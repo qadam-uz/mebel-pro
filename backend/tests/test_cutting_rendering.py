@@ -5,8 +5,8 @@ The PDF must be a faithful print rendering of the web panel visualiser
 transposition of its formulas into reportlab's bottom-left-origin space.
 """
 
-# ruff: noqa: RUF001 -- expected labels reuse the visualiser's exact copy (multiplication
-# sign in dimensions, U+21BB rotation marker)
+# ruff: noqa: RUF001, RUF002 -- expected labels/docstrings reuse the visualiser's exact
+# copy (multiplication sign in dimensions, U+21BB rotation marker)
 
 import uuid
 from types import SimpleNamespace
@@ -36,10 +36,6 @@ def _offcut(*, usable: bool, length_mm: int = 500, width_mm: int = 300) -> Cutti
     return CuttingOffcutResponse(
         x_mm=0, y_mm=0, length_mm=length_mm, width_mm=width_mm, usable=usable
     )
-
-
-def _parts_by_ref(parts: list[dict[str, Any]]) -> dict[str, tuple[dict[str, Any], int]]:
-    return rendering._parts_by_ref(SimpleNamespace(parts_snapshot=parts))  # type: ignore[arg-type]
 
 
 # --- placement geometry ---------------------------------------------------
@@ -87,33 +83,59 @@ def test_label_gate_matches_the_visualiser_thresholds() -> None:
     assert not rendering._label_fits(400, 100, norm_scale)  # width gate (>30)
 
 
-def test_placement_label_uses_part_name() -> None:
-    parts = _parts_by_ref([{"part_ref": "a", "name": "Polka"}])
-    label = rendering._placement_label(_placement(part_ref="a"), parts)
-    assert label == "#1 Polka 600×400"
+def test_placement_label_mode_edges_when_both_sides_have_room() -> None:
+    """A part is identified by its size alone now (no name/number on the
+    map), so each dimension prints against the side it measures whenever both
+    fit — matching the web visualiser's Bazis-style layout."""
+    rendering._register_fonts()
+    placement = _placement(length_mm=600, width_mm=400)
+
+    plan = rendering._placement_label_mode(placement, 10.0, 200.0, 150.0, 10.0)
+
+    assert plan == rendering._DimensionLabelPlan("edges", "600", "400")
 
 
-def test_placement_label_falls_back_to_row_number_for_blank_names() -> None:
-    parts = _parts_by_ref(
-        [
-            {"part_ref": "a", "name": "Polka"},
-            {"part_ref": "b", "name": "   "},
-            {"part_ref": "c"},
-        ]
-    )
-    assert rendering._placement_label(_placement(part_ref="b"), parts) == "#2 D2 600×400"
-    assert rendering._placement_label(_placement(part_ref="c"), parts) == "#3 D3 600×400"
+def test_placement_label_mode_falls_back_to_inline_when_edges_dont_clear_the_inset() -> None:
+    """When the inset clearance doesn't leave room for a dimension against its
+    own (narrow) side, the whole `L×W` collapses onto one centred line."""
+    rendering._register_fonts()
+    placement = _placement(length_mm=600, width_mm=400)
+
+    plan = rendering._placement_label_mode(placement, 10.0, 52.0, 150.0, 40.0)
+
+    assert plan == rendering._DimensionLabelPlan("inline", "600×400", "")
 
 
-def test_placement_label_marks_rotated_placements() -> None:
-    parts = _parts_by_ref([{"part_ref": "a", "name": "Polka"}])
-    label = rendering._placement_label(_placement(part_ref="a", rotated=True), parts)
-    assert label == "#1 Polka 600×400 ↻"
+def test_placement_label_mode_rotates_inline_for_a_tall_narrow_strip() -> None:
+    """A strip too narrow for any horizontal text still has to carry its size —
+    a part is identified by its dimensions alone, so losing them is not an option."""
+    rendering._register_fonts()
+    placement = _placement(length_mm=80, width_mm=1800)
+
+    plan = rendering._placement_label_mode(placement, 7.0, 12.0, 240.0, 3.0)
+
+    assert plan == rendering._DimensionLabelPlan("inline_rotated", "80×1800", "")
 
 
-def test_placement_label_falls_back_to_ref_for_unknown_parts() -> None:
-    label = rendering._placement_label(_placement(part_ref="ghost"), {})
-    assert label == "ghost 600×400"
+def test_placement_label_mode_none_when_even_a_rotated_inline_does_not_fit() -> None:
+    rendering._register_fonts()
+    placement = _placement(length_mm=600, width_mm=400)
+
+    plan = rendering._placement_label_mode(placement, 10.0, 10.0, 10.0, 5.0)
+
+    assert plan is None
+
+
+def test_dim_fits_requires_room_along_its_axis_and_clearance_across_it() -> None:
+    rendering._register_fonts()
+
+    assert rendering._dim_fits("600", 10.0, along_pt=30.0, across_pt=150.0, inset_pt=10.0)
+    assert not rendering._dim_fits(
+        "600", 10.0, along_pt=20.0, across_pt=150.0, inset_pt=10.0
+    )  # text itself doesn't fit along the side it measures
+    assert not rendering._dim_fits(
+        "600", 10.0, along_pt=30.0, across_pt=20.0, inset_pt=10.0
+    )  # inset + font leave no clearance across the other axis
 
 
 def test_offcut_label_mode_ladder() -> None:

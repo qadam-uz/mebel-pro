@@ -371,10 +371,6 @@ export function cuttingImportErrorLabel(error: unknown): string {
   // the generic "import qilib bo'lmadi" and no idea which file to fix (QAD-163).
   if (code === 'invalid_file') return "Faylni o'qib bo'lmadi — XML buzilgan yoki to'liq emas."
   if (code === 'invalid_map_file') return "2D-Place MAP faylni o'qib bo'lmadi."
-  // `detal` is the app-wide word for a cut piece now (the owner's ruling that
-  // QAD-163 left open), and it was already what the import wizard used — the
-  // file's own vocabulary and the product's finally agree.
-  if (code === 'invalid_map_part') return 'MAP faylda 50 mm dan kichik detal bor.'
   if (code === 'too_many_parts') {
     const total = typeof details?.total_pieces === 'number' ? details.total_pieces : null
     return total

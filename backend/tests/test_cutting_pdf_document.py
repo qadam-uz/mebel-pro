@@ -1,13 +1,13 @@
 """Tests for the detailed cutting PDF document builder."""
 
-# ruff: noqa: RUF001 -- expected report labels use Uzbek copy.
-
 import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from io import BytesIO
 from typing import Any
 
+import pytest
 from app.models.enums import CuttingResultSource, CuttingResultStatus
 from app.modules.cutting import pdf_document
 from app.modules.cutting.schemas import (
@@ -16,6 +16,7 @@ from app.modules.cutting.schemas import (
     CuttingPlacementResponse,
     CuttingResultResponse,
 )
+from reportlab.pdfgen import canvas as rl_canvas
 
 PANEL_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 PANEL_B_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
@@ -243,7 +244,10 @@ def test_area_stats_compute_two_kim_inputs() -> None:
     assert pdf_document._percent(stats.parts_area + stats.usable_area, stats.sheet_area) == "58.0%"
 
 
-def test_part_rows_use_registry_numbers_and_texture_marker() -> None:
+def test_part_rows_carry_dimensions_and_band_counts_not_identity() -> None:
+    """The register row is `[length, width, qty, length_bands, width_bands]` —
+    no index, name, registry number or grain arrow (CB redesign: a part is
+    identified by size + band pattern alone)."""
     part = _part(
         edge_top={"material_id": str(EDGE_A_ID), "source": "shop"},
         edge_right={"material_id": str(EDGE_B_ID), "source": "shop"},
@@ -255,7 +259,65 @@ def test_part_rows_use_registry_numbers_and_texture_marker() -> None:
 
     rows = pdf_document._panel_part_rows(result, panel, registry)
 
-    assert rows == [["1", "Shelf", "400×200", "1", "①", "·", "·", "②", "·"]]
+    # edge_top only -> 1 length-side band; edge_right only -> 1 width-side band.
+    assert rows == [["400", "200", "1", "1", "1"]]
+
+
+def test_part_rows_merge_identical_size_and_band_pattern_by_summing_quantity() -> None:
+    """Two different parts that happen to share size + band pattern are
+    indistinguishable on the sheet, so they collapse into one register row."""
+    twin_a = _part(part_ref="part-a", edge_top={"material_id": str(EDGE_A_ID), "source": "shop"})
+    twin_b = _part(
+        part_ref="part-b",
+        name="Different name",
+        edge_top={"material_id": str(EDGE_A_ID), "source": "shop"},
+    )
+    odd_one_out = _part(
+        part_ref="part-c",
+        edge_top={"material_id": str(EDGE_A_ID), "source": "shop"},
+        edge_left={"material_id": str(EDGE_B_ID), "source": "shop"},
+    )
+    panel = _panel(
+        PANEL_ID,
+        panel_index=1,
+        placements=[
+            _placement("part-a", 0, 0),
+            _placement("part-b", 400, 0),
+            _placement("part-c", 800, 0),
+        ],
+    )
+    result = _result(parts=[twin_a, twin_b, odd_one_out], panels=[panel])
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+
+    rows = pdf_document._panel_part_rows(result, panel, registry)
+
+    # twin_a/twin_b share (400, 200, 1 length band, 0 width bands) -> merged qty 2;
+    # odd_one_out differs in width-band count (1) so it stays its own row.
+    assert rows == [["400", "200", "2", "1", "0"], ["400", "200", "1", "1", "1"]]
+
+
+def test_register_widths_are_three_columns_summing_to_the_total_width() -> None:
+    widths = pdf_document._register_widths(120.0)
+    assert len(widths) == 3  # Bo'yi, Eni, Soni — no more #/Detal/D1/D2/Sh1/Sh2
+    assert sum(widths) == pytest.approx(120.0)
+
+
+def test_register_draws_rules_and_band_ticks_not_per_cell_boxes() -> None:
+    """The redesigned register has no `pdf.rect(...)` per cell (those made
+    empty cells read as stray boxes) — only a header rule, row hairlines and a
+    closing rule, plus N short tick marks under a banded number."""
+    pdf_document._register_fonts()
+    buf = BytesIO()
+    pdf = rl_canvas.Canvas(buf, pagesize=(400, 200))
+    # One row: 2 length-side bands (Bo'yi ticks), 1 width-side band (Eni tick).
+    rows = [["400", "200", "3", "2", "1"]]
+
+    pdf_document._draw_register(pdf, 10, 190, 120, rows)
+
+    tokens = " ".join(pdf._code).split()
+    assert "re" not in tokens  # no rectangle operator anywhere -> no cell boxes
+    # header rule + closing rule (2) + band ticks (2 length-side + 1 width-side) = 5
+    assert tokens.count("l") == 5
 
 
 def test_render_pdf_smoke_uses_a4_portrait_and_summary_plus_sheet_pages() -> None:
@@ -292,8 +354,11 @@ def _layout_units(result: CuttingResultResponse) -> list[pdf_document.LayoutUnit
 
 
 def _dense_result(row_count: int) -> CuttingResultResponse:
+    # Each part gets its own length so the new identical-row merge (same
+    # length/width/band-counts collapse to one row) never kicks in here — this
+    # fixture exists specifically to overflow the register's row capacity.
     parts = [
-        _part(part_ref=f"part-{index}", name=f"Detail {index}", length_mm=100, width_mm=100)
+        _part(part_ref=f"part-{index}", name=f"Detail {index}", length_mm=100 + index, width_mm=100)
         for index in range(row_count)
     ]
     placements = [
@@ -301,7 +366,7 @@ def _dense_result(row_count: int) -> CuttingResultResponse:
             f"part-{index}",
             (index % 9) * 100,
             (index // 9) * 100,
-            length=100,
+            length=100 + index,
             width=100,
         )
         for index in range(row_count)
@@ -310,26 +375,29 @@ def _dense_result(row_count: int) -> CuttingResultResponse:
 
 
 def _standard_sheet_result() -> CuttingResultResponse:
+    # "narrow"/"thin" are deliberately slim trim strips, but still wide enough
+    # for the 7 pt edges-mode dimension fallback to fit both numbers at the
+    # two-up portrait scale — see test_standard_2750_by_1830_sheet_... below.
     parts = [
         _part(part_ref="tall", name="Yon panel", length_mm=350, width_mm=1288),
         _part(part_ref="wide", name="Tokcha", length_mm=900, width_mm=350),
         _part(part_ref="square", name="Eshik", length_mm=668, width_mm=600),
-        _part(part_ref="narrow", name="Tasma", length_mm=120, width_mm=524),
-        _part(part_ref="thin", name="Qirra", length_mm=80, width_mm=468),
+        _part(part_ref="narrow", name="Tasma", length_mm=140, width_mm=524),
+        _part(part_ref="thin", name="Qirra", length_mm=150, width_mm=468),
     ]
     first = [
         _placement("tall", 0, 0, length=350, width=1288),
         _placement("wide", 350, 0, length=900, width=350),
         _placement("square", 1250, 0, length=668, width=600),
-        _placement("narrow", 1918, 0, length=120, width=524),
-        _placement("thin", 2038, 0, length=80, width=468),
+        _placement("narrow", 1918, 0, length=140, width=524),
+        _placement("thin", 2058, 0, length=150, width=468),
     ]
     second = [
         _placement("tall", 10, 0, length=350, width=1288),
         _placement("wide", 360, 0, length=900, width=350),
         _placement("square", 1260, 0, length=668, width=600),
-        _placement("narrow", 1928, 0, length=120, width=524),
-        _placement("thin", 2048, 0, length=80, width=468),
+        _placement("narrow", 1928, 0, length=140, width=524),
+        _placement("thin", 2068, 0, length=150, width=468),
     ]
     result = _result(
         parts=parts,
@@ -343,7 +411,7 @@ def _standard_sheet_result() -> CuttingResultResponse:
     return result
 
 
-def test_work_page_planner_puts_two_eligible_units_on_one_portrait_page() -> None:
+def test_work_page_planner_puts_two_units_on_one_portrait_page() -> None:
     result = _result(
         parts=[_part()],
         panels=[
@@ -357,6 +425,23 @@ def test_work_page_planner_puts_two_eligible_units_on_one_portrait_page() -> Non
     assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 2)]
 
 
+def test_work_page_planner_pairs_every_sheet_two_up_leaving_the_odd_one_alone() -> None:
+    """Two sheets to a page is unconditional — five sheets are 2 + 2 + 1."""
+    panels = [
+        _panel(PANEL_ID, panel_index=index, placements=[_placement("part-a", index * 100, 0)])
+        for index in range(1, 6)
+    ]
+    result = _result(parts=[_part()], panels=panels)
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert [(page.orientation, len(page.units)) for page in pages] == [
+        ("portrait", 2),
+        ("portrait", 2),
+        ("portrait", 1),
+    ]
+
+
 def test_standard_2750_by_1830_sheet_uses_two_up_portrait_with_fixed_7pt_fallbacks() -> None:
     result = _standard_sheet_result()
 
@@ -365,7 +450,9 @@ def test_standard_2750_by_1830_sheet_uses_two_up_portrait_with_fixed_7pt_fallbac
     assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 2)]
 
 
-def test_unlabelable_map_uses_landscape_even_when_its_register_fits() -> None:
+def test_unlabelable_map_still_shares_a_two_up_page() -> None:
+    """A sheet whose parts are too small to label no longer earns a page of its
+    own — two-up is unconditional, and the register still carries every size."""
     result = _result(
         parts=[_part(length_mm=20, width_mm=20)],
         panels=[
@@ -379,13 +466,7 @@ def test_unlabelable_map_uses_landscape_even_when_its_register_fits() -> None:
 
     pages = pdf_document._plan_work_pages(result, _layout_units(result))
 
-    assert [page.orientation for page in pages] == ["landscape"]
-
-
-def test_cut_metrics_remain_on_their_own_work_card_line() -> None:
-    result = _standard_sheet_result()
-
-    assert pdf_document._cut_metric_text(result.panels[0]) == "Kesishlar: 14 · uzunligi 12.48 m"
+    assert [page.orientation for page in pages] == ["portrait"]
 
 
 def test_work_page_planner_keeps_an_odd_eligible_unit_in_portrait_top_slot() -> None:
@@ -399,26 +480,142 @@ def test_work_page_planner_keeps_an_odd_eligible_unit_in_portrait_top_slot() -> 
     assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 1)]
 
 
-def test_work_page_planner_flushes_pending_portrait_before_dense_landscape() -> None:
+def test_a_dense_sheet_keeps_its_two_up_slot_and_spills_rows_to_a_continuation() -> None:
+    """A long register no longer promotes its sheet to a page of its own: the
+    sheet keeps its half-page slot and the overflow rows follow on their own
+    page, so nothing is dropped."""
     simple = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
     dense = _dense_result(90)
     result = _result(parts=[_part(), *dense.parts_snapshot], panels=[simple, *dense.panels])
+    units = _layout_units(result)
+    dense_row_count = len(units[1].rows)
 
-    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+    pages = pdf_document._plan_work_pages(result, units)
 
     assert pages[0].orientation == "portrait"
-    assert len(pages[0].units) == 1
-    assert pages[1].orientation == "landscape"
-    assert any(page.orientation == "landscape_continuation" for page in pages[2:])
-    rendered_rows = sum(
-        (page.row_end or 0) - page.row_start
-        for page in pages
-        if page.orientation.startswith("landscape")
+    assert len(pages[0].units) == 2
+    continuations = [page for page in pages[1:] if page.orientation == "portrait_continuation"]
+    assert continuations
+    capacity = pdf_document._portrait_slot_capacity()
+    printed = capacity + sum((page.row_end or 0) - page.row_start for page in continuations)
+    assert printed == dense_row_count
+    assert all(page.orientation.startswith("portrait") for page in pages)
+
+
+def test_work_card_metrics_line_reads_foydali_qoldiq_and_chiqindi_not_bold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CB layout change: the card metrics line dropped "Jami qoldiq" /
+    "Foydasiz qoldiq" (bold) for "Foydali qoldiq" / "Chiqindi" (normal
+    weight) — pin both the new wording and that it no longer prints bold."""
+    calls: list[tuple[str, bool]] = []
+
+    def spy_draw_text(
+        pdf: Any, x: float, y: float, text: str, size: float, *, bold: bool = False, gray: float = 0
+    ) -> None:
+        calls.append((text, bold))
+
+    monkeypatch.setattr(pdf_document, "_draw_text", spy_draw_text)
+    monkeypatch.setattr(pdf_document, "draw_sheet_map", lambda *args, **kwargs: None)
+
+    panel = _panel(
+        PANEL_ID,
+        panel_index=1,
+        placements=[_placement("part-a", 0, 0)],
+        offcuts=[
+            CuttingOffcutResponse(x_mm=400, y_mm=0, length_mm=600, width_mm=1000, usable=True)
+        ],
     )
-    assert rendered_rows == 90
+    result = _result(parts=[_part()], panels=[panel])
+    unit = _layout_units(result)[0]
+
+    pdf_document._draw_work_card(
+        rl_canvas.Canvas(BytesIO(), pagesize=(600, 400)),
+        result,
+        pdf_document.PdfContext(),
+        [],
+        unit,
+        (10.0, 10.0, 500.0, 300.0),
+    )
+
+    metrics_calls = [
+        text_and_bold for text_and_bold in calls if "qoldiq" in text_and_bold[0].lower()
+    ]
+    assert len(metrics_calls) == 1
+    text, bold = metrics_calls[0]
+    assert "Foydali qoldiq:" in text
+    assert "Chiqindi:" in text
+    assert "Jami qoldiq" not in text
+    assert "Foydasiz qoldiq" not in text
+    assert bold is False
 
 
-def test_adaptive_pdf_smoke_mixes_portrait_and_landscape_and_embeds_font() -> None:
+def test_portrait_slot_capacity_is_the_exact_max_the_drawn_card_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_portrait_slot_capacity` must match `_draw_work_card`'s real register
+    geometry exactly. Before this fix the planner discounted the map's bottom
+    padding twice, undercounting by one row and sending it to a needless
+    continuation page even though the card had room for it."""
+    captured: dict[str, float] = {}
+    original_draw_register = pdf_document._draw_register
+
+    def spy_draw_register(
+        pdf: Any, x: float, top: float, width: float, rows: list[list[str]]
+    ) -> None:
+        captured["top"] = top
+        original_draw_register(pdf, x, top, width, rows)
+
+    monkeypatch.setattr(pdf_document, "_draw_register", spy_draw_register)
+
+    result = _dense_result(200)
+    unit = _layout_units(result)[0]
+    slot_h = (pdf_document._PAGE_H - 2 * pdf_document._MARGIN - pdf_document._PORTRAIT_SLOT_GAP) / 2
+    frame = (pdf_document._MARGIN, pdf_document._MARGIN, pdf_document._CONTENT_W, slot_h)
+    pdf_document._register_fonts()
+    pdf = rl_canvas.Canvas(BytesIO(), pagesize=(pdf_document._PAGE_W, pdf_document._PAGE_H))
+
+    pdf_document._draw_work_card(pdf, result, pdf_document.PdfContext(), [], unit, frame)
+
+    capacity = pdf_document._portrait_slot_capacity()
+    available = captured["top"] - frame[1]  # register's real top down to the slot's bottom edge
+    fits_capacity_rows = pdf_document._REGISTER_HEADER_H + capacity * pdf_document._REGISTER_ROW_H
+    fits_one_more_row = fits_capacity_rows + pdf_document._REGISTER_ROW_H
+
+    assert fits_capacity_rows <= available  # what the planner promises actually fits
+    assert fits_one_more_row > available  # capacity is the true max, not an undercount
+
+
+def test_register_continuation_uses_the_full_page_width_not_a_narrow_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A continuation page has no map beside the register, so it should use
+    the full content width instead of the work card's narrow
+    `_PORTRAIT_REGISTER_W` — a lone 120pt column would look wrong stranded on
+    an otherwise empty A4 page."""
+    captured: dict[str, float] = {}
+    original_draw_register = pdf_document._draw_register
+
+    def spy_draw_register(
+        pdf: Any, x: float, top: float, width: float, rows: list[list[str]]
+    ) -> None:
+        captured["width"] = width
+        original_draw_register(pdf, x, top, width, rows)
+
+    monkeypatch.setattr(pdf_document, "_draw_register", spy_draw_register)
+
+    result = _dense_result(200)
+    unit = _layout_units(result)[0]
+    page = pdf_document.PdfPagePlan("portrait_continuation", (unit,), 0, 10)
+    pdf_document._register_fonts()
+    pdf = rl_canvas.Canvas(BytesIO(), pagesize=(pdf_document._PAGE_W, pdf_document._PAGE_H))
+
+    pdf_document._draw_register_continuation(pdf, result, pdf_document.PdfContext(), [], unit, page)
+
+    assert captured["width"] == pdf_document._CONTENT_W
+
+
+def test_every_work_page_is_portrait_and_embeds_the_unicode_font() -> None:
     simple = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
     dense = _dense_result(36)
     result = _result(parts=[_part(), *dense.parts_snapshot], panels=[simple, *dense.panels])
@@ -431,6 +628,31 @@ def test_adaptive_pdf_smoke_mixes_portrait_and_landscape_and_embeds_font() -> No
 
     assert pdf.startswith(b"%PDF")
     assert b"/FontFile2" in pdf
-    assert sizes[0][0] < sizes[0][1]  # summary is always portrait
-    assert any(width < height for width, height in sizes[1:])
-    assert any(width > height for width, height in sizes)
+    assert sizes
+    assert all(width < height for width, height in sizes)
+
+
+def test_every_planned_page_gets_its_own_sheet() -> None:
+    """Each planned page must be broken; without it the work pages overprint one another."""
+    parts = [
+        _part(part_ref=f"part-{index}", name=f"Detail {index}", length_mm=400 + index * 10)
+        for index in range(5)
+    ]
+    panels = [
+        _panel(
+            PANEL_ID,
+            panel_index=index + 1,
+            placements=[_placement(f"part-{index}", 0, 0, length=400 + index * 10)],
+        )
+        for index in range(5)
+    ]
+    result = _result(parts=parts, panels=panels)
+
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+    planned = len(pdf_document._plan_summary_pages(result, registry)) + len(
+        pdf_document._plan_work_pages(result, _layout_units(result))
+    )
+    pdf = pdf_document.render_cutting_pdf(result)
+
+    assert planned > 2  # the case is only meaningful with several work pages
+    assert pdf.count(b"/Type /Page\n") == planned

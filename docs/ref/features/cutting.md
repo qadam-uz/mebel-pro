@@ -2,11 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-<<<<<<< HEAD
-updated: 2026-07-23
-=======
-updated: 2026-07-27
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
+updated: 2026-07-29
 order: 80
 ---
 
@@ -172,7 +168,7 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 
 | Constraint                       | Value                                                                                         |
 | -------------------------------- | --------------------------------------------------------------------------------------------- |
-| Part minimum                     | 50 mm × 50 mm                                                                                 |
+| Part minimum                     | 10 mm × 10 mm                                                                                 |
 | Part maximum                     | panel − 2× edge trim (for the part's chosen panel material)                                   |
 | Parts per optimisation           | ≤ 300 (across all materials)                                                                  |
 | Import file                      | ≤ 1 MiB; `.csv`, БАЗИС-Мебельщик `Спецификация в XML` `.xml`, or 2D-Place `.map`              |
@@ -246,20 +242,28 @@ parts-only import. If any imported detail has banding marks, the wizard asks for
 and applies it to all marked sides. The commit endpoint validates the selected panel dimensions
 against the MAP sheet dimensions, validates that every placement matches the generated parts,
 rejects overlapping/out-of-bounds placements, then creates a new draft with an imported result
-already chosen. The same flow is available in the workshop editor for a resolved walk-in client:
-staff must hold `manage_orders` on the current branch, and the new draft is staff-minted with
-that branch frozen.
+already chosen, named after the uploaded file with its extension stripped (e.g. `AFZAL.map` ->
+`AFZAL`; left unnamed when nothing usable remains). The same flow is available in the workshop
+editor for a resolved walk-in client: staff must hold `manage_orders` on the current branch, and
+the new draft is staff-minted with that branch frozen. CSV/XML imports never mint a draft this
+way — they only load parts into the editor's current draft (see above), so there is no file name
+to seed a draft name from.
 
 Imported MAP results are stamped `algorithm_name=imported-2dplace-map`,
-`algorithm_version=map-1`, `source=imported_map`, `kerf_mm=0`, and `edge_trim_mm=0`. Waste and
-cut/edge metrics are recomputed from the persisted placements; MAP waste/remainder rectangles
-are stored as panel `offcuts` and used only for preview, not pricing. The UI labels these results
-`Fayldan joylashuv`. A successful MAP commit opens that result before any editing. The editor
-warns only before a geometry-affecting parts edit (adding/removing a row, quantity, dimensions,
-panel material, or texture direction). Accepting the edit removes the file layout, clears the
-choice, and requires a fresh optimiser run. Name, edge-band, and material-source edits are
-geometry-neutral: they save without the warning and retain the layout while its edge metrics are
-refreshed.
+`algorithm_version=map-1`, and `source=imported_map`. `kerf_mm` / `edge_trim_mm` are derived from
+the imported layout's own geometry rather than a branch setting: kerf is the most common gap
+between two adjacent real parts on the same sheet, edge trim is the most common inset of a real
+part from its sheet's edge, each taken across every sheet in the layout (not per sheet, so a
+one-off stray gap can't outvote the dominant one) and clamped to the same range a branch's own
+kerf/edge-trim accepts. Either falls back to `0` when the layout gives no evidence (a single part,
+no part near an edge) or the derived value is out of range. Waste and cut/edge metrics are
+recomputed from the persisted placements; MAP waste/remainder rectangles are stored as panel
+`offcuts` and used only for preview, not pricing. The UI labels these results `Fayldan joylashuv`.
+A successful MAP commit opens that result before any editing. The editor warns only before a
+geometry-affecting parts edit (adding/removing a row, quantity, dimensions, panel material, or
+texture direction). Accepting the edit removes the file layout, clears the choice, and requires a
+fresh optimiser run. Name, edge-band, and material-source edits are geometry-neutral: they save
+without the warning and retain the layout while its edge metrics are refreshed.
 
 ## UX — the cutting flow (client app)
 
@@ -373,7 +377,7 @@ grooves, non-rectangular panels, and edges marked "see drawing" import the recta
 but appear as warnings.
 
 Rows skipped because they cannot be represented (for example an `Итого` footer in a numeric
-column) appear in the report. Recoverable domain problems still import: a sub-50 mm part is
+column) appear in the report. Recoverable domain problems still import: an undersized part is
 loaded and then flagged by the editor's normal validation. Imports over 300 pieces are
 rejected at parse time; imports that make the current editor exceed 300 pieces show a notice
 and the optimiser remains blocked until rows are removed.
@@ -526,14 +530,6 @@ rather than inventing a third regime.
    cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
    available, it asks the user to select one instead of inventing a price.
    - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
-<<<<<<< HEAD
-   - **Download PDF** — the print-ready cutting document for the saw operator. It starts on
-     one or more A4 portrait **Xulosa** pages: drawing/order identity, client, branch, date,
-     total sheets/details/cut/edge length, per-panel-material KIM stats, edge-tape
-     specification, and usable-offcut inventory. Sections paginate at rows with their heading
-     repeated. Consecutive identical layouts remain one `List 1–2 · 2 dona` layout unit while
-     summary counts include every physical sheet.
-=======
    - **PDF ochish** — the print-ready cutting document for the saw operator, opened in a new
      browser tab rather than saved to disk: the reader wants to look at or print the plan, and
      the browser's own viewer already offers both plus a download. Every PDF entry point
@@ -546,18 +542,16 @@ rather than inventing a third regime.
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
      identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
      include every physical sheet.
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
    - The PDF carries two area-derived KIM figures. `KIM` is parts area divided by sheet
-     area; `KIM (qoldiq bilan)` adds usable offcut area before dividing. The sheet stat
-     line shows `To'ldirish`, detail area, usable offcut area, and waste area.
-   - Work cards are planned for print before drawing: two eligible layout units stack on an
-     A4 portrait page; an odd eligible unit stays in the top slot. A unit whose map or complete
-     side register would fall below 7 pt/0.8 pt tick readability receives its own A4 landscape
-     page. Each card keeps a proportional map beside its compact `# · detal · o'lcham · dona ·
-     D1 · D2 · Sh1 · Sh2` register; overflow rows go to landscape `Detallar (davomi)` pages,
-     never by clipping a row or splitting the map. Every page is numbered. Per-sheet stats
-     include fill/detail/offcut/waste and exact `Kesishlar: N · uzunligi X m` when the engine
-     recorded them; imported MAP and legacy rows say that cut information is unavailable.
+     area; `KIM (qoldiq bilan)` adds usable offcut area before dividing.
+   - Work cards are planned for print before drawing: two layout units always stack on one A4
+     portrait page — never a page of its own for a dense sheet or an unlabelable map, and never
+     landscape. An odd unit stays alone in the top slot. A card carries four header lines
+     (sheet range · material · `Kromkalar` · `Detallar maydoni · KIM · Foydali qoldiq ·
+     Chiqindi`), then a proportional map beside a compact `Bo'yi · Eni · Soni` register whose
+     band marks sit under each dimension. A register too long for its half-page slot spills its
+     overflow rows onto a full-width portrait `Detallar (davomi)` continuation page, never by
+     clipping a row or splitting the map. Every page is numbered.
    - The PDF parity contract is intentionally narrow: the **map panel inside the PDF**
      mirrors the web sheet visualiser's geometry, label fitting, offcut overlays, and
      banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.
@@ -627,9 +621,11 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **Import footers / summary rows** — non-empty rows whose mapped numeric cells cannot be
   parsed, such as an `Итого` footer, are listed in the import report as skipped rows with
   the original row number and preview text.
-- **Recoverable imported typos** — imported parts below the 50 mm minimum or otherwise
+- **Recoverable imported typos** — imported parts below the part minimum or otherwise
   outside the chosen panel's bounds are loaded into the editor and flagged inline by the
-  existing validation, so the client can correct them instead of losing the row.
+  existing validation, so the client can correct them instead of losing the row. No importer
+  rejects a file over part size: a small part is a row to fix, not a reason to lose the
+  drawing.
 - **Import piece cap** — a parsed file above 300 pieces is rejected; an append that makes
   the editor exceed 300 pieces is allowed to land but the optimiser stays blocked until the
   client removes rows.

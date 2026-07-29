@@ -17,6 +17,17 @@ class ClientProfileResponse(APIModel):
     status: UserStatus
 
 
+class ClientContact(APIModel):
+    """Public name+phone lookup for an arbitrary client id — for cross-module
+    identity displays (e.g. the cutting PDF header) that need a client's
+    contact info without the "current authenticated principal" framing that
+    `get_client_profile` requires."""
+
+    id: uuid.UUID
+    name: str
+    phone: str
+
+
 class ClientProfilePatchRequest(BaseModel):
     name: str | None = None
     preferred_branch_id: uuid.UUID | None = None

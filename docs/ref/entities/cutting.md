@@ -2,11 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-<<<<<<< HEAD
-updated: 2026-07-23
-=======
-updated: 2026-07-25
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
+updated: 2026-07-29
 order: 40
 ---
 
@@ -28,6 +24,7 @@ indefinitely (no expiry); a client may have at most 50 self-made drafts open at 
 |---|---|---|
 | `id` | UUID | PK |
 | `client_id` | UUID | the client who owns it |
+| `name` | text? | operator-editable label; `null` until set. The draft a MAP import commits is seeded from the uploaded file's name (extension stripped, e.g. `AFZAL.map` -> `AFZAL`; blank/unusable leaves it `null`) — every other draft (manual, CSV/XML import) starts unnamed until the operator names it. |
 | `created_via_workshop_id` | UUID? | null for a client self-made draft. Set to the minting workshop when staff created the draft for a walk-in ([`cutting.md`](../features/cutting.md#access)): staff access is scoped by it (workshop-wide), the draft is hidden from the client until the order is placed, and it is excluded from the 50-draft cap. On such a draft `preferred_branch_id` is the staff flow's fixed branch, frozen at creation. Unfinished ones (no bound order, `revision_of_order_id` null) are listed on the workshop's **Saqlangan chizmalar** surface for resuming. |
 | `revision_of_order_id` | UUID? | null except on an order's **revision draft** ([`orders.md`](../features/orders.md#revising-a-placed-order)): staff-minted from the order's confirmed result, branch-locked to the order's branch, unique per order. A revision draft never places a new order — its only exits are apply (back onto its order) or discard — and it is client-invisible like any staff-minted draft. |
 | `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively (rows referencing materials the branch doesn't carry stay editable with inline recovery affordances). |
@@ -66,13 +63,8 @@ is stamped for audit; replacing a solver later doesn't touch past results.
 | `draft_id`                                                         | UUID?      | the draft this result came from; null once `confirmed` (the draft is gone, the result outlives it via `order_id`)                                                                    |
 | `algorithm_name` / `algorithm_version`                             | text       | internal audit stamp: `cutting-engine/native`, `cutting-engine/packingsolver`, or `cutting-engine/hybrid` plus engine/provider version; `imported-2dplace-map` / `map-1` for MAP imports. Not a client-visible choice |
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
-<<<<<<< HEAD
 | `status`                                                           | enum       | `candidate` (the draft's current result) · `confirmed` (chosen and bound to an order)                                                                                                |
-| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the global constants at run time; imported MAP results store `0` / `0` because the external layout is kept as-is                                                         |
-=======
-| `status`                                                           | enum       | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order)                                                                                             |
-| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; imported MAP results store `0` / `0` because the external layout is kept as-is |
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
+| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; an imported MAP result instead derives both from the imported layout's own geometry (the dominant gap between adjacent parts, the dominant part inset from a sheet edge — [`cutting.md`](../features/cutting.md#imports)) and falls back to `0` / `0` when the layout gives no evidence |
 | `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material)                                                           |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |

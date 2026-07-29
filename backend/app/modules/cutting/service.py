@@ -20,7 +20,12 @@ from app.models.enums import (
     MaterialStatus,
 )
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
-from app.modules.client_portal.api import get_client_profile, require_client, visible_branch
+from app.modules.client_portal.api import (
+    client_contact,
+    get_client_profile,
+    require_client,
+    visible_branch,
+)
 from app.modules.cutting.contracts import (
     CuttingDraft,
     CuttingPanel,
@@ -28,6 +33,8 @@ from app.modules.cutting.contracts import (
     CuttingResult,
 )
 from app.modules.cutting.imports.base import ImportMapLayout, ImportMapPlacement
+from app.modules.cutting.imports.common import draft_name_from_filename
+from app.modules.cutting.imports.map_2dplace import derive_map_cut_params
 from app.modules.cutting.optimizer import (
     DEFAULT_CUT_PARAMS,
     MAX_PARTS_PER_RUN,
@@ -42,6 +49,7 @@ from app.modules.cutting.optimizer import (
     edge_metrics,
     run_all_algorithms,
 )
+from app.modules.cutting.pdf_document import PdfContext
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
     CuttingDraftPart,
@@ -55,7 +63,7 @@ from app.modules.cutting.schemas import (
 from app.modules.inventory.api import display_unit
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
-from app.modules.workshop.contracts import Branch
+from app.modules.workshop.contracts import Branch, Workshop
 
 DRAFT_LIMIT = 50
 IMPORTED_MAP_ALGORITHM_NAME = "imported-2dplace-map"
@@ -137,6 +145,7 @@ async def commit_imported_map(
     draft = CuttingDraft(
         client_id=client.id,
         preferred_branch_id=preferred_branch_id or client.preferred_branch_id,
+        name=draft_name_from_filename(payload.source_filename),
     )
     return await _commit_imported_map_for_draft(
         db,
@@ -700,6 +709,66 @@ async def cutting_result_response(
     return await _result_response(db, result)
 
 
+async def cutting_result_pdf_context(
+    db: AsyncSession,
+    result: CuttingResultResponse,
+) -> PdfContext:
+    """Resolve the PDF identity box for a result: a confirmed (order-bound)
+    result reads order → client + branch; a still-candidate result reads its
+    draft → client + branch instead. Branch → workshop either way. Every
+    field stays optional — a torn-down draft/order/branch/client simply
+    leaves its line blank on the PDF rather than failing the render."""
+    order_number: str | None = None
+    draft_name: str | None = None
+    client_id: uuid.UUID | None = None
+    branch_id: uuid.UUID | None = None
+    if result.order_id is not None:
+        order = await db.get(Order, result.order_id)
+        if order is not None:
+            order_number = order.order_number
+            client_id = order.client_id
+            branch_id = order.branch_id
+    elif result.draft_id is not None:
+        draft = await db.get(CuttingDraft, result.draft_id)
+        if draft is not None:
+            draft_name = draft.name
+            client_id = draft.client_id
+            branch_id = draft.preferred_branch_id
+
+    client_name: str | None = None
+    client_phone: str | None = None
+    if client_id is not None:
+        contact = await client_contact(db, client_id)
+        if contact is not None:
+            client_name = contact.name
+            client_phone = contact.phone
+
+    branch_name: str | None = None
+    branch_address: str | None = None
+    branch_phone: str | None = None
+    workshop_name: str | None = None
+    if branch_id is not None:
+        branch = await db.get(Branch, branch_id)
+        if branch is not None:
+            branch_name = branch.name
+            branch_address = branch.address
+            branch_phone = branch.phone
+            workshop = await db.get(Workshop, branch.workshop_id)
+            if workshop is not None:
+                workshop_name = workshop.name
+
+    return PdfContext(
+        order_number=order_number,
+        draft_name=draft_name,
+        client_name=client_name,
+        client_phone=client_phone,
+        branch_name=branch_name,
+        branch_address=branch_address,
+        branch_phone=branch_phone,
+        workshop_name=workshop_name,
+    )
+
+
 async def _client_draft(
     db: AsyncSession,
     *,
@@ -908,14 +977,15 @@ async def _create_imported_map_result(
         if total_sheet_area
         else Decimal("0")
     )
+    kerf_mm, edge_trim_mm = derive_map_cut_params(layout)
     result = CuttingResult(
         draft_id=draft.id,
         algorithm_name=IMPORTED_MAP_ALGORITHM_NAME,
         algorithm_version=IMPORTED_MAP_ALGORITHM_VERSION,
         source=CuttingResultSource.IMPORTED_MAP,
         status=CuttingResultStatus.CANDIDATE,
-        kerf_mm=0,
-        edge_trim_mm=0,
+        kerf_mm=kerf_mm,
+        edge_trim_mm=edge_trim_mm,
         panels_used_by_material=panels_used,
         waste_percentage=waste_percentage,
         total_cut_length_mm=total_cut_length,

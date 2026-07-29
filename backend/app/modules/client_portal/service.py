@@ -21,6 +21,7 @@ from app.modules.client_portal.schemas import (
     ClientBranchMaterialResponse,
     ClientBranchOption,
     ClientBranchResponse,
+    ClientContact,
 )
 from app.modules.inventory.api import display_unit
 from app.modules.support.api import record_action
@@ -46,6 +47,16 @@ async def get_client_profile(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
     return client
+
+
+async def client_contact(db: AsyncSession, client_id: uuid.UUID) -> ClientContact | None:
+    """Name+phone for an arbitrary client id, or `None` if it no longer
+    resolves — the caller (e.g. the cutting PDF identity box) treats a torn-
+    down client as an absent line, not an error."""
+    client = await db.get(Client, client_id)
+    if client is None:
+        return None
+    return ClientContact(id=client.id, name=client.name, phone=client.phone)
 
 
 async def update_client_profile(

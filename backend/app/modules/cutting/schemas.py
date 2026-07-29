@@ -104,6 +104,10 @@ class CuttingMapImportCommitRequest(BaseModel):
     parts: list[CuttingPart]
     map_layout: ImportMapLayout
     panel_picks: dict[str, uuid.UUID]
+    # The uploaded file's name (e.g. "AFZAL.map") — the wizard already knows it
+    # from the file picker. Used only to derive the new draft's `name`
+    # (imports/common.py:draft_name_from_filename); never persisted verbatim.
+    source_filename: str | None = None
 
 
 class WorkshopCuttingMapImportCommitRequest(CuttingMapImportCommitRequest):

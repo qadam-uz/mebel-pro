@@ -742,6 +742,7 @@ async def test_client_map_import_commit_keeps_a_single_result_lifecycle(
             "parts": parts,
             "map_layout": layout,
             "panel_picks": {"m1": str(panel.id)},
+            "source_filename": "6.map",
         },
     )
     draft = committed.json()
@@ -762,10 +763,16 @@ async def test_client_map_import_commit_keeps_a_single_result_lifecycle(
 
     assert committed.status_code == 200
     assert draft["chosen_result_id"] == imported_result["id"]
+    # The draft is named after the imported file, extension stripped (CB task:
+    # filename -> draft name).
+    assert draft["name"] == "6"
     assert imported_result["source"] == "imported_map"
     assert imported_result["algorithm_name"] == "imported-2dplace-map"
-    assert imported_result["kerf_mm"] == 0
-    assert imported_result["edge_trim_mm"] == 0
+    # 6.map's own layout has parts spaced 4 mm apart and inset 5 mm from every
+    # sheet edge — kerf_mm/edge_trim_mm are derived from that geometry, not
+    # hardcoded (see imports/map_2dplace.py:derive_map_cut_params).
+    assert imported_result["kerf_mm"] == 4
+    assert imported_result["edge_trim_mm"] == 5
     assert imported_result["panels_used_by_material"] == {str(panel.id): 1}
     assert imported_result["total_cut_length_mm"] == expected_cut_length
     assert len(imported_result["panels"]) == 1
@@ -865,6 +872,7 @@ async def test_workshop_map_import_commit_creates_staff_minted_imported_draft(
             "parts": _map_commit_parts(parsed, panel.id, edge.id),
             "map_layout": parsed["map_layout"],
             "panel_picks": {"m1": str(panel.id)},
+            "source_filename": "6.map",
         },
     )
 
@@ -875,7 +883,10 @@ async def test_workshop_map_import_commit_creates_staff_minted_imported_draft(
     assert stored.client_id == walk_in.id
     assert stored.preferred_branch_id == branch_id
     assert stored.created_via_workshop_id == workshop_id
+    assert stored.name == "6"
     assert body["results"][0]["source"] == "imported_map"
+    assert body["results"][0]["kerf_mm"] == 4
+    assert body["results"][0]["edge_trim_mm"] == 5
 
 
 async def test_workshop_map_import_commit_requires_branch_manage_orders_grant(

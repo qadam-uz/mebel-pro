@@ -29,6 +29,7 @@ from app.modules.access.api import (
 )
 from app.modules.access.contracts import Client
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
+from app.modules.cutting.imports.common import draft_name_from_filename
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
     CuttingDraftPart,
@@ -207,6 +208,7 @@ async def commit_workshop_imported_map(
         client_id=client.id,
         preferred_branch_id=scope.branch_id,
         created_via_workshop_id=workshop_id,
+        name=draft_name_from_filename(payload.source_filename),
     )
     # The imported result is built by the same core as the client path. The
     # frozen workshop branch deliberately overrides any client-path preference.

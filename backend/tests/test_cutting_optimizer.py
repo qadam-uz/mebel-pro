@@ -93,9 +93,11 @@ def test_cutting_engine_places_every_instance_without_overlap(params: CutParams)
 def test_optimizer_records_exact_per_sheet_cut_count_and_manhattan_length() -> None:
     panel = _panel()
 
-    result = run_all_algorithms([_part(material_id=panel.material_id)], {panel.material_id: panel})[
-        0
-    ]
+    result = run_all_algorithms(
+        [_part(material_id=panel.material_id)],
+        {panel.material_id: panel},
+        params=DEFAULT_CUT_PARAMS,
+    )[0]
 
     assert all(row.cut_count is not None and row.cut_count >= 0 for row in result.panels)
     assert all(row.cut_length_mm is not None and row.cut_length_mm >= 0 for row in result.panels)

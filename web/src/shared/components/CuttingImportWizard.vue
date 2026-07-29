@@ -352,6 +352,7 @@ async function commitMapLayout() {
       parts: buildMapImportedParts(parsed.value, panelPicks.value, edgePicks.value),
       map_layout: parsed.value.map_layout,
       panel_picks: buildMapPanelPicks(parsed.value, panelPicks.value),
+      source_filename: selectedFile.value?.name ?? null,
     })
     emit('committed', draft.id)
   } catch (errorValue) {

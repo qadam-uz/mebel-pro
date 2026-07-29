@@ -18,6 +18,7 @@ from app.modules.cutting.api import (
     commit_workshop_imported_map,
     create_draft,
     create_workshop_draft,
+    cutting_result_pdf_context,
     delete_draft,
     delete_workshop_draft,
     get_client_result,
@@ -186,8 +187,11 @@ async def client_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_client_result(db, principal=principal, result_id=result_id)
+    context = await cutting_result_pdf_context(db, result)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
-    return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
+    return Response(
+        render_cutting_pdf(result, context), media_type="application/pdf", headers=headers
+    )
 
 
 @router.get("/client/catalog/materials", response_model=list[ClientCatalogMaterialOption])
@@ -332,8 +336,11 @@ async def workshop_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_workshop_result(db, principal=principal, result_id=result_id)
+    context = await cutting_result_pdf_context(db, result)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
-    return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
+    return Response(
+        render_cutting_pdf(result, context), media_type="application/pdf", headers=headers
+    )
 
 
 @router.get("/workshop/catalog/materials", response_model=list[ClientCatalogMaterialOption])

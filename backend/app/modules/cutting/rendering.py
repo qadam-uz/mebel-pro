@@ -8,14 +8,15 @@ in sheet millimetres with the y axis growing up — the optimizer's own conventi
 which is also reportlab's page convention.
 """
 
-# ruff: noqa: RUF001 -- labels reuse the visualiser's exact copy (multiplication
-# sign in dimensions, U+21BB rotation marker)
+# ruff: noqa: RUF001, RUF002 -- labels and docstrings reuse the visualiser's exact
+# copy (multiplication sign in dimensions, U+21BB rotation marker)
 
 from __future__ import annotations
 
 from typing import Any, NamedTuple
 
 from reportlab.lib.colors import HexColor
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
 from app.core.pdf import FONT_BOLD, FONT_REGULAR, register_pdf_fonts
@@ -36,6 +37,10 @@ _LABEL_MIN_H = 30.0
 _BAND_STROKE = 3.0
 _BAND_INSET = 3.0
 _BAND_MARK = 30.0
+# Dimension texts sit against the side they measure, like the web visualiser
+# (CuttingPanelSvg.vue). The inset clears the band tick (_BAND_INSET + stroke)
+# with room to spare, so a number never lands on a tape mark.
+_DIM_INSET = 12.0
 
 # Print equivalents of the web tokens the visualiser uses. Structure stays
 # grayscale for print; colour is reserved for the offcut semantics.
@@ -68,6 +73,14 @@ class _BandedSides(NamedTuple):
 class _OffcutLabelMode(NamedTuple):
     text: str
     orientation: str
+
+
+class _DimensionLabelPlan(NamedTuple):
+    """`edges` carries both numbers separately; `inline` carries `L×W` centred."""
+
+    mode: str
+    length_text: str
+    width_text: str
 
 
 class _Frame(NamedTuple):
@@ -190,18 +203,32 @@ def draw_sheet_map(
                     )
                 pdf.restoreState()
 
-        label = _placement_label_mode(placement, parts, label_font_pt, w, h)
+        dim_inset_pt = (_DIM_INSET / norm_scale) * scale
+        label = _placement_label_mode(placement, label_font_pt, w, h, dim_inset_pt)
         if label is not None:
             pdf.setFillColor(_INK_SOFT)
             pdf.setFont(_FONT_REGULAR, label_font_pt)
-            if label.orientation == "vertical":
+            if label.mode == "edges":
+                pdf.drawCentredString(
+                    x + w / 2,
+                    y + h - dim_inset_pt - 0.36 * label_font_pt,
+                    label.length_text,
+                )
+                pdf.saveState()
+                pdf.translate(x + dim_inset_pt, y + h / 2)
+                pdf.rotate(90)
+                pdf.drawCentredString(0, -0.36 * label_font_pt, label.width_text)
+                pdf.restoreState()
+            elif label.mode == "inline_rotated":
                 pdf.saveState()
                 pdf.translate(x + w / 2, y + h / 2)
                 pdf.rotate(90)
-                pdf.drawCentredString(0, -0.36 * label_font_pt, label.text)
+                pdf.drawCentredString(0, -0.36 * label_font_pt, label.length_text)
                 pdf.restoreState()
             else:
-                pdf.drawCentredString(x + w / 2, y + h / 2 - 0.36 * label_font_pt, label.text)
+                pdf.drawCentredString(
+                    x + w / 2, y + h / 2 - 0.36 * label_font_pt, label.length_text
+                )
 
 
 def _rect_points(
@@ -243,46 +270,49 @@ def _parts_by_ref(result: CuttingResultResponse) -> dict[str, tuple[dict[str, An
     }
 
 
-def _placement_label(
-    placement: CuttingPlacementResponse,
-    parts_by_ref: dict[str, tuple[dict[str, Any], int]],
-) -> str:
-    row = parts_by_ref.get(placement.part_ref)
-    if row is None:
-        name = placement.part_ref
-    else:
-        part, index = row
-        raw_name = part.get("name")
-        stripped = raw_name.strip() if isinstance(raw_name, str) else ""
-        name = stripped or f"D{index + 1}"
-    rotated = " ↻" if placement.rotated else ""
-    number = f"#{index + 1} " if row is not None else ""
-    return f"{number}{name} {placement.length_mm}×{placement.width_mm}{rotated}"
-
-
 def _placement_label_mode(
     placement: CuttingPlacementResponse,
-    parts_by_ref: dict[str, tuple[dict[str, Any], int]],
     font_pt: float,
     width_pt: float,
     height_pt: float,
-) -> _OffcutLabelMode | None:
-    """Deterministic print fallback: full label, dimensions, row number, none.
+    inset_pt: float,
+) -> _DimensionLabelPlan | None:
+    """Decide how a placement carries its own dimensions.
 
-    The right-side register always carries dimensions and quantity, so omitting a
-    label here is safe only after all readable alternatives have failed.
+    A part is identified by its size, never by a name or row number, so the
+    dimensions are the one thing that must survive. The ladder degrades one step
+    at a time: `edges` places each number against the side it measures
+    (Bazis-style, matching the web visualiser); `inline` puts both on a single
+    `L×W` line when the part is too tight for the rotated number; and
+    `inline_rotated` turns that line 90° so a tall, narrow strip — the shape that
+    defeats every horizontal option — still carries its size. `None` means the
+    placement is unlabelable at this scale, which is the planner's cue to move
+    the whole sheet to landscape rather than print a part with no dimensions.
     """
-    full = _placement_label(placement, parts_by_ref)
-    row = parts_by_ref.get(placement.part_ref)
-    dims = f"{placement.length_mm}×{placement.width_mm}"
-    number = f"#{row[1] + 1}" if row is not None else placement.part_ref
-    for text in (full, dims, number):
-        if _printed_text_fits(text, font_pt, width_pt, height_pt):
-            return _OffcutLabelMode(text, "horizontal")
-    for text in (full, dims, number):
-        if _printed_text_fits(text, font_pt, height_pt, width_pt):
-            return _OffcutLabelMode(text, "vertical")
+    length_text = str(placement.length_mm)
+    width_text = str(placement.width_mm)
+    edges_fit = _dim_fits(length_text, font_pt, width_pt, height_pt, inset_pt) and _dim_fits(
+        width_text, font_pt, height_pt, width_pt, inset_pt
+    )
+    if edges_fit:
+        return _DimensionLabelPlan("edges", length_text, width_text)
+    inline = f"{length_text}×{width_text}"
+    if _printed_text_fits(inline, font_pt, width_pt, height_pt):
+        return _DimensionLabelPlan("inline", inline, "")
+    if _printed_text_fits(inline, font_pt, height_pt, width_pt):
+        return _DimensionLabelPlan("inline_rotated", inline, "")
     return None
+
+
+def _dim_fits(
+    text: str, font_pt: float, along_pt: float, across_pt: float, inset_pt: float
+) -> bool:
+    """A dimension needs room along its own axis and clearance from the side it
+    labels — the inset is what keeps it off the band tick."""
+    return (
+        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + 4 <= along_pt
+        and inset_pt + font_pt * 1.35 <= across_pt
+    )
 
 
 def _printed_text_fits(text: str, font_pt: float, width_pt: float, height_pt: float) -> bool:

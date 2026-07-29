@@ -15,7 +15,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, NamedTuple
 
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -29,7 +29,6 @@ from app.modules.cutting.rendering import (
     _panel_length,
     _panel_width,
     _parts_by_ref,
-    _placement_label_mode,
     _register_fonts,
     draw_sheet_map,
 )
@@ -50,11 +49,25 @@ _EDGE_FIELDS = ("edge_top", "edge_bottom", "edge_left", "edge_right")
 _MIN_PRINT_TEXT_PT = 7.0
 _MIN_EDGE_STROKE_PT = 0.8
 _PORTRAIT_SLOT_GAP = 10.0
-_REGISTER_ROW_H = 11.0
+_REGISTER_ROW_H = 14.0
 _REGISTER_HEADER_H = 13.0
-_PORTRAIT_REGISTER_W = 165.0
-_LANDSCAPE_REGISTER_W = 242.0
-_LANDSCAPE = (float(landscape(A4)[0]), float(landscape(A4)[1]))
+_PORTRAIT_REGISTER_W = 120.0
+# Vertical space a work card spends above its map: the four header lines plus
+# the padding under them. The planner needs it to size a slot's register.
+_CARD_HEADER_H = 73.0
+# Gap between the slot's bottom edge and the map/register's bottom edge (see
+# `map_y` in `_draw_work_card`). The register shares the map's top, so it
+# actually gets this much more room than `_CARD_HEADER_H` alone implies —
+# `_portrait_slot_capacity` must add it back or it undercounts by a row.
+_CARD_MAP_BOTTOM_PAD = 7.0
+_CONTINUATION_HEADER_H = 40.0
+# The register's own tick geometry (band-count marks under Bo'yi/Eni), separate
+# from the map's tick constants in rendering.py.
+_REGISTER_TICK_W = 22.0
+_REGISTER_TICK_GAP = 3.5
+_REGISTER_TICK_STROKE = 0.7
+_REGISTER_NUMBER_BASELINE = 5.0
+_REGISTER_TICK_TOP = 8.5
 
 
 @dataclass(frozen=True)
@@ -63,6 +76,13 @@ class PdfContext:
     client_name: str | None = None
     branch_name: str | None = None
     generated_at: datetime | None = None
+    # Draft-bound (not yet an order) identity: the draft's own name, used as
+    # the "Buyurtma/chizma" fallback ahead of the bare short-id.
+    draft_name: str | None = None
+    client_phone: str | None = None
+    workshop_name: str | None = None
+    branch_address: str | None = None
+    branch_phone: str | None = None
 
 
 class EdgeRegistryEntry(NamedTuple):
@@ -127,7 +147,6 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
     work_pages = _plan_work_pages(result, units)
     page_count = len(summary_pages) + len(work_pages)
 
-<<<<<<< HEAD
     for number, summary_page in enumerate(summary_pages, start=1):
         _draw_adaptive_summary_page(pdf, result, ctx, summary_page, number, page_count)
         pdf.showPage()
@@ -138,11 +157,6 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
         pdf.showPage()
     for index, page in enumerate(work_pages, start=len(summary_pages) + 1):
         _draw_work_page(pdf, result, ctx, registry, page, index, page_count)
-=======
-    if not result.panels:
-        _draw_title(pdf, "Kesish hujjati")
-        _draw_text(pdf, _MARGIN, _PAGE_H - 36 * mm, "Listlar yo'q", 11)
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
         pdf.showPage()
 
     pdf.save()
@@ -172,26 +186,21 @@ def _draw_summary_title_block(
     context: PdfContext,
     y: float,
 ) -> float:
-    box_h = 70
+    box_h = 78
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
     _draw_text(pdf, _MARGIN + 8, y - 17, "Mebel Pro — kesish hujjati", 14, bold=True)
-    order = context.order_number or f"chizma {_draft_short_id(result)}"
     date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
     pieces = sum(_part_quantity(part) for part in result.parts_snapshot)
     total_sheets = len(result.panels)
-    left = [
-        f"Buyurtma: {order}",
-        f"Mijoz: {_fallback(context.client_name)}",
-        f"Filial: {_fallback(context.branch_name)}",
-    ]
+    left = _identity_left_lines(result, context)
     right = [
         f"Sana: {date_text}",
         f"Listlar: {total_sheets}",
         f"Detallar: {pieces} dona",
     ]
     for index, text in enumerate(left):
-        _draw_text(pdf, _MARGIN + 8, y - 34 - index * 13, text, 9)
+        _draw_text(pdf, _MARGIN + 8, y - 34 - index * 12, text, 9)
     for index, text in enumerate(right):
         _draw_text(pdf, _MARGIN + _CONTENT_W / 2 + 8, y - 34 - index * 13, text, 9)
     return y - box_h
@@ -458,10 +467,6 @@ def _registry_number(number: int) -> str:
     return f"({number})"
 
 
-def _edge_registry_lookup(registry: list[EdgeRegistryEntry]) -> dict[str, EdgeRegistryEntry]:
-    return {entry.key: entry for entry in registry}
-
-
 def _group_identical_sheets(result: CuttingResultResponse) -> list[SheetGroup]:
     groups: list[SheetGroup] = []
     current: list[CuttingPanelResponse] = []
@@ -539,41 +544,76 @@ def _panel_areas(result: CuttingResultResponse, panel: CuttingPanelResponse) -> 
     )
 
 
+def _sheet_list_label(group: SheetGroup) -> str:
+    return f"List {group.start}" if group.start == group.end else f"List {group.start}-{group.end}"
+
+
+def _sheet_edge_labels(
+    result: CuttingResultResponse,
+    panel: CuttingPanelResponse,
+    parts_by_ref: dict[str, tuple[dict[str, Any], int]],
+) -> list[str]:
+    """Distinct edge-band materials actually used by the parts placed on this
+    sheet, in first-seen order."""
+    seen: set[str] = set()
+    labels: list[str] = []
+    for placement in panel.placements:
+        row = parts_by_ref.get(placement.part_ref)
+        if row is None:
+            continue
+        part = row[0]
+        for side in _EDGE_FIELDS:
+            edge = part.get(side)
+            if not isinstance(edge, dict):
+                continue
+            material_id = str(edge.get("material_id") or "")
+            if not material_id or material_id in seen:
+                continue
+            seen.add(material_id)
+            labels.append(_edge_label(_material_snapshot(result, material_id), material_id))
+    return labels
+
+
 def _panel_part_rows(
     result: CuttingResultResponse,
     panel: CuttingPanelResponse,
     registry: list[EdgeRegistryEntry],
 ) -> list[list[str]]:
+    """Register rows: `[length, width, quantity, length_band_count,
+    width_band_count]`. A part is identified by size + band pattern alone —
+    no name, no row number — so rows that end up identical on both counts
+    merge their quantity. `registry` is unused: edge materials no longer
+    print per row, only ①②③-numbered in the summary spec; kept so this
+    signature still matches the other row-builders callers thread together.
+    """
+    del registry
     grouped: dict[str, int] = {}
     for placement in panel.placements:
         grouped[placement.part_ref] = grouped.get(placement.part_ref, 0) + 1
-    lookup = _edge_registry_lookup(registry)
-    rows: list[list[str]] = []
-    for index, part in enumerate(result.parts_snapshot):
+    merged: dict[tuple[int, int, int, int], int] = {}
+    order: list[tuple[int, int, int, int]] = []
+    for part in result.parts_snapshot:
         part_ref = str(part.get("part_ref") or "")
         count = grouped.get(part_ref, 0)
         if count <= 0:
             continue
-        side_numbers = []
-        for side in _EDGE_FIELDS:
-            edge = part.get(side)
-            number = "·"
-            if isinstance(edge, dict):
-                key = f"{edge.get('material_id')}:{edge.get('source', 'shop')}"
-                entry = lookup.get(key)
-                if entry:
-                    number = _registry_number(entry.number)
-            side_numbers.append(number)
-        name = _part_name(part, index)
+        length_mm = int(part.get("length_mm") or 0)
+        width_mm = int(part.get("width_mm") or 0)
+        length_bands = sum(
+            1 for side in ("edge_top", "edge_bottom") if isinstance(part.get(side), dict)
+        )
+        width_bands = sum(
+            1 for side in ("edge_left", "edge_right") if isinstance(part.get(side), dict)
+        )
+        key = (length_mm, width_mm, length_bands, width_bands)
+        if key not in merged:
+            order.append(key)
+        merged[key] = merged.get(key, 0) + count
+    rows: list[list[str]] = []
+    for key in order:
+        length_mm, width_mm, length_bands, width_bands = key
         rows.append(
-            [
-                str(index + 1),
-                name,
-                f"{part.get('length_mm')}×{part.get('width_mm')}",
-                str(count),
-                *side_numbers,
-                "→" if part.get("follow_grain", True) else "·",
-            ]
+            [str(length_mm), str(width_mm), str(merged[key]), str(length_bands), str(width_bands)]
         )
     return rows
 
@@ -650,6 +690,42 @@ def _fallback(value: str | None) -> str:
     return value or "—"
 
 
+def _order_or_draft_label(result: CuttingResultResponse, context: PdfContext) -> str:
+    """An order-bound PDF keeps its order number; a still-draft PDF falls back
+    to the draft's own name; only a nameless draft prints the bare short id."""
+    if context.order_number:
+        return context.order_number
+    if context.draft_name:
+        return context.draft_name
+    return f"chizma {_draft_short_id(result)}"
+
+
+def _client_label(context: PdfContext) -> str:
+    if context.client_name and context.client_phone:
+        return f"{context.client_name} ({context.client_phone})"
+    return _fallback(context.client_name)
+
+
+def _branch_lines(context: PdfContext) -> list[str]:
+    """Workshop + branch identity for the fixed-height identity box, split
+    across up to two lines (names, then address/phone) instead of clipping."""
+    first = " · ".join(part for part in [context.workshop_name, context.branch_name] if part)
+    second = " · ".join(part for part in [context.branch_address, context.branch_phone] if part)
+    lines = [line for line in [first, second] if line]
+    return lines or ["—"]
+
+
+def _identity_left_lines(result: CuttingResultResponse, context: PdfContext) -> list[str]:
+    branch_lines = _branch_lines(context)
+    lines = [
+        f"Buyurtma/chizma: {_order_or_draft_label(result, context)}",
+        f"Mijoz: {_client_label(context)}",
+        f"Filial: {branch_lines[0]}",
+    ]
+    lines.extend(branch_lines[1:])
+    return lines
+
+
 def _percent(value: int, total: int) -> str:
     if total <= 0:
         return "—"
@@ -673,51 +749,48 @@ def _clip(text: str, width: float) -> str:
 
 
 def _plan_work_pages(result: CuttingResultResponse, units: list[LayoutUnit]) -> list[PdfPagePlan]:
-    """Plan pages before drawing so no unit is split to make it fit.
+    """Two sheets to an A4 portrait page, always.
 
-    The planner deliberately has no ReportLab dependency.  Its thresholds are
-    print constraints, not aesthetic hints: 7 pt type, 0.8 pt edge ticks, and
-    complete register rows.  This makes orientation behaviour cheap to test.
+    Orientation is no longer a decision: a page holds two layout units (the last
+    one alone when the count is odd) regardless of how many parts a sheet
+    carries. A register too long for its half-page slot spills onto a
+    continuation page instead of promoting its sheet to a page of its own — the
+    operator gets a predictable two-up sheet order, and no row is dropped.
     """
+    del result
+    capacity = _portrait_slot_capacity()
     pages: list[PdfPagePlan] = []
-    pending: LayoutUnit | None = None
-    for unit in units:
-        if _portrait_unit_eligible(result, unit):
-            if pending is None:
-                pending = unit
-            else:
-                pages.append(PdfPagePlan("portrait", (pending, unit)))
-                pending = None
-            continue
-        if pending is not None:
-            pages.append(PdfPagePlan("portrait", (pending,)))
-            pending = None
-        pages.extend(_landscape_pages_for_unit(unit))
-    if pending is not None:
-        pages.append(PdfPagePlan("portrait", (pending,)))
+    for index in range(0, len(units), 2):
+        pair = tuple(units[index : index + 2])
+        pages.append(PdfPagePlan("portrait", pair))
+        for unit in pair:
+            pages.extend(_register_continuation_pages(unit, capacity))
     return pages
 
 
-def _portrait_unit_eligible(result: CuttingResultResponse, unit: LayoutUnit) -> bool:
-    panel = unit.group.panels[0]
-    frame_h = (_PAGE_H - 2 * _MARGIN - _PORTRAIT_SLOT_GAP) / 2
-    map_h = frame_h - 73
-    map_w = _CONTENT_W - _PORTRAIT_REGISTER_W - 16
-    return len(unit.rows) <= _register_capacity(map_h) and _map_is_readable(
-        result, panel, map_w, map_h
-    )
+def _portrait_slot_capacity() -> int:
+    """Register rows one half-page work card can print.
+
+    Must mirror `_draw_work_card`'s geometry exactly: the register starts at
+    the map's top (`map_y + map_h`, i.e. `slot_h - _CARD_HEADER_H +
+    _CARD_MAP_BOTTOM_PAD` above the slot's bottom edge), not at
+    `slot_h - _CARD_HEADER_H`. Omitting the pad undercounts by a row and
+    sends a row to a needless continuation page even though it would have
+    fit in the card.
+    """
+    slot_h = (_PAGE_H - 2 * _MARGIN - _PORTRAIT_SLOT_GAP) / 2
+    return _register_capacity(slot_h - _CARD_HEADER_H + _CARD_MAP_BOTTOM_PAD)
 
 
-def _landscape_pages_for_unit(unit: LayoutUnit) -> list[PdfPagePlan]:
-    _page_w, page_h = _LANDSCAPE
-    map_h = page_h - 2 * _MARGIN - 73
-    capacity = _register_capacity(map_h)
-    pages = [PdfPagePlan("landscape", (unit,), 0, min(len(unit.rows), capacity))]
+def _register_continuation_pages(unit: LayoutUnit, capacity: int) -> list[PdfPagePlan]:
+    if capacity <= 0 or len(unit.rows) <= capacity:
+        return []
+    pages: list[PdfPagePlan] = []
+    continuation_capacity = _register_capacity(_PAGE_H - 2 * _MARGIN - _CONTINUATION_HEADER_H)
     row_start = capacity
-    continuation_capacity = _register_capacity(page_h - 2 * _MARGIN - 40)
     while row_start < len(unit.rows):
         row_end = min(len(unit.rows), row_start + continuation_capacity)
-        pages.append(PdfPagePlan("landscape_continuation", (unit,), row_start, row_end))
+        pages.append(PdfPagePlan("portrait_continuation", (unit,), row_start, row_end))
         row_start = row_end
     return pages
 
@@ -726,41 +799,13 @@ def _register_capacity(height: float) -> int:
     return max(0, int((height - _REGISTER_HEADER_H) // _REGISTER_ROW_H))
 
 
-def _map_is_readable(
-    result: CuttingResultResponse,
-    panel: CuttingPanelResponse,
-    frame_w: float,
-    frame_h: float,
-) -> bool:
-    length = _panel_length(result, panel)
-    width = _panel_width(result, panel)
-    if length <= 0 or width <= 0 or frame_w < 150 or frame_h < 120:
-        return False
-    scale = min(frame_w / length, frame_h / width)
-    parts = _parts_by_ref(result)
-    # Work-card labels use the same 7 pt fitting ladder as the map renderer.
-    # Banded ticks are clamped to 0.8 pt by draw_sheet_map, so their old
-    # normalized web tick length is not a print-orientation gate.
-    return all(
-        _placement_label_mode(
-            placement,
-            parts,
-            _MIN_PRINT_TEXT_PT,
-            placement.length_mm * scale,
-            placement.width_mm * scale,
-        )
-        is not None
-        for placement in panel.placements
-    )
-
-
 def _plan_summary_pages(
     result: CuttingResultResponse, registry: list[EdgeRegistryEntry]
 ) -> list[list[tuple[SummarySection, int, int]]]:
     sections = _summary_sections(result, registry)
     pages: list[list[tuple[SummarySection, int, int]]] = []
     page: list[tuple[SummarySection, int, int]] = []
-    remaining = _PAGE_H - 2 * _MARGIN - 82  # identity block on the first page
+    remaining = _PAGE_H - 2 * _MARGIN - 92  # identity block on the first page
     for section in sections:
         start = 0
         while start < len(section.rows):
@@ -903,18 +948,13 @@ def _draw_adaptive_summary_page(
 def _draw_adaptive_identity(
     pdf: canvas.Canvas, result: CuttingResultResponse, context: PdfContext, y: float
 ) -> float:
-    box_h = 74
+    box_h = 82
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
     _draw_text(pdf, _MARGIN + 8, y - 16, "Mebel Pro — kesish hujjati", 14, bold=True)
-    order = context.order_number or f"chizma {_draft_short_id(result)}"
     date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
     pieces = sum(_part_quantity(part) for part in result.parts_snapshot)
-    left = [
-        f"Buyurtma/chizma: {order}",
-        f"Mijoz: {_fallback(context.client_name)}",
-        f"Filial: {_fallback(context.branch_name)}",
-    ]
+    left = _identity_left_lines(result, context)
     right = [
         f"Sana: {date_text}",
         f"Listlar: {len(result.panels)} · detallar: {pieces} dona",
@@ -923,7 +963,7 @@ def _draw_adaptive_identity(
         f"kromka: {_metres(result.total_edge_length_mm)} m",
     ]
     for index, text in enumerate(left):
-        _draw_text(pdf, _MARGIN + 8, y - 32 - index * 13, text, 8.5)
+        _draw_text(pdf, _MARGIN + 8, y - 32 - index * 12, text, 8.5)
     for index, text in enumerate(right):
         _draw_text(pdf, _MARGIN + _CONTENT_W / 2 + 5, y - 32 - index * 13, text, 8.5)
     return y - box_h
@@ -938,33 +978,25 @@ def _draw_work_page(
     number: int,
     count: int,
 ) -> None:
-    if page.orientation == "portrait":
-        _setup_page(pdf)
-        available_h = _PAGE_H - 2 * _MARGIN
-        slot_h = (available_h - _PORTRAIT_SLOT_GAP) / 2
-        for slot, unit in enumerate(page.units):
-            y = _PAGE_H - _MARGIN - (slot + 1) * slot_h - slot * _PORTRAIT_SLOT_GAP
-            _draw_work_card(pdf, result, context, registry, unit, (_MARGIN, y, _CONTENT_W, slot_h))
+    _setup_page(pdf)
+    if page.orientation == "portrait_continuation":
+        _draw_register_continuation(pdf, result, context, registry, page.units[0], page)
         _draw_page_number(pdf, number, count, _PAGE_W, _PAGE_H)
         return
-    page_w, page_h = _LANDSCAPE
-    pdf.setPageSize(_LANDSCAPE)
-    pdf.setTitle("Mebel Pro — kesish hujjati")
-    unit = page.units[0]
-    if page.orientation == "landscape_continuation":
-        _draw_register_continuation(pdf, result, context, registry, unit, page, page_w, page_h)
-    else:
+    slot_h = (_PAGE_H - 2 * _MARGIN - _PORTRAIT_SLOT_GAP) / 2
+    capacity = _portrait_slot_capacity()
+    for slot, unit in enumerate(page.units):
+        y = _PAGE_H - _MARGIN - (slot + 1) * slot_h - slot * _PORTRAIT_SLOT_GAP
         _draw_work_card(
             pdf,
             result,
             context,
             registry,
             unit,
-            (_MARGIN, _MARGIN, page_w - 2 * _MARGIN, page_h - 2 * _MARGIN),
-            row_start=page.row_start,
-            row_end=page.row_end,
+            (_MARGIN, y, _CONTENT_W, slot_h),
+            row_end=capacity,
         )
-    _draw_page_number(pdf, number, count, page_w, page_h)
+    _draw_page_number(pdf, number, count, _PAGE_W, _PAGE_H)
 
 
 def _draw_work_card(
@@ -983,41 +1015,31 @@ def _draw_work_card(
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(x, y, width, height)
     snapshot = _material_snapshot(result, panel.material_id)
-    list_label = (
-        f"List {unit.group.start}"
-        if unit.group.start == unit.group.end
-        else f"List {unit.group.start}–{unit.group.end}"
-    )
-    _draw_text(
-        pdf, x + 6, y + height - 14, f"{list_label} · {len(unit.group.panels)} dona", 9, bold=True
-    )
+    parts_by_ref = _parts_by_ref(result)
+    # Card header: exactly 4 lines — list range, material, kromka materials
+    # used on this sheet, then the area/KIM/qoldiq metrics.
+    _draw_text(pdf, x + 6, y + height - 14, _sheet_list_label(unit.group), 9, bold=True)
     _draw_text(
         pdf,
         x + 6,
         y + height - 27,
         _material_label(snapshot, str(panel.material_id)),
-        7.0,
+        7.5,
     )
-    stats = _panel_areas(result, panel)
-    cut = _cut_metric_text(panel)
-    area_stats_text = (
-        f"To'ldirish {_percent(stats.parts_area, stats.sheet_area)} · "
-        f"Detallar {_m2(stats.parts_area)} m² · "
-        f"Qoldiq {_m2(stats.usable_area)} m² · "
-        f"Chiqit {_m2(stats.waste_area)} m²"
+    edge_labels = _sheet_edge_labels(result, panel, parts_by_ref)
+    kromka_line = f"Kromkalar: {', '.join(edge_labels)}" if edge_labels else "Kromkalar: —"
+    _draw_text(pdf, x + 6, y + height - 40, _clip(kromka_line, width - 12), 7.0)
+    areas = _panel_areas(result, panel)
+    metrics_line = (
+        f"Detallar maydoni: {_m2(areas.parts_area)} m² · "
+        f"KIM: {_percent(areas.parts_area, areas.sheet_area)} · "
+        f"Foydali qoldiq: {_m2(areas.usable_area)} m² · "
+        f"Chiqindi: {_m2(areas.waste_area)} m²"
     )
-    _draw_text(
-        pdf,
-        x + 6,
-        y + height - 40,
-        area_stats_text,
-        7.0,
-        bold=True,
-    )
-    _draw_text(pdf, x + 6, y + height - 53, cut, 7.0, bold=True)
-    map_y = y + 7
-    map_h = height - 73
-    register_w = _PORTRAIT_REGISTER_W if width < 600 else _LANDSCAPE_REGISTER_W
+    _draw_text(pdf, x + 6, y + height - 53, metrics_line, 7.0)
+    map_y = y + _CARD_MAP_BOTTOM_PAD
+    map_h = height - _CARD_HEADER_H
+    register_w = _PORTRAIT_REGISTER_W
     map_w = width - register_w - 16
     map_x = x + 5
     register_x = map_x + map_w + 7
@@ -1026,13 +1048,12 @@ def _draw_work_card(
         (map_x, map_y, map_w, map_h),
         result,
         panel,
-        _parts_by_ref(result),
+        parts_by_ref,
         min_text_pt=_MIN_PRINT_TEXT_PT,
         min_edge_stroke_pt=_MIN_EDGE_STROKE_PT,
     )
-    _draw_register(
-        pdf, register_x, map_y + map_h, register_w, unit.rows[row_start:row_end], registry
-    )
+    del registry  # edge materials print in the "Kromkalar" header line, not per row
+    _draw_register(pdf, register_x, map_y + map_h, register_w, unit.rows[row_start:row_end])
 
 
 def _draw_register_continuation(
@@ -1042,31 +1063,29 @@ def _draw_register_continuation(
     registry: list[EdgeRegistryEntry],
     unit: LayoutUnit,
     page: PdfPagePlan,
-    page_w: float,
-    page_h: float,
 ) -> None:
     panel = unit.group.panels[0]
     snapshot = _material_snapshot(result, panel.material_id)
-    list_label = (
-        f"List {unit.group.start}"
-        if unit.group.start == unit.group.end
-        else f"List {unit.group.start}–{unit.group.end}"
-    )
-    _draw_text(pdf, _MARGIN, page_h - _MARGIN, f"{list_label} · Detallar (davomi)", 11, bold=True)
+    list_label = _sheet_list_label(unit.group)
+    _draw_text(pdf, _MARGIN, _PAGE_H - _MARGIN, f"{list_label} · Detallar (davomi)", 11, bold=True)
     _draw_text(
         pdf,
         _MARGIN,
-        page_h - _MARGIN - 15,
-        _clip(_material_label(snapshot, str(panel.material_id)), page_w - 2 * _MARGIN),
+        _PAGE_H - _MARGIN - 15,
+        _clip(_material_label(snapshot, str(panel.material_id)), _CONTENT_W),
         8,
     )
+    del registry  # edge materials print in the work card's "Kromkalar" line, not per row
+    # Full content width, not the work card's narrow _PORTRAIT_REGISTER_W: this
+    # page has no map beside it, so a 120pt column would sit as a lone strip on
+    # an otherwise empty A4. _register_widths splits it into the same three
+    # proportional columns, just spread across the page.
     _draw_register(
         pdf,
         _MARGIN,
-        page_h - _MARGIN - 30,
-        page_w - 2 * _MARGIN,
+        _PAGE_H - _MARGIN - _CONTINUATION_HEADER_H,
+        _CONTENT_W,
         unit.rows[page.row_start : page.row_end],
-        registry,
     )
 
 
@@ -1076,25 +1095,80 @@ def _draw_register(
     top: float,
     width: float,
     rows: list[list[str]],
-    registry: list[EdgeRegistryEntry],
 ) -> None:
-    # The edge columns are deliberately retained on every card: numbers refer
-    # to the summary registry and therefore survive grayscale printing.
-    del registry
+    """Bo'yi / Eni / Soni register. A part carries no name or row number on
+    the sheet — only size and band pattern — so this draws rules only: a rule
+    under the header, a light hairline between rows, a closing rule under the
+    last row. No per-cell boxes (those made empty cells read as stray boxes).
+    """
     widths = _register_widths(width)
-    headers = ["#", "Detal", "O'lcham", "Q", "D1", "D2", "Sh1", "Sh2"]
-    y = _draw_positioned_table_row(
-        pdf, x, top, headers, widths, bold=True, row_h=_REGISTER_HEADER_H
-    )
-    for row in rows:
-        compact = [row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]]
-        y = _draw_positioned_table_row(pdf, x, y, compact, widths, row_h=_REGISTER_ROW_H)
+    y = top - _REGISTER_HEADER_H
+    cursor = x
+    for text, col_width in zip(["Bo'yi", "Eni", "Soni"], widths, strict=True):
+        _draw_centred_text(pdf, cursor + col_width / 2, y + 3, text, _MIN_PRINT_TEXT_PT, bold=True)
+        cursor += col_width
+    pdf.setStrokeGray(_HAIRLINE)
+    pdf.setLineWidth(0.6)
+    pdf.line(x, y, x + width, y)
+    for index, row in enumerate(rows):
+        y = _draw_register_row(pdf, x, y, row, widths)
+        if index < len(rows) - 1:
+            pdf.setStrokeGray(_HAIRLINE)
+            pdf.setLineWidth(0.35)
+            pdf.line(x, y, x + width, y)
+    pdf.setStrokeGray(_HAIRLINE)
+    pdf.setLineWidth(0.6)
+    pdf.line(x, y, x + width, y)
+
+
+def _draw_register_row(
+    pdf: canvas.Canvas,
+    x: float,
+    top: float,
+    row: list[str],
+    widths: Sequence[float],
+) -> float:
+    length_text, width_text, qty_text, length_bands, width_bands = row
+    y = top - _REGISTER_ROW_H
+    baseline = top - _REGISTER_NUMBER_BASELINE
+    tick_top = top - _REGISTER_TICK_TOP
+    cursor = x
+    _draw_centred_text(pdf, cursor + widths[0] / 2, baseline, length_text, _MIN_PRINT_TEXT_PT)
+    _draw_band_ticks(pdf, cursor + widths[0] / 2, tick_top, int(length_bands))
+    cursor += widths[0]
+    _draw_centred_text(pdf, cursor + widths[1] / 2, baseline, width_text, _MIN_PRINT_TEXT_PT)
+    _draw_band_ticks(pdf, cursor + widths[1] / 2, tick_top, int(width_bands))
+    cursor += widths[1]
+    _draw_centred_text(pdf, cursor + widths[2] / 2, baseline, qty_text, _MIN_PRINT_TEXT_PT)
+    return y
+
+
+def _draw_band_ticks(pdf: canvas.Canvas, cx: float, top_y: float, count: int) -> None:
+    """N short horizontal rules stacked under a register number — N banded
+    edges on that side (0, 1 or 2). Uniform solid stroke, never dashed."""
+    if count <= 0:
+        return
+    pdf.saveState()
+    pdf.setStrokeGray(_INK)
+    pdf.setLineWidth(_REGISTER_TICK_STROKE)
+    pdf.setLineCap(1)
+    half = _REGISTER_TICK_W / 2
+    for tick in range(count):
+        ty = top_y - tick * _REGISTER_TICK_GAP
+        pdf.line(cx - half, ty, cx + half, ty)
+    pdf.restoreState()
+
+
+def _draw_centred_text(
+    pdf: canvas.Canvas, cx: float, y: float, text: str, size: float, *, bold: bool = False
+) -> None:
+    pdf.setFillGray(_INK)
+    pdf.setFont(_FONT_BOLD if bold else _FONT_REGULAR, size)
+    pdf.drawCentredString(cx, y, text)
 
 
 def _register_widths(width: float) -> list[float]:
-    # Eight columns must also fit in a portrait half-card. Names may clip,
-    # while dimensions, quantity and all four edge references keep their cells.
-    ratios = (0.09, 0.16, 0.26, 0.12, 0.0925, 0.0925, 0.0925, 0.0925)
+    ratios = (0.42, 0.42, 0.16)
     return [width * ratio for ratio in ratios]
 
 
@@ -1130,12 +1204,6 @@ def _draw_positioned_table_row(
         )
         cursor += width
     return y - row_h
-
-
-def _cut_metric_text(panel: CuttingPanelResponse) -> str:
-    if panel.cut_count is None or panel.cut_length_mm is None:
-        return "Kesish ma'lumoti mavjud emas"
-    return f"Kesishlar: {panel.cut_count} · uzunligi {_metres(panel.cut_length_mm)} m"
 
 
 def _draw_page_number(

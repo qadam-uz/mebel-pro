@@ -143,6 +143,10 @@ export interface CuttingMapImportCommitPayload {
   parts: CuttingPart[]
   map_layout: ImportMapLayout
   panel_picks: Record<string, string>
+  // The uploaded file's name (e.g. "AFZAL.map") — the wizard already has it
+  // from the file picker. The backend derives the new draft's `name` from it
+  // (extension stripped); never persisted verbatim.
+  source_filename?: string | null
 }
 
 export interface ClientCatalogMaterialOption {

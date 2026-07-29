@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 
 from app.modules.cutting.imports.base import (
@@ -58,7 +59,7 @@ def _to_import_response(map_file: MapFile) -> ImportParsedResponse:
         waste_count = 0
         remainder_count = 0
 
-        for record_index, record in enumerate(sheet.records, start=1):
+        for record in sheet.records:
             edges = _edges_dict(record.edges)
             if record.is_waste:
                 waste_count += 1
@@ -80,13 +81,6 @@ def _to_import_response(map_file: MapFile) -> ImportParsedResponse:
                     )
                 )
                 continue
-
-            if record.width < 50 or record.height < 50:
-                raise ImportParseError(
-                    "invalid_map_part",
-                    "MAP faylda 50 mm dan kichik detal bor",
-                    details={"sheet": sheet.name, "record": record_index},
-                )
 
             has_edges = has_edges or any(record.edges)
             aggregate = _aggregate_for(aggregates, record, material_key)
@@ -264,3 +258,100 @@ def _material_label(width: int, height: int, hint: str) -> str:
 def _edges_dict(edges: EdgeFlags) -> dict[str, bool]:
     top, bottom, left, right = edges
     return {"top": top, "bottom": bottom, "left": left, "right": right}
+
+
+# 2D-Place's MAP format carries no explicit kerf/edge-trim field (map_parser.py
+# reads only description, sheet size, record coordinates, waste/remainder
+# flags, and edge codes) — but both are implicit in how the layout was already
+# spaced when it was placed. These mirror the branch kerf_mm/edge_trim_mm
+# bounds (app/modules/workshop/schemas.py BranchCreateRequest/BranchPatchRequest)
+# — a derived value outside them is untrustworthy noise, not a real cut parameter.
+_KERF_MM_MIN = 1
+_KERF_MM_MAX = 20
+_EDGE_TRIM_MM_MIN = 0
+_EDGE_TRIM_MM_MAX = 50
+
+
+def derive_map_cut_params(layout: ImportMapLayout) -> tuple[int, int]:
+    """Recover (kerf_mm, edge_trim_mm) from an imported MAP layout's geometry.
+
+    Kerf is the small gap 2D-Place left between two adjacent real parts;
+    edge trim is the margin it kept from the raw sheet edge before placing
+    anything. Both are recovered as the single most common value across the
+    *whole* imported layout (every sheet, not one) — a one-off 1 mm/3 mm
+    stray gap must not outvote the dominant 4 mm seen elsewhere in the same
+    file. Waste/remainder rectangles are excluded from both measurements;
+    only real parts define kerf and trim.
+
+    A sheet with a single part, or parts that never sit adjacent, leaves no
+    kerf evidence; a layout with no part near an edge leaves no trim
+    evidence. Either falls back to 0 — today's hardcoded behaviour — rather
+    than guessing. A derived value outside the branch settings' sane range
+    is treated the same way: probably noise, not a real cut parameter.
+
+    (An unconfirmed lead: raw uint16-LE reads at MAP byte offsets 683/833
+    line up with each fixture's trim, and offset 581 with kerf 4 — but the
+    kerf offset doesn't discriminate across fixtures and both offsets sit
+    inside record data, not a header field. Not relied on here.)
+    """
+    kerf = _mode(_adjacent_gaps(layout))
+    trim = _mode(_edge_insets(layout))
+    kerf_mm = kerf if kerf is not None and _KERF_MM_MIN <= kerf <= _KERF_MM_MAX else 0
+    edge_trim_mm = (
+        trim if trim is not None and _EDGE_TRIM_MM_MIN <= trim <= _EDGE_TRIM_MM_MAX else 0
+    )
+    return kerf_mm, edge_trim_mm
+
+
+def _adjacent_gaps(layout: ImportMapLayout) -> Counter[int]:
+    """Gaps between every pair of real parts on the same sheet whose spans
+    overlap on the perpendicular axis (i.e. they face each other across a
+    would-be saw cut). Only non-negative gaps count — an overlap would mean
+    the placements are invalid, already rejected before this runs."""
+    gaps: Counter[int] = Counter()
+    for sheet in layout.sheets:
+        parts = [placement for placement in sheet.placements if not placement.is_waste]
+        for index, left in enumerate(parts):
+            for right in parts[index + 1 :]:
+                y_overlap = min(left.y_mm + left.width_mm, right.y_mm + right.width_mm) - max(
+                    left.y_mm, right.y_mm
+                )
+                if y_overlap > 0:
+                    _count_gap(gaps, right.x_mm - (left.x_mm + left.length_mm))
+                    _count_gap(gaps, left.x_mm - (right.x_mm + right.length_mm))
+                x_overlap = min(left.x_mm + left.length_mm, right.x_mm + right.length_mm) - max(
+                    left.x_mm, right.x_mm
+                )
+                if x_overlap > 0:
+                    _count_gap(gaps, right.y_mm - (left.y_mm + left.width_mm))
+                    _count_gap(gaps, left.y_mm - (right.y_mm + right.width_mm))
+    return gaps
+
+
+def _edge_insets(layout: ImportMapLayout) -> Counter[int]:
+    """Every real part's inset from each of the sheet's four edges."""
+    insets: Counter[int] = Counter()
+    for sheet in layout.sheets:
+        for placement in sheet.placements:
+            if placement.is_waste:
+                continue
+            insets[placement.x_mm] += 1
+            insets[placement.y_mm] += 1
+            insets[sheet.width_mm - (placement.x_mm + placement.length_mm)] += 1
+            insets[sheet.height_mm - (placement.y_mm + placement.width_mm)] += 1
+    return insets
+
+
+def _count_gap(gaps: Counter[int], gap: int) -> None:
+    if gap >= 0:
+        gaps[gap] += 1
+
+
+def _mode(counter: Counter[int]) -> int | None:
+    """The most frequent value, tie-broken toward the smallest — deterministic
+    regardless of dict iteration order, and the smallest candidate is the
+    conservative pick for both a saw kerf and a trim margin."""
+    if not counter:
+        return None
+    top_count = max(counter.values())
+    return min(value for value, count in counter.items() if count == top_count)

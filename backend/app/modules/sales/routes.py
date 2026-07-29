@@ -174,7 +174,11 @@ async def client_order_cutting_pdf(
             PdfContext(
                 order_number=order.order_number,
                 client_name=order.client_name,
+                client_phone=order.client_phone,
                 branch_name=order.branch_name,
+                branch_address=order.branch_address,
+                branch_phone=order.branch_phone,
+                workshop_name=order.workshop_name,
             ),
         ),
         media_type="application/pdf",
@@ -450,7 +454,11 @@ async def workshop_order_cutting_pdf(
             PdfContext(
                 order_number=order.order_number,
                 client_name=order.client_name,
+                client_phone=order.client_phone,
                 branch_name=order.branch_name,
+                branch_address=order.branch_address,
+                branch_phone=order.branch_phone,
+                workshop_name=order.workshop_name,
             ),
         ),
         media_type="application/pdf",

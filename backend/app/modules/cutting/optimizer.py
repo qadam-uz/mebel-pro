@@ -263,13 +263,9 @@ def _run_best_engine_result(
                 PanelResult(
                     material_id=material_id,
                     panel_index=sheet_result.index,
-<<<<<<< HEAD
-                    waste_area_mm2=material.usable_area_mm2 - used_area,
+                    waste_area_mm2=material.usable_area_mm2(params.edge_trim_mm) - used_area,
                     cut_count=len(sheet_result.cuts),
                     cut_length_mm=cut_length_mm,
-=======
-                    waste_area_mm2=material.usable_area_mm2(params.edge_trim_mm) - used_area,
->>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
                     offcuts=[
                         OffcutResult(
                             x_mm=offcut.x,

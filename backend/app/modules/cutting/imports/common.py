@@ -6,6 +6,7 @@ import math
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from typing import Any, Literal
 
 from app.modules.cutting.imports.base import SkipReason, WarningCode
@@ -13,6 +14,27 @@ from app.modules.cutting.imports.base import SkipReason, WarningCode
 DimensionError = Literal["non_numeric", "dimension_not_positive", "dimension_too_large"]
 
 _SPACE_RE = re.compile(r"[\s\u00a0\u2009]+")
+
+# Matches CuttingDraftPatchRequest.name / CuttingPart.name (schemas.py) -- a
+# derived name is capped the same as a hand-typed one.
+_DRAFT_NAME_MAX_LENGTH = 64
+
+
+def draft_name_from_filename(filename: str | None) -> str | None:
+    """Best-effort draft name from an imported file's name.
+
+    Strips the extension (``AFZAL.map`` -> ``AFZAL``), trims whitespace, and
+    caps to the same length a hand-typed draft name allows. Returns ``None``
+    when nothing usable remains (no filename, or a name that's all
+    whitespace/extension) -- callers must leave the draft unnamed rather than
+    invent one.
+    """
+    if not filename:
+        return None
+    stem = Path(filename).stem.strip()
+    if not stem:
+        return None
+    return stem[:_DRAFT_NAME_MAX_LENGTH].strip() or None
 
 
 @dataclass

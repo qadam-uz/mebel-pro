@@ -3,7 +3,10 @@ from pathlib import Path
 
 import pytest
 from app.modules.cutting.imports.base import ImportParseError, ImportParseOptions
+from app.modules.cutting.imports.common import draft_name_from_filename
 from app.modules.cutting.imports.detect import decode_csv_text, sniff_csv_delimiter, sniff_format
+from app.modules.cutting.imports.map_2dplace import _to_import_response, derive_map_cut_params
+from app.modules.cutting.imports.map_parser import MapFile, MapRecord, MapSheet
 from app.modules.cutting.imports.parser import guess_header, parse_import_file
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -272,6 +275,133 @@ def test_map_import_parse_returns_layout_and_material_groups() -> None:
     assert response.map_layout.sheets[0].parts_count == 6
     assert response.map_layout.sheets[0].remainder_count == 1
     assert response.map_layout.part_rows[0].part_ref == "map-1"
+
+
+def test_map_import_keeps_undersized_parts_instead_of_rejecting_the_file() -> None:
+    """A small part is a row the editor flags, never a reason to lose the drawing —
+    the importer used to reject the whole file over a sub-50 mm record."""
+    sheet = MapSheet(
+        name="1: Лист 1",
+        width_mm=2750,
+        height_mm=1830,
+        records=[
+            MapRecord(
+                x=0, y=0, width=30, height=20, name="tiny", edges=(False, False, False, False)
+            ),
+            MapRecord(
+                x=0, y=100, width=600, height=400, name="normal", edges=(False, False, False, False)
+            ),
+        ],
+    )
+    map_file = MapFile(description="", customer_name="", order_type="", sheets=[sheet])
+
+    response = _to_import_response(map_file)
+
+    assert response.status == "parsed"
+    assert sorted((part.length_mm, part.width_mm) for part in response.parts) == [
+        (30, 20),
+        (600, 400),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected_kerf_mm", "expected_edge_trim_mm"),
+    [
+        # These are the honest test data: a human measured kerf/trim directly
+        # off each real fixture's placement geometry before this derivation
+        # was built (see imports/map_2dplace.py:derive_map_cut_params).
+        ("6.map", 4, 5),
+        ("AFZAL.map", 4, 5),
+        ("A1.map", 4, 5),
+        ("9.map", 4, 10),
+    ],
+)
+def test_derive_map_cut_params_matches_real_fixtures(
+    filename: str, expected_kerf_mm: int, expected_edge_trim_mm: int
+) -> None:
+    response = parse_import_file(filename=filename, content=_map_fixture(filename))
+    assert response.map_layout is not None
+
+    kerf_mm, edge_trim_mm = derive_map_cut_params(response.map_layout)
+
+    assert kerf_mm == expected_kerf_mm
+    assert edge_trim_mm == expected_edge_trim_mm
+
+
+def test_derive_map_cut_params_falls_back_to_zero_for_a_single_unadjacent_part() -> None:
+    """A lone part with no neighbour (no kerf evidence) sitting far from every
+    sheet edge (no trustworthy trim evidence — its nearest inset is well past
+    the branch's own edge-trim bound) must not report an invented number.
+    Falls back to 0/0, the prior hardcoded behaviour."""
+    sheet = MapSheet(
+        name="1: Лист 1",
+        width_mm=2750,
+        height_mm=1830,
+        records=[
+            MapRecord(
+                x=500,
+                y=500,
+                width=100,
+                height=100,
+                name="lonely",
+                edges=(False, False, False, False),
+            ),
+        ],
+    )
+    map_file = MapFile(description="", customer_name="", order_type="", sheets=[sheet])
+    response = _to_import_response(map_file)
+    assert response.map_layout is not None
+
+    kerf_mm, edge_trim_mm = derive_map_cut_params(response.map_layout)
+
+    assert kerf_mm == 0
+    assert edge_trim_mm == 0
+
+
+def test_derive_map_cut_params_ignores_a_one_off_gap_in_favour_of_the_dominant_one() -> None:
+    """Three parts on one sheet: two are 4 mm apart (the dominant, real kerf),
+    one is a stray 1 mm off — the derivation must pick the frequent 4 mm, not
+    the minimum 1 mm (AFZAL.map has exactly this shape in the real data)."""
+    sheet = MapSheet(
+        name="1: Лист 1",
+        width_mm=2750,
+        height_mm=1830,
+        records=[
+            MapRecord(
+                x=5, y=5, width=200, height=100, name="a", edges=(False, False, False, False)
+            ),
+            MapRecord(
+                x=209, y=5, width=200, height=100, name="b", edges=(False, False, False, False)
+            ),  # 4 mm gap from "a"
+            MapRecord(
+                x=413, y=5, width=200, height=100, name="c", edges=(False, False, False, False)
+            ),  # 4 mm gap from "b"
+            MapRecord(
+                x=614, y=5, width=200, height=100, name="d", edges=(False, False, False, False)
+            ),  # 1 mm stray gap from "c"
+        ],
+    )
+    map_file = MapFile(description="", customer_name="", order_type="", sheets=[sheet])
+    response = _to_import_response(map_file)
+    assert response.map_layout is not None
+
+    kerf_mm, _ = derive_map_cut_params(response.map_layout)
+
+    assert kerf_mm == 4
+
+
+def test_draft_name_from_filename_strips_extension_trims_and_caps() -> None:
+    assert draft_name_from_filename("AFZAL.map") == "AFZAL"
+    assert draft_name_from_filename("  spaced name.csv  ") == "spaced name"
+    assert draft_name_from_filename("archive.tar.gz") == "archive.tar"
+    assert draft_name_from_filename("x" * 100 + ".map") == "x" * 64
+
+
+@pytest.mark.parametrize("filename", [None, "", "   "])
+def test_draft_name_from_filename_returns_none_when_nothing_usable_remains(
+    filename: str | None,
+) -> None:
+    assert draft_name_from_filename(filename) is None
 
 
 def test_mebelshik_spec_csv_without_material_column_uses_all_group_and_silent_blank_line() -> None:

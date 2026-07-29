@@ -230,6 +230,9 @@ describe('CuttingImportWizard', () => {
 
     expect(parseMock).toHaveBeenCalledWith(expect.any(File), undefined, 'workshop')
     expect(commit).toHaveBeenCalledOnce()
+    // The uploaded file's name travels to the commit payload so the backend
+    // can seed the new draft's name from it (extension stripped server-side).
+    expect(commit).toHaveBeenCalledWith(expect.objectContaining({ source_filename: 'kitchen.map' }))
     expect(wrapper.emitted('committed')).toEqual([['draft-map']])
   })
 })
