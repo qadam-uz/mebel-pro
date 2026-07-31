@@ -277,7 +277,7 @@ test('owner adds a branch material and records priced stock movement with prefil
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
   })
   await expect(
-    stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.name)}.*3 panel`) }),
+    stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.name)}.*3 list`) }),
   ).toBeVisible()
 
   // The arrival is readable as a document: one K-… row carrying one position.
