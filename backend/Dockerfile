@@ -1,5 +1,53 @@
 # syntax=docker/dockerfile:1
 
+# --- packingsolver-builder: build the pinned PackingSolver executable --------
+# cutting-engine's PackingSolver provider (docs/PACKINGSOLVER_PROVIDER_SPEC.md,
+# "Packing and deployment") is a local subprocess Mebel Pro's image must
+# install; the Python wheel stays platform-independent. Upstream is MIT
+# licensed (fontanf/packingsolver); source is never vendored into this repo,
+# only fetched, checksummed, and built here.
+FROM python:3.12-slim AS packingsolver-builder
+
+# Pin the exact upstream commit and archive checksum — never `latest`, never
+# an unpinned revision (PACKINGSOLVER_PROVIDER_SPEC.md, "Fixed decisions").
+ARG PACKINGSOLVER_COMMIT=6915ff627a70ee0d71f5adca81f0ecbb0d0579e4
+ARG PACKINGSOLVER_SHA256=d3b60f82ff05206a8fa75fbf55e6e12bbe225ec29d45133600300344a739b7cb
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         build-essential git curl ca-certificates liblapack-dev libbz2-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# cmake via pip rather than apt — apt's cmake on python:3.12-slim (Debian
+# bookworm) is older than PackingSolver's CMakeLists.txt requires.
+RUN pip install --no-cache-dir cmake==4.0.3
+
+WORKDIR /usr/src/packingsolver
+
+# Download the fixed source archive and verify its checksum before extracting
+# — the archive is untrusted until the hash matches exactly.
+RUN curl -fsSL -o packingsolver.tar.gz \
+      "https://github.com/fontanf/packingsolver/archive/${PACKINGSOLVER_COMMIT}.tar.gz" \
+    && echo "${PACKINGSOLVER_SHA256}  packingsolver.tar.gz" | sha256sum --check --status \
+    && tar -xzf packingsolver.tar.gz --strip-components=1 \
+    && rm packingsolver.tar.gz
+
+# Configure Release, unit tests off, and build ONLY the rectangleguillotine
+# main target — the other packing types (rectangle, boxstacks, irregular, ...)
+# are never compiled. CMake's FetchContent pulls Boost/HiGHS/treesearchsolver
+# etc. at configure/build time, hence `git`/`curl`/`ca-certificates` above.
+RUN cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DPACKINGSOLVER_BUILD_TEST=OFF \
+    && cmake --build build --target PackingSolver_rectangleguillotine_main --parallel "$(nproc)"
+
+# Install manually rather than `cmake --install` — only one target was built,
+# and the project's install rules cover every packing-type executable.
+RUN mkdir -p /opt/packingsolver/bin \
+    && cp build/src/rectangleguillotine/packingsolver_rectangleguillotine \
+         /opt/packingsolver/bin/packingsolver_rectangleguillotine \
+    && strip /opt/packingsolver/bin/packingsolver_rectangleguillotine
+
 # --- builder: resolve & install deps into the system interpreter -------------
 FROM python:3.12-slim AS builder
 
@@ -31,6 +79,13 @@ COPY . /app
 # --- runtime -----------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
+# Shared-library runtime deps for the PackingSolver executable only — no
+# compiler, no headers, no CMake cache, no PackingSolver source (those stay in
+# packingsolver-builder and are discarded with it).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends liblapack3 libbz2-1.0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home --uid 1000 app
 WORKDIR /app
 
@@ -38,6 +93,42 @@ WORKDIR /app
 # console scripts (uvicorn, fastapi, alembic) verbatim; they're on PATH already.
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder --chown=app:app /app /app
+
+# The pinned PackingSolver executable cutting-engine's packingsolver provider
+# resolves via `shutil.which` (PACKINGSOLVER_PROVIDER_SPEC.md, "Executable
+# resolution") — root-owned, mode 0755, next to the other console scripts on
+# PATH. The application process itself stays non-root (`USER app` below).
+COPY --from=packingsolver-builder \
+     /opt/packingsolver/bin/packingsolver_rectangleguillotine \
+     /usr/local/bin/packingsolver_rectangleguillotine
+RUN chown root:root /usr/local/bin/packingsolver_rectangleguillotine \
+    && chmod 0755 /usr/local/bin/packingsolver_rectangleguillotine
+
+# MIT license notice for the vendored executable (THIRD_PARTY_NOTICES.md at
+# the repo root carries the same text for the product as a whole).
+COPY --from=packingsolver-builder \
+     /usr/src/packingsolver/LICENSE \
+     /usr/share/licenses/packingsolver/LICENSE
+
+# Build-time smoke test: every shared library must resolve (no "not found"),
+# and the executable must actually run. This pinned build has no long
+# `--help` option at all — passing it is itself an "unrecognised option"
+# error. The real help text comes from `-h` (or no arguments), still exit
+# code 1: PackingSolver's argument parser treats printing usage as a
+# failure regardless of how it was invoked. Verified by hand against the
+# pinned commit's binary before writing this assertion (see
+# PACKINGSOLVER_PROVIDER_SPEC.md, "Packing and deployment" for the spec's
+# original, older-pin assumption of `--help`).
+RUN ldd /usr/local/bin/packingsolver_rectangleguillotine \
+    && ! ldd /usr/local/bin/packingsolver_rectangleguillotine | grep -q "not found"
+RUN help_output="$(/usr/local/bin/packingsolver_rectangleguillotine -h)"; rc=$?; \
+    if [ "$rc" -ne 1 ]; then \
+        echo "expected exit code 1 from -h, got $rc" >&2; exit 1; \
+    fi; \
+    echo "$help_output" | grep -q "Allowed options" || { \
+        echo "expected 'Allowed options' in -h output" >&2; exit 1; \
+    }
+
 ENV PYTHONUNBUFFERED=1
 
 USER app
