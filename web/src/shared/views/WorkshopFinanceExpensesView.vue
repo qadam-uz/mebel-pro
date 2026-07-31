@@ -973,7 +973,7 @@ onMounted(async () => {
             <input
               v-model="expenseForm.description"
               class="mp-input"
-              placeholder="Masalan: Bahodir T. · 19 panel"
+              placeholder="Masalan: Bahodir T. · 19 list"
               required
             />
           </label>

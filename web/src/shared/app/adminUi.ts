@@ -244,7 +244,7 @@ export function adminJobLogText(value: string | null | undefined) {
 }
 
 export function materialKindLabel(kind: MaterialKind | null | undefined) {
-  if (kind === 'panel') return 'Panel'
+  if (kind === 'panel') return 'List'
   if (kind === 'edge') return 'Kromka'
   return 'Hammasi'
 }

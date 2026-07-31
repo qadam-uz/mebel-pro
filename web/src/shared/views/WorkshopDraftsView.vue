@@ -54,11 +54,6 @@ function draftLabel(draft: WorkshopDraftSummary): string {
   return draft.name?.trim() || draft.client_name || 'Nomsiz chizma'
 }
 
-function wastePercent(draft: WorkshopDraftSummary): string | null {
-  if (draft.waste_percentage === null) return null
-  return `${(draft.waste_percentage * 100).toFixed(1)}%`
-}
-
 function openDraft(draft: WorkshopDraftSummary) {
   void router.push(rolePath(`/workshop/orders/cutting/${draft.id}`))
 }
@@ -172,9 +167,6 @@ watch(
             >
             <span v-if="draft.has_result">
               <b class="font-mono text-ink">{{ draft.panel_count || '—' }}</b> panel
-            </span>
-            <span v-if="wastePercent(draft)">
-              <b class="font-mono text-ink">{{ wastePercent(draft) }}</b> chiqim
             </span>
             <span>{{ formatRelativeUz(draft.updated_at) }} · tahrirlangan</span>
           </span>

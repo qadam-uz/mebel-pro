@@ -345,8 +345,9 @@ One term per concept, across client, workshop and admin.
 | -------------------------------------- | ------------------- | ------------------------- |
 | A client's cutting order               | `buyurtma`          | `zakaz`                   |
 | A cut piece on a drawing               | `detal`             | `qism`, `part`            |
+| A distinct part size on a drawing      | `xil`               | `qator`, `tur`            |
 | A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
-| A panel sheet                          | `list`              | `plita`                   |
+| A panel sheet                          | `list`              | `plita`, `panel`          |
 | Edge tape (the material)               | `kromka`            | `krom`                    |
 | The edge-banding station / stage       | `Krom` / `Kromka`   | — _owner's ruling pending_ |
 | A workshop location                    | `filial`            | `bo'lim` (= a UI section) |
@@ -361,11 +362,19 @@ One term per concept, across client, workshop and admin.
 | A background job                       | `fon vazifa`        | `ish`, `scheduler`        |
 | A signed statement of account          | `akt sverka`        | —                         |
 | A printed/served document              | `hujjat`            | `xujjat`                  |
+| A part fitted onto a sheet             | `joylashtirildi`    | — _orders never use it_   |
+| An order the client just submitted     | `Yuborildi`         | `Joylashtirildi`          |
 
 `kirim` and `tushum` are **not** synonyms and must never be unified: `Kirim` is a stock
 arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
 income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
 of the interface) are different words for different things.
+
+`joylashtirish` belongs to the cutting result and nothing else — a part fitted onto a sheet
+(`Joylashtirildi 12/14`, `Fayldan joylashuv`). The `new` order status used to borrow the same
+word, so a client read `Joylashtirildi 12/14` on the result screen and then saw their order
+sitting in a stage called `Joylashtirildi` — one meaning a placed part, the other a submitted
+order. Submitting is `Yuborildi`.
 
 ## Do's and Don'ts
 

@@ -61,7 +61,10 @@ onMounted(async () => {
 
 <template>
   <section>
-    <RouterLink :to="rolePath(adapter.paths.editor(draftId))" class="client-back">
+    <RouterLink
+      :to="rolePath(adapter.paths.editor(draftId))"
+      class="mp-button mp-button-outline mb-3 min-h-9 px-3 text-xs"
+    >
       <span aria-hidden="true">←</span>
       Detallarni tahrirlash
     </RouterLink>

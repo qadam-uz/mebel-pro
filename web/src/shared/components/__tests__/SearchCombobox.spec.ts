@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -20,6 +21,76 @@ function mountCombobox(props: Record<string, unknown> = {}) {
 
 afterEach(() => {
   document.body.innerHTML = ''
+})
+
+describe('SearchCombobox changing an existing pick', () => {
+  it('opens on the whole list, not on the one row matching what is already picked', async () => {
+    // The regression this guards: choosing wrote the full option label into the
+    // input and the client filter then matched only that label, so reopening a
+    // set picker showed exactly one row — the option already chosen — and the
+    // value could not be changed without deleting the text by hand.
+    const wrapper = mountCombobox({ modelValue: 'order-1' })
+
+    await wrapper.get('input').trigger('focus')
+    await nextTick()
+
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(options.length)
+    expect(wrapper.get('input').element.value).toBe('')
+  })
+
+  it('opens with the picked option marked and active, not the first row', async () => {
+    const wrapper = mountCombobox({ modelValue: 'order-2' })
+
+    await wrapper.get('input').trigger('focus')
+    await nextTick()
+
+    const picked = wrapper.findAll('[role="option"]')[1]
+    expect(picked.attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('input').attributes('aria-activedescendant')).toBe(picked.attributes('id'))
+  })
+
+  it('shows the picked label as the placeholder while the list is open', async () => {
+    const wrapper = mountCombobox({ modelValue: 'order-1' })
+
+    await wrapper.get('input').trigger('focus')
+    await nextTick()
+
+    expect(wrapper.get('input').attributes('placeholder')).toBe(options[0].label)
+  })
+
+  it('keeps the selection when a search is typed and then abandoned', async () => {
+    // Typing used to unset the model on the first keystroke, so starting a search
+    // and pressing Escape dropped a perfectly good pick.
+    const wrapper = mountCombobox({ modelValue: 'order-1' })
+
+    await wrapper.get('input').trigger('focus')
+    await wrapper.get('input').setValue('bobur')
+    await wrapper.get('input').trigger('keydown', { key: 'Escape' })
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.get('input').element.value).toBe(options[0].label)
+  })
+
+  it('does not blank the query the user is typing', async () => {
+    const wrapper = mountCombobox({ modelValue: 'order-1' })
+
+    await wrapper.get('input').setValue('bobur')
+
+    expect(wrapper.get('input').element.value).toBe('bobur')
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+  })
+
+  it('tells a server-backed parent the query is empty again when it reopens', async () => {
+    const wrapper = mountCombobox({
+      serverFiltered: true,
+      searchDebounceMs: 250,
+      modelValue: 'order-1',
+    })
+
+    await wrapper.get('input').trigger('focus')
+
+    expect(wrapper.emitted('search')).toEqual([['']])
+  })
 })
 
 describe('SearchCombobox client filtering', () => {

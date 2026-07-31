@@ -65,14 +65,14 @@ describe('shared formatters', () => {
     expect(formatStockQuantity(2500, 'm')).toBe('2.5 m')
     expect(formatStockQuantity(2500, 'metre')).toBe('2.5 m')
     expect(formatStockQuantity(2530, 'm')).toBe('2.53 m')
-    expect(formatStockQuantity(5, 'panel')).toBe('5 panel')
+    expect(formatStockQuantity(5, 'panel')).toBe('5 list')
     expect(formatStockQuantity(12, 'piece')).toBe('12 dona')
   })
 
   it('localizes stock-unit enums, never surfacing a raw English enum', () => {
     expect(formatStockUnit('metre')).toBe('m')
     expect(formatStockUnit('m')).toBe('m')
-    expect(formatStockUnit('panel')).toBe('panel')
+    expect(formatStockUnit('panel')).toBe('list')
     expect(formatStockUnit('pcs')).toBe('dona')
     expect(formatStockUnit('piece')).toBe('dona')
   })

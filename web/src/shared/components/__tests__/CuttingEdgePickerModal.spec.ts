@@ -283,11 +283,11 @@ describe('CuttingEdgePickerModal arming', () => {
       .find((button) => button.text().includes('Yana kromka'))!
       .trigger('click')
 
-    expect(wrapper.text()).toContain("Shu panelga mos · Panel bo'yicha")
+    expect(wrapper.text()).toContain("Shu listga mos · Panel bo'yicha")
     expect(wrapper.text()).toContain('dekor mos')
     expect(wrapper.text()).toContain('rang mos')
     expect(wrapper.text()).toContain('Boshqa kromkalar')
-    expect(wrapper.text()).toContain('panel qalinligidan (18 mm) tor')
+    expect(wrapper.text()).toContain('list qalinligidan (18 mm) tor')
     expect(wrapper.text()).not.toContain(edge.name)
 
     const thicknessFilter = wrapper.get('[aria-label="Qalinlik filtri"]')

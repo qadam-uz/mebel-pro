@@ -225,7 +225,7 @@ describe('workshop order detail helpers', () => {
         },
         (id) => (id === 'worker-1' ? 'Ali Valiyev' : id),
       ),
-    ).toEqual(['Bajardi: Ali Valiyev', 'Panel sarfi: 3 panel'])
+    ).toEqual(['Bajardi: Ali Valiyev', 'List sarfi: 3 list'])
 
     expect(
       productionTimelineDetails(

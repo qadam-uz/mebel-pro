@@ -139,8 +139,8 @@ const materialApiLocMap: Partial<Record<string, MaterialField>> = {
 }
 
 const kindOptions = [
-  dropdownOption('all', 'Hammasi', 'panel va kromka'),
-  dropdownOption('panel', 'Panel', 'plita materiallari'),
+  dropdownOption('all', 'Hammasi', 'list va kromka'),
+  dropdownOption('panel', 'List', 'plita materiallari'),
   dropdownOption('edge', 'Kromka', 'kromka'),
 ]
 const statusOptions = [
@@ -173,7 +173,7 @@ const materialTypeOptions: ChoiceOption[] = [
 ]
 const materialTypeFilterOptions = computed<ChoiceOption[]>(() => materialTypeOptions)
 const materialKindOptions: ChoiceOption[] = [
-  { value: 'panel', label: 'Panel', meta: 'plita materiali' },
+  { value: 'panel', label: 'List', meta: 'plita materiali' },
   { value: 'edge', label: 'Kromka', meta: 'kromka' },
 ]
 
@@ -301,7 +301,7 @@ function materialSpec(material: Material) {
 }
 
 function materialTypeLabel(type: PanelMaterialType | null | undefined) {
-  return materialTypeOptions.find((option) => option.value === type)?.label ?? 'Panel'
+  return materialTypeOptions.find((option) => option.value === type)?.label ?? 'List'
 }
 
 async function onMaterialFile(file: File) {
@@ -343,7 +343,7 @@ function validateMaterialForm() {
     set('panelLengthMm', requiredText(form.panelLengthMm) ?? positiveInteger(form.panelLengthMm))
     set('panelWidthMm', requiredText(form.panelWidthMm) ?? positiveInteger(form.panelWidthMm))
     if (!materialFieldErrors.panelLengthMm && dimensionError.value) {
-      materialFieldErrors.panelLengthMm = "Uzunlik enidan kichik bo'lmasligi kerak."
+      materialFieldErrors.panelLengthMm = "Uzunlik kenglikdan kichik bo'lmasligi kerak."
     }
   } else {
     set('edgeWidthMm', requiredText(form.edgeWidthMm) ?? positiveInteger(form.edgeWidthMm))
@@ -471,7 +471,7 @@ onMounted(async () => {
       />
       <MultiSelectFilter
         v-model="typeFilter"
-        label="Panel turlari"
+        label="List turlari"
         :options="materialTypeFilterOptions"
         empty-label="Hammasi"
         selected-label="tanlangan"
@@ -505,7 +505,7 @@ onMounted(async () => {
     <section v-else-if="admin.materials.length === 0" class="admin-empty">
       <template v-if="!hasActiveFilters">
         <h3>Material yo'q</h3>
-        <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki kromka material yarating.</p>
+        <p>Avval ishlab chiqaruvchi qo'shing, keyin list yoki kromka material yarating.</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2">
           <button type="button" class="admin-primary-action" @click="openCreate">
             + Yangi material
@@ -538,7 +538,7 @@ onMounted(async () => {
               <th>Tur</th>
               <th>Turi / o'lcham</th>
               <th>Qalinligi</th>
-              <th>Panel o'lchami</th>
+              <th>List o'lchami</th>
               <th>Tekstura</th>
               <th>Holat</th>
               <th>Ustaxonalar</th>
@@ -555,7 +555,7 @@ onMounted(async () => {
                     aria-hidden="true"
                   ></span>
                   <span class="admin-material-thumb-mark" aria-hidden="true">
-                    {{ material.kind === 'panel' ? 'P' : 'K' }}
+                    {{ material.kind === 'panel' ? 'L' : 'K' }}
                   </span>
                   <AuthFileImage
                     v-if="material.image_file_id"
@@ -701,7 +701,7 @@ onMounted(async () => {
                 v-if="form.kind === 'panel'"
                 id="mat-type"
                 v-model="form.type"
-                label="Panel turi"
+                label="List turi"
                 :options="materialTypeOptions"
                 :error="materialFieldErrors.type"
                 required
@@ -726,7 +726,7 @@ onMounted(async () => {
                 </span>
               </label>
               <label v-if="form.kind === 'edge'" class="admin-field" for="mat-edge-width">
-                <span>Eni (mm)</span>
+                <span>Kenglik (mm)</span>
                 <input
                   id="mat-edge-width"
                   v-model="form.edgeWidthMm"
@@ -787,7 +787,7 @@ onMounted(async () => {
                   </span>
                 </label>
                 <label class="admin-field" for="mat-wid">
-                  <span>Eni, mm</span>
+                  <span>Kenglik, mm</span>
                   <input
                     id="mat-wid"
                     v-model="form.panelWidthMm"
@@ -810,7 +810,7 @@ onMounted(async () => {
                   class="admin-full text-xs font-bold text-danger"
                   role="alert"
                 >
-                  Uzunlik enidan kichik bo'lmasligi kerak.
+                  Uzunlik kenglikdan kichik bo'lmasligi kerak.
                 </p>
                 <label
                   class="flex min-h-11 items-center gap-3 self-end rounded-md border border-hairline-strong px-3 text-sm font-bold"

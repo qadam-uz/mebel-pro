@@ -44,7 +44,7 @@ _TYPE_LABELS: dict[PanelMaterialType, str] = {
     PanelMaterialType.MDF: "MDF",
     PanelMaterialType.PLYWOOD: "Fanera",
     PanelMaterialType.NATURAL_WOOD: "Yog'och",
-    PanelMaterialType.OTHER: "Panel",
+    PanelMaterialType.OTHER: "List",
 }
 _DIMENSION_SEPARATOR = "\N{MULTIPLICATION SIGN}"
 

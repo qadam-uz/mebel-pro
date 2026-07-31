@@ -186,9 +186,15 @@ const edgeLegend = computed(() => {
         edgeRegistryEntryByMaterial(registry, line.material_id, 'shop') ??
         edgeRegistryEntryByMaterial(registry, line.material_id, 'own')
       )?.colorStyle.bg ?? 'var(--color-accent)',
-    label: [line.color ?? line.material_label, line.thickness_mm ? `${line.thickness_mm} mm` : null]
-      .filter(Boolean)
-      .join(' · '),
+    // A compact "which roll to load" legend: color + thickness when known.
+    // `material_label` (already the full canonical shape, thickness and all)
+    // is only the fallback when color is missing — don't re-append thickness
+    // on top of a label that already carries it.
+    label: line.color
+      ? [line.color, line.thickness_mm ? `${line.thickness_mm} mm` : null]
+          .filter(Boolean)
+          .join(' · ')
+      : line.material_label,
     metres: formatStockQuantity(line.consumed_mm, 'm'),
   }))
 })
@@ -347,7 +353,7 @@ onBeforeUnmount(() => {
               >Detallar <b class="font-mono">{{ job.item_count }}</b></span
             >
             <span v-if="job.planned_panels > 0" class="prod-stat">
-              Panellar <b class="font-mono">{{ job.planned_panels }}</b>
+              Listlar <b class="font-mono">{{ job.planned_panels }}</b>
             </span>
             <span v-if="kromTotal" class="prod-stat">
               Krom <b class="font-mono">{{ kromTotal }}</b>
@@ -391,7 +397,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="prod-rail">
               <div class="prod-rail-h">
-                <span>Panellar</span>
+                <span>Listlar</span>
                 <span v-if="marksEnabled">{{ markedCount }}/{{ result.panels.length }}</span>
                 <span v-else>{{ result.panels.length }} ta</span>
               </div>

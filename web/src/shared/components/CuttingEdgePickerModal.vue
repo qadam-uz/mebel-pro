@@ -148,7 +148,7 @@ function panelThicknessForPart() {
 function narrowWarning(material: { edge_width_mm: number | null } | null | undefined) {
   const panelThickness = panelThicknessForPart()
   if (!material || panelThickness == null || !edgeTooNarrow(panelThickness, material)) return null
-  return `Lenta eni (${material.edge_width_mm} mm) panel qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
+  return `Lenta kengligi (${material.edge_width_mm} mm) list qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
 }
 
 function sideClass(side: EdgeField) {
@@ -853,7 +853,7 @@ onBeforeUnmount(() => {
 
           <section v-if="catalogMatchedEdges.length" class="grid gap-2">
             <h4 class="text-xs font-semibold text-ink-soft">
-              Shu panelga mos
+              Shu listga mos
               <span class="font-normal text-ink-muted">· {{ catalogPanelName }} bo'yicha</span>
             </h4>
             <button

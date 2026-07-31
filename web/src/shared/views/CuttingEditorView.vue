@@ -512,7 +512,7 @@ function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
     const panel = materialById(part.material_id)
     const panelThickness = Number(panel?.thickness_mm)
     if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
-      return `Lenta eni (${edge.edge_width_mm} mm) panel qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
+      return `Lenta kengligi (${edge.edge_width_mm} mm) list qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
     }
   }
   return null
@@ -564,7 +564,7 @@ function partSizeError(part: CuttingPart): string | null {
   const usableWidth = panel.panel_width_mm - 2 * trimMm
   if (code === 'impossible_grain')
     return `Tekstura yo'nalishi qat'iy — detal ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
-  return `Detal panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${trimMm} mm chetki qirqim).`
+  return `Detal listga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (list − 2×${trimMm} mm chetki qirqim).`
 }
 
 // A chosen panel id that no longer resolves in the loaded catalog — e.g. the
@@ -591,7 +591,7 @@ function partIsInvalid(part: CuttingPart) {
 
 function optimizeRowMessage(code: string | undefined): string {
   if (code === 'part_too_large')
-    return "Bu detal panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
+    return "Bu detal listga sig'maydi — o'lchamini kichraytiring yoki boshqa list tanlang."
   if (code === 'impossible_grain')
     return "Tekstura yo'nalishi bu detalni joylashtirishga to'sqinlik qiladi."
   if (code === 'material_not_found')
@@ -1506,12 +1506,17 @@ onBeforeRouteLeave(async () => {
 
 <template>
   <section>
+    <!-- The editor is a leaf with no other way out — every other client detail
+         screen carries this link. `adapter.paths.drafts` so the workshop shell
+         lands on its own list, and the route guard still flushes the autosave
+         on the way out. -->
+    <RouterLink :to="rolePath(adapter.paths.drafts)" class="client-back">
+      <span aria-hidden="true">←</span> Chizmalar
+    </RouterLink>
+
     <div class="client-page-head">
       <div>
         <h1>Chizma</h1>
-        <p class="sub">
-          Detallarni kiriting, ustaxona katalogi bo'yicha tekshiring va kesish natijasini oling.
-        </p>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
         <span
@@ -1828,10 +1833,10 @@ onBeforeRouteLeave(async () => {
               >
                 <span aria-hidden="true" class="text-center">#</span>
                 <span aria-hidden="true" class="text-center">Nomi</span>
-                <span aria-hidden="true" class="text-center">Bo'y</span>
-                <span aria-hidden="true" class="text-center">Eni</span>
+                <span aria-hidden="true" class="text-center">Uzunlik</span>
+                <span aria-hidden="true" class="text-center">Kenglik</span>
                 <span aria-hidden="true" class="text-center">Soni</span>
-                <span aria-hidden="true" class="text-center">Tekstura</span>
+                <span aria-hidden="true" class="text-center">Burilish</span>
                 <span aria-hidden="true" class="text-center">Kromka</span>
                 <span aria-hidden="true"></span>
               </div>
@@ -1976,7 +1981,7 @@ onBeforeRouteLeave(async () => {
         >
           <div class="text-sm">
             <span class="font-mono font-bold text-ink"
-              >{{ parts.length }} qator · {{ totalQuantity }} dona</span
+              >{{ parts.length }} xil · {{ totalQuantity }} dona</span
             >
             <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
           </div>
@@ -2030,6 +2035,7 @@ onBeforeRouteLeave(async () => {
       :all-edge-choices="allEdgeChoices"
       :has-existing-parts="parts.length > 0"
       :current-pieces="totalQuantity"
+      :current-parts="parts.length"
       :preferred-branch-name="preferredBranch?.branch_name ?? null"
       :preferred-branch-id="activeBranchId"
       @close="closeImportWizard"
@@ -2052,7 +2058,7 @@ onBeforeRouteLeave(async () => {
     <ConfirmDialog
       :open="importReplaceConfirmOpen"
       title="Detallarni almashtirish"
-      :message="`Hozirgi ${parts.length} qator import qilingan ro'yxat bilan almashtirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
+      :message="`Hozirgi ${parts.length} xil import qilingan ro'yxat bilan almashtirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
       confirm-label="Almashtirish"
       cancel-label="Bekor qilish"
       danger
@@ -2205,7 +2211,7 @@ onBeforeRouteLeave(async () => {
             </span>
           </button>
           <p v-if="materialPickerMaterials.length === 0" class="p-4 text-sm text-ink-muted">
-            Bu filialda panel materiali topilmadi.
+            Bu filialda list materiali topilmadi.
           </p>
         </div>
         <div class="flex justify-end border-t border-hairline px-5 py-3">

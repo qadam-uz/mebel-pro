@@ -21,7 +21,7 @@ export interface WorkshopProductionQueueOrder {
 
 export function workshopQueuePartsLine(order: WorkshopQueuePanelSummary) {
   const panels = order.planned_panels || order.panels_used_snapshot
-  return `${order.item_count} detal${panels ? ` · ${panels} panel` : ''}`
+  return `${order.item_count} detal${panels ? ` · ${panels} list` : ''}`
 }
 
 export function workshopProductionQueueCounts(

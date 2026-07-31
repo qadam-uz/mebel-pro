@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, UniqueConstraint, false
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -75,6 +75,15 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
     contact_phone: Mapped[str] = mapped_column(nullable=False)
     note_client: Mapped[str | None]
     note_workshop: Mapped[str | None]
+    # Snapshotted at placement, not looked up: placing an order consumes its
+    # drawing (`place_client_order` deletes the draft and nulls the result's
+    # `draft_id`), so by the time anything reads the order the source row is
+    # gone. `None` means the drawing was never named.
+    draft_name: Mapped[str | None]
+    # Whether that drawing was minted by workshop staff on the client's behalf.
+    created_via_workshop: Mapped[bool] = mapped_column(
+        default=False, server_default=false(), nullable=False
+    )
     confirmed_at: Mapped[datetime | None]
     completed_at: Mapped[datetime | None]
     cancelled_at: Mapped[datetime | None]

@@ -251,7 +251,7 @@ watch(
 function linePriceUnit(line: InvoiceLineDraft) {
   const item = stockItemByMaterial(line.materialId)
   if (!item) return "so'm"
-  return isMetreUnit(item.display_unit) ? "so'm/m" : "so'm/panel"
+  return isMetreUnit(item.display_unit) ? "so'm/m" : "so'm/list"
 }
 
 function lineQuantityUnit(line: InvoiceLineDraft) {

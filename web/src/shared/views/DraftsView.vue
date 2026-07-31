@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import {
   clientErrorLabel,
   draftDisplayName,
-  formatPercent,
   formatRelativeDate,
   pluralUz,
 } from '@/shared/app/clientUi'
@@ -59,9 +58,11 @@ function newCutting() {
   void router.push(rolePath('/c/cutting/new'))
 }
 
+// Always the parts editor, never straight to the result: opening a draft means
+// looking at what is in it. The editor's own "Davom etish" carries on to the
+// cutting result when one already exists.
 function openDraft(draft: CuttingDraft) {
-  const suffix = chosenResult(draft) ? '/result' : ''
-  void router.push(rolePath(`/c/cutting/${draft.id}${suffix}`))
+  void router.push(rolePath(`/c/cutting/${draft.id}`))
 }
 
 function requestDeleteDraft(draft: CuttingDraft) {
@@ -93,17 +94,8 @@ async function confirmDeleteDraft() {
   }
 }
 
-// Resolve a draft's preferred-branch label for the row chip (CB-88). Branch
-// options are loaded client-side; no per-draft fetch.
-function branchName(draft: CuttingDraft): string | null {
-  if (!draft.preferred_branch_id) return null
-  const branch = cutting.branchOptions.find((row) => row.branch_id === draft.preferred_branch_id)
-  return branch ? `${branch.workshop_name} · ${branch.branch_name}` : null
-}
-
 onMounted(() => {
   void cutting.loadDrafts()
-  void cutting.loadBranchOptions()
 })
 </script>
 
@@ -155,55 +147,53 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-else class="grid gap-2">
+    <div v-else class="grid gap-3">
+      <!-- Same card as the home "Chizmalar" section, plus the delete control —
+           the two lists show the same object and had drifted into two shapes. -->
       <article
         v-for="draft in sortedDrafts"
         :key="draft.id"
-        class="client-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4 client-card-link"
+        class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+        role="link"
+        tabindex="0"
+        :aria-label="draftTitle(draft)"
+        @click="openDraft(draft)"
+        @keydown.enter="openDraft(draft)"
       >
-        <button type="button" class="min-w-0 text-left" @click="openDraft(draft)">
-          <span
-            class="block truncate text-sm font-bold"
-            :class="draft.name ? 'text-ink' : 'text-ink-soft'"
-            >{{ draftTitle(draft) }}</span
-          >
-          <span v-if="branchName(draft)" class="client-pill client-pill-info mt-1 inline-block">
-            {{ branchName(draft) }}
-          </span>
-          <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <span class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft">
+          <Icon name="scissors" />
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="truncate font-mono text-sm font-bold text-ink">
+            {{ draftTitle(draft) }}
+          </div>
+          <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
             <span
               ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
             >
             <span
-              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> panel</span
+              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> list</span
             >
-            <span v-if="chosenResult(draft)">
-              <b class="font-mono text-ink">{{
-                formatPercent(chosenResult(draft)?.waste_percentage)
-              }}</b>
-              chiqim
-            </span>
-            <span>{{ formatRelativeDate(draft.updated_at) }} · tahrirlangan</span>
-          </span>
-        </button>
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-            @click="openDraft(draft)"
-          >
-            Ochish →
-          </button>
-          <button
-            type="button"
-            class="grid size-9 place-items-center rounded-md border border-hairline text-lg text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
-            :disabled="deletingId === draft.id"
-            aria-label="Chizmani o'chirish"
-            @click="requestDeleteDraft(draft)"
-          >
-            ×
-          </button>
+            <span>{{ formatRelativeDate(draft.updated_at) }}</span>
+          </div>
         </div>
+        <RouterLink
+          :to="rolePath(`/c/cutting/${draft.id}`)"
+          class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
+          @click.stop
+        >
+          Davom etish →
+        </RouterLink>
+        <!-- `.stop` so deleting never doubles as opening the card behind it. -->
+        <button
+          type="button"
+          class="grid size-9 shrink-0 place-items-center rounded-md border border-hairline text-lg text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
+          :disabled="deletingId === draft.id"
+          aria-label="Chizmani o'chirish"
+          @click.stop="requestDeleteDraft(draft)"
+        >
+          ×
+        </button>
       </article>
       <p class="sr-only">{{ pluralUz(sortedDrafts.length, 'chizma') }}</p>
     </div>

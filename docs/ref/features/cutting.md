@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-29
+updated: 2026-07-31
 order: 80
 ---
 
@@ -286,8 +286,12 @@ list is built from the chosen workshop's catalog.
 
 Rows are grouped visually by panel material in first-seen order, with a leading
 `Material tanlanmagan` group for new rows before a material is picked. Each row has a `Nomi`
-input, dimensions, quantity, a grained-material-only `Tekstura` toggle, four compact edge cells,
-duplicate, and an overflow menu for material replacement and deletion. `Enter` moves through
+input, dimensions, quantity, a grained-material-only `Burilish` toggle, four compact edge cells,
+duplicate, and an overflow menu for material replacement and deletion. The toggle names the
+permission rather than the material property, so it is on when the part **may** rotate — the
+inverse of the stored `follow_grain`. It renders as a two-state glyph switch (grain lines when
+the part is pinned to the texture, a rotation arrow when it is free) rather than a checkbox,
+because both states carry meaning and a bare box under a one-word header did not say which. `Enter` moves through
 cells and appends a new inherited row from the last cell of the last row. Deleting a row shows an
 undo toast; clearing all rows still requires confirmation.
 
@@ -349,35 +353,53 @@ new imported-result draft for the current client or workshop walk-in client and 
 stage immediately. A MAP whose selected panel size does not match degrades to parts-only import
 and stays in the editor; there is no unseen result to warn about.
 
+The wizard is **two screens**, not a step rail. Parsing runs the moment a file is selected, so
+everything after the drop is known at once; serialising it into steps only delayed the
+diagnostics past the point where they could change a decision.
+
 1. **File.** The user picks a file; the UI pre-checks the 1 MiB size cap and `.csv`/`.xml`/`.map`
    extension, then calls the role-scoped parse endpoint (`POST /api/v1/client/cutting/import/parse`
    or `POST /api/v1/workshop/cutting/import/parse`) without a mapping.
-2. **Columns.** CSV imports return a preview and suggested column roles. The user confirms
-   or changes the mapping and sets how many top rows to skip. Length and width must be
-   mapped before continuing. БАЗИС-Мебельщик XML imports skip this step because the source
-   already carries typed fields.
-3. **Materials.** Materials from the file become groups only. The user must pick a panel
-   catalog item for every panel group and an edge catalog item for every edge group. When
-   the CSV carries a `Толщина`/thickness column, or XML material carries `Толщина`, the
-   wizard shows that value as a muted hint next to the panel group. The uploaded file name
-   is shown above the material list, which helps the БАЗИС-Мебельщик "by material" export
-   mode where the material name lives in the file name. There is deliberately no automatic
-   material matching.
-4. **Report and load.** The wizard shows total parts/pieces, skipped rows, and warnings
-   before it writes anything into the editor. Empty editors get a single **Load** action;
-   non-empty editors offer **Append** and a danger-confirmed **Replace**.
+2. **Review and import.** One screen, ordered by how likely each block is to need attention.
+
+The review screen carries four blocks:
+
+- **File strip** — name, source format, and `N xil · M dona`, with a **Boshqa fayl** action back
+  to the file screen.
+- **Diagnostics** — skipped rows, warnings, ignored objects, and (for MAP) the sheet list, each
+  a count that expands in place. These sit **ahead of** the commit: a row count the parser
+  dropped is the one fact that can still change the operator's mind.
+- **Columns** (CSV only) — the parse response carries suggested column roles and a suggested
+  skip count, so the wizard applies the guess and re-parses through it without asking. The block
+  collapses to a one-line summary (`A→uzunlik · B→kenglik · …`) with a **To'g'rilash** action
+  that reveals the preview table, the per-column role pickers, and the skip-rows control. When
+  the guess is short of a length or width column the block opens itself and the commit stays
+  blocked. БАЗИС-Мебельщик XML and MAP imports have no columns block — the source carries typed
+  fields.
+- **Materials** — the one decision that always needs a person. Materials from the file become
+  groups only; the user picks a panel catalog item for every panel group and an edge catalog item
+  for every edge group, and there is deliberately no automatic matching. A `Толщина`/thickness
+  value from CSV or XML shows as a muted hint on the group. An unpicked group carries an accent
+  border, so the reason the commit is blocked is visible on the thing blocking it. For MAP
+  imports the panel-size match verdict renders as a chip on the card, since the whole layout
+  survives or dies on it.
+
+The footer holds **one** primary action, `Import qilish`, disabled until the mapping and every
+material pick are complete. When the editor already has parts, an **Qo'shish / Almashtirish**
+segmented control sits beside it with a live consequence line (`Hozirgi 7 xil o'chadi`) — the
+mode is a choice with a stated cost, not two competing buttons one of which is red.
 
 XML support is intentionally narrow: it accepts only БАЗИС-Мебельщик's project-root
 `<Проект>` export from **Спецификация в XML**. The parser flattens every
 `Изделие/СписокЭлементов/Объект`, imports only `ТипОбъекта = Панель`, multiplies object
 quantity by product quantity, reads `Длина_детали_без_облицовки` / `Ширина_детали_без_облицовки`
 when present, and maps `Горизонтальная` / `Вертикальная` texture orientation to
-`follow_grain = true`. Non-panel objects are counted in the report, not imported. Holes,
+`follow_grain = true`. Non-panel objects are counted as a diagnostic, not imported. Holes,
 grooves, non-rectangular panels, and edges marked "see drawing" import the rectangular part
 but appear as warnings.
 
 Rows skipped because they cannot be represented (for example an `Итого` footer in a numeric
-column) appear in the report. Recoverable domain problems still import: an undersized part is
+column) appear in the review screen's diagnostics, before the import is committed. Recoverable domain problems still import: an undersized part is
 loaded and then flagged by the editor's normal validation. Imports over 300 pieces are
 rejected at parse time; imports that make the current editor exceed 300 pieces show a notice
 and the optimiser remains blocked until rows are removed.
@@ -548,7 +570,7 @@ rather than inventing a third regime.
      portrait page — never a page of its own for a dense sheet or an unlabelable map, and never
      landscape. An odd unit stays alone in the top slot. A card carries four header lines
      (sheet range · material · `Kromkalar` · `Detallar maydoni · KIM · Foydali qoldiq ·
-     Chiqindi`), then a proportional map beside a compact `Bo'yi · Eni · Soni` register whose
+     Chiqindi`), then a proportional map beside a compact `Uzunlik · Kenglik · Soni` register whose
      band marks sit under each dimension. A register too long for its half-page slot spills its
      overflow rows onto a full-width portrait `Detallar (davomi)` continuation page, never by
      clipping a row or splitting the map. Every page is numbered.
@@ -619,8 +641,8 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
   arbitrary JSON/XML/text, empty files, oversized files, and binary junk are rejected with a
   clear error before they touch the editor.
 - **Import footers / summary rows** — non-empty rows whose mapped numeric cells cannot be
-  parsed, such as an `Итого` footer, are listed in the import report as skipped rows with
-  the original row number and preview text.
+  parsed, such as an `Итого` footer, are listed as skipped rows in the review
+  screen diagnostics, with the original row number and preview text.
 - **Recoverable imported typos** — imported parts below the part minimum or otherwise
   outside the chosen panel's bounds are loaded into the editor and flagged inline by the
   existing validation, so the client can correct them instead of losing the row. No importer

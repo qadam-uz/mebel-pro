@@ -47,17 +47,33 @@ const emit = defineEmits<{
 const actionsOpen = ref(false)
 // Writable computeds keep the original `v-model.number` semantics while emitting
 // (a number input bound straight to the prop would mutate it).
-const lengthModel = computed({
-  get: () => props.part.length_mm,
-  set: (value: number) => emit('update:length', value),
+// A fresh row carries 0 for the three numeric cells — the stored "not entered
+// yet" value (`partIsInvalid` rejects it). Painting a literal 0 in the box makes
+// an untouched row look filled in and forces the user to clear it before typing,
+// so 0 renders as an empty field. `v-model.number` hands back '' when the field
+// is cleared, hence the widened cell type.
+type NumericCell = number | string | null
+
+function toStoredNumber(value: NumericCell): number {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
+function blankWhenUnset(value: number): number | null {
+  return value > 0 ? value : null
+}
+
+const lengthModel = computed<NumericCell>({
+  get: () => blankWhenUnset(props.part.length_mm),
+  set: (value) => emit('update:length', toStoredNumber(value)),
 })
-const widthModel = computed({
-  get: () => props.part.width_mm,
-  set: (value: number) => emit('update:width', value),
+const widthModel = computed<NumericCell>({
+  get: () => blankWhenUnset(props.part.width_mm),
+  set: (value) => emit('update:width', toStoredNumber(value)),
 })
-const quantityModel = computed({
-  get: () => props.part.quantity,
-  set: (value: number) => emit('update:quantity', value),
+const quantityModel = computed<NumericCell>({
+  get: () => blankWhenUnset(props.part.quantity),
+  set: (value) => emit('update:quantity', toStoredNumber(value)),
 })
 const nameModel = computed({
   get: () => props.part.name ?? '',
@@ -68,10 +84,14 @@ const nameModel = computed({
 })
 
 const followsGrain = computed(() => props.part.follow_grain !== false)
+// The cell names the permission («Burilish»), not the material property, so the
+// switch is ON when rotation is ALLOWED — the inverse of `follow_grain`. The
+// stored field keeps its meaning; only this control is flipped.
+const rotationAllowed = computed(() => !followsGrain.value)
 const grainTitle = computed(() =>
-  followsGrain.value
-    ? "Tekstura yo'nalishi bo'yicha — burilmaydi"
-    : 'Tekstura hisobga olinmaydi — burilishi mumkin',
+  rotationAllowed.value
+    ? "Burilishi mumkin — tekstura yo'nalishi erkin, list tejaladi"
+    : "Burilmaydi — tekstura yo'nalishi saqlanadi",
 )
 
 const notCarriedNonPanel = computed(() => props.notCarried.some((issue) => issue !== 'panel'))
@@ -99,10 +119,8 @@ function edgeGlyphStyle() {
   )
 }
 
-function updateFollowGrain(event: Event) {
-  const input = event.target
-  if (!(input instanceof HTMLInputElement)) return
-  emit('update:follow-grain', input.checked)
+function toggleFollowGrain() {
+  emit('update:follow-grain', rotationAllowed.value)
 }
 
 function duplicateFromMenu() {
@@ -178,20 +196,31 @@ function focusNumericFromPointer(event: MouseEvent) {
             @keydown="onRapidEntryKeydown($event, 'name')"
           />
         </label>
-        <label
+        <div
           class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-6 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Tekstura</span>
-          <input
+          <span class="@min-[920px]:hidden">Burilish</span>
+          <!-- A bare checkbox under a one-word header never said which way it
+               meant; the glyph shows the state itself. `switch` (not a checkbox)
+               because the two states are both meaningful, not on/absent. -->
+          <button
             data-test="follow-grain"
-            type="checkbox"
-            class="size-4"
-            :checked="followsGrain"
+            type="button"
+            role="switch"
+            :aria-checked="rotationAllowed"
+            class="grid size-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+            :class="
+              rotationAllowed
+                ? 'border-hairline bg-sunk/30 text-ink-muted hover:border-hairline-strong hover:bg-sunk'
+                : 'border-accent-tint bg-accent-soft text-accent hover:border-accent'
+            "
             :title="grainTitle"
             :aria-label="grainTitle"
-            @change="updateFollowGrain"
-          />
-        </label>
+            @click="toggleFollowGrain"
+          >
+            <Icon :name="rotationAllowed ? 'rotate' : 'grain'" class="size-[18px]" />
+          </button>
+        </div>
         <div
           class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-7 @min-[680px]:row-start-1"
         >
@@ -267,7 +296,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-3 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Bo'y</span>
+          <span class="@min-[920px]:hidden">Uzunlik</span>
           <input
             v-model.number="lengthModel"
             :data-part-index="index"
@@ -278,7 +307,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             enterkeyhint="next"
             class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
-            aria-label="Bo'y millimetr"
+            aria-label="Uzunlik millimetr"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'length')"
@@ -288,7 +317,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-4 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Eni</span>
+          <span class="@min-[920px]:hidden">Kenglik</span>
           <input
             v-model.number="widthModel"
             :data-part-index="index"
@@ -299,7 +328,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             enterkeyhint="next"
             class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
-            aria-label="Eni millimetr"
+            aria-label="Kenglik millimetr"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'width')"
@@ -342,7 +371,7 @@ function focusNumericFromPointer(event: MouseEvent) {
       class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
     >
       <span aria-hidden="true">!</span>
-      <span>Bu qatordagi panel materiali endi katalogda yo'q — boshqasini tanlang.</span>
+      <span>Bu qatordagi list materiali endi katalogda yo'q — boshqasini tanlang.</span>
     </p>
 
     <p

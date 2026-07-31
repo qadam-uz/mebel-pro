@@ -22,6 +22,7 @@ import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
+import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -33,7 +34,6 @@ import {
   useOrdersStore,
   type OrderDetail,
   type OrderEvent,
-  type OrderItem,
   type OrderPriceLine,
   type OrderStockWarning,
 } from '@/shared/stores/orders'
@@ -355,43 +355,6 @@ const menuItems = computed<OrderMenuItem[]>(() => {
   return items
 })
 
-function snapshotName(item: OrderItem) {
-  const value = item.material_snapshot.name
-  return typeof value === 'string' ? value : item.material_id.slice(0, 8)
-}
-
-function edgeCountLabel(item: OrderItem) {
-  const count = edgeSideDetails(item).length
-  return count > 0 ? `Kromka · ${count} tomon` : "kromka yo'q"
-}
-
-function edgeSideDetails(item: OrderItem) {
-  return [
-    { label: 'Yuqori', edge: item.edge_top, length: item.length_mm },
-    { label: 'Past', edge: item.edge_bottom, length: item.length_mm },
-    { label: 'Chap', edge: item.edge_left, length: item.width_mm },
-    { label: "O'ng", edge: item.edge_right, length: item.width_mm },
-  ]
-    .filter((side) => side.edge)
-    .map((side) => {
-      const data = side.edge as Record<string, unknown>
-      const snapshot =
-        data.snapshot && typeof data.snapshot === 'object'
-          ? (data.snapshot as Record<string, unknown>)
-          : {}
-      const thickness =
-        snapshot.thickness_mm || snapshot.thickness || snapshot.size_mm
-          ? `${snapshot.thickness_mm ?? snapshot.thickness ?? snapshot.size_mm} mm`
-          : "qalinlik yo'q"
-      const color =
-        typeof snapshot.color === 'string' && snapshot.color ? ` · ${snapshot.color}` : ''
-      const material =
-        typeof snapshot.name === 'string' && snapshot.name ? ` · ${snapshot.name}` : ''
-      const source = data.source === 'own' ? ' · mijoz materiali' : ''
-      return `${side.label}: ${thickness}${color}${material} · ${metres(side.length * item.quantity)}${source}`
-    })
-}
-
 // Itemized breakdown (always expanded): one row per material actually used,
 // panel or kromka alike, from the backend's snapshot-exact price_lines.
 const panelLines = computed<OrderPriceLine[]>(
@@ -450,7 +413,7 @@ function warningQuantity(
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+  return `${String(snapshot?.name ?? 'List')} · ${panel.panel_index}`
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -1196,7 +1159,7 @@ onBeforeUnmount(() => {
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
                       }}<small class="block text-xs text-ink-muted"
-                        >{{ line.panels_used }} panel</small
+                        >{{ line.panels_used }} list</small
                       ></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
@@ -1222,7 +1185,7 @@ onBeforeUnmount(() => {
                 <template v-else>
                   <!-- Snapshot lines missing (no cutting result) — aggregate rows. -->
                   <div class="flex items-baseline justify-between gap-3">
-                    <span class="min-w-0 text-ink">Panellar</span>
+                    <span class="min-w-0 text-ink">Listlar</span>
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(order.subtotal_materials_tiyin)
                     }}</span>
@@ -1247,7 +1210,7 @@ onBeforeUnmount(() => {
                 <div class="flex items-baseline justify-between gap-3">
                   <span class="min-w-0 text-ink"
                     >Kesish<small v-if="totalPanels > 0" class="block text-xs text-ink-muted"
-                      >{{ totalPanels }} panel</small
+                      >{{ totalPanels }} list</small
                     ></span
                   >
                   <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
@@ -1454,7 +1417,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Panellar">
+          <div class="flex flex-wrap gap-2" role="group" aria-label="Listlar">
             <button
               v-for="panel in result.panels"
               :key="panel.id"
@@ -1489,43 +1452,12 @@ onBeforeUnmount(() => {
 
         <div>
           <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Buyurtma tarkibi</div>
-          <details v-for="item in order.items" :key="item.id" class="bom-item">
-            <summary class="bom-summary">
-              <div class="bom-main">
-                <div class="nm">
-                  {{ snapshotName(item) }} · {{ item.length_mm }}x{{ item.width_mm }}
-                </div>
-                <small class="text-ink-muted"
-                  >{{ item.material_source === 'own' ? 'mijoz paneli' : 'ustaxona paneli' }} ·
-                  {{ edgeCountLabel(item) }}</small
-                >
-              </div>
-              <span class="bom-qty">{{ item.quantity }} dona</span>
-              <svg class="od-chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                <path
-                  d="M5 7.5 10 12.5 15 7.5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </summary>
-            <div class="bom-body">
-              <ul v-if="edgeSideDetails(item).length > 0" class="grid gap-1">
-                <li
-                  v-for="detail in edgeSideDetails(item)"
-                  :key="detail"
-                  class="text-xs text-ink-muted"
-                >
-                  {{ detail }}
-                </li>
-              </ul>
-              <p v-else class="text-xs text-ink-muted">Bu panelda kromka yo'q — yaxlit panel.</p>
-            </div>
-          </details>
-          <div v-if="order.items.length === 0" class="st-empty !border-0 !py-6">
+          <!-- The same grouped, read-only list the client sees on their order
+               and the operator fills in the editor: one layout across the three
+               surfaces, so a cutter reading this against the drawing does not
+               have to re-map it. -->
+          <CuttingPartsByMaterial v-if="result" :result="result" />
+          <div v-else class="st-empty !border-0 !py-6">
             <h3>Chizmada detal yo'q</h3>
           </div>
         </div>
@@ -1534,11 +1466,10 @@ onBeforeUnmount(() => {
           <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Kromka</div>
           <div v-for="line in order.planned_edge_lines" :key="line.material_id" class="row-item">
             <div>
+              <!-- material_label already carries thickness x width and color
+                   (app/core/material_label.py's canonical edge shape) — no
+                   separate thickness/color line needed underneath. -->
               <div class="nm">{{ line.material_label }}</div>
-              <small class="text-ink-muted">
-                {{ line.thickness_mm ? `${line.thickness_mm} mm` : "qalinlik yo'q" }}
-                <span v-if="line.color"> · {{ line.color }}</span>
-              </small>
             </div>
             <div class="meta">{{ metres(line.consumed_mm) }}</div>
           </div>

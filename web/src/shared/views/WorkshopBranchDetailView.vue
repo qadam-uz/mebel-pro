@@ -471,7 +471,7 @@ onMounted(refreshBranch)
                  cutting_rate` and edge labour is `length_mm × rate ÷ 1000`, so
                  one is per panel and the other per metre (QAD-182). -->
             <label class="field" for="branch-detail-cutting-rate">
-              <span>Kesish narxi (so'm / panel)</span>
+              <span>Kesish narxi (so'm / list)</span>
               <input
                 id="branch-detail-cutting-rate"
                 v-model="pricingForm.cuttingRateSom"
@@ -558,7 +558,7 @@ onMounted(refreshBranch)
               </label>
             </div>
             <p class="mt-2 text-xs text-ink-muted">
-              Panelning ishlatiladigan yuzasi = panel − 2× chetki qirqim.
+              Listning ishlatiladigan yuzasi = list − 2× chetki qirqim.
             </p>
           </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">

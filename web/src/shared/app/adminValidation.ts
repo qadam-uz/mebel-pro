@@ -104,9 +104,9 @@ function apiValidationMessage(code: string | null): string {
     case 'invalid_thickness':
       return 'Musbat qalinlik kiriting.'
     case 'invalid_panel_size':
-      return "Panel uzunligi va eni musbat bo'lishi, uzunlik enidan kichik bo'lmasligi kerak."
+      return "List uzunligi va eni musbat bo'lishi, uzunlik enidan kichik bo'lmasligi kerak."
     case 'invalid_panel_material':
-      return "Panel maydonlarini to'ldiring."
+      return "List maydonlarini to'ldiring."
     case 'invalid_grain':
       return "Tekstura yo'nalishini belgilang."
     default:

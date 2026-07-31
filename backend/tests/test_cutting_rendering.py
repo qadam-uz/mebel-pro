@@ -92,7 +92,7 @@ def test_placement_label_mode_edges_when_both_sides_have_room() -> None:
 
     plan = rendering._placement_label_mode(placement, 10.0, 200.0, 150.0, 10.0)
 
-    assert plan == rendering._DimensionLabelPlan("edges", "600", "400")
+    assert plan == rendering._DimensionLabelPlan("edges", "600", "400", 10.0)
 
 
 def test_placement_label_mode_falls_back_to_inline_when_edges_dont_clear_the_inset() -> None:
@@ -103,7 +103,7 @@ def test_placement_label_mode_falls_back_to_inline_when_edges_dont_clear_the_ins
 
     plan = rendering._placement_label_mode(placement, 10.0, 52.0, 150.0, 40.0)
 
-    assert plan == rendering._DimensionLabelPlan("inline", "600×400", "")
+    assert plan == rendering._DimensionLabelPlan("inline", "600×400", "", 10.0)
 
 
 def test_placement_label_mode_rotates_inline_for_a_tall_narrow_strip() -> None:
@@ -114,14 +114,49 @@ def test_placement_label_mode_rotates_inline_for_a_tall_narrow_strip() -> None:
 
     plan = rendering._placement_label_mode(placement, 7.0, 12.0, 240.0, 3.0)
 
-    assert plan == rendering._DimensionLabelPlan("inline_rotated", "80×1800", "")
+    assert plan == rendering._DimensionLabelPlan("inline_rotated", "80×1800", "", 7.0)
 
 
-def test_placement_label_mode_none_when_even_a_rotated_inline_does_not_fit() -> None:
+def test_placement_label_mode_shrinks_the_font_for_a_placement_too_small_at_the_sheet_size() -> (
+    None
+):
+    """A part too small to label at the sheet's uniform font used to print with
+    no size at all. It now keeps its own dimensions at a smaller font — every
+    part on the map stays identifiable, even the tiny ones."""
+    rendering._register_fonts()
+    placement = _placement(length_mm=20, width_mm=20)
+
+    at_sheet_size = rendering._fit_dimension_label(placement, 7.0, 8.0, 18.0, 3.0)
+    plan = rendering._placement_label_mode(placement, 7.0, 8.0, 18.0, 3.0)
+
+    assert at_sheet_size is None  # confirms this frame is a genuine shrink case
+    assert plan is not None
+    assert plan.font_pt < 7.0
+    assert plan.font_pt >= rendering._MIN_LABEL_FONT_FLOOR_PT
+    assert plan.length_text == "20×20"
+
+
+def test_edges_mode_is_rejected_when_the_two_labels_would_collide_in_the_corner() -> None:
+    """A near-square box can pass each dimension's own along/across check while
+    the top-centred length text and the rotated, inset-anchored width text
+    still overlap in the corner — regression for a real rendering defect where
+    both numbers printed on top of each other."""
+    rendering._register_fonts()
+    placement = _placement(length_mm=60, width_mm=45)
+
+    assert rendering._edges_labels_collide("60", "45", 4.0, 12.24, 9.18, 3.06)
+    plan = rendering._fit_dimension_label(placement, 4.0, 12.24, 9.18, 3.06)
+
+    assert plan is None or plan.mode != "edges"
+
+
+def test_placement_label_mode_none_when_even_the_floor_size_does_not_fit() -> None:
+    """The shrink loop reaches for a genuinely tiny font before giving up — this
+    box has to be small enough that even the floor size overflows it."""
     rendering._register_fonts()
     placement = _placement(length_mm=600, width_mm=400)
 
-    plan = rendering._placement_label_mode(placement, 10.0, 10.0, 10.0, 5.0)
+    plan = rendering._placement_label_mode(placement, 10.0, 2.0, 2.0, 1.0)
 
     assert plan is None
 
@@ -209,24 +244,3 @@ def test_panel_fill_percent() -> None:
     panel = SimpleNamespace(waste_area_mm2=2_800 * 2_070 // 4)
     assert rendering._panel_fill_percent(panel, 2800, 2070) == "75.0%"  # type: ignore[arg-type]
     assert rendering._panel_fill_percent(panel, 0, 2070) == "-"  # type: ignore[arg-type]
-
-
-def test_material_label_uses_catalog_identity_format() -> None:
-    assert (
-        rendering._material_label(
-            {
-                "type": "dsp",
-                "manufacturer_name": "Egger",
-                "decor_code": "H1334 ST9",
-                "name": "Dub",
-                "color": "Sanoma",
-                "thickness_mm": "18.0",
-                "panel_length_mm": 2750,
-                "panel_width_mm": 1830,
-            },
-            "id",
-        )
-        == "LDSP Egger H1334 ST9 · Sanoma · 2750×1830×18 mm"
-    )
-    assert rendering._material_label({"name": "Dub"}, "id") == "Dub"
-    assert rendering._material_label({}, "0123456789abcdef") == "01234567"

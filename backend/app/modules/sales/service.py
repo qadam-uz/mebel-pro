@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import APIError
+from app.core.material_label import edge_label, material_label
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
     ActorType,
@@ -219,6 +220,10 @@ async def place_client_order(
         contact_name=_contact_name(payload.contact_name),
         contact_phone=_contact_phone(payload.contact_phone),
         note_client=_optional_text(payload.note_client),
+        # Copied now, while the drawing still exists — placing an order deletes
+        # it further down, so this is the only moment the name is readable.
+        draft_name=draft.name,
+        created_via_workshop=draft.created_via_workshop_id is not None,
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
@@ -434,6 +439,10 @@ async def place_workshop_order(
         contact_name=_contact_name(payload.contact_name),
         contact_phone=_contact_phone(payload.contact_phone),
         note_client=_optional_text(payload.note_client),
+        # Copied now, while the drawing still exists — placing an order deletes
+        # it further down, so this is the only moment the name is readable.
+        draft_name=draft.name,
+        created_via_workshop=draft.created_via_workshop_id is not None,
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
@@ -1126,9 +1135,16 @@ async def _edge_material_meta(
     )
     return {
         str(material.id): (
-            _material_label(
-                {"manufacturer_name": manufacturer.name, "name": material.name},
-                fallback=f"Material {str(material.id)[:8]}",
+            edge_label(
+                {
+                    "manufacturer_name": manufacturer.name,
+                    "decor_code": material.decor_code,
+                    "name": material.name,
+                    "color": material.color,
+                    "thickness_mm": str(material.thickness_mm),
+                    "edge_width_mm": material.edge_width_mm,
+                },
+                material.id,
             ),
             _normalized_decimal(material.thickness_mm),
             material.color,
@@ -1567,7 +1583,7 @@ def _first_name(value: str) -> str:
 
 
 def _panel_material_labels(items: Sequence[OrderItem]) -> list[str]:
-    labels = [_material_label(item.material_snapshot) for item in items]
+    labels = [material_label(item.material_snapshot, item.material_id) for item in items]
     return list(dict.fromkeys(labels))
 
 
@@ -1578,7 +1594,7 @@ def _production_job_item(item: OrderItem) -> ProductionJobItem:
         length_mm=item.length_mm,
         width_mm=item.width_mm,
         quantity=item.quantity,
-        material_label=_material_label(item.material_snapshot),
+        material_label=material_label(item.material_snapshot, item.material_id),
         edge_top=_production_edge_side(item.edge_top),
         edge_bottom=_production_edge_side(item.edge_bottom),
         edge_left=_production_edge_side(item.edge_left),
@@ -1591,7 +1607,7 @@ def _production_edge_side(edge: dict[str, Any] | None) -> ProductionEdgeSide | N
         return None
     snapshot = edge.get("snapshot") or {}
     return ProductionEdgeSide(
-        material_label=_material_label(snapshot, fallback="Edge"),
+        material_label=edge_label(snapshot, edge["material_id"]),
         thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
         color=_snapshot_text(snapshot.get("color")),
         source=MaterialSource(str(edge["source"])),
@@ -2289,6 +2305,8 @@ def _order_summary_base(
         "item_count": sum(item.quantity for item in items),
         "has_banding": _items_have_banding(items),
         "planned_panels": _planned_panels(result),
+        "draft_name": order.draft_name,
+        "created_via_workshop": order.created_via_workshop,
         "planned_edge_lines": _planned_edge_lines(result),
         "stock_warnings": stock_warnings,
     }
@@ -2381,10 +2399,7 @@ def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialD
         lines.append(
             OrderEdgeMaterialDemand(
                 material_id=uuid.UUID(material_id),
-                material_label=_material_label(
-                    snapshot,
-                    fallback=f"Material {material_id[:8]}",
-                ),
+                material_label=edge_label(snapshot, material_id),
                 thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
                 color=_snapshot_text(snapshot.get("color")),
                 consumed_mm=int(consumed_mm),
@@ -2418,16 +2433,16 @@ def _order_price_lines(
                 uuid.UUID(str(edge["material_id"])), int(snapshot.get("price_tiyin") or 0)
             )
 
-    def _line_label(material_id: uuid.UUID) -> str:
-        return _material_label(
-            result.material_snapshots.get(str(material_id), {}),
-            fallback=f"Material {str(material_id)[:8]}",
-        )
+    def _panel_line_label(material_id: uuid.UUID) -> str:
+        return material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+
+    def _edge_line_label(material_id: uuid.UUID) -> str:
+        return edge_label(result.material_snapshots.get(str(material_id), {}), material_id)
 
     panel_lines = [
         OrderPriceLine(
             material_id=material_id,
-            material_name=_line_label(material_id),
+            material_name=_panel_line_label(material_id),
             kind="panel",
             panels_used=quantity,
             line_total_tiyin=panel_prices.get(material_id, 0) * quantity,
@@ -2437,7 +2452,7 @@ def _order_price_lines(
     edge_lines = [
         OrderPriceLine(
             material_id=material_id,
-            material_name=_line_label(material_id),
+            material_name=_edge_line_label(material_id),
             kind="edge",
             consumed_mm=consumed_mm,
             line_total_tiyin=_millimetre_price(consumed_mm, edge_prices.get(material_id, 0)),
@@ -2447,13 +2462,6 @@ def _order_price_lines(
     panel_lines.sort(key=lambda line: line.material_name)
     edge_lines.sort(key=lambda line: line.material_name)
     return panel_lines + edge_lines
-
-
-def _material_label(snapshot: dict[str, Any], *, fallback: str = "Material") -> str:
-    manufacturer = _snapshot_text(snapshot.get("manufacturer_name")) or ""
-    name = _snapshot_text(snapshot.get("name")) or ""
-    label = f"{manufacturer} {name}".strip()
-    return label or fallback
 
 
 def _snapshot_decimal(value: object) -> Decimal | None:
@@ -3027,8 +3035,15 @@ def _apply_order_filters(
     normalized = search.strip() if search else ""
     if normalized:
         pattern = f"%{normalized.lower()}%"
+        # `draft_name` is what the client calls the order ("Oshxona shkafi") — it
+        # is the card's headline, so the search box has to reach it. NULL names
+        # simply never match, which is what an OR of ilike already gives.
         query = query.where(
-            or_(Order.order_number.ilike(pattern), Order.contact_name.ilike(pattern))
+            or_(
+                Order.order_number.ilike(pattern),
+                Order.contact_name.ilike(pattern),
+                Order.draft_name.ilike(pattern),
+            )
         )
     phone_condition = _phone_digits_condition(contact_phone)
     if phone_condition is not None:
@@ -3064,6 +3079,9 @@ def _order_search_condition(search: str | None) -> ColumnElement[bool] | None:
     conditions: list[ColumnElement[bool]] = [
         Order.order_number.ilike(pattern),
         Order.contact_name.ilike(pattern),
+        # Same reason as the list filter: at the counter the client is as likely
+        # to name the drawing as the order number.
+        Order.draft_name.ilike(pattern),
     ]
     phone_condition = _phone_digits_condition(normalized)
     if phone_condition is not None:
