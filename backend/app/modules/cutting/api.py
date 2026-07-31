@@ -2,7 +2,6 @@
 
 from app.modules.cutting.imports import parse_import_file
 from app.modules.cutting.optimizer import (
-    ALGORITHM_VERSION,
     DEFAULT_CUT_PARAMS,
     DEFAULT_EDGE_TRIM_MM,
     DEFAULT_KERF_MM,
@@ -19,7 +18,7 @@ from app.modules.cutting.optimizer import (
     PanelSpec,
     PartInput,
     PlacementResult,
-    run_all_algorithms,
+    run_optimizer,
 )
 from app.modules.cutting.pdf_document import PdfContext, render_cutting_pdf
 from app.modules.cutting.service import (
@@ -50,7 +49,6 @@ from app.modules.cutting.workshop_service import (
 )
 
 __all__ = [
-    "ALGORITHM_VERSION",
     "DEFAULT_CUT_PARAMS",
     "DEFAULT_EDGE_TRIM_MM",
     "DEFAULT_KERF_MM",
@@ -89,7 +87,7 @@ __all__ = [
     "optimize_workshop_draft",
     "parse_import_file",
     "render_cutting_pdf",
-    "run_all_algorithms",
+    "run_optimizer",
     "update_draft",
     "update_workshop_draft",
     "workshop_catalog_materials",

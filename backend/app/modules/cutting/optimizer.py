@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from importlib.metadata import version
 
 from cutting_engine import (
     CuttingEngineError,
@@ -16,10 +16,14 @@ from cutting_engine import (
     OptimizationLevel,
     Part,
     Sheet,
+    SolverProvider,
     optimize,
 )
 from cutting_engine import (
     CuttingResult as EngineCuttingResult,
+)
+from cutting_engine import (
+    SolverMetadata as EngineSolverMetadata,
 )
 
 from app.models.enums import MaterialSource
@@ -29,9 +33,17 @@ DEFAULT_EDGE_TRIM_MM = 5
 EDGE_OVERHANG_MM = 30
 MAX_PARTS_PER_RUN = 300
 MAX_PANELS_PER_MATERIAL = 20
-OPTIMIZATION_TIMEOUT_SECONDS = 5.0
-ALGORITHM_VERSION = f"cutting-engine-{version('cutting-engine')}"
-ALGORITHM_NAME = "cutting-engine-best"
+OPTIMIZATION_TIMEOUT_SECONDS = 10.0
+
+#: Number of leading hex characters of ``SolverMetadata.provider_version`` kept
+#: in the persisted ``algorithm_version`` stamp for a PackingSolver-produced
+#: (or hybrid) result — see PACKINGSOLVER_PROVIDER_SPEC.md, "Mebel Pro adapter
+#: changes".
+PACKINGSOLVER_VERSION_STAMP_LENGTH = 12
+
+ALGORITHM_NAME_NATIVE = "cutting-engine/native"
+ALGORITHM_NAME_PACKINGSOLVER = "cutting-engine/packingsolver"
+ALGORITHM_NAME_HYBRID = "cutting-engine/hybrid"
 
 EDGE_SIDES = ("top", "bottom", "left", "right")
 
@@ -162,28 +174,30 @@ class OptimizationResult:
     edge_banded_sides_by_material: dict[str, dict[str, int]]
 
 
-def run_all_algorithms(
+def run_optimizer(
     parts: list[PartInput],
     materials: dict[uuid.UUID, PanelSpec],
     *,
     params: CutParams,
     timeout_seconds: float = OPTIMIZATION_TIMEOUT_SECONDS,
-) -> list[OptimizationResult]:
-    """Return the single best deterministic result from ``cutting-engine``.
+) -> OptimizationResult:
+    """Return the single result `cutting-engine` produces for this draft.
 
-    The service layer still expects a list because older UI/API flows supported
-    comparing algorithms. The product now keeps only the best result, so this
-    adapter returns a one-item list while preserving the existing persistence
-    contract. ``params`` is resolved by the caller from the draft's branch —
-    every reader of kerf/trim in this module takes it as an argument.
+    ``cutting-engine`` internally races its `native` and `packingsolver`
+    providers (default `AUTO` policy) per material group and already returns
+    one winning candidate per group; this adapter aggregates those per-material
+    groups into the one persisted `OptimizationResult` for the whole draft.
+    There is no algorithm chooser and no redundant re-selection here — that
+    used to live in the caller as `min(waste, name)` and is gone now that this
+    function itself returns a single result. ``params`` is resolved by the
+    caller from the draft's branch — every reader of kerf/trim in this module
+    takes it as an argument.
     """
 
-    return [
-        _run_best_engine_result(parts, materials, params=params, timeout_seconds=timeout_seconds)
-    ]
+    return _run_optimizer_result(parts, materials, params=params, timeout_seconds=timeout_seconds)
 
 
-def _run_best_engine_result(
+def _run_optimizer_result(
     parts: list[PartInput],
     materials: dict[uuid.UUID, PanelSpec],
     *,
@@ -202,6 +216,7 @@ def _run_best_engine_result(
     deadline = time.monotonic() + timeout_seconds
     panels: list[PanelResult] = []
     total_cut_length = 0
+    solvers: list[EngineSolverMetadata] = []
 
     parts_by_material: dict[uuid.UUID, list[PartInput]] = {}
     for part in parts:
@@ -214,6 +229,7 @@ def _run_best_engine_result(
         material = materials[material_id]
         material_parts = parts_by_material[material_id]
         engine_result = _optimize_material(material, material_parts, params=params)
+        solvers.append(engine_result.solver)
 
         if engine_result.unplaced_parts:
             unplaced = engine_result.unplaced_parts[0]
@@ -285,7 +301,12 @@ def _run_best_engine_result(
             raise OptimizerError("optimization_timeout", "Optimization timed out")
 
     return _build_result(
-        parts, panels, materials, params=params, total_cut_length_mm=total_cut_length
+        parts,
+        panels,
+        materials,
+        params=params,
+        total_cut_length_mm=total_cut_length,
+        solvers=solvers,
     )
 
 
@@ -395,6 +416,42 @@ def _rotation_locked(_material: PanelSpec, part: PartInput) -> bool:
     return part.follow_grain
 
 
+def _algorithm_stamp(solvers: Sequence[EngineSolverMetadata]) -> tuple[str, str]:
+    """Derive the persisted ``(algorithm_name, algorithm_version)`` pair from the
+    per-material-group ``SolverMetadata`` the engine returned for this draft.
+
+    One `optimize()` call runs per panel material group; each call
+    independently returns whichever provider won for that group. When every
+    group agrees, the draft is stamped with that provider's name. When groups
+    disagree, the draft is stamped `cutting-engine/hybrid` — see
+    PACKINGSOLVER_PROVIDER_SPEC.md, "Mebel Pro adapter changes", item 9.
+    """
+
+    engine_version = solvers[0].engine_version
+    providers = {solver.provider for solver in solvers}
+
+    packingsolver_version = next(
+        (
+            solver.provider_version
+            for solver in solvers
+            if solver.provider is SolverProvider.PACKINGSOLVER
+        ),
+        None,
+    )
+
+    if providers == {SolverProvider.NATIVE}:
+        return ALGORITHM_NAME_NATIVE, engine_version
+
+    assert packingsolver_version is not None  # providers has PackingSolver here
+    packingsolver_stamp = (
+        f"{engine_version}+packingsolver."
+        f"{packingsolver_version[:PACKINGSOLVER_VERSION_STAMP_LENGTH]}"
+    )
+    if providers == {SolverProvider.PACKINGSOLVER}:
+        return ALGORITHM_NAME_PACKINGSOLVER, packingsolver_stamp
+    return ALGORITHM_NAME_HYBRID, packingsolver_stamp
+
+
 def _build_result(
     parts: list[PartInput],
     panels: list[PanelResult],
@@ -402,6 +459,7 @@ def _build_result(
     *,
     params: CutParams,
     total_cut_length_mm: int,
+    solvers: Sequence[EngineSolverMetadata],
 ) -> OptimizationResult:
     panels_used: dict[str, int] = {}
     total_waste = 0
@@ -417,9 +475,10 @@ def _build_result(
     waste_percentage = (
         Decimal(total_waste) / Decimal(total_usable_area) if total_usable_area else Decimal("0")
     )
+    algorithm_name, algorithm_version = _algorithm_stamp(solvers)
     return OptimizationResult(
-        algorithm_name=ALGORITHM_NAME,
-        algorithm_version=ALGORITHM_VERSION,
+        algorithm_name=algorithm_name,
+        algorithm_version=algorithm_version,
         kerf_mm=params.kerf_mm,
         edge_trim_mm=params.edge_trim_mm,
         panels=panels,
