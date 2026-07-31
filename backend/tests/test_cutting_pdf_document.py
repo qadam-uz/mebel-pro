@@ -16,6 +16,8 @@ from app.modules.cutting.schemas import (
     CuttingPlacementResponse,
     CuttingResultResponse,
 )
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas as rl_canvas
 
 PANEL_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -298,7 +300,7 @@ def test_part_rows_merge_identical_size_and_band_pattern_by_summing_quantity() -
 
 def test_register_widths_are_three_columns_summing_to_the_total_width() -> None:
     widths = pdf_document._register_widths(120.0)
-    assert len(widths) == 3  # Bo'yi, Eni, Soni — no more #/Detal/D1/D2/Sh1/Sh2
+    assert len(widths) == 3  # Uzunlik, Kenglik, Soni — no more #/Detal/D1/D2/Sh1/Sh2
     assert sum(widths) == pytest.approx(120.0)
 
 
@@ -309,7 +311,7 @@ def test_register_draws_rules_and_band_ticks_not_per_cell_boxes() -> None:
     pdf_document._register_fonts()
     buf = BytesIO()
     pdf = rl_canvas.Canvas(buf, pagesize=(400, 200))
-    # One row: 2 length-side bands (Bo'yi ticks), 1 width-side band (Eni tick).
+    # One row: 2 length-side bands (Uzunlik ticks), 1 width-side band (Kenglik tick).
     rows = [["400", "200", "3", "2", "1"]]
 
     pdf_document._draw_register(pdf, 10, 190, 120, rows)
@@ -448,6 +450,32 @@ def test_standard_2750_by_1830_sheet_uses_two_up_portrait_with_fixed_7pt_fallbac
     pages = pdf_document._plan_work_pages(result, _layout_units(result))
 
     assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 2)]
+
+
+def test_a_standard_sheet_map_is_width_bound_and_spends_the_page_it_is_given() -> None:
+    """The map is the document — it is what the operator reads at the saw. For a
+    standard 2750x1830 sheet the map box is wider-than-tall relative to the
+    sheet, so page width is what limits it: the margin and the register column
+    beside it are the only two things standing between the map and the paper,
+    and both are held at their floor."""
+    slot_h = (pdf_document._PAGE_H - 2 * pdf_document._MARGIN - pdf_document._PORTRAIT_SLOT_GAP) / 2
+    map_h = slot_h - pdf_document._CARD_HEADER_H
+    map_w = pdf_document._CONTENT_W - pdf_document._PORTRAIT_REGISTER_W - 16
+
+    assert map_w / 2750 < map_h / 1830  # width-bound: extra height would not help
+    assert map_w / pdf_document._PAGE_W > 0.70  # was 0.64 at a 14 mm margin
+
+    # The register still fits its widest content: a 4-digit mm value over a band
+    # tick, and the narrow quantity column under its own bold header.
+    pdf_document._register_fonts()
+    length_w, _, qty_w = pdf_document._register_widths(pdf_document._PORTRAIT_REGISTER_W)
+    assert length_w > max(
+        pdfmetrics.stringWidth("2750", pdf_document._FONT_REGULAR, pdf_document._MIN_PRINT_TEXT_PT),
+        pdf_document._REGISTER_TICK_W,
+    )
+    assert qty_w > pdfmetrics.stringWidth(
+        "Soni", pdf_document._FONT_BOLD, pdf_document._MIN_PRINT_TEXT_PT
+    )
 
 
 def test_unlabelable_map_still_shares_a_two_up_page() -> None:
@@ -613,6 +641,173 @@ def test_register_continuation_uses_the_full_page_width_not_a_narrow_column(
     pdf_document._draw_register_continuation(pdf, result, pdf_document.PdfContext(), [], unit, page)
 
     assert captured["width"] == pdf_document._CONTENT_W
+
+
+def test_identity_block_prints_the_kerf_and_edge_trim_the_layout_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The layout coordinates only reproduce on the machine under the same two
+    cutting parameters, so the summary identity block has to carry them."""
+    calls: list[str] = []
+
+    def spy_draw_text(
+        pdf: Any, x: float, y: float, text: str, size: float, *, bold: bool = False, gray: float = 0
+    ) -> None:
+        calls.append(text)
+
+    monkeypatch.setattr(pdf_document, "_draw_text", spy_draw_text)
+
+    result = _result(
+        parts=[_part()],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+    )
+
+    pdf_document._draw_adaptive_identity(
+        rl_canvas.Canvas(BytesIO(), pagesize=(600, 800)),
+        result,
+        pdf_document.PdfContext(),
+        780.0,
+    )
+
+    matches = [text for text in calls if "Arra kesigi" in text]
+    assert len(matches) == 1
+    assert matches[0] == "Arra kesigi: 4 mm · chetki qirqim: 10 mm"
+
+
+def _identity_draw_calls(
+    monkeypatch: pytest.MonkeyPatch, context: pdf_document.PdfContext
+) -> tuple[list[tuple[float, str, float]], float]:
+    """Draw the identity block with `_draw_text` spied; return its body lines
+    (title excluded) and the height the block claimed."""
+    drawn: list[tuple[float, str, float]] = []
+
+    def spy_draw_text(
+        pdf: Any, x: float, y: float, text: str, size: float, *, bold: bool = False, gray: float = 0
+    ) -> None:
+        drawn.append((x, text, size))
+
+    pdf_document._register_fonts()
+    monkeypatch.setattr(pdf_document, "_draw_text", spy_draw_text)
+
+    result = _result(
+        parts=[_part()],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+    )
+    top = 780.0
+    bottom = pdf_document._draw_adaptive_identity(
+        rl_canvas.Canvas(BytesIO(), pagesize=A4), result, context, top
+    )
+    body = [(x, text, size) for x, text, size in drawn if "kesish hujjati" not in text]
+    return body, top - bottom
+
+
+def _assert_within_columns(body: list[tuple[float, str, float]]) -> None:
+    right_x = pdf_document._MARGIN + pdf_document._CONTENT_W * pdf_document._IDENTITY_SPLIT
+    for x, text, size in body:
+        width = pdfmetrics.stringWidth(text, pdf_document._FONT_REGULAR, size)
+        limit = right_x if x < right_x else pdf_document._MARGIN + pdf_document._CONTENT_W
+        assert x + width <= limit, f"{text!r} overruns its column"
+
+
+def test_branch_identity_keeps_both_columns_inside_their_own_width(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real workshop address plus phone overran the left column and printed
+    on top of the right-hand stats."""
+    body, height = _identity_draw_calls(
+        monkeypatch,
+        pdf_document.PdfContext(
+            workshop_name="Mebel Master",
+            branch_name="Chilonzor filiali",
+            branch_address="Toshkent, Chilonzor tumani, Bunyodkor ko'chasi 12",
+            branch_phone="+998712001212",
+        ),
+    )
+
+    _assert_within_columns(body)
+    # These fit as-is, so the box stays its normal height and neither line wraps.
+    lines = [text for _, text, _ in body]
+    assert "Filial: Mebel Master · Chilonzor filiali · +998712001212" in lines
+    assert "Toshkent, Chilonzor tumani, Bunyodkor ko'chasi 12" in lines
+    assert height == pdf_document._IDENTITY_MIN_H
+
+
+def test_overlong_workshop_name_wraps_down_instead_of_being_truncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Names longer than the column continue on the next line and the box grows
+    to hold them — no ellipsis, nothing lost, nothing over the stats column."""
+    body, height = _identity_draw_calls(
+        monkeypatch,
+        pdf_document.PdfContext(
+            workshop_name="Zamonaviy Mebel Konstruksiyalari Ishlab Chiqarish Korxonasi",
+            branch_name="Yunusobod tumani markaziy ishlab chiqarish filiali",
+            branch_address="Toshkent shahri, Yunusobod tumani, Amir Temur shoh ko'chasi 108A",
+            branch_phone="+998712001212",
+        ),
+    )
+
+    _assert_within_columns(body)
+    lines = [text for _, text, _ in body]
+    assert not any(text.endswith("…") for text in lines)
+    # Every word survives somewhere in the block, in order.
+    assert "Korxonasi" in " ".join(lines)
+    assert "108A" in " ".join(lines)
+    # Wrapping pushed past the four-line minimum, so the box had to grow.
+    assert height > pdf_document._IDENTITY_MIN_H
+
+
+def test_a_single_unbreakable_token_is_split_not_run_over_the_stats(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """There is no space to wrap on, so the split has to happen mid-token."""
+    body, _ = _identity_draw_calls(monkeypatch, pdf_document.PdfContext(workshop_name="Z" * 200))
+
+    _assert_within_columns(body)
+    assert sum(text.count("Z") for _, text, _ in body) == 200  # every glyph survives
+
+
+def test_summary_planner_budgets_the_identity_height_it_actually_draws() -> None:
+    """The planner subtracted a hardcoded height; once the box can grow, a long
+    workshop name would push the first table under the box it was sized for."""
+    # A summary long enough to fill the first page, so a taller identity box has
+    # to push rows off it: one distinct usable offcut per sheet is one row each.
+    panels = [
+        _panel(
+            PANEL_ID,
+            panel_index=index + 1,
+            placements=[_placement("part-a", 0, 0)],
+            offcuts=[
+                CuttingOffcutResponse(
+                    x_mm=400, y_mm=0, length_mm=600 + index, width_mm=1000, usable=True
+                )
+            ],
+        )
+        for index in range(60)
+    ]
+    result = _result(parts=[_part()], panels=panels)
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+    plain = pdf_document.PdfContext()
+    tall = pdf_document.PdfContext(
+        workshop_name="Zamonaviy Mebel Konstruksiyalari Ishlab Chiqarish Korxonasi",
+        branch_name="Yunusobod tumani markaziy ishlab chiqarish qo'shma filiali",
+        branch_address="Toshkent shahri, Yunusobod tumani, Amir Temur shoh ko'chasi 108A-uy",
+        client_name="Abdurahmon Sultonmurodov Xurshidbek o'g'li",
+        client_phone="+998901234567",
+        order_number="B-0042",
+    )
+    pdf_document._register_fonts()
+
+    def first_page_rows(context: pdf_document.PdfContext) -> int:
+        page = pdf_document._plan_summary_pages(result, registry, context)[0]
+        return sum(end - start for _, start, end in page)
+
+    grew_by = pdf_document._identity_box_h(
+        *pdf_document._identity_columns(result, tall)
+    ) - pdf_document._identity_box_h(*pdf_document._identity_columns(result, plain))
+
+    assert grew_by >= pdf_document._REGISTER_ROW_H  # the case is only meaningful if it grew
+    assert first_page_rows(tall) < first_page_rows(plain)
 
 
 def test_every_work_page_is_portrait_and_embeds_the_unicode_font() -> None:

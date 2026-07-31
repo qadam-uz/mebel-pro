@@ -207,6 +207,10 @@ export interface OrderSummary {
   item_count: number
   has_banding: boolean
   planned_panels: number
+  /** Name of the drawing this order was placed from; `null` when it was never named. */
+  draft_name: string | null
+  /** The drawing was built by workshop staff on the client's behalf. */
+  created_via_workshop: boolean
   planned_edge_lines: OrderEdgeMaterialDemand[]
   stock_warnings: OrderStockWarning[]
 }

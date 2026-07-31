@@ -218,7 +218,7 @@ export function productionTimelineDetails(
   if (creditedUserId) details.push(`Bajardi: ${workerName(creditedUserId)}`)
 
   const panelCount = summedRecordValue(metadata.panel_demands)
-  if (panelCount !== null) details.push(`Panel sarfi: ${panelCount} panel`)
+  if (panelCount !== null) details.push(`List sarfi: ${panelCount} list`)
 
   const edgeMillimetres = summedRecordValue(metadata.edge_demands)
   if (edgeMillimetres !== null) details.push(`Kromka sarfi: ${formatMetres(edgeMillimetres)}`)

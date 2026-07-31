@@ -70,7 +70,7 @@ const manufacturerOptions = computed<ChoiceOption[]>(() => [
 ])
 const kindOptions: ChoiceOption[] = [
   { value: 'all', label: 'Barcha turlar' },
-  { value: 'panel', label: 'Panel' },
+  { value: 'panel', label: 'List' },
   { value: 'edge', label: 'Kromka' },
 ]
 const thicknessOptions = computed<ChoiceOption[]>(() => [
@@ -103,12 +103,12 @@ function optionMeta(material: Material) {
   if (material.kind === 'edge') {
     return `Kromka · ${material.thickness_mm}×${material.edge_width_mm} mm`
   }
-  const type = material.type ? material.type.toUpperCase() : 'Panel'
+  const type = material.type ? material.type.toUpperCase() : 'List'
   return `${type} · ${material.panel_length_mm}×${material.panel_width_mm}×${material.thickness_mm} mm`
 }
 
 function priceUnit(kind: MaterialKind) {
-  return kind === 'edge' ? '/ metr' : '/ panel'
+  return kind === 'edge' ? '/ metr' : '/ list'
 }
 
 function filters(offset = 0) {
@@ -447,7 +447,7 @@ function sanitizeRowThreshold(row: SelectedRow) {
           To'ldirilgan maydon barcha qatorlarga qo'llanadi; keyin har bir qatorni alohida
           o'zgartirsa bo'ladi.
           <template v-if="mixedKinds">
-            Tanlovda panel ham, kromka ham bor — qiymat har bir qatorning o'z birligida (panel uchun
+            Tanlovda list ham, kromka ham bor — qiymat har bir qatorning o'z birligida (list uchun
             dona, kromka uchun metr) qo'llanadi.
           </template>
         </small>

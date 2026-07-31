@@ -1,3 +1,6 @@
+# ruff: noqa: RUF001 -- expected material/edge labels reuse the canonical display
+# format's multiplication sign in dimensions.
+
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -283,8 +286,9 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert order["planned_panels"] == 1
     planned_edge_line = order["planned_edge_lines"][0]
     assert planned_edge_line["material_id"] == str(edge_id)
+    # Canonical edge shape: `{manufacturer} {decor}` · `{color}` · `{thickness}x{width} mm`.
     assert planned_edge_line["material_label"].startswith("Phase 5 Maker ")
-    assert planned_edge_line["material_label"].endswith(" Phase 5 Edge")
+    assert planned_edge_line["material_label"].endswith(" P5-E · White · 2×19 mm")
     assert planned_edge_line["thickness_mm"] == "2"
     assert planned_edge_line["color"] == "White"
     assert planned_edge_line["consumed_mm"] == 1000
@@ -295,7 +299,9 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert panel_line["kind"] == "panel"
     assert panel_line["panels_used"] == 1
     assert panel_line["line_total_tiyin"] == 250_000
-    assert panel_line["material_name"].startswith("Phase 5 Maker ")
+    # Canonical panel shape: `{type} {manufacturer} {decor}` · `{color}` · `LxWxT mm`.
+    assert panel_line["material_name"].startswith("LDSP Phase 5 Maker ")
+    assert panel_line["material_name"].endswith(" P5-P · White · 900×600×18 mm")
     assert edge_line["kind"] == "edge"
     assert edge_line["material_id"] == str(edge_id)
     assert edge_line["consumed_mm"] == 1000
@@ -648,8 +654,9 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     assert production_row["orders_banded"] == 1
     assert production_row["edge_length_by_material"] == {str(edge_id): 1000}
     assert production_row["edge_lines"][0]["material_id"] == str(edge_id)
+    # Canonical edge shape: `{manufacturer} {decor}` · `{color}` · `{thickness}x{width} mm`.
     assert production_row["edge_lines"][0]["material_label"].startswith("Phase 5 Maker ")
-    assert production_row["edge_lines"][0]["material_label"].endswith(" Phase 5 Edge")
+    assert production_row["edge_lines"][0]["material_label"].endswith(" P5-E · White · 2×19 mm")
     assert production_row["edge_lines"][0]["thickness_mm"] == "2"
     assert production_row["edge_lines"][0]["color"] == "White"
     assert production_row["edge_lines"][0]["length_mm"] == 1000
@@ -962,6 +969,122 @@ async def test_surcharge_rejects_bad_percent_terminal_status_and_unprivileged(
     )
     assert surcharge_after.status_code == 400
     assert surcharge_after.json()["code"] == "surcharge_not_allowed"
+
+
+async def test_order_carries_the_drawing_name_it_was_placed_from(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The order card is identified by the drawing the client named, not by the
+    branch. An unnamed drawing yields `None` — the surface falls back, the API
+    does not invent a label."""
+    owner_access, _, branch_id, _ = await _workshop_setup(db_session)
+    del owner_access
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    client_access, _ = await _client_access(db_session, phone="+998901555991")
+    draft = await _optimized_draft(
+        client, client_access, branch_id=branch_id, panel=panel, edge=edge
+    )
+    named = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft['id']}",
+        headers=_auth(client_access),
+        json={"name": "Oshxona shkafi"},
+    )
+    assert named.status_code == 200
+
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": draft["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Named Draft",
+            "contact_phone": "+998901555222",
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    order_id = placed.json()["id"]
+    assert placed.json()["draft_name"] == "Oshxona shkafi"
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    assert listed.status_code == 200
+    row = next(item for item in listed.json() if item["id"] == order_id)
+    assert row["draft_name"] == "Oshxona shkafi"
+    # Placed by the client themselves — no staff badge.
+    assert row["created_via_workshop"] is False
+
+    detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+    assert detail.status_code == 200
+    assert detail.json()["draft_name"] == "Oshxona shkafi"
+
+
+async def test_order_search_matches_the_drawing_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The card's headline is the drawing name, so the search box has to reach
+    it — and an unnamed order must not be swept in by a name query."""
+    owner_access, _, branch_id, _ = await _workshop_setup(db_session)
+    del owner_access
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    client_access, _ = await _client_access(db_session, phone="+998901555992")
+
+    async def _place(name: str | None, contact: str) -> str:
+        draft = await _optimized_draft(
+            client, client_access, branch_id=branch_id, panel=panel, edge=edge
+        )
+        if name is not None:
+            patched = await client.patch(
+                f"/api/v1/client/cutting-drafts/{draft['id']}",
+                headers=_auth(client_access),
+                json={"name": name},
+            )
+            assert patched.status_code == 200
+        placed = await client.post(
+            "/api/v1/client/orders",
+            headers=_auth(client_access),
+            json={
+                "draft_id": draft["id"],
+                "branch_id": str(branch_id),
+                "contact_name": contact,
+                "contact_phone": "+998901555222",
+            },
+        )
+        assert placed.status_code == 201, placed.text
+        return str(placed.json()["id"])
+
+    named_id = await _place("Oshxona shkafi", "Named")
+    unnamed_id = await _place(None, "Unnamed")
+
+    async def _search(term: str) -> set[str]:
+        response = await client.get(
+            "/api/v1/client/orders",
+            params={"search": term},
+            headers=_auth(client_access),
+        )
+        assert response.status_code == 200
+        return {str(row["id"]) for row in response.json()}
+
+    # Whole name, a fragment, and a different case all find it.
+    assert await _search("Oshxona shkafi") == {named_id}
+    assert await _search("shkaf") == {named_id}
+    assert await _search("OSHXONA") == {named_id}
+    # The unnamed order is reachable by its own fields, never by a name query.
+    assert unnamed_id not in await _search("shkaf")
+    assert unnamed_id in await _search("Unnamed")
+
+
+async def test_order_from_an_unnamed_drawing_reports_no_draft_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, _, _, _, _ = await _placed_order(client, db_session)
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    assert listed.status_code == 200
+    row = next(item for item in listed.json() if item["id"] == order["id"])
+    assert row["draft_name"] is None
+    assert row["created_via_workshop"] is False
 
 
 async def test_client_orders_active_filter_expands_to_status_union(

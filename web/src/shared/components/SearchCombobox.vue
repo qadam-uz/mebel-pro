@@ -90,6 +90,12 @@ const activeOptionId = computed(() => {
   return option ? `${id}-${option.value}` : undefined
 })
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
+// While the list is open the input is a search box, so it reads empty even when
+// a value is set. Echoing the picked label as the placeholder keeps the current
+// selection legible instead of the field claiming nothing is chosen.
+const inputPlaceholder = computed(() =>
+  open.value && props.modelValue ? selectedLabel() : props.placeholder,
+)
 
 // Remember the chosen option's label so the input keeps showing it even when the
 // parent filters that option out of `options` (CB-84 panel filters) — the value
@@ -121,11 +127,50 @@ function firstEnabledIndex(start = 0, direction = 1) {
 // list we just closed (the dropdown "lingered" after picking).
 let suppressFocusOpen = false
 
+// The index the list should open on: the current selection, so a picker that
+// already holds a value opens *at* that value rather than at the top.
+function selectedIndex() {
+  const index = filteredOptions.value.findIndex((option) => option.value === props.modelValue)
+  if (index >= 0 && !filteredOptions.value[index]?.disabled) return index
+  return firstEnabledIndex(0)
+}
+
+function scrollActiveIntoView() {
+  const list = listRef.value
+  const row = list?.children[activeIndex.value]
+  if (row instanceof HTMLElement) row.scrollIntoView({ block: 'nearest' })
+}
+
+// Reaching for the list (focus, click, ArrowDown) starts a fresh search: the
+// query holds the whole selected label, so leaving it in place means the client
+// filter matches only that one option and the list opens showing the single row
+// the user already picked — the value could not be changed without deleting the
+// text by hand. Typing does *not* go through here, or it would wipe itself.
+function beginFreshSearch() {
+  if (open.value || query.value === '') return
+  query.value = ''
+  if (props.serverFiltered) {
+    // The parent owns the filtering, so it has to hear that the query is empty
+    // again — immediately, since reaching for the list isn't typing.
+    cancelPendingSearch()
+    emit('search', '')
+  }
+}
+
+function onFocus() {
+  if (props.disabled || suppressFocusOpen) return
+  beginFreshSearch()
+  void openList()
+}
+
 async function openList() {
   if (props.disabled || suppressFocusOpen) return
   open.value = true
-  activeIndex.value = firstEnabledIndex(0)
   await nextTick()
+  // After the tick: blanking the query recomputes `filteredOptions`, whose watcher
+  // resets `activeIndex` to the top. Setting it here means the selection wins.
+  activeIndex.value = selectedIndex()
+  scrollActiveIntoView()
   // Placement flips the list up when there's no room below and the list scrolls
   // internally, so it stays visible without scrolling the page (which jumped the
   // content "up" when the dropdown opened low in the viewport).
@@ -136,16 +181,20 @@ function closeList(returnFocus = false) {
   open.value = false
   stopPlacement()
   syncQueryFromModel()
-  if (returnFocus) inputRef.value?.focus()
+  if (!returnFocus) return
+  // Handing focus back must not trip @focus into reopening the list we just
+  // closed — and now also not into blanking the label syncQueryFromModel just
+  // restored, which would leave an Escaped search showing an empty field.
+  suppressFocusOpen = true
+  inputRef.value?.focus()
+  suppressFocusOpen = false
 }
 
 function choose(option: ChoiceOption) {
   if (option.disabled) return
   emit('update:modelValue', option.value)
   query.value = option.label
-  suppressFocusOpen = true
   closeList(true)
-  suppressFocusOpen = false
 }
 
 // One pending `search` emit at a time. A server-backed picker sets
@@ -188,17 +237,22 @@ function onInput(event: Event) {
   if (!(target instanceof HTMLInputElement)) return
   query.value = target.value
   emitSearch(query.value)
-  if (props.modelValue) emit('update:modelValue', null)
+  // Typing is a search, not an unset: the selection stands until another option
+  // is chosen. Clearing it here meant that starting a search and then changing
+  // your mind (Esc, click away) silently dropped a good pick.
   void openList()
 }
 
 function move(direction: number) {
   if (!open.value) {
+    beginFreshSearch()
     void openList()
     return
   }
   const next = firstEnabledIndex(activeIndex.value + direction, direction)
-  if (next >= 0) activeIndex.value = next
+  if (next < 0) return
+  activeIndex.value = next
+  void nextTick(scrollActiveIntoView)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -307,7 +361,7 @@ onBeforeUnmount(() => {
             showClear ? (compact ? 'pr-8' : 'pr-9') : compact ? 'pr-2.5' : 'pr-3',
           ]"
           :value="query"
-          :placeholder="placeholder"
+          :placeholder="inputPlaceholder"
           :disabled="disabled"
           :aria-expanded="open"
           :aria-controls="`${id}-listbox`"
@@ -318,7 +372,7 @@ onBeforeUnmount(() => {
           role="combobox"
           autocomplete="off"
           aria-autocomplete="list"
-          @focus="openList"
+          @focus="onFocus"
           @input="onInput"
           @keydown="onKeydown"
         />

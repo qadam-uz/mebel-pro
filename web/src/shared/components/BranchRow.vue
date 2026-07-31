@@ -58,7 +58,7 @@ defineEmits<{ select: [] }>()
       :class="error ? 'text-ink-muted' : 'text-accent'"
       >{{ quote ? formatTiyin(quote.total_tiyin) : '—'
       }}<small v-if="quote" class="mt-1 block text-[10px] text-ink-muted"
-        >so'm · {{ quote.panels_used }} panel</small
+        >so'm · {{ quote.panels_used }} list</small
       ></span
     >
   </button>

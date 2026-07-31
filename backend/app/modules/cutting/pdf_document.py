@@ -17,14 +17,15 @@ from typing import Any, NamedTuple
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
+from app.core.material_label import edge_label as _edge_label
+from app.core.material_label import material_label as _material_label
 from app.modules.cutting.rendering import (
     _FONT_BOLD,
     _FONT_REGULAR,
-    _format_mm,
     _int_snapshot,
-    _material_label,
     _material_snapshot,
     _panel_length,
     _panel_width,
@@ -36,13 +37,31 @@ from app.modules.cutting.schemas import CuttingPanelResponse, CuttingResultRespo
 
 _PAGE_W = float(A4[0])
 _PAGE_H = float(A4[1])
-_MARGIN = 14 * mm
+# The sheet map is what the operator actually reads at the saw, so the page
+# gives it every point it can spare. 10 mm is the tightest margin office and
+# home printers reliably reproduce without clipping — below that the map starts
+# losing its own edge on some hardware, which costs more than it gains.
+_MARGIN = 10 * mm
 _CONTENT_W = _PAGE_W - 2 * _MARGIN
 _INK = 0.08
 _MUTED = 0.42
 _HAIRLINE = 0.78
 _ROW_H = 15
 _SMALL_ROW_H = 13
+# Identity box column split: the left column holds free-text identity and needs
+# the wider share; the right holds fixed-shape generated stats.
+_IDENTITY_SPLIT = 0.58
+_IDENTITY_FONT = 8.5
+# Title block above the first identity baseline, then the per-line steps. The
+# box is not a fixed height: long names wrap and it grows, so these drive both
+# `_draw_adaptive_identity` and the first summary page's remaining-space budget.
+_IDENTITY_TOP = 32.0
+_IDENTITY_LEFT_STEP = 12.0
+_IDENTITY_RIGHT_STEP = 13.0
+_IDENTITY_BOTTOM_PAD = 11.0
+_IDENTITY_MIN_H = 82.0
+# Gap between the identity box and the first table on the summary page.
+_IDENTITY_GAP = 10.0
 _MAP_H = 285
 _CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
 _EDGE_FIELDS = ("edge_top", "edge_bottom", "edge_left", "edge_right")
@@ -51,7 +70,12 @@ _MIN_EDGE_STROKE_PT = 0.8
 _PORTRAIT_SLOT_GAP = 10.0
 _REGISTER_ROW_H = 14.0
 _REGISTER_HEADER_H = 13.0
-_PORTRAIT_REGISTER_W = 120.0
+# Every point here is a point the map does not get, and the map is width-bound
+# for a standard 2750x1830 sheet. 104 is the floor: the binding constraint is now
+# the bold 7pt header — "Kenglik" is 25.3pt in a 41.6pt column (0.40 x 104) —
+# ahead of a 4-digit mm value (17.8pt) over a 22pt band tick, and the narrow
+# "Soni" column still clears its own header.
+_PORTRAIT_REGISTER_W = 104.0
 # Vertical space a work card spends above its map: the four header lines plus
 # the padding under them. The planner needs it to size a slot's register.
 _CARD_HEADER_H = 73.0
@@ -61,7 +85,7 @@ _CARD_HEADER_H = 73.0
 # `_portrait_slot_capacity` must add it back or it undercounts by a row.
 _CARD_MAP_BOTTOM_PAD = 7.0
 _CONTINUATION_HEADER_H = 40.0
-# The register's own tick geometry (band-count marks under Bo'yi/Eni), separate
+# The register's own tick geometry (band-count marks under Uzunlik/Kenglik), separate
 # from the map's tick constants in rendering.py.
 _REGISTER_TICK_W = 22.0
 _REGISTER_TICK_GAP = 3.5
@@ -143,7 +167,7 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
     units = [
         LayoutUnit(group, _panel_part_rows(result, group.panels[0], registry)) for group in groups
     ]
-    summary_pages = _plan_summary_pages(result, registry)
+    summary_pages = _plan_summary_pages(result, registry, ctx)
     work_pages = _plan_work_pages(result, units)
     page_count = len(summary_pages) + len(work_pages)
 
@@ -637,18 +661,6 @@ def _usable_offcut_rows(result: CuttingResultResponse) -> list[tuple[str, int, i
     )
 
 
-def _edge_label(snapshot: dict[str, Any], material_id: str) -> str:
-    manufacturer = _snapshot_text(snapshot, "manufacturer_name")
-    decor = _snapshot_text(snapshot, "decor_code")
-    name = _snapshot_text(snapshot, "name")
-    color = _snapshot_text(snapshot, "color")
-    thickness = _snapshot_text(snapshot, "thickness_mm")
-    width = _int_snapshot(snapshot.get("edge_width_mm"), fallback=0)
-    base = " ".join(part for part in [manufacturer, decor or name] if part) or material_id[:8]
-    size = f"{_format_mm(thickness)}×{width} mm" if thickness and width > 0 else ""
-    return " · ".join(part for part in [base, color, size] if part)
-
-
 def _material_short(snapshot: dict[str, Any], material_id: str) -> str:
     return (
         _snapshot_text(snapshot, "decor_code")
@@ -708,9 +720,17 @@ def _client_label(context: PdfContext) -> str:
 
 def _branch_lines(context: PdfContext) -> list[str]:
     """Workshop + branch identity for the fixed-height identity box, split
-    across up to two lines (names, then address/phone) instead of clipping."""
-    first = " · ".join(part for part in [context.workshop_name, context.branch_name] if part)
-    second = " · ".join(part for part in [context.branch_address, context.branch_phone] if part)
+    across up to two lines instead of clipping.
+
+    The phone rides with the names rather than with the address: the box has a
+    hard four-line budget, and a real address plus a phone is wider than the
+    column, so pairing them put the phone — the one line a customer acts on —
+    into the truncated tail. Names + phone and the address alone both fit.
+    """
+    first = " · ".join(
+        part for part in [context.workshop_name, context.branch_name, context.branch_phone] if part
+    )
+    second = context.branch_address or ""
     lines = [line for line in [first, second] if line]
     return lines or ["—"]
 
@@ -743,6 +763,47 @@ def _metres(length_mm: int) -> str:
 def _clip(text: str, width: float) -> str:
     limit = max(3, int(width / 4.4))
     return text if len(text) <= limit else f"{text[: limit - 1]}…"
+
+
+def _wrap(text: str, size: float, width: float, *, bold: bool = False) -> list[str]:
+    """Word-wrap to the column width, measured in the real font.
+
+    `_clip` estimates from a character count, which is fine for the generated
+    stat lines it guards but wrong for free-text identity (a long workshop name
+    or address in a proportional font). Nothing here is dropped: a line too wide
+    for its column continues on the next one, and a single unbroken token wider
+    than the whole column is split on characters rather than allowed to run over
+    the neighbouring column.
+    """
+    font = _FONT_BOLD if bold else _FONT_REGULAR
+    if not text:
+        return []
+    if width <= 0 or pdfmetrics.stringWidth(text, font, size) <= width:
+        return [text]
+    lines: list[str] = []
+    current = ""
+    for word in text.split(" "):
+        candidate = f"{current} {word}" if current else word
+        if pdfmetrics.stringWidth(candidate, font, size) <= width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        while pdfmetrics.stringWidth(word, font, size) > width:
+            head = ""
+            for char in word:
+                if pdfmetrics.stringWidth(head + char, font, size) > width:
+                    break
+                head += char
+            if not head:  # column narrower than one glyph — nothing to split on
+                break
+            lines.append(head)
+            word = word[len(head) :]
+        current = word
+    if current:
+        lines.append(current)
+    return lines
 
 
 # --- Adaptive production cards -------------------------------------------
@@ -800,12 +861,18 @@ def _register_capacity(height: float) -> int:
 
 
 def _plan_summary_pages(
-    result: CuttingResultResponse, registry: list[EdgeRegistryEntry]
+    result: CuttingResultResponse,
+    registry: list[EdgeRegistryEntry],
+    context: PdfContext | None = None,
 ) -> list[list[tuple[SummarySection, int, int]]]:
     sections = _summary_sections(result, registry)
     pages: list[list[tuple[SummarySection, int, int]]] = []
     page: list[tuple[SummarySection, int, int]] = []
-    remaining = _PAGE_H - 2 * _MARGIN - 92  # identity block on the first page
+    # The identity block on the first page is as tall as its wrapped columns
+    # need; measure it rather than assume, or a workshop with a long name
+    # silently overprints the first table.
+    identity_h = _identity_box_h(*_identity_columns(result, context or PdfContext()))
+    remaining = _PAGE_H - 2 * _MARGIN - identity_h - _IDENTITY_GAP
     for section in sections:
         start = 0
         while start < len(section.rows):
@@ -827,7 +894,7 @@ def _plan_summary_pages(
 def _summary_sections(
     result: CuttingResultResponse, registry: list[EdgeRegistryEntry]
 ) -> list[SummarySection]:
-    material_widths = [124, 62, 34, 38, 45, 45, 42, 34, 34]
+    material_widths = _fill_width([0, 50, 55, 52, 52, 55, 38])
     material_rows: list[list[str]] = []
     total = MaterialStats("", 0, 0, 0, 0, 0, 0)
     for row in _material_stats(result):
@@ -835,14 +902,12 @@ def _summary_sections(
         material_rows.append(
             [
                 _material_label(snapshot, row.material_id),
-                f"{_panel_length_for_snapshot(snapshot)}×{_panel_width_for_snapshot(snapshot)}",
                 str(row.sheet_count),
                 str(row.piece_count),
                 _m2(row.parts_area),
                 _m2(row.usable_area),
                 _m2(row.waste_area),
                 _percent(row.parts_area, row.sheet_area),
-                _percent(row.parts_area + row.usable_area, row.sheet_area),
             ]
         )
         total = MaterialStats(
@@ -858,14 +923,12 @@ def _summary_sections(
         material_rows.append(
             [
                 "Jami",
-                "",
                 str(total.sheet_count),
                 str(total.piece_count),
                 _m2(total.parts_area),
                 _m2(total.usable_area),
                 _m2(total.waste_area),
                 _percent(total.parts_area, total.sheet_area),
-                _percent(total.parts_area + total.usable_area, total.sheet_area),
             ]
         )
     edge_rows: list[list[str]] = []
@@ -886,7 +949,7 @@ def _summary_sections(
         edge_rows.append(["", "Kromka ishlatilmagan.", ""])
     offcut_rows = [
         [
-            _material_short(_material_snapshot(result, material_id), material_id),
+            _material_label(_material_snapshot(result, material_id), material_id),
             f"{length}×{width} mm",
             f"{count} dona",
         ]
@@ -899,23 +962,21 @@ def _summary_sections(
             "Materiallar",
             [
                 "Material",
-                "List",
                 "Listlar",
                 "Detallar",
                 "Detal m²",
                 "Qoldiq m²",
-                "Chiqit m²",
+                "Chiqindi m²",
                 "KIM",
-                "KIM+q",
             ],
             material_widths,
-            material_rows or [["", "", "0", "0", "0.00", "0.00", "0.00", "—", "—"]],
+            material_rows or [["", "0", "0", "0.00", "0.00", "0.00", "—"]],
         ),
         SummarySection(
-            "Kromka spetsifikatsiyasi", ["#", "Kromka", "Metr"], [28, 360, 112], edge_rows
+            "Kromkalar", ["#", "Kromka", "Metr"], _fill_width([28, 0, 112], name_index=1), edge_rows
         ),
         SummarySection(
-            "Sizda qoladigan qoldiqlar", ["Material", "O'lcham", "Dona"], [300, 94, 70], offcut_rows
+            "Qoldiqlar", ["Material", "O'lcham", "Dona"], _fill_width([0, 100, 64]), offcut_rows
         ),
     ]
 
@@ -931,7 +992,7 @@ def _draw_adaptive_summary_page(
     _setup_page(pdf)
     y = _PAGE_H - _MARGIN
     if number == 1:
-        y = _draw_adaptive_identity(pdf, result, context, y) - 10
+        y = _draw_adaptive_identity(pdf, result, context, y) - _IDENTITY_GAP
     else:
         _draw_text(pdf, _MARGIN, y, "Kesish hujjati — umumiy ma'lumot (davomi)", 11, bold=True)
         y -= 20
@@ -945,27 +1006,73 @@ def _draw_adaptive_summary_page(
     _draw_page_number(pdf, number, count, _PAGE_W, _PAGE_H)
 
 
+def _identity_columns(
+    result: CuttingResultResponse, context: PdfContext
+) -> tuple[list[str], list[str]]:
+    """The identity box's two columns, wrapped to their own widths.
+
+    The left column carries free-text identity (workshop, branch, address,
+    client) whose length the report cannot bound; the right is generated stats
+    of a known shape. Long text wraps onto further lines rather than being
+    truncated — a half-printed workshop name is worse than a taller box — so
+    the box height is a function of this result, not a constant.
+    """
+    date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
+    pieces = sum(_part_quantity(part) for part in result.parts_snapshot)
+    left = [
+        line
+        for text in _identity_left_lines(result, context)
+        for line in _wrap(text, _IDENTITY_FONT, _identity_left_w())
+    ]
+    right = [
+        line
+        for text in (
+            f"Sana: {date_text}",
+            f"Listlar: {len(result.panels)} · detallar: {pieces} dona",
+            f"Kromka: {_metres(result.total_edge_length_mm)} m",
+            # The two cutting parameters the layout was computed with — without
+            # them the saw operator cannot reproduce these coordinates.
+            f"Arra kesigi: {result.kerf_mm} mm · chetki qirqim: {result.edge_trim_mm} mm",
+        )
+        for line in _wrap(text, _IDENTITY_FONT, _identity_right_w())
+    ]
+    return left, right
+
+
+def _identity_left_w() -> float:
+    """Left edge padding to the right column's edge, less a gutter."""
+    return float(_CONTENT_W * _IDENTITY_SPLIT - 16)
+
+
+def _identity_right_w() -> float:
+    return float(_CONTENT_W * (1 - _IDENTITY_SPLIT) - 8)
+
+
+def _identity_box_h(left: list[str], right: list[str]) -> float:
+    """Height the identity box needs for its wrapped columns.
+
+    `_plan_summary_pages` has to subtract the same number it draws, or the
+    first page's tables start where the box already ended.
+    """
+    last_baseline = max(
+        (len(left) - 1) * _IDENTITY_LEFT_STEP, (len(right) - 1) * _IDENTITY_RIGHT_STEP
+    )
+    return max(_IDENTITY_MIN_H, _IDENTITY_TOP + last_baseline + _IDENTITY_BOTTOM_PAD)
+
+
 def _draw_adaptive_identity(
     pdf: canvas.Canvas, result: CuttingResultResponse, context: PdfContext, y: float
 ) -> float:
-    box_h = 82
+    left, right = _identity_columns(result, context)
+    box_h = _identity_box_h(left, right)
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
     _draw_text(pdf, _MARGIN + 8, y - 16, "Mebel Pro — kesish hujjati", 14, bold=True)
-    date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
-    pieces = sum(_part_quantity(part) for part in result.parts_snapshot)
-    left = _identity_left_lines(result, context)
-    right = [
-        f"Sana: {date_text}",
-        f"Listlar: {len(result.panels)} · detallar: {pieces} dona",
-        "Kesish: "
-        f"{_metres(result.total_cut_length_mm)} m · "
-        f"kromka: {_metres(result.total_edge_length_mm)} m",
-    ]
+    right_x = _MARGIN + _CONTENT_W * _IDENTITY_SPLIT
     for index, text in enumerate(left):
-        _draw_text(pdf, _MARGIN + 8, y - 32 - index * 12, text, 8.5)
+        _draw_text(pdf, _MARGIN + 8, y - _IDENTITY_TOP - index * _IDENTITY_LEFT_STEP, text, 8.5)
     for index, text in enumerate(right):
-        _draw_text(pdf, _MARGIN + _CONTENT_W / 2 + 5, y - 32 - index * 13, text, 8.5)
+        _draw_text(pdf, right_x, y - _IDENTITY_TOP - index * _IDENTITY_RIGHT_STEP, text, 8.5)
     return y - box_h
 
 
@@ -1096,7 +1203,7 @@ def _draw_register(
     width: float,
     rows: list[list[str]],
 ) -> None:
-    """Bo'yi / Eni / Soni register. A part carries no name or row number on
+    """Uzunlik / Kenglik / Soni register. A part carries no name or row number on
     the sheet — only size and band pattern — so this draws rules only: a rule
     under the header, a light hairline between rows, a closing rule under the
     last row. No per-cell boxes (those made empty cells read as stray boxes).
@@ -1104,7 +1211,7 @@ def _draw_register(
     widths = _register_widths(width)
     y = top - _REGISTER_HEADER_H
     cursor = x
-    for text, col_width in zip(["Bo'yi", "Eni", "Soni"], widths, strict=True):
+    for text, col_width in zip(["Uzunlik", "Kenglik", "Soni"], widths, strict=True):
         _draw_centred_text(pdf, cursor + col_width / 2, y + 3, text, _MIN_PRINT_TEXT_PT, bold=True)
         cursor += col_width
     pdf.setStrokeGray(_HAIRLINE)
@@ -1167,8 +1274,26 @@ def _draw_centred_text(
     pdf.drawCentredString(cx, y, text)
 
 
+def _fill_width(widths: list[float], *, name_index: int = 0) -> list[float]:
+    """Spend the whole content width, giving the slack to the name column.
+
+    The numeric columns are sized to their content; the name column (material,
+    kromka) holds text that is always longer than its box, so it absorbs
+    whatever the page width leaves over instead of the table stopping short.
+    """
+    fixed = sum(width for index, width in enumerate(widths) if index != name_index)
+    return [
+        float(_CONTENT_W - fixed) if index == name_index else width
+        for index, width in enumerate(widths)
+    ]
+
+
 def _register_widths(width: float) -> list[float]:
-    ratios = (0.42, 0.42, 0.16)
+    # Uzunlik / Kenglik carry a 4-digit mm value over a 22pt band tick; Soni carries at
+    # most three digits but still has to clear its own bold "Soni" header, which
+    # is wider than any value it holds. At the register's narrowed width the old
+    # 0.16 share stopped covering that header.
+    ratios = (0.40, 0.40, 0.20)
     return [width * ratio for ratio in ratios]
 
 

@@ -19,7 +19,7 @@ const TYPE_LABELS: Record<PanelMaterialType, string> = {
   mdf: 'MDF',
   plywood: 'Fanera',
   natural_wood: "Yog'och",
-  other: 'Panel',
+  other: 'List',
 }
 
 export function buildAdminMaterialWriteRequest(form: AdminMaterialFormState): MaterialWriteRequest {

@@ -21,7 +21,7 @@ const PANEL_TYPE_LABELS: Record<PanelMaterialType, string> = {
   mdf: 'MDF',
   plywood: 'Fanera',
   natural_wood: "Yog'och",
-  other: 'Panel',
+  other: 'List',
 }
 
 // Deterministic swatch colour for a material: a few named-colour shortcuts, then a

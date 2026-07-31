@@ -407,8 +407,8 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
     .getByRole('dialog', { name: 'Materialni almashtirish' })
     .getByRole('button', { name: new RegExp(panel.name) })
     .click()
-  await page.getByLabel("Bo'y millimetr").fill('260')
-  await page.getByLabel('Eni millimetr').fill('180')
+  await page.getByLabel("Uzunlik millimetr").fill('260')
+  await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
   await chooseEdgeBanding(page, edge.name)
   await page.getByRole('button', { name: 'Davom etish' }).click()
@@ -479,8 +479,8 @@ test('client resumes a saved cutting draft after reload and from the drafts list
     .getByRole('dialog', { name: 'Materialni almashtirish' })
     .getByRole('button', { name: new RegExp(panel.name) })
     .click()
-  await page.getByLabel("Bo'y millimetr").fill('260')
-  await page.getByLabel('Eni millimetr').fill('180')
+  await page.getByLabel("Uzunlik millimetr").fill('260')
+  await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
   await page.getByRole('button', { name: 'Davom etish' }).click()
 
@@ -497,8 +497,8 @@ test('client resumes a saved cutting draft after reload and from the drafts list
 
   // Editing is a deliberate trip back to the detail stage.
   await page.getByRole('link', { name: 'Detallarni tahrirlash' }).click()
-  await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
-  await expect(page.getByLabel('Eni millimetr')).toHaveValue('180')
+  await expect(page.getByLabel("Uzunlik millimetr")).toHaveValue('260')
+  await expect(page.getByLabel('Kenglik millimetr')).toHaveValue('180')
   await expect(page.getByLabel('Soni')).toHaveValue('2')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
@@ -508,10 +508,15 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await continueButton.click()
   await expect(page).toHaveURL(resultUrl)
 
-  // Resume path #2 — drafts with a chosen result reopen on the result stage.
+  // Resume path #2 — the drafts list reopens a draft on the detail stage with
+  // its parts restored, and the same one CTA carries it on to the result.
+  const editorUrl = resultUrl.replace(/\/result$/, '')
   await page.goto('/client/c/cutting/drafts')
   await expect(page.getByRole('heading', { name: 'Saqlangan chizmalar' })).toBeVisible()
-  await page.getByRole('button', { name: 'Ochish →' }).click()
+  await page.getByRole('link', { name: 'Davom etish →' }).click()
+  await expect(page).toHaveURL(editorUrl)
+  await expect(page.getByLabel("Uzunlik millimetr")).toHaveValue('260')
+  await page.getByRole('button', { name: 'Davom etish' }).click()
   await expect(page).toHaveURL(resultUrl)
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
@@ -519,7 +524,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   // Changing geometry invalidates that current snapshot. The same one CTA now
   // optimises instead of exposing a stale result.
   await page.getByRole('link', { name: 'Detallarni tahrirlash' }).click()
-  await page.getByLabel("Bo'y millimetr").fill('261')
+  await page.getByLabel("Uzunlik millimetr").fill('261')
   await expect(page.getByRole('button', { name: 'Davom etish' })).toHaveCount(1)
 })
 

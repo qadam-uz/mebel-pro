@@ -309,7 +309,16 @@ async def test_walk_in_sees_order_after_otp_login(
     )
     listed = await client.get("/api/v1/client/orders", headers=_auth(tokens.access_token))
     assert listed.status_code == 200
-    assert order_id in {row["id"] for row in listed.json()}
+    rows = {row["id"]: row for row in listed.json()}
+    assert order_id in rows
+    # The client never saw this drawing before the order existed, so the card has
+    # to say staff built it — on the list and on the detail alike.
+    assert rows[order_id]["created_via_workshop"] is True
+    detail = await client.get(
+        f"/api/v1/client/orders/{order_id}", headers=_auth(tokens.access_token)
+    )
+    assert detail.status_code == 200
+    assert detail.json()["created_via_workshop"] is True
 
 
 async def test_staff_minted_draft_is_hidden_from_the_client(

@@ -64,9 +64,9 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await expect(pricingHint).toBeVisible();
   await expect(pricingHint.getByText("2/3-qadam")).toBeVisible();
 
-  await page.getByLabel("Kesish narxi (so'm / panel)").click();
+  await page.getByLabel("Kesish narxi (so'm / list)").click();
   await expect(pricingHint).toHaveCount(0);
-  await page.getByLabel("Kesish narxi (so'm / panel)").fill("25000");
+  await page.getByLabel("Kesish narxi (so'm / list)").fill("25000");
   await page.getByLabel("Kromka yopishtirish narxi (so'm / m)").fill("5000");
   const editForm = page
     .getByRole("heading", { name: "Filial ma'lumotlari" })

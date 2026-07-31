@@ -260,6 +260,14 @@ class OrderSummaryResponse(APIModel):
     item_count: int
     has_banding: bool
     planned_panels: int = 0
+    # Identity the client actually recognises: the name they gave the drawing
+    # this order was placed from. `None` when the drawing was never named — the
+    # UI falls back to the order number rather than inventing a label.
+    draft_name: str | None = None
+    # The drawing was minted by workshop staff on the client's behalf. Such
+    # drafts stay hidden from the client's own list until the order exists, so
+    # the order is the first time they see it — the surface says who built it.
+    created_via_workshop: bool = False
     planned_edge_lines: list[OrderEdgeMaterialDemand] = Field(default_factory=list)
     stock_warnings: list[OrderStockWarning] = Field(default_factory=list)
 

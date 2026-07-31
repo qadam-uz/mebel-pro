@@ -102,7 +102,7 @@ const statusOptions: DropdownOption[] = [
 ]
 const kindOptions: DropdownOption[] = [
   { value: 'all', label: 'Barcha turlar' },
-  { value: 'panel', label: 'Panel' },
+  { value: 'panel', label: 'List' },
   { value: 'edge', label: 'Kromka' },
 ]
 const editingBranchMaterial = computed(
@@ -133,7 +133,7 @@ function materialMeta(row: (typeof workshop.branchMaterials)[number]) {
 }
 
 function priceUnit(kind: MaterialKind) {
-  return kind === 'edge' ? '/ metr' : '/ panel'
+  return kind === 'edge' ? '/ metr' : '/ list'
 }
 
 // Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
@@ -502,7 +502,7 @@ onBeforeUnmount(() => {
                 <td class="nowrap hidden lg:table-cell">
                   <span :class="row.material.kind === 'edge' ? 'pill p-eb' : 'pill p-cut'">
                     <span class="pd"></span
-                    >{{ row.material.kind === 'edge' ? 'Kromka (metr)' : 'Panel' }}
+                    >{{ row.material.kind === 'edge' ? 'Kromka (metr)' : 'List' }}
                   </span>
                 </td>
                 <td class="amt nowrap hidden sm:table-cell">

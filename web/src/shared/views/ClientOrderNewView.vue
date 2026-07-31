@@ -17,6 +17,7 @@ import {
   canPlaceBlockerLabel,
   fieldDiffersFromProfile,
 } from '@/shared/app/clientOrderReview'
+import { snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import { traceLine } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -72,14 +73,15 @@ const totalEdge = computed(() =>
     : 0,
 )
 
-// Resolves a part/line material id to its display name from the chosen
-// result's snapshot — the only place that name is carried on the wire.
+// Resolves a part/line material id to its full canonical display label from
+// the chosen result's snapshot — the only place that identity is carried on
+// the wire. Same shape everywhere a material/edge is shown (see
+// snapshotMaterialLabel's own doc): `{type} {manufacturer} {decor or name}` ·
+// `{color}` · `{L}×{W}×{T} mm`.
 function resolveMaterialName(materialId: string): string {
   const snapshot = chosenResult.value?.material_snapshots[materialId]
   if (!snapshot) return materialId
-  const name = String(snapshot.name ?? snapshot.title ?? materialId)
-  const manufacturer = String(snapshot.manufacturer_name ?? '')
-  return manufacturer && !name.includes(manufacturer) ? `${manufacturer} ${name}` : name
+  return snapshotMaterialLabel(snapshot, materialId)
 }
 
 // "To'liq xulosa" (step 4): the full parts list and itemized bill, derived via
@@ -304,11 +306,14 @@ onMounted(async () => {
                     <tr v-for="row in partRows" :key="row.key" class="border-t border-hairline">
                       <td class="px-3 py-2 font-bold text-ink">
                         {{ row.name }}
+                        <!-- `follow_grain` defaults to true, so marking it would
+                             tag nearly every row. Mark the deliberate exception
+                             instead — the row where rotation was allowed. -->
                         <span
-                          v-if="row.followGrain"
+                          v-if="!row.followGrain"
                           class="ml-1 text-[10px] font-bold text-ink-muted"
-                          title="Tekstura yo'nalishi bo'yicha — burilmaydi"
-                          >· tekstura</span
+                          title="Burilishi mumkin — tekstura yo'nalishi erkin"
+                          >· burilish</span
                         >
                       </td>
                       <td class="px-3 py-2 text-ink-soft">{{ row.materialLabel }}</td>
@@ -323,7 +328,7 @@ onMounted(async () => {
 
             <p class="text-xs text-ink-soft">
               Onlayn to'lov yo'q — buyurtmani ustaxona ko'rib chiqib tasdiqlaydi, to'lov filialda
-              amalga oshiriladi; "Joylashtirildi" bosqichida ekanida uni bekor qilish mumkin.
+              amalga oshiriladi; "Yuborildi" bosqichida ekanida uni bekor qilish mumkin.
             </p>
           </div>
         </section>
@@ -341,7 +346,7 @@ onMounted(async () => {
               ><span class="font-mono font-bold text-ink">{{ totalQuantity }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Panellar</span
+              <span class="text-ink-soft">Listlar</span
               ><span class="font-mono font-bold text-ink">{{ totalPanels }}</span>
             </div>
             <div class="flex justify-between gap-4">

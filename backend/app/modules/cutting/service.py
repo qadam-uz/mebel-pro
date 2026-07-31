@@ -47,7 +47,7 @@ from app.modules.cutting.optimizer import (
     PartInput,
     PlacementResult,
     edge_metrics,
-    run_all_algorithms,
+    run_optimizer,
 )
 from app.modules.cutting.pdf_document import PdfContext
 from app.modules.cutting.schemas import (
@@ -447,7 +447,7 @@ async def _apply_optimize(
     )
     draft.parts_snapshot = parts
     try:
-        optimizer_results = run_all_algorithms(optimizer_parts, panel_specs, params=params)
+        optimizer_result = run_optimizer(optimizer_parts, panel_specs, params=params)
     except OptimizerError as exc:
         raise APIError(
             exc.code,
@@ -459,60 +459,56 @@ async def _apply_optimize(
     await db.flush()
     await _delete_candidate_results(db, draft.id)
     now = datetime.now(UTC)
-    created_results: list[CuttingResult] = []
-    for optimizer_result in optimizer_results:
-        result = CuttingResult(
-            draft_id=draft.id,
-            algorithm_name=optimizer_result.algorithm_name,
-            algorithm_version=optimizer_result.algorithm_version,
-            source=CuttingResultSource.OPTIMIZER,
-            status=CuttingResultStatus.CANDIDATE,
-            kerf_mm=optimizer_result.kerf_mm,
-            edge_trim_mm=optimizer_result.edge_trim_mm,
-            panels_used_by_material=optimizer_result.panels_used_by_material,
-            waste_percentage=optimizer_result.waste_percentage,
-            total_cut_length_mm=optimizer_result.total_cut_length_mm,
-            total_edge_length_mm=optimizer_result.total_edge_length_mm,
-            edge_length_by_material=optimizer_result.edge_length_by_material,
-            parts_snapshot=parts,
-            material_snapshots=material_snapshots,
-            edge_length_shop_by_material=optimizer_result.edge_length_shop_by_material,
-            edge_length_own_by_material=optimizer_result.edge_length_own_by_material,
-            edge_consumed_shop_by_material=optimizer_result.edge_consumed_shop_by_material,
-            edge_consumed_own_by_material=optimizer_result.edge_consumed_own_by_material,
-            edge_banded_sides_by_material=optimizer_result.edge_banded_sides_by_material,
-            created_at=now,
+    result = CuttingResult(
+        draft_id=draft.id,
+        algorithm_name=optimizer_result.algorithm_name,
+        algorithm_version=optimizer_result.algorithm_version,
+        source=CuttingResultSource.OPTIMIZER,
+        status=CuttingResultStatus.CANDIDATE,
+        kerf_mm=optimizer_result.kerf_mm,
+        edge_trim_mm=optimizer_result.edge_trim_mm,
+        panels_used_by_material=optimizer_result.panels_used_by_material,
+        waste_percentage=optimizer_result.waste_percentage,
+        total_cut_length_mm=optimizer_result.total_cut_length_mm,
+        total_edge_length_mm=optimizer_result.total_edge_length_mm,
+        edge_length_by_material=optimizer_result.edge_length_by_material,
+        parts_snapshot=parts,
+        material_snapshots=material_snapshots,
+        edge_length_shop_by_material=optimizer_result.edge_length_shop_by_material,
+        edge_length_own_by_material=optimizer_result.edge_length_own_by_material,
+        edge_consumed_shop_by_material=optimizer_result.edge_consumed_shop_by_material,
+        edge_consumed_own_by_material=optimizer_result.edge_consumed_own_by_material,
+        edge_banded_sides_by_material=optimizer_result.edge_banded_sides_by_material,
+        created_at=now,
+    )
+    db.add(result)
+    await db.flush()
+    for panel in optimizer_result.panels:
+        panel_row = CuttingPanel(
+            cutting_result_id=result.id,
+            material_id=panel.material_id,
+            panel_index=panel.panel_index,
+            waste_area_mm2=panel.waste_area_mm2,
+            cut_count=panel.cut_count,
+            cut_length_mm=panel.cut_length_mm,
+            offcuts=[offcut.__dict__ for offcut in panel.offcuts],
         )
-        db.add(result)
+        db.add(panel_row)
         await db.flush()
-        for panel in optimizer_result.panels:
-            panel_row = CuttingPanel(
-                cutting_result_id=result.id,
-                material_id=panel.material_id,
-                panel_index=panel.panel_index,
-                waste_area_mm2=panel.waste_area_mm2,
-                cut_count=panel.cut_count,
-                cut_length_mm=panel.cut_length_mm,
-                offcuts=[offcut.__dict__ for offcut in panel.offcuts],
-            )
-            db.add(panel_row)
-            await db.flush()
-            for placement in panel.placements:
-                db.add(
-                    CuttingPlacement(
-                        cutting_panel_id=panel_row.id,
-                        part_ref=placement.part_ref,
-                        part_quantity_index=placement.part_quantity_index,
-                        x_mm=placement.x_mm,
-                        y_mm=placement.y_mm,
-                        length_mm=placement.length_mm,
-                        width_mm=placement.width_mm,
-                        rotated=placement.rotated,
-                    )
+        for placement in panel.placements:
+            db.add(
+                CuttingPlacement(
+                    cutting_panel_id=panel_row.id,
+                    part_ref=placement.part_ref,
+                    part_quantity_index=placement.part_quantity_index,
+                    x_mm=placement.x_mm,
+                    y_mm=placement.y_mm,
+                    length_mm=placement.length_mm,
+                    width_mm=placement.width_mm,
+                    rotated=placement.rotated,
                 )
-        created_results.append(result)
-    winner = min(created_results, key=lambda item: (item.waste_percentage, item.algorithm_name))
-    draft.chosen_result_id = winner.id
+            )
+    draft.chosen_result_id = result.id
     draft.updated_at = now
     await db.flush()
     await record_action(
@@ -522,7 +518,7 @@ async def _apply_optimize(
         entity_type="cutting_draft",
         entity_id=draft.id,
         summary="Optimized cutting draft",
-        details={"result_ids": [str(result.id) for result in created_results]},
+        details={"result_ids": [str(result.id)]},
     )
     return await _draft_response(db, draft)
 

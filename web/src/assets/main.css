@@ -760,23 +760,33 @@
     font-size: 0.75rem;
   }
 
+  /* A bordered control, not a bare text link: on a detail screen this is the
+     only way out, and a borderless label at the top of the page was read as a
+     breadcrumb rather than something to click. Sized below .mp-button so it
+     stays subordinate to the screen's own primary action. */
   .client-back {
     display: inline-flex;
     min-height: 36px;
     align-items: center;
     gap: 7px;
     margin-bottom: 10px;
-    border: 0;
-    border-radius: 7px;
-    background: none;
-    color: var(--color-ink-muted);
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: 6px;
+    background: var(--color-elevated);
+    color: var(--color-ink);
     font-size: 0.8125rem;
     font-weight: 700;
-    padding-inline: 0;
+    padding-inline: 12px;
     text-decoration: none;
+    transition:
+      background 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
   }
 
   .client-back:hover {
+    border-color: var(--color-accent);
+    background: var(--color-sunk);
     color: var(--color-accent);
   }
 
@@ -804,6 +814,34 @@
   .client-tab.active {
     border-bottom-color: var(--color-accent);
     color: var(--color-ink);
+  }
+
+  /* Import-dialog diagnostics: an expandable count that sits ahead of the
+     commit, and the MAP size-match verdict on a material card. Chip, not pill —
+     these carry a sentence and a disclosure caret, so they never take the
+     .client-pill dot. */
+  .import-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .import-chip-warn {
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  .import-chip-ok {
+    border-color: var(--color-success-border);
+    background: var(--color-success-soft);
+    color: var(--color-success);
   }
 
   .client-banner {
@@ -2593,61 +2631,6 @@
     gap: 10px;
     color: var(--color-ink-muted);
     font-size: 0.78125rem;
-  }
-
-  .od-chev {
-    color: var(--color-ink-muted);
-    transition: transform 0.15s ease;
-  }
-
-  details[open] > summary .od-chev {
-    transform: rotate(180deg);
-  }
-
-  /* Each order-contents panel is a collapsible row — headline always visible,
-     the per-side edge breakdown opens on demand (QAD-85). */
-  .bom-item {
-    border-bottom: 1px solid var(--color-hairline);
-  }
-
-  .bom-item:last-child {
-    border-bottom: 0;
-  }
-
-  .bom-summary {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 10px 0;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .bom-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .bom-summary:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-    border-radius: 6px;
-  }
-
-  .bom-main {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  .bom-qty {
-    color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  .bom-body {
-    padding: 0 0 12px;
   }
 
   @media (max-width: 620px) {

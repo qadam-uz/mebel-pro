@@ -6,7 +6,7 @@ import {
   clientErrorLabel,
   clientStatusLabel,
   clientStatusPillClass,
-  formatRelativeDate,
+  formatFullDate,
 } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceSuffix } from '@/shared/app/errorTrace'
@@ -108,7 +108,6 @@ onMounted(() => {
     <div class="client-page-head">
       <div>
         <h1>Mening buyurtmalarim</h1>
-        <p class="sub">Faol va tugatilgan buyurtmalaringiz.</p>
       </div>
       <!-- The onboarding empty state carries a centred CTA, so this would be
            redundant there; it shows once the user has orders (or has merely
@@ -126,7 +125,10 @@ onMounted(() => {
       <FormSelect v-model="status" label="Holat" :options="statusOptions" />
       <label class="grid gap-1 text-sm font-bold text-ink">
         Qidirish
-        <input v-model="search" class="mp-input" placeholder="#26-14-0003" />
+        <!-- Names both fields the search reaches rather than showing one sample
+             number: the drawing name is the card's headline, and an example of
+             only one of the two accepted inputs hides the other. -->
+        <input v-model="search" class="mp-input" placeholder="Buyurtma raqami yoki chizma nomi" />
       </label>
     </div>
 
@@ -173,19 +175,36 @@ onMounted(() => {
         @click="openOrder(order)"
         @keydown.enter="openOrder(order)"
       >
+        <!-- The drawing's name leads because it is the only field that differs
+             from card to card: a client usually orders from one branch, so the
+             branch name was the largest type on every card and identical on all
+             of them. It stays, demoted to the identifier line. -->
         <div class="mb-4 flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <span
-              class="inline-block rounded-md bg-sunk px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-ink-soft"
-            >
-              {{ order.order_number }}
-            </span>
-            <h2 class="mb-1 mt-2 font-serif text-xl font-semibold text-ink">
-              {{ order.branch_name }}
-            </h2>
-            <p class="text-sm text-ink-soft">
-              {{ order.workshop_name }} · {{ formatRelativeDate(order.created_at) }} ·
-              <b class="font-semibold text-ink">{{ order.item_count }} detal</b>
+            <!-- Weight + ink against the soft sans rest of the line, no chip: the
+                 status pill already occupies this row on the right, and a second
+                 boxed element would read as a second status. -->
+            <p class="truncate text-sm text-ink-soft">
+              <span class="font-mono text-[15px] font-bold text-ink">{{ order.order_number }}</span>
+              · {{ order.workshop_name }} · {{ order.branch_name }}
+            </p>
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <h2
+                class="font-serif text-lg font-semibold"
+                :class="order.draft_name ? 'text-ink' : 'text-ink-muted'"
+              >
+                {{ order.draft_name || 'Nomsiz chizma' }}
+              </h2>
+              <!-- Staff-minted drawings stay hidden from the client's own list
+                   until the order exists, so this is the first time they see it. -->
+              <span v-if="order.created_via_workshop" class="client-pill client-pill-info">
+                Ustaxona tuzgan
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-ink-soft">
+              <b class="font-mono font-semibold text-ink">{{ order.item_count }}</b> detal ·
+              <b class="font-mono font-semibold text-ink">{{ order.planned_panels || '—' }}</b> list
+              · <span class="font-mono">{{ formatFullDate(order.created_at) }}</span>
             </p>
           </div>
           <span :class="clientStatusPillClass(order.status)">
@@ -198,7 +217,6 @@ onMounted(() => {
         >
           <div class="font-mono text-base font-bold text-ink">
             {{ formatTiyin(order.total_tiyin) }}
-            <small class="font-sans text-xs font-medium text-ink-muted">jami narx</small>
           </div>
           <button
             v-if="order.status === 'new'"

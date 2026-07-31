@@ -132,7 +132,7 @@ export function formatDateInputValue(value: Date): string {
 // labels so a raw English enum never surfaces in the UI.
 export function formatStockUnit(unit: string): string {
   if (unit === 'metre' || unit === 'm') return 'm'
-  if (unit === 'panel') return 'panel'
+  if (unit === 'panel') return 'list'
   if (unit === 'pcs' || unit === 'piece') return 'dona'
   return unit
 }

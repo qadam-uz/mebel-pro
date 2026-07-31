@@ -11,7 +11,6 @@ import {
   clientPhaseProgress,
   clientStatusLabel,
   clientStatusPillClass,
-  formatPercent,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
@@ -39,10 +38,17 @@ const productionCount = computed(
       (order) => order.status === 'cutting' || order.status === 'edge_banding',
     ).length,
 )
+const RECENT_DRAFT_LIMIT = 4
+
 const recentDrafts = computed(() =>
   [...cutting.drafts]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    .slice(0, 4),
+    .slice(0, RECENT_DRAFT_LIMIT),
+)
+// The home list is capped at RECENT_DRAFT_LIMIT; without a trailing marker the
+// list's end reads as "that's all I have". Count what the cap hides.
+const hiddenDraftCount = computed(() =>
+  Math.max(0, cutting.drafts.length - recentDrafts.value.length),
 )
 
 const greetName = computed(() => clientGreetingName(auth.me))
@@ -71,9 +77,10 @@ function openOrder(id: string) {
   void router.push(rolePath(`/c/orders/${id}`))
 }
 
+// Always the parts editor, never straight to the result — same rule as the
+// drafts list; the editor's "Davom etish" is what moves on to the result.
 function openDraft(draft: CuttingDraft) {
-  const suffix = chosenResult(draft) ? '/result' : ''
-  void router.push(rolePath(`/c/cutting/${draft.id}${suffix}`))
+  void router.push(rolePath(`/c/cutting/${draft.id}`))
 }
 
 async function reloadHome() {
@@ -341,12 +348,15 @@ onMounted(() => {
 
       <section>
         <div class="client-section-title">
-          <h2>Davom ettirish</h2>
+          <h2>Chizmalar</h2>
           <RouterLink
             :to="rolePath('/c/cutting/drafts')"
             class="text-sm font-bold text-ink-soft no-underline hover:text-ink"
           >
-            Barcha chizmalar →
+            Barcha chizmalar<template v-if="cutting.drafts.length">
+              ({{ cutting.drafts.length }})</template
+            >
+            →
           </RouterLink>
         </div>
 
@@ -384,19 +394,13 @@ onMounted(() => {
                   ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
                 >
                 <span
-                  ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> panel</span
+                  ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> list</span
                 >
-                <span v-if="chosenResult(draft)">
-                  <b class="font-mono text-ink">{{
-                    formatPercent(chosenResult(draft)?.waste_percentage)
-                  }}</b>
-                  chiqim
-                </span>
                 <span>{{ formatRelativeDate(draft.updated_at) }}</span>
               </div>
             </div>
             <RouterLink
-              :to="rolePath(`/c/cutting/${draft.id}${chosenResult(draft) ? '/result' : ''}`)"
+              :to="rolePath(`/c/cutting/${draft.id}`)"
               class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
               @click.stop
             >
@@ -404,6 +408,17 @@ onMounted(() => {
             </RouterLink>
             <span class="shrink-0 font-bold text-accent sm:hidden" aria-hidden="true">→</span>
           </article>
+
+          <!-- Marks the cut, not the end of the data: a dashed row reads as a
+               continuation rather than another draft card. -->
+          <RouterLink
+            v-if="hiddenDraftCount > 0"
+            :to="rolePath('/c/cutting/drafts')"
+            class="flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-dashed border-hairline-strong p-3 text-sm font-bold text-ink-soft no-underline transition hover:border-accent hover:bg-accent-soft hover:text-accent focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+          >
+            Yana {{ hiddenDraftCount }} ta saqlangan chizma
+            <span aria-hidden="true">→</span>
+          </RouterLink>
         </div>
       </section>
     </template>

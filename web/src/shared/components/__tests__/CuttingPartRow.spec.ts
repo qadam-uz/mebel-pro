@@ -78,31 +78,75 @@ describe('CuttingPartRow grain toggle', () => {
     setActivePinia(createPinia())
   })
 
-  it('keeps the texture checkbox visible for non-grained material', () => {
+  // 0 is the stored "not entered" value; a blank row must read as blank, not as
+  // three zeros the user has to clear first.
+  it('renders the numeric cells empty when the part is still unfilled', () => {
+    seedPanel(true)
+
+    const wrapper = mountRow(part({ length_mm: 0, width_mm: 0, quantity: 0 }))
+
+    expect(wrapper.get<HTMLInputElement>('[data-cell="length"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[data-cell="width"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[data-cell="quantity"]').element.value).toBe('')
+  })
+
+  it('shows real dimensions once they are entered', () => {
+    seedPanel(true)
+
+    const wrapper = mountRow(part({ length_mm: 300, width_mm: 200, quantity: 2 }))
+
+    expect(wrapper.get<HTMLInputElement>('[data-cell="length"]').element.value).toBe('300')
+    expect(wrapper.get<HTMLInputElement>('[data-cell="quantity"]').element.value).toBe('2')
+  })
+
+  it('stores 0 again when a numeric cell is cleared', async () => {
+    seedPanel(true)
+    const wrapper = mountRow(part({ length_mm: 300 }))
+
+    await wrapper.get('[data-cell="length"]').setValue('')
+
+    expect(wrapper.emitted('update:length')).toEqual([[0]])
+  })
+
+  it('keeps the rotation switch visible for non-grained material', () => {
     seedPanel(false)
 
     const wrapper = mountRow(part())
 
-    expect(wrapper.find('[data-test="follow-grain"][type="checkbox"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Tekstura')
+    expect(wrapper.find('[data-test="follow-grain"][role="switch"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Burilish')
   })
 
-  it('emits false when active desktop texture checkbox is unchecked', async () => {
+  // The switch names rotation, not grain: on = rotation allowed = follow_grain
+  // false. Both directions are asserted so the inversion can't silently drop.
+  it('emits false when the rotation switch is turned on', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: true }))
 
-    await wrapper.get('[data-test="follow-grain"][type="checkbox"]').setValue(false)
+    await wrapper.get('[data-test="follow-grain"]').trigger('click')
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[false]])
   })
 
-  it('emits true when inactive desktop texture checkbox is checked', async () => {
+  it('emits true when the rotation switch is turned off', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: false }))
 
-    await wrapper.get('[data-test="follow-grain"][type="checkbox"]').setValue(true)
+    await wrapper.get('[data-test="follow-grain"]').trigger('click')
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[true]])
+  })
+
+  it('reports switch state and glyph from follow_grain', () => {
+    seedPanel(true)
+
+    const locked = mountRow(part({ follow_grain: true }))
+    const free = mountRow(part({ follow_grain: false }))
+
+    expect(locked.get('[data-test="follow-grain"]').attributes('aria-checked')).toBe('false')
+    expect(free.get('[data-test="follow-grain"]').attributes('aria-checked')).toBe('true')
+    expect(locked.get('[data-test="follow-grain"] icon-stub').attributes('name')).toBe('grain')
+    expect(free.get('[data-test="follow-grain"] icon-stub').attributes('name')).toBe('rotate')
   })
 
   it('renders one edge glyph and opens the shared edge dialog', async () => {

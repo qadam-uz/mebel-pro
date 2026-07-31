@@ -41,6 +41,25 @@ _BAND_MARK = 30.0
 # (CuttingPanelSvg.vue). The inset clears the band tick (_BAND_INSET + stroke)
 # with room to spare, so a number never lands on a tape mark.
 _DIM_INSET = 12.0
+# A placement too small for the sheet's uniform label size shrinks its own
+# text rather than going unlabelled — every part keeps its size on paper, at
+# whatever font still fits inside it. The floor is a last-resort minimum, not
+# a target: almost every part prints at the sheet's uniform size. Two sheets
+# now always share a page (never a page of its own for a dense one), so the
+# map itself is smaller than it used to be — a 100mm part on an ordinary
+# 2750mm sheet is only ~14pt on paper, and the text is vector, not raster: a
+# print shop reads this up close or zooms a PDF, so a small-but-correct
+# number beats a blank rectangle. The floor only exists to stop the loop
+# short of a font with literally no width — a genuinely sub-30mm sliver
+# still goes unlabelled rather than printing an invisible dot.
+_MIN_LABEL_FONT_FLOOR_PT = 1.5
+_LABEL_FONT_SHRINK_STEP_PT = 0.1
+# Breathing room between the text and the edge of its own axis. A flat 4pt
+# was sized for the sheet's uniform label, where it's a rounding error; at
+# the smaller sizes the shrink loop reaches for, that same 4pt can be most of
+# the placement's own box, so it alone was blocking a label a genuinely
+# fitting font would otherwise print.
+_LABEL_TEXT_PADDING_PT = 1.0
 
 # Print equivalents of the web tokens the visualiser uses. Structure stays
 # grayscale for print; colour is reserved for the offcut semantics.
@@ -48,13 +67,6 @@ _SUCCESS = HexColor("#15803d")  # --color-success: usable offcut
 _DANGER = HexColor("#be3a2b")  # --color-danger: waste offcut
 _INK_MUTED = HexColor("#5b6675")  # --color-ink-muted: waste offcut label, footer
 _INK_SOFT = HexColor("#475569")  # --color-ink-soft: placement labels
-_PANEL_TYPE_LABELS = {
-    "dsp": "LDSP",
-    "mdf": "MDF",
-    "plywood": "Fanera",
-    "natural_wood": "Yog'och",
-    "other": "Panel",
-}
 
 # The vendored Unicode font pair is shared with the other in-process documents
 # (app/core/pdf.py); these aliases keep the module-local naming.
@@ -76,11 +88,17 @@ class _OffcutLabelMode(NamedTuple):
 
 
 class _DimensionLabelPlan(NamedTuple):
-    """`edges` carries both numbers separately; `inline` carries `L×W` centred."""
+    """`edges` carries both numbers separately; `inline` carries `L×W` centred.
+
+    `font_pt` is the size this specific plan was fitted at — the sheet's
+    uniform size for almost every part, smaller only for the placements that
+    needed it.
+    """
 
     mode: str
     length_text: str
     width_text: str
+    font_pt: float
 
 
 class _Frame(NamedTuple):
@@ -182,7 +200,9 @@ def draw_sheet_map(
         )
         pdf.setLineWidth(1.5 * scale)
         pdf.setStrokeGray(0.25)
-        pdf.setFillGray(0.93)
+        # White, not the old light gray: a black-and-white printer's toner
+        # coverage on a filled tint can blur the fine band ticks and text.
+        pdf.setFillGray(1.0)
         pdf.rect(x, y, w, h, stroke=1, fill=1)
 
         row = parts.get(placement.part_ref)
@@ -207,27 +227,27 @@ def draw_sheet_map(
         label = _placement_label_mode(placement, label_font_pt, w, h, dim_inset_pt)
         if label is not None:
             pdf.setFillColor(_INK_SOFT)
-            pdf.setFont(_FONT_REGULAR, label_font_pt)
+            pdf.setFont(_FONT_REGULAR, label.font_pt)
             if label.mode == "edges":
                 pdf.drawCentredString(
                     x + w / 2,
-                    y + h - dim_inset_pt - 0.36 * label_font_pt,
+                    y + h - dim_inset_pt - 0.36 * label.font_pt,
                     label.length_text,
                 )
                 pdf.saveState()
                 pdf.translate(x + dim_inset_pt, y + h / 2)
                 pdf.rotate(90)
-                pdf.drawCentredString(0, -0.36 * label_font_pt, label.width_text)
+                pdf.drawCentredString(0, -0.36 * label.font_pt, label.width_text)
                 pdf.restoreState()
             elif label.mode == "inline_rotated":
                 pdf.saveState()
                 pdf.translate(x + w / 2, y + h / 2)
                 pdf.rotate(90)
-                pdf.drawCentredString(0, -0.36 * label_font_pt, label.length_text)
+                pdf.drawCentredString(0, -0.36 * label.font_pt, label.length_text)
                 pdf.restoreState()
             else:
                 pdf.drawCentredString(
-                    x + w / 2, y + h / 2 - 0.36 * label_font_pt, label.length_text
+                    x + w / 2, y + h / 2 - 0.36 * label.font_pt, label.length_text
                 )
 
 
@@ -277,31 +297,78 @@ def _placement_label_mode(
     height_pt: float,
     inset_pt: float,
 ) -> _DimensionLabelPlan | None:
-    """Decide how a placement carries its own dimensions.
+    """Decide how a placement carries its own dimensions, shrinking the font
+    for this one placement if the sheet's uniform size doesn't fit it.
 
     A part is identified by its size, never by a name or row number, so the
-    dimensions are the one thing that must survive. The ladder degrades one step
-    at a time: `edges` places each number against the side it measures
-    (Bazis-style, matching the web visualiser); `inline` puts both on a single
-    `L×W` line when the part is too tight for the rotated number; and
-    `inline_rotated` turns that line 90° so a tall, narrow strip — the shape that
-    defeats every horizontal option — still carries its size. `None` means the
-    placement is unlabelable at this scale, which is the planner's cue to move
-    the whole sheet to landscape rather than print a part with no dimensions.
+    dimensions are the one thing that must survive — a part small enough to
+    defeat the ladder at every size down to the floor is the only case that
+    prints with no label. Every other placement gets *some* legible number,
+    even if it's smaller than its neighbours.
     """
+    size = font_pt
+    while size >= _MIN_LABEL_FONT_FLOOR_PT:
+        plan = _fit_dimension_label(placement, size, width_pt, height_pt, inset_pt)
+        if plan is not None:
+            return plan
+        size -= _LABEL_FONT_SHRINK_STEP_PT
+    return None
+
+
+def _fit_dimension_label(
+    placement: CuttingPlacementResponse,
+    font_pt: float,
+    width_pt: float,
+    height_pt: float,
+    inset_pt: float,
+) -> _DimensionLabelPlan | None:
+    """The fitting ladder at one fixed font size: `edges` places each number
+    against the side it measures (Bazis-style, matching the web visualiser);
+    `inline` puts both on a single `L×W` line when the part is too tight for
+    the rotated number; `inline_rotated` turns that line 90° so a tall,
+    narrow strip — the shape that defeats every horizontal option — still
+    carries its size. `None` means this size doesn't fit at all."""
     length_text = str(placement.length_mm)
     width_text = str(placement.width_mm)
-    edges_fit = _dim_fits(length_text, font_pt, width_pt, height_pt, inset_pt) and _dim_fits(
-        width_text, font_pt, height_pt, width_pt, inset_pt
+    edges_fit = (
+        _dim_fits(length_text, font_pt, width_pt, height_pt, inset_pt)
+        and _dim_fits(width_text, font_pt, height_pt, width_pt, inset_pt)
+        and not _edges_labels_collide(
+            length_text, width_text, font_pt, width_pt, height_pt, inset_pt
+        )
     )
     if edges_fit:
-        return _DimensionLabelPlan("edges", length_text, width_text)
+        return _DimensionLabelPlan("edges", length_text, width_text, font_pt)
     inline = f"{length_text}×{width_text}"
     if _printed_text_fits(inline, font_pt, width_pt, height_pt):
-        return _DimensionLabelPlan("inline", inline, "")
+        return _DimensionLabelPlan("inline", inline, "", font_pt)
     if _printed_text_fits(inline, font_pt, height_pt, width_pt):
-        return _DimensionLabelPlan("inline_rotated", inline, "")
+        return _DimensionLabelPlan("inline_rotated", inline, "", font_pt)
     return None
+
+
+def _edges_labels_collide(
+    length_text: str,
+    width_text: str,
+    font_pt: float,
+    width_pt: float,
+    height_pt: float,
+    inset_pt: float,
+) -> bool:
+    """`_dim_fits` only checks each dimension against its own edge — on a small,
+    close-to-square placement both texts can independently "fit" while their
+    printed boxes still overlap in the corner (the top-centred length text
+    reaches left past the inset column the rotated width text sits in). An
+    axis-aligned bounding-box test on both labels' actual footprints catches
+    that regardless of which axis the collision happens on."""
+    top_w = float(pdfmetrics.stringWidth(length_text, _FONT_REGULAR, font_pt))
+    side_w = float(pdfmetrics.stringWidth(width_text, _FONT_REGULAR, font_pt))
+    side_thickness = font_pt * 0.9
+    top_x0, top_x1 = width_pt / 2 - top_w / 2, width_pt / 2 + top_w / 2
+    top_y0, top_y1 = height_pt - inset_pt - font_pt * 1.35, height_pt
+    side_x0, side_x1 = inset_pt - side_thickness / 2, inset_pt + side_thickness / 2
+    side_y0, side_y1 = height_pt / 2 - side_w / 2, height_pt / 2 + side_w / 2
+    return (top_x0 < side_x1 and side_x0 < top_x1) and (top_y0 < side_y1 and side_y0 < top_y1)
 
 
 def _dim_fits(
@@ -310,14 +377,14 @@ def _dim_fits(
     """A dimension needs room along its own axis and clearance from the side it
     labels — the inset is what keeps it off the band tick."""
     return (
-        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + 4 <= along_pt
+        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + _LABEL_TEXT_PADDING_PT <= along_pt
         and inset_pt + font_pt * 1.35 <= across_pt
     )
 
 
 def _printed_text_fits(text: str, font_pt: float, width_pt: float, height_pt: float) -> bool:
     return (
-        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + 4 <= width_pt
+        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + _LABEL_TEXT_PADDING_PT <= width_pt
         and font_pt * 1.35 <= height_pt
     )
 
@@ -381,50 +448,6 @@ def _band_tick_lines(
     if sides.right:
         lines.append((x0 + length - inset, cy - half_v, x0 + length - inset, cy + half_v))
     return lines
-
-
-def _material_label(snapshot: dict[str, Any], material_id: object) -> str:
-    raw_type = _snapshot_text(snapshot, "type")
-    type_label = _PANEL_TYPE_LABELS.get(raw_type, raw_type)
-    manufacturer = _snapshot_text(snapshot, "manufacturer_name")
-    decor = _snapshot_text(snapshot, "decor_code")
-    name = _snapshot_text(snapshot, "name")
-    color = _snapshot_text(snapshot, "color")
-    thickness = _snapshot_text(snapshot, "thickness_mm")
-    length = _int_snapshot(snapshot.get("panel_length_mm"), fallback=0)
-    width = _int_snapshot(snapshot.get("panel_width_mm"), fallback=0)
-
-    base = " ".join(part for part in [type_label, manufacturer, decor or name] if part)
-    if not base:
-        return str(material_id)[:8]
-
-    details: list[str] = []
-    if color and color.lower() not in base.lower():
-        details.append(color)
-    if length > 0 and width > 0:
-        dims = f"{length}×{width}"
-        if thickness:
-            dims = f"{dims}×{_format_mm(thickness)}"
-        details.append(f"{dims} mm")
-    elif thickness:
-        details.append(f"{_format_mm(thickness)} mm")
-    return " · ".join([base, *details])
-
-
-def _snapshot_text(snapshot: dict[str, Any], key: str) -> str:
-    value = snapshot.get(key)
-    return value.strip() if isinstance(value, str) else ""
-
-
-def _format_mm(value: object) -> str:
-    text = str(value).strip()
-    try:
-        parsed = float(text)
-    except ValueError:
-        return text
-    if parsed.is_integer():
-        return str(int(parsed))
-    return text.rstrip("0").rstrip(".")
 
 
 def _panel_fill_percent(panel: CuttingPanelResponse, panel_length: int, panel_width: int) -> str:

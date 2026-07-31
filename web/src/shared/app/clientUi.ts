@@ -22,7 +22,7 @@ export function draftDisplayName(draft: CuttingDraft): string {
 }
 
 export const clientStatusLabel: Record<OrderStatus, string> = {
-  new: 'Joylashtirildi',
+  new: 'Yuborildi',
   confirmed: 'Tasdiqlandi',
   cutting: 'Ishlab chiqarishda',
   edge_banding: 'Ishlab chiqarishda',
@@ -32,7 +32,7 @@ export const clientStatusLabel: Record<OrderStatus, string> = {
 }
 
 export const clientPhaseLabels = [
-  'Joylashtirildi',
+  'Yuborildi',
   'Tasdiqlandi',
   'Ishlab chiqarishda',
   'Tayyor',
@@ -139,6 +139,17 @@ export function formatRelativeDate(value: string | Date): string {
   return `${day}.${month} ${hour}:${minute}`
 }
 
+/** Same clock as `formatRelativeDate` but with the year — for lists that
+ *  accumulate across years, where a bare `12.07` is ambiguous. */
+export function formatFullDate(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${day}.${month}.${date.getFullYear()} ${hour}:${minute}`
+}
+
 export function formatPercent(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '-'
   const numeric = Number(value)
@@ -157,12 +168,12 @@ const CLIENT_ERROR_LABELS: Record<string, string> = {
   order_action_failed: "Amalni bajarib bo'lmadi. Qayta urinib ko'ring.",
   client_orders_load_failed: "Buyurtmalar ro'yxatini yuklab bo'lmadi.",
   client_order_load_failed: "Buyurtmani yuklab bo'lmadi.",
-  branch_does_not_carry_panel: "Bu filialda kerakli panel materiali yo'q.",
+  branch_does_not_carry_panel: "Bu filialda kerakli list materiali yo'q.",
   branch_does_not_carry_edge: "Bu filialda kerakli kromka materiali yo'q.",
   missing_cutting_rate: 'Ustaxona kesish narxini hali kiritmagan.',
   missing_edge_banding_rate: 'Ustaxona kromka yopishtirish narxini hali kiritmagan.',
   cutting_result_not_usable: "Bu natijadan hozircha buyurtma berib bo'lmaydi.",
-  part_too_large: 'Detal panel uchun juda katta.',
+  part_too_large: 'Detal list uchun juda katta.',
   part_too_small: 'Detal juda kichik.',
   draft_limit_exceeded: `Saqlangan chizmalar chegarasi (${DRAFT_LIMIT}) to'ldi — eskisini o'chiring.`,
   invalid_name: 'Ismingizni kiriting.',
@@ -224,6 +235,11 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   ban: '<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>',
   'eye-off':
     '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M10.7 5.1A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.7 2.7"/><path d="M6.6 6.6A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M2 2l20 20"/>',
+  // The two states of the «Burilish» cell. `grain` is a panel whose texture runs
+  // one way — the part is pinned to it; `rotate` is the same panel released.
+  // Drawn as a pair so the cell reads as one control in either state.
+  grain: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 6v12M15 6v12"/>',
+  rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/>',
 }
 
 export function clientIconPath(name: string): string {

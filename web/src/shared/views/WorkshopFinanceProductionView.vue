@@ -67,9 +67,11 @@ function thicknessLines(row: WorkerProductionRow): EdgeCellLine[] {
 }
 
 function edgeLabel(line: WorkerProductionEdgeLine) {
-  return [line.material_label, line.thickness_mm ? `${line.thickness_mm} mm` : null, line.color]
-    .filter(Boolean)
-    .join(' · ')
+  // `material_label` is already the canonical `{manufacturer} {decor}` ·
+  // `{color}` · `{thickness}x{width} mm` shape (backend
+  // app/core/material_label.py) — thickness_mm/color are separate fields on
+  // the line for sorting/filtering, not for re-appending here.
+  return line.material_label
 }
 
 async function refresh() {
@@ -153,7 +155,7 @@ watch([dateFrom, dateTo], () => {
           <thead class="bg-sunk text-xs uppercase text-ink-muted">
             <tr>
               <th class="px-5 py-3">Xodim</th>
-              <th class="px-5 py-3 text-right">Kesilgan panel</th>
+              <th class="px-5 py-3 text-right">Kesilgan list</th>
               <th class="px-5 py-3 text-right">Kesimlar</th>
               <th class="px-5 py-3 text-right">Kromka qilingan buyurtma</th>
               <th class="px-5 py-3">Kromka metri</th>

@@ -19,7 +19,7 @@ describe('workshop production display helpers', () => {
         planned_panels: 2,
         panels_used_snapshot: null,
       }),
-    ).toBe('6 detal · 2 panel')
+    ).toBe('6 detal · 2 list')
   })
 
   it('falls back to completion panel snapshot when planned panels are absent', () => {
@@ -29,7 +29,7 @@ describe('workshop production display helpers', () => {
         planned_panels: 0,
         panels_used_snapshot: 1,
       }),
-    ).toBe('4 detal · 1 panel')
+    ).toBe('4 detal · 1 list')
   })
 
   it('counts only production jobs assigned to the current worker', () => {
@@ -134,11 +134,11 @@ describe('station workspace partitioning', () => {
   })
 
   it('sizes the job for the saw and for the edge bander differently', () => {
-    expect(productionJobMetaLine(stationJob(), 'cutting')).toBe('6 detal · 1 panel')
+    expect(productionJobMetaLine(stationJob(), 'cutting')).toBe('6 detal · 1 list')
     // The bander sizes a job in metres of tape; material names live on the sheet.
     expect(productionJobMetaLine(stationJob(), 'banding')).toBe('3.9 m krom · 6 detal')
     expect(productionJobMetaLine(stationJob({ planned_edge_lines: [] }), 'banding')).toBe(
-      '6 detal · 1 panel',
+      '6 detal · 1 list',
     )
   })
 })

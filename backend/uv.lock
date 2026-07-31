@@ -457,11 +457,11 @@ wheels = [
 
 [[package]]
 name = "cutting-engine"
-version = "0.2.0"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/48/01/67235de3d46d48eab7308a1ea359d270f8d0fdcd520d3b0103661880a2cc/cutting_engine-0.2.0.tar.gz", hash = "sha256:38a820c316a8e450d5998593b75667c578e3f210f896783ebca891ad72c29ca7", size = 92118, upload-time = "2026-07-11T05:33:36.646Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3a/4f/5ba3ebb83071f11a638ad59c78bdf81321d6a0674f06106e453a898abd29/cutting_engine-0.3.0.tar.gz", hash = "sha256:65d9d73a0b51d574a7150ec1bcdedf8a3fe12d13ed4833b33230b88f6b010680", size = 360868, upload-time = "2026-07-31T14:39:45.756Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/77/e643ec14fd5645c9bb0ad10df0df297a38199afcf24ba98a9d6c3b489333/cutting_engine-0.2.0-py3-none-any.whl", hash = "sha256:43e0419bd30bf4bb961d3df7a95686ab70c9887ea85395f0cb6f8625e1d75789", size = 25757, upload-time = "2026-07-11T05:33:35.417Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/86/282b6d09b2118c9c3a865fe4fba94fd487dff3c31db3dfe51d72b2f66920/cutting_engine-0.3.0-py3-none-any.whl", hash = "sha256:cfc9594beff43bb5e26aebf671846ccd73cd71f0994633a86a82c0d1ad34cf01", size = 84190, upload-time = "2026-07-31T14:39:44.336Z" },
 ]
 
 [[package]]
@@ -990,7 +990,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "boto3", specifier = ">=1.43.6" },
-    { name = "cutting-engine", specifier = "==0.2.0" },
+    { name = "cutting-engine", specifier = "==0.3.0" },
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "markdown", specifier = ">=3.10.2" },

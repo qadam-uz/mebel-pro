@@ -324,7 +324,7 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert updated.json()["parts_snapshot"][0]["part_ref"] == "shelf"
     assert updated.json()["parts_snapshot"][0]["name"] == "Shelf"
     assert optimized.status_code == 200
-    assert [row["algorithm_name"] for row in results] == ["cutting-engine-best"]
+    assert [row["algorithm_name"] for row in results] == ["cutting-engine/native"]
     assert optimized.json()["chosen_result_id"] in {row["id"] for row in results}
     first_result = results[0]
     assert first_result["parts_snapshot"][0]["quantity"] == 2

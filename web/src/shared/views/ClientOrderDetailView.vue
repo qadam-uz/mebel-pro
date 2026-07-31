@@ -8,28 +8,21 @@ import {
   clientPhaseLabels,
   clientStatusLabel,
   clientStatusPillClass,
-  formatPercent,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
-import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
-import { orphanPartIndexByRef } from '@/shared/app/cuttingResultsDisplay'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
+import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
+import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
 import { formatDate, formatTiyin } from '@/shared/formatters'
-import {
-  metres,
-  type CuttingPanel,
-  type CuttingPlacement,
-  type CuttingResult,
-} from '@/shared/stores/cutting'
+import { metres } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderStatus } from '@/shared/stores/orders'
 
-type DetailTab = 'overview' | 'cutting' | 'finance' | 'timeline'
+type DetailTab = 'overview' | 'parts' | 'cutting' | 'finance' | 'timeline'
 
 const route = useRoute()
 const rolePath = useRolePath()
@@ -49,17 +42,9 @@ const cancelledReason = computed(
   () => order.value?.events.find((event) => event.to_status === 'cancelled')?.reason ?? null,
 )
 const result = computed(() => order.value?.cutting_result ?? null)
-const activePanel = computed(() => {
-  const current = result.value
-  if (!current) return null
-  return (
-    current.panels.find((panel) => panel.id === activePanelId.value) ?? current.panels[0] ?? null
-  )
-})
-const totalPanels = computed(() =>
-  result.value
-    ? Object.values(result.value.panels_used_by_material).reduce((sum, count) => sum + count, 0)
-    : 0,
+// Header summary only — the grouped table itself is CuttingPartsByMaterial's job.
+const materialCount = computed(
+  () => new Set((result.value?.parts_snapshot ?? []).map((part) => part.material_id)).size,
 )
 const totalEdge = computed(() => {
   const current = result.value
@@ -117,36 +102,6 @@ function phaseTimestamp(index: number): string | null {
   return null
 }
 
-function materialName(snapshot: Record<string, unknown>) {
-  return String(snapshot.name ?? snapshot.decor_code ?? 'Material')
-}
-
-function panelTitle(current: CuttingResult, panel: CuttingPanel) {
-  const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
-}
-
-// Placement rows name parts like the drawing does — detail names with the
-// editor's D-numbering as fallback, never the raw part_ref uuid.
-const partNamesByRef = computed(() => {
-  const current = result.value
-  const names = new Map<string, string>()
-  if (!current) return names
-  ;(current.parts_snapshot ?? []).forEach((part, index) => {
-    names.set(part.part_ref, partDisplayName(part, index))
-  })
-  for (const [ref, index] of orphanPartIndexByRef(current)) names.set(ref, `D${index + 1}`)
-  return names
-})
-
-function placementName(placement: CuttingPlacement) {
-  return partNamesByRef.value.get(placement.part_ref) ?? 'D1'
-}
-
-function selectPlacement(placement: CuttingPlacement) {
-  activePlacementId.value = placement.id
-}
-
 function requestCancelOrder() {
   cancelReason.value = 'Mijoz buyurtmani tasdiqlashdan oldin bekor qildi'
   actionError.value = null
@@ -172,7 +127,7 @@ function switchTab(tab: DetailTab) {
   activeTab.value = tab
 }
 
-const detailTabs: DetailTab[] = ['overview', 'cutting', 'finance', 'timeline']
+const detailTabs: DetailTab[] = ['overview', 'parts', 'cutting', 'finance', 'timeline']
 function onTabKeydown(event: KeyboardEvent) {
   const current = detailTabs.indexOf(activeTab.value)
   let nextIndex = current
@@ -336,6 +291,19 @@ onMounted(() => {
           Umumiy
         </button>
         <button
+          id="tab-parts"
+          type="button"
+          role="tab"
+          class="client-tab"
+          :class="{ active: activeTab === 'parts' }"
+          :aria-selected="activeTab === 'parts'"
+          aria-controls="panel-parts"
+          :tabindex="activeTab === 'parts' ? 0 : -1"
+          @click="switchTab('parts')"
+        >
+          Detallar
+        </button>
+        <button
           id="tab-cutting"
           type="button"
           role="tab"
@@ -376,359 +344,170 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.85fr)]">
-        <div class="min-w-0">
-          <section
-            v-if="activeTab === 'overview'"
-            id="panel-overview"
-            role="tabpanel"
-            aria-labelledby="tab-overview"
-            tabindex="0"
-            class="grid gap-4"
-          >
-            <div class="client-card">
-              <div class="client-card-h"><h2>Buyurtma tarkibi</h2></div>
-              <div class="client-card-b">
+      <div class="min-w-0">
+        <section
+          v-if="activeTab === 'overview'"
+          id="panel-overview"
+          role="tabpanel"
+          aria-labelledby="tab-overview"
+          tabindex="0"
+          class="grid gap-4"
+        >
+          <div class="client-card">
+            <div class="client-card-h"><h2>Buyurtma tarkibi</h2></div>
+            <div class="client-card-b">
+              <div class="client-row-item">
+                <div>
+                  <div class="client-row-name">Kesish xizmati</div>
+                  <div class="text-sm text-ink-muted">
+                    chizma {{ order.cutting_result_id.slice(0, 8) }}
+                  </div>
+                </div>
+                <div class="client-row-meta">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</div>
+              </div>
+              <div class="client-row-item">
+                <div>
+                  <div class="client-row-name">Material</div>
+                  <div class="text-sm text-ink-muted">ustaxona materiali</div>
+                </div>
+                <div class="client-row-meta">
+                  {{ formatTiyin(order.subtotal_materials_tiyin) }}
+                </div>
+              </div>
+              <template v-if="order.subtotal_edge_banding_tiyin > 0">
                 <div class="client-row-item">
                   <div>
-                    <div class="client-row-name">Kesish xizmati</div>
+                    <div class="client-row-name">Kromka</div>
                     <div class="text-sm text-ink-muted">
-                      chizma {{ order.cutting_result_id.slice(0, 8) }}
+                      {{ metres(totalEdge) }} · material + xizmat
                     </div>
                   </div>
-                  <div class="client-row-meta">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</div>
+                  <div class="client-row-meta">
+                    {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+                  </div>
                 </div>
                 <div class="client-row-item">
                   <div>
-                    <div class="client-row-name">Material</div>
-                    <div class="text-sm text-ink-muted">ustaxona materiali</div>
+                    <div class="client-row-name">Kromka materiali</div>
+                    <div class="text-sm text-ink-muted">lenta narxi</div>
                   </div>
-                  <div class="client-row-meta">
-                    {{ formatTiyin(order.subtotal_materials_tiyin) }}
+                  <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
+                </div>
+                <div class="client-row-item">
+                  <div>
+                    <div class="client-row-name">Kromka yopishtirish xizmati</div>
+                    <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
                   </div>
+                  <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
+                </div>
+              </template>
+              <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
+                <div>
+                  <div class="client-row-name">Ustama</div>
+                  <div class="text-sm text-ink-muted">{{ order.surcharge_reason ?? '' }}</div>
+                </div>
+                <div class="client-row-meta">+ {{ formatTiyin(order.surcharge_tiyin) }}</div>
+              </div>
+              <div v-if="order.discount_tiyin > 0" class="client-row-item">
+                <div>
+                  <div class="client-row-name">Chegirma</div>
+                  <div class="text-sm text-ink-muted">{{ order.discount_reason ?? '' }}</div>
+                </div>
+                <div class="client-row-meta text-success">
+                  - {{ formatTiyin(order.discount_tiyin) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="client-card">
+            <div class="client-card-h"><h2>Narx</h2></div>
+            <div class="client-card-b">
+              <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
+                <div class="flex justify-between py-1 text-ink-soft">
+                  <span>Kesish xizmati</span
+                  ><span class="font-mono text-ink">{{
+                    formatTiyin(order.subtotal_cutting_tiyin)
+                  }}</span>
+                </div>
+                <div class="flex justify-between py-1 text-ink-soft">
+                  <span>Material</span
+                  ><span class="font-mono text-ink">{{
+                    formatTiyin(order.subtotal_materials_tiyin)
+                  }}</span>
                 </div>
                 <template v-if="order.subtotal_edge_banding_tiyin > 0">
-                  <div class="client-row-item">
-                    <div>
-                      <div class="client-row-name">Kromka</div>
-                      <div class="text-sm text-ink-muted">
-                        {{ metres(totalEdge) }} · material + xizmat
-                      </div>
-                    </div>
-                    <div class="client-row-meta">
-                      {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
-                    </div>
+                  <div class="flex justify-between py-1 text-ink-soft">
+                    <span>Kromka materiali</span
+                    ><span class="font-mono text-ink">{{
+                      formatTiyin(edgeCostSplit.materials)
+                    }}</span>
                   </div>
-                  <div class="client-row-item">
-                    <div>
-                      <div class="client-row-name">Kromka materiali</div>
-                      <div class="text-sm text-ink-muted">lenta narxi</div>
-                    </div>
-                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
-                  </div>
-                  <div class="client-row-item">
-                    <div>
-                      <div class="client-row-name">Kromka yopishtirish xizmati</div>
-                      <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
-                    </div>
-                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
+                  <div class="flex justify-between py-1 text-ink-soft">
+                    <span>Kromka yopishtirish xizmati</span
+                    ><span class="font-mono text-ink">{{
+                      formatTiyin(edgeCostSplit.service)
+                    }}</span>
                   </div>
                 </template>
-                <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
-                  <div>
-                    <div class="client-row-name">Ustama</div>
-                    <div class="text-sm text-ink-muted">{{ order.surcharge_reason ?? '' }}</div>
-                  </div>
-                  <div class="client-row-meta">+ {{ formatTiyin(order.surcharge_tiyin) }}</div>
-                </div>
-                <div v-if="order.discount_tiyin > 0" class="client-row-item">
-                  <div>
-                    <div class="client-row-name">Chegirma</div>
-                    <div class="text-sm text-ink-muted">{{ order.discount_reason ?? '' }}</div>
-                  </div>
-                  <div class="client-row-meta text-success">
-                    - {{ formatTiyin(order.discount_tiyin) }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="client-card">
-              <div class="client-card-h"><h2>Narx</h2></div>
-              <div class="client-card-b">
-                <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>Kesish xizmati</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(order.subtotal_cutting_tiyin)
-                    }}</span>
-                  </div>
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>Material</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(order.subtotal_materials_tiyin)
-                    }}</span>
-                  </div>
-                  <template v-if="order.subtotal_edge_banding_tiyin > 0">
-                    <div class="flex justify-between py-1 text-ink-soft">
-                      <span>Kromka materiali</span
-                      ><span class="font-mono text-ink">{{
-                        formatTiyin(edgeCostSplit.materials)
-                      }}</span>
-                    </div>
-                    <div class="flex justify-between py-1 text-ink-soft">
-                      <span>Kromka yopishtirish xizmati</span
-                      ><span class="font-mono text-ink">{{
-                        formatTiyin(edgeCostSplit.service)
-                      }}</span>
-                    </div>
-                  </template>
-                  <div
-                    v-if="order.surcharge_tiyin > 0"
-                    class="flex justify-between py-1 text-ink-soft"
-                  >
-                    <span>Ustama</span
-                    ><span class="font-mono text-ink"
-                      >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
-                    >
-                  </div>
-                  <div
-                    v-if="order.discount_tiyin > 0"
-                    class="flex justify-between py-1 text-success"
-                  >
-                    <span>Chegirma</span
-                    ><span class="font-mono">- {{ formatTiyin(order.discount_tiyin) }}</span>
-                  </div>
-                  <div
-                    class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink"
-                  >
-                    <span>Jami</span
-                    ><span class="font-serif text-2xl">{{ formatTiyin(order.total_tiyin) }}</span>
-                  </div>
-                </div>
-                <p class="mt-3 text-sm text-ink-muted">
-                  Narx buyurtma berilganda qat'iy belgilangan — keyin o'zgarmaydi.
-                </p>
-              </div>
-            </div>
-
-            <div class="client-card">
-              <div class="client-card-h"><h2>Olib ketish</h2></div>
-              <div class="client-card-b">
-                <div class="client-row-item">
-                  <div>
-                    <div class="client-row-name">
-                      {{ order.workshop_name }} · {{ order.branch_name }}
-                    </div>
-                    <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
-                  </div>
-                  <div class="client-row-meta">{{ order.branch_phone }}</div>
-                </div>
-                <div class="client-row-item">
-                  <div class="client-row-name">Aloqa</div>
-                  <div class="client-row-meta">
-                    {{ order.contact_name }} · {{ order.contact_phone }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="order.note_workshop || order.note_client" class="client-card">
-              <div class="client-card-h"><h2>Izoh</h2></div>
-              <div class="client-card-b space-y-3">
-                <div v-if="order.note_workshop">
-                  <div class="text-xs font-bold uppercase text-ink-muted">Ustaxonadan</div>
-                  <p class="mt-1 text-sm text-ink">{{ order.note_workshop }}</p>
-                </div>
-                <div v-if="order.note_client">
-                  <div class="text-xs font-bold uppercase text-ink-muted">Sizning izohingiz</div>
-                  <p class="mt-1 text-sm text-ink">{{ order.note_client }}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            v-else-if="activeTab === 'cutting'"
-            id="panel-cutting"
-            role="tabpanel"
-            aria-labelledby="tab-cutting"
-            tabindex="0"
-            class="client-card"
-          >
-            <div class="client-card-h">
-              <h2>Chizma</h2>
-              <button
-                v-if="result"
-                type="button"
-                class="text-sm font-bold text-accent"
-                :disabled="orders.downloadingId === order.id"
-                @click="orders.openClientPdf(order.id)"
-              >
-                {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'PDF ochish →' }}
-              </button>
-            </div>
-            <div class="client-card-b">
-              <p
-                v-if="orders.downloadError"
-                class="mb-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-                role="alert"
-              >
-                {{ orders.downloadError }}
-                <span v-if="orders.downloadTraceId" class="block text-xs font-normal opacity-80">
-                  trace {{ orders.downloadTraceId }}
-                </span>
-              </p>
-              <div v-if="!result" class="text-sm text-ink-muted">Chizma natijasi topilmadi.</div>
-              <template v-else>
-                <div class="mb-4 grid gap-3 sm:grid-cols-3">
-                  <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Panellar</div>
-                    <div class="mt-1 text-xl font-bold text-ink">{{ totalPanels }}</div>
-                  </div>
-                  <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Kromka</div>
-                    <div class="mt-1 text-xl font-bold text-ink">{{ metres(totalEdge) }}</div>
-                  </div>
-                  <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Chiqim</div>
-                    <div class="mt-1 text-xl font-bold text-ink">
-                      {{ formatPercent(result.waste_percentage) }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="mb-4 flex flex-wrap gap-2">
-                  <button
-                    v-for="panel in result.panels"
-                    :key="panel.id"
-                    type="button"
-                    class="mp-chip"
-                    :class="panel.id === activePanel?.id ? 'bg-accent-soft text-accent' : ''"
-                    @click="activePanelId = panel.id"
-                  >
-                    {{ panelTitle(result, panel) }}
-                  </button>
-                </div>
-
-                <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_220px]">
-                  <CuttingPanelSvg
-                    v-if="activePanel"
-                    :result="result"
-                    :panel="activePanel"
-                    :active-placement-id="activePlacementId"
-                    @select-placement="selectPlacement"
-                  />
-                  <aside v-if="activePanel">
-                    <h3 class="mb-3 text-xs font-bold uppercase text-ink-muted">Detallar</h3>
-                    <div class="grid gap-2">
-                      <button
-                        v-for="placement in activePanel.placements"
-                        :key="placement.id"
-                        type="button"
-                        class="rounded-md border border-hairline bg-sunk px-3 py-2 text-left font-mono text-xs text-ink"
-                        :class="
-                          placement.id === activePlacementId ? 'border-accent text-accent' : ''
-                        "
-                        @click="selectPlacement(placement)"
-                      >
-                        {{ placementName(placement) }} #{{ placement.part_quantity_index }}
-                        <span v-if="placement.rotated" class="font-bold">R</span>
-                      </button>
-                    </div>
-                  </aside>
-                </div>
-              </template>
-            </div>
-          </section>
-
-          <section
-            v-else-if="activeTab === 'finance'"
-            id="panel-finance"
-            role="tabpanel"
-            aria-labelledby="tab-finance"
-            tabindex="0"
-            class="client-card"
-          >
-            <div class="client-card-h"><h2>To'lov</h2></div>
-            <div class="client-card-b">
-              <template v-if="financeOpen && order.settlement">
-                <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>Jami</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(order.settlement.total_tiyin)
-                    }}</span>
-                  </div>
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>To'langan</span
-                    ><span class="font-mono text-success"
-                      >- {{ formatTiyin(order.settlement.recorded_tiyin) }}</span
-                    >
-                  </div>
-                  <div
-                    class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink"
-                  >
-                    <span>Qoldiq</span
-                    ><span class="font-serif text-2xl">{{
-                      formatTiyin(order.settlement.balance_tiyin)
-                    }}</span>
-                  </div>
-                </div>
-                <p class="mt-3 text-sm text-ink-muted">
-                  To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa —
-                  to'lov bo'yicha ustaxonaga murojaat qiling.
-                </p>
-              </template>
-              <div v-else class="client-empty border-0 !p-8">
-                <div class="client-empty-icon"><Icon name="layers" /></div>
-                <h3>To'lov ma'lumotlari hali yopiq</h3>
-                <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
-              </div>
-            </div>
-          </section>
-
-          <section
-            v-else
-            id="panel-timeline"
-            role="tabpanel"
-            aria-labelledby="tab-timeline"
-            tabindex="0"
-            class="client-card"
-          >
-            <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
-            <div class="client-card-b">
-              <ol v-if="order.status === 'cancelled'" class="tl">
-                <li class="step done">
-                  <span class="when">{{ formatRelativeDate(order.created_at) }}</span>
-                  Joylashtirildi
-                </li>
-                <li class="step bad">
-                  <span v-if="order.cancelled_at" class="when">{{
-                    formatRelativeDate(order.cancelled_at)
-                  }}</span>
-                  Bekor qilingan
-                  <p v-if="cancelledReason" class="mt-1 text-sm text-ink-soft">
-                    {{ cancelledReason }}
-                  </p>
-                </li>
-              </ol>
-              <ol v-else class="tl">
-                <li
-                  v-for="(label, index) in clientPhaseLabels"
-                  :key="label"
-                  class="step"
-                  :class="phaseNodeClass(index)"
+                <div
+                  v-if="order.surcharge_tiyin > 0"
+                  class="flex justify-between py-1 text-ink-soft"
                 >
-                  <span v-if="phaseTimestamp(index)" class="when">{{ phaseTimestamp(index) }}</span>
-                  {{ label }}
-                </li>
-              </ol>
+                  <span>Ustama</span
+                  ><span class="font-mono text-ink"
+                    >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
+                  >
+                </div>
+                <div v-if="order.discount_tiyin > 0" class="flex justify-between py-1 text-success">
+                  <span>Chegirma</span
+                  ><span class="font-mono">- {{ formatTiyin(order.discount_tiyin) }}</span>
+                </div>
+                <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
+                  <span>Jami</span
+                  ><span class="font-serif text-2xl">{{ formatTiyin(order.total_tiyin) }}</span>
+                </div>
+              </div>
+              <p class="mt-3 text-sm text-ink-muted">
+                Narx buyurtma berilganda qat'iy belgilangan — keyin o'zgarmaydi.
+              </p>
             </div>
-          </section>
-        </div>
+          </div>
 
-        <aside class="grid gap-4 self-start">
+          <div class="client-card">
+            <div class="client-card-h"><h2>Olib ketish</h2></div>
+            <div class="client-card-b">
+              <div class="client-row-item">
+                <div>
+                  <div class="client-row-name">
+                    {{ order.workshop_name }} · {{ order.branch_name }}
+                  </div>
+                  <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
+                </div>
+                <div class="client-row-meta">{{ order.branch_phone }}</div>
+              </div>
+              <div class="client-row-item">
+                <div class="client-row-name">Aloqa</div>
+                <div class="client-row-meta">
+                  {{ order.contact_name }} · {{ order.contact_phone }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="order.note_workshop || order.note_client" class="client-card">
+            <div class="client-card-h"><h2>Izoh</h2></div>
+            <div class="client-card-b space-y-3">
+              <div v-if="order.note_workshop">
+                <div class="text-xs font-bold uppercase text-ink-muted">Ustaxonadan</div>
+                <p class="mt-1 text-sm text-ink">{{ order.note_workshop }}</p>
+              </div>
+              <div v-if="order.note_client">
+                <div class="text-xs font-bold uppercase text-ink-muted">Sizning izohingiz</div>
+                <p class="mt-1 text-sm text-ink">{{ order.note_client }}</p>
+              </div>
+            </div>
+          </div>
           <section class="client-card">
             <div class="client-card-h"><h2 class="!text-base">Holat</h2></div>
             <div class="client-card-b">
@@ -773,28 +552,157 @@ onMounted(() => {
             </div>
           </section>
 
-          <section class="client-card">
-            <div class="client-card-h"><h2 class="!text-base">Detallar</h2></div>
-            <div class="client-card-b">
-              <div v-for="(item, index) in order.items" :key="item.id" class="client-row-item">
-                <div>
-                  <div class="client-row-name">D{{ index + 1 }}</div>
-                  <div class="text-sm text-ink-muted">
-                    {{ materialName(item.material_snapshot) }} · {{ item.length_mm }}x{{
-                      item.width_mm
-                    }}
-                    mm · {{ item.quantity }} dona
-                  </div>
-                </div>
-                <div class="client-row-meta">{{ formatTiyin(item.line_total_tiyin) }}</div>
-              </div>
-            </div>
-          </section>
-
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
             {{ clientErrorLabel(actionError) }}{{ traceSuffix(orders.actionTraceId) }}
           </p>
-        </aside>
+        </section>
+
+        <section
+          v-else-if="activeTab === 'parts'"
+          id="panel-parts"
+          role="tabpanel"
+          aria-labelledby="tab-parts"
+          tabindex="0"
+          class="client-card"
+        >
+          <div class="client-card-h">
+            <h2>Detallar</h2>
+            <span class="font-mono text-sm text-ink-muted">
+              {{ order.item_count }} detal · {{ materialCount }} material
+            </span>
+          </div>
+          <div class="client-card-b">
+            <CuttingPartsByMaterial v-if="result" :result="result" />
+            <div v-else class="text-sm text-ink-muted">Bu buyurtmada detal yo'q.</div>
+          </div>
+        </section>
+
+        <section
+          v-else-if="activeTab === 'cutting'"
+          id="panel-cutting"
+          role="tabpanel"
+          aria-labelledby="tab-cutting"
+          tabindex="0"
+          class="client-card"
+        >
+          <div class="client-card-h">
+            <h2>Chizma</h2>
+            <button
+              v-if="result"
+              type="button"
+              class="text-sm font-bold text-accent"
+              :disabled="orders.downloadingId === order.id"
+              @click="orders.openClientPdf(order.id)"
+            >
+              {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'PDF ochish →' }}
+            </button>
+          </div>
+          <div class="client-card-b">
+            <p
+              v-if="orders.downloadError"
+              class="mb-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              {{ orders.downloadError }}
+              <span v-if="orders.downloadTraceId" class="block text-xs font-normal opacity-80">
+                trace {{ orders.downloadTraceId }}
+              </span>
+            </p>
+            <div v-if="!result" class="text-sm text-ink-muted">Chizma natijasi topilmadi.</div>
+            <!-- The same component the cutting-result page renders — material
+                 and edge tally, sheet strip, drawing, per-sheet rail — so a
+                 placed order's drawing is not a second, thinner version of the
+                 screen the client already saw before ordering. -->
+            <CuttingResultOverview
+              v-else
+              v-model:active-panel-id="activePanelId"
+              :result="result"
+            />
+          </div>
+        </section>
+
+        <section
+          v-else-if="activeTab === 'finance'"
+          id="panel-finance"
+          role="tabpanel"
+          aria-labelledby="tab-finance"
+          tabindex="0"
+          class="client-card"
+        >
+          <div class="client-card-h"><h2>To'lov</h2></div>
+          <div class="client-card-b">
+            <template v-if="financeOpen && order.settlement">
+              <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
+                <div class="flex justify-between py-1 text-ink-soft">
+                  <span>Jami</span
+                  ><span class="font-mono text-ink">{{
+                    formatTiyin(order.settlement.total_tiyin)
+                  }}</span>
+                </div>
+                <div class="flex justify-between py-1 text-ink-soft">
+                  <span>To'langan</span
+                  ><span class="font-mono text-success"
+                    >- {{ formatTiyin(order.settlement.recorded_tiyin) }}</span
+                  >
+                </div>
+                <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
+                  <span>Qoldiq</span
+                  ><span class="font-serif text-2xl">{{
+                    formatTiyin(order.settlement.balance_tiyin)
+                  }}</span>
+                </div>
+              </div>
+              <p class="mt-3 text-sm text-ink-muted">
+                To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa — to'lov
+                bo'yicha ustaxonaga murojaat qiling.
+              </p>
+            </template>
+            <div v-else class="client-empty border-0 !p-8">
+              <div class="client-empty-icon"><Icon name="layers" /></div>
+              <h3>To'lov ma'lumotlari hali yopiq</h3>
+              <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          v-else
+          id="panel-timeline"
+          role="tabpanel"
+          aria-labelledby="tab-timeline"
+          tabindex="0"
+          class="client-card"
+        >
+          <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
+          <div class="client-card-b">
+            <ol v-if="order.status === 'cancelled'" class="tl">
+              <li class="step done">
+                <span class="when">{{ formatRelativeDate(order.created_at) }}</span>
+                Yuborildi
+              </li>
+              <li class="step bad">
+                <span v-if="order.cancelled_at" class="when">{{
+                  formatRelativeDate(order.cancelled_at)
+                }}</span>
+                Bekor qilingan
+                <p v-if="cancelledReason" class="mt-1 text-sm text-ink-soft">
+                  {{ cancelledReason }}
+                </p>
+              </li>
+            </ol>
+            <ol v-else class="tl">
+              <li
+                v-for="(label, index) in clientPhaseLabels"
+                :key="label"
+                class="step"
+                :class="phaseNodeClass(index)"
+              >
+                <span v-if="phaseTimestamp(index)" class="when">{{ phaseTimestamp(index) }}</span>
+                {{ label }}
+              </li>
+            </ol>
+          </div>
+        </section>
       </div>
     </template>
 

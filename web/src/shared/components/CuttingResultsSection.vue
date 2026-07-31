@@ -1,39 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
-import { snapshotEdgeLabel, snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
-import {
-  deriveSnapshotEdgeRegistry,
-  edgeRegistryEntryByMaterial,
-  groupPanelPlacements,
-  panelDisplayIndex,
-  panelFillPercent,
-  resultPanelCount,
-} from '@/shared/app/cuttingResultsDisplay'
+import { resultPanelCount } from '@/shared/app/cuttingResultsDisplay'
 import { formatTiyin } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
-import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
-import CuttingPartsList from '@/shared/components/CuttingPartsList.vue'
-import CuttingSheetThumbnails from '@/shared/components/CuttingSheetThumbnails.vue'
+import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
 import {
   metres,
   useCuttingStore,
   type CuttingDraft,
-  type CuttingPanel,
-  type CuttingPlacement,
   type CuttingResult,
 } from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
 
-// CB-93 seam: the results surface — per-material panel strip + SVG visualiser,
-// kromka/placement aside, and order/PDF actions. A draft has one orderable
-// result; legacy drafts may carry older candidates, but they are never offered
-// for comparison here.
+// CB-93 seam: the draft-side wrapper around a cutting result — the shared
+// read-only view of the result itself lives in CuttingResultOverview, which a
+// placed order renders too. What stays here is everything draft-shaped: the
+// stale/unplaced banners, the "choose this variant" action, and the price quote
+// with its checkout CTA.
 const props = defineProps<{
   draft: CuttingDraft
   optimizeError: string | null
@@ -58,14 +47,6 @@ const cutting = useCuttingStore()
 const rolePath = useRolePath()
 const toast = useToast()
 
-const activePartRef = ref<string | null>(null)
-const activePlacementId = ref<string | null>(null)
-// Carries a selection across a sheet switch: picking a row from another sheet
-// in the narrow-viewport parts list changes the active panel, and the
-// panel watcher below would otherwise wipe the selection it was made for.
-const pendingPartRef = ref<string | null>(null)
-const drawingCard = ref<HTMLElement | null>(null)
-
 const chosenResult = computed(() => {
   const draft = props.draft
   return (
@@ -77,11 +58,6 @@ const footerResult = computed(
     props.draft.results.find((result) => result.id === props.draft.chosen_result_id) ??
     chosenResult.value,
 )
-const activePanel = computed(() => {
-  const result = chosenResult.value
-  if (!result) return null
-  return result.panels.find((panel) => panel.id === props.activePanelId) ?? result.panels[0] ?? null
-})
 const activeResultIsChosen = computed(() => chosenResult.value?.id === props.draft.chosen_result_id)
 const orderPanelCount = computed(() =>
   footerResult.value ? resultPanelCount(footerResult.value) : 0,
@@ -103,53 +79,6 @@ const requestedCount = computed(() =>
     : 0,
 )
 const allPlaced = computed(() => placedCount.value >= requestedCount.value)
-const edgeByMaterial = computed(() => {
-  const result = chosenResult.value
-  if (!result) return []
-  const registry = snapshotEdgeRegistry.value
-  const ids = new Set([
-    ...Object.keys(result.edge_consumed_shop_by_material),
-    ...Object.keys(result.edge_consumed_own_by_material),
-  ])
-  return [...ids]
-    .map((id) => {
-      const shop = result.edge_consumed_shop_by_material[id] ?? 0
-      const own = result.edge_consumed_own_by_material[id] ?? 0
-      const snapshot = result.material_snapshots[id]
-      const label = snapshotEdgeLabel(snapshot, id.slice(0, 8))
-      const entry =
-        edgeRegistryEntryByMaterial(registry, id, 'shop') ??
-        edgeRegistryEntryByMaterial(registry, id, 'own')
-      return {
-        id,
-        label,
-        total: shop + own,
-        entry,
-      }
-    })
-    .filter((row) => row.total > 0)
-    .sort((left, right) => (left.entry?.number ?? 999) - (right.entry?.number ?? 999))
-})
-const panelMaterials = computed(() => {
-  const result = chosenResult.value
-  if (!result) return []
-  return Object.entries(result.panels_used_by_material)
-    .filter(([, count]) => count > 0)
-    .map(([id, count]) => ({
-      id,
-      count,
-      label: snapshotMaterialLabel(result.material_snapshots[id], id.slice(0, 8)),
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'uz'))
-})
-const snapshotEdgeRegistry = computed(() =>
-  chosenResult.value ? deriveSnapshotEdgeRegistry(chosenResult.value.parts_snapshot ?? []) : [],
-)
-const activePanelGroups = computed(() =>
-  chosenResult.value && activePanel.value
-    ? groupPanelPlacements(chosenResult.value, activePanel.value)
-    : [],
-)
 
 // The price always reflects the officially chosen result (what ordering now
 // would cost) because the backend quote endpoint only prices that result.
@@ -186,92 +115,8 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => activePanel.value?.id,
-  () => {
-    if (pendingPartRef.value) {
-      activePartRef.value = pendingPartRef.value
-      activePlacementId.value = null
-      pendingPartRef.value = null
-      return
-    }
-    clearSelection()
-  },
-)
-
 function sumRecord(record: Record<string, number> | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
-}
-
-function panelCaption(result: CuttingResult, panel: CuttingPanel) {
-  const material = snapshotMaterialLabel(
-    result.material_snapshots[panel.material_id],
-    panel.material_id.slice(0, 8),
-  )
-  return `List ${panelDisplayIndex(result, panel)} · ${material} · KIM ${panelFillPercent(result, panel)}`
-}
-
-function selectPlacement(placement: CuttingPlacement) {
-  activePlacementId.value = placement.id
-  activePartRef.value = placement.part_ref
-  const panelId = activePanel.value?.id
-  void nextTick(() => {
-    // Both rails carry the part: the desktop per-sheet rail and the narrow
-    // parts list. Only one of them is displayed at a time — scrollIntoView on
-    // the hidden one is a no-op, so scrolling both keeps this breakpoint-free.
-    // The desktop rail scrolls inside the page beside the drawing, so
-    // 'nearest' is right there; the narrow list scrolls the page itself, where
-    // 'nearest' would leave the row pinned to the very bottom edge.
-    document
-      .querySelector<HTMLElement>(`[data-panel-part-ref="${placement.part_ref}"]`)
-      ?.scrollIntoView({ block: 'nearest' })
-    if (panelId) {
-      document
-        .querySelector<HTMLElement>(`[data-parts-row="${panelId}:${placement.part_ref}"]`)
-        ?.scrollIntoView({ block: 'center' })
-    }
-  })
-}
-
-function selectPartGroup(partRef: string) {
-  if (activePartRef.value === partRef && activePlacementId.value === null) {
-    clearSelection()
-    return
-  }
-  activePartRef.value = partRef
-  activePlacementId.value = null
-}
-
-// A parts-list row can point at a sheet the drawing isn't showing: switch the
-// sheet first, then let the panel watcher apply the pending selection.
-function selectListPart(target: { panelId: string; partRef: string }) {
-  if (target.panelId === activePanel.value?.id) {
-    selectPartGroup(target.partRef)
-  } else {
-    pendingPartRef.value = target.partRef
-    emit('update:activePanelId', target.panelId)
-  }
-  revealDrawing()
-}
-
-// The list sits below the drawing, so a row tapped near the bottom of a long
-// result would highlight a sheet that is off-screen — the tap would look like
-// it did nothing. Centring is deliberate over `block: 'start'`: both shells
-// stack a tall sticky header on narrow viewports (189px in the workshop one),
-// which would swallow a top-aligned card. It is also idempotent, so tapping
-// row after row settles the drawing in one place instead of drifting.
-// `behavior: 'auto'` rather than a smooth scroll: the sheet switch re-lays out
-// the drawing mid-animation and cancels it part-way, and an instant move needs
-// no `prefers-reduced-motion` exemption.
-function revealDrawing() {
-  void nextTick(() => {
-    drawingCard.value?.scrollIntoView({ block: 'center', behavior: 'auto' })
-  })
-}
-
-function clearSelection() {
-  activePartRef.value = null
-  activePlacementId.value = null
 }
 
 async function choose(result: CuttingResult) {
@@ -331,165 +176,44 @@ async function choose(result: CuttingResult) {
 
     <div v-if="chosenResult" class="grid gap-5 p-5">
       <div
-        class="grid gap-5 xl:grid-cols-[minmax(190px,220px)_minmax(0,1fr)_250px] 2xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_300px]"
+        class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_250px] 2xl:grid-cols-[minmax(0,1fr)_300px]"
       >
-        <div
-          class="order-1 min-w-0 space-y-4 xl:col-start-2 xl:row-start-1 2xl:col-start-2 2xl:row-start-1"
+        <CuttingResultOverview
+          class="order-1 min-w-0 xl:col-start-1 xl:row-start-1"
+          :result="chosenResult"
+          :active-panel-id="activePanelId"
+          @update:active-panel-id="emit('update:activePanelId', $event)"
         >
-          <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
-            <span class="font-mono font-black">!</span>
-            <span
-              >Detallar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
-              tushiring.</span
-            >
-          </div>
-
-          <div v-if="!activeResultIsChosen" class="flex justify-end">
-            <button type="button" class="mp-button mp-button-outline" @click="choose(chosenResult)">
-              Shu variantni tanlash
-            </button>
-          </div>
-
-          <div v-if="!allPlaced" class="client-banner danger" role="alert">
-            <span class="font-mono font-black">!</span>
-            <span>
-              {{ requestedCount - placedCount }} ta detal panelga joylashmadi — detal o'lchamini
-              kichraytiring yoki boshqa panel tanlang.
-            </span>
-          </div>
-
-          <section class="rounded-lg border border-hairline bg-elevated p-4">
-            <CuttingSheetThumbnails
-              :result="chosenResult"
-              :active-panel-id="activePanel?.id ?? null"
-              @select="emit('update:activePanelId', $event)"
-            />
-          </section>
-
-          <section ref="drawingCard" class="rounded-lg border border-hairline bg-elevated p-4">
-            <p v-if="activePanel" class="mb-3 text-sm font-extrabold text-ink">
-              {{ panelCaption(chosenResult, activePanel) }}
-            </p>
-            <CuttingPanelSvg
-              v-if="activePanel"
-              :result="chosenResult"
-              :panel="activePanel"
-              :active-part-ref="activePartRef"
-              :active-placement-id="activePlacementId"
-              fit="viewport"
-              @select-placement="selectPlacement"
-              @clear-selection="clearSelection"
-            />
-            <p class="mt-2 text-right text-xs text-ink-muted">
-              Arra kesigi {{ chosenResult.kerf_mm }} mm · Chetki qirqim
-              {{ chosenResult.edge_trim_mm }} mm
-            </p>
-          </section>
-
-          <!-- QAD-177: below `md` the drawing is an overview only — a 2800 mm
-               sheet renders ~7× reduced and its labels cannot be read. The
-               numbers move into this text list; at `md` and up the drawing is
-               legible and the per-sheet rail in the aside carries the detail. -->
-          <CuttingPartsList
-            class="md:hidden"
-            :result="chosenResult"
-            :active-panel-id="activePanel?.id ?? null"
-            :active-part-ref="activePartRef"
-            @select="selectListPart"
-          />
-        </div>
-
-        <aside
-          class="order-2 space-y-4 xl:col-start-1 xl:row-start-1 2xl:col-start-1 2xl:row-start-1"
-        >
-          <div class="rounded-lg border border-hairline p-4">
-            <h3 class="text-sm font-extrabold text-ink">Materiallar</h3>
-            <ul class="mt-2 space-y-1.5 text-sm">
-              <li
-                v-for="material in panelMaterials"
-                :key="material.id"
-                class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
+          <template #banners>
+            <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
+              <span class="font-mono font-black">!</span>
+              <span
+                >Detallar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
+                tushiring.</span
               >
-                <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
-                <span class="min-w-0 font-bold leading-tight text-ink-soft">{{
-                  material.label
-                }}</span>
-                <span class="shrink-0 font-mono text-ink">{{ material.count }} list</span>
-              </li>
-            </ul>
+            </div>
 
-            <div class="my-4 border-t border-hairline"></div>
-
-            <h3 class="text-sm font-extrabold text-ink">Kromka</h3>
-            <template v-if="edgeByMaterial.length">
-              <ul class="mt-2 space-y-1.5 text-sm">
-                <li
-                  v-for="row in edgeByMaterial"
-                  :key="row.id"
-                  class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
-                  :title="row.label"
-                >
-                  <span
-                    class="mt-1.5 size-1.5 rounded-full bg-ink-muted"
-                    :style="row.entry ? { background: row.entry.colorStyle.bg } : undefined"
-                    aria-hidden="true"
-                  ></span>
-                  <span class="min-w-0">
-                    <span
-                      class="block whitespace-normal text-sm font-bold leading-tight text-ink-soft"
-                    >
-                      {{ row.label }}
-                    </span>
-                  </span>
-                  <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
-                </li>
-              </ul>
-            </template>
-            <p v-else class="mt-2 text-sm text-ink-soft">Kromka ishlatilmagan.</p>
-          </div>
-          <!-- Superseded below `md` by CuttingPartsList, which covers every
-               sheet instead of only the active one. Two rails doing the same
-               job on one screen is exactly what the design system forbids. -->
-          <div v-if="activePanel" class="rounded-lg border border-hairline p-4 max-md:hidden">
-            <h3 class="text-sm font-extrabold text-ink">
-              Detallar — List {{ panelDisplayIndex(chosenResult, activePanel) }}
-            </h3>
-            <div class="mt-3 grid gap-2">
+            <div v-if="!activeResultIsChosen" class="flex justify-end">
               <button
-                v-for="group in activePanelGroups"
-                :key="group.partRef"
                 type="button"
-                :data-panel-part-ref="group.partRef"
-                class="rounded-md border px-3 py-2 text-left text-sm transition"
-                :class="
-                  group.partRef === activePartRef
-                    ? 'border-accent bg-accent-soft text-accent'
-                    : 'border-hairline bg-elevated text-ink hover:border-accent-tint'
-                "
-                @click="selectPartGroup(group.partRef)"
+                class="mp-button mp-button-outline"
+                @click="choose(chosenResult)"
               >
-                <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <b class="min-w-0 truncate font-semibold"
-                    >{{ group.name }} · {{ group.length_mm }}×{{ group.width_mm }}</b
-                  >
-                  <span
-                    class="rounded bg-sunk px-1.5 py-0.5 font-mono text-[11px] font-bold text-ink-muted"
-                  >
-                    × {{ group.count }}
-                  </span>
-                  <span
-                    v-if="group.rotatedCount > 0"
-                    class="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent"
-                  >
-                    ↻ {{ group.rotatedCount }}
-                  </span>
-                </span>
+                Shu variantni tanlash
               </button>
             </div>
-          </div>
-        </aside>
 
-        <aside class="order-3 xl:col-start-3 xl:row-start-1 2xl:col-start-3 2xl:row-start-1">
+            <div v-if="!allPlaced" class="client-banner danger" role="alert">
+              <span class="font-mono font-black">!</span>
+              <span>
+                {{ requestedCount - placedCount }} ta detal listga joylashmadi — detal o'lchamini
+                kichraytiring yoki boshqa list tanlang.
+              </span>
+            </div>
+          </template>
+        </CuttingResultOverview>
+
+        <aside class="order-2 xl:col-start-2 xl:row-start-1">
           <section class="rounded-lg border border-hairline bg-sunk p-4">
             <h3 class="font-serif text-xl font-semibold text-ink">Buyurtmangiz</h3>
 

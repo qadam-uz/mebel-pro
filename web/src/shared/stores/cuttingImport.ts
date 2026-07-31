@@ -215,7 +215,7 @@ export const IMPORT_WARNING_LABELS: Record<ImportWarningCode, string> = {
   dimension_rounded: "O'lcham mm gacha yaxlitlandi",
   quantity_defaulted: "Soni ko'rsatilmagan - 1 deb olindi",
   grain_token_unknown: 'Tekstura belgisi tushunarsiz - "bo\'ylab" deb olindi',
-  non_rectangular: "To'g'ri to'rtburchak bo'lmagan panel import qilindi",
+  non_rectangular: "To'g'ri to'rtburchak bo'lmagan list import qilindi",
   ignored_holes: 'Teshiklar importda hisobga olinmadi',
   ignored_grooves: 'Pazlar importda hisobga olinmadi',
   edge_see_drawing: "Chizmada ko'rsatilgan kromka avtomatik tanlanmadi",

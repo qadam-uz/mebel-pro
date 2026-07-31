@@ -430,8 +430,8 @@ test("client places an order and workshop completes it through production queues
     .getByRole("dialog", { name: "Materialni almashtirish" })
     .getByRole("button", { name: new RegExp(panel.name) })
     .click();
-  await page.getByLabel("Bo'y millimetr").fill("260");
-  await page.getByLabel("Eni millimetr").fill("180");
+  await page.getByLabel("Uzunlik millimetr").fill("260");
+  await page.getByLabel("Kenglik millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
   await chooseEdgeBanding(page, edge.name);
   await page.getByRole("button", { name: "Davom etish" }).click();
