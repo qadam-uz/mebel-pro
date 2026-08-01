@@ -190,6 +190,62 @@ function focusAdminContent(toMeta: Record<string, unknown>) {
   })
 }
 
+// Every route component is a lazy `import()` of a content-hashed chunk. A deploy
+// replaces `dist/`, so a tab left open across one is still holding the *old*
+// filenames: the import 404s, and vue-router aborts the navigation with nothing
+// on screen. The symptom is a shell that looks alive — the page under it still
+// works — while every sidebar link is dead until the operator happens to reload.
+//
+// The three engines word the same failure differently, and none of them exposes
+// a code, so the message is all there is to match on.
+const STALE_CHUNK_MESSAGES = [
+  'failed to fetch dynamically imported module', // Chromium
+  'error loading dynamically imported module', // Firefox
+  'importing a module script failed', // Safari
+]
+
+export function isStaleChunkError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+  return STALE_CHUNK_MESSAGES.some((phrase) => message.includes(phrase))
+}
+
+const STALE_RELOAD_KEY = 'mp-stale-chunk-reload'
+
+/** Per-tab, so one tab recovering never suppresses another's reload. */
+function tabStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Decides what to do with a failed navigation. Returns the path to hard-load,
+ * or `null` to let the failure stand.
+ *
+ * Recovery is a full page load **of the target**, not a bare reload: the click
+ * still lands where it was aimed, and the fresh HTML carries the new chunk
+ * names. It happens at most once per target per tab — if the chunk is still
+ * missing after that, the deploy itself is broken and a reload loop would be
+ * worse for the operator than a dead link.
+ */
+export function staleChunkRecovery(
+  error: unknown,
+  targetPath: string,
+  storage: Storage | null = tabStorage(),
+): string | null {
+  if (!isStaleChunkError(error)) return null
+  if (storage?.getItem(STALE_RELOAD_KEY) === targetPath) return null
+  storage?.setItem(STALE_RELOAD_KEY, targetPath)
+  return targetPath
+}
+
+/** Called once a navigation lands, so a later deploy can recover in this tab too. */
+export function clearStaleChunkMark(storage: Storage | null = tabStorage()): void {
+  storage?.removeItem(STALE_RELOAD_KEY)
+}
+
 export async function mountRoleApp(
   config: RoleConfig,
   routes: RouteRecordRaw[],
@@ -279,8 +335,15 @@ export async function mountRoleApp(
   })
 
   router.afterEach((to) => {
+    clearStaleChunkMark()
     document.title = roleDocumentTitle(to.meta.titleKey, roleConfig)
     if (roleConfig.role === 'admin') focusAdminContent(to.meta)
+  })
+
+  router.onError((error, to) => {
+    const recoverTo = staleChunkRecovery(error, to.fullPath)
+    if (recoverTo === null) return
+    window.location.assign(recoverTo)
   })
 
   // Switching language mid-session must retitle the tab too — `afterEach` only
