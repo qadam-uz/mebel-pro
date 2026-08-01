@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import { safeRedirectPath } from '@/shared/app/redirect'
+import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { useResendCooldown } from '@/shared/composables/useResendCooldown'
 import { useAuthStore } from '@/shared/stores/auth'
 
+const { t } = useI18n()
 const config = useRoleConfig()
 const auth = useAuthStore()
 const route = useRoute()
@@ -28,30 +31,30 @@ const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.
 // Set by the API client's 401 interceptor when a silent refresh fails (CB-08).
 const sessionExpired = computed(() => route.query.reason === 'session_expired')
 
+// The sign-in failure codes that carry their own message under `client.error`;
+// anything else is a genuinely unexpected failure and gets the generic line.
+const LOGIN_ERROR_CODES: ReadonlySet<string> = new Set([
+  'account_blocked',
+  'invalid_phone',
+  'phone_unreachable_on_telegram',
+  'code_send_rate_limited',
+  'invalid_code',
+  'code_expired',
+  'too_many_attempts',
+  'name_required',
+  'network_error',
+])
+
 const clientErrorText = computed(() => {
   const code = error.value
   if (!code) return null
   if (code === 'invalid_code') {
     const remaining = Number(auth.lastErrorDetails?.attempts_remaining)
     return Number.isFinite(remaining) && remaining > 0
-      ? `Kod noto'g'ri. Qolgan urinishlar: ${remaining}.`
-      : "Kod noto'g'ri."
+      ? t('client.error.invalidCodeAttempts', { count: remaining })
+      : t('client.error.invalid_code')
   }
-  return (
-    {
-      account_blocked: 'Hisobingiz bloklangan.',
-      // non-breaking spaces keep the example number from splitting across lines
-      invalid_phone: "Telefon raqami noto'g'ri. Masalan: +998 90 123 45 67",
-      phone_unreachable_on_telegram:
-        "Bu raqam Telegram'da topilmadi — kirish uchun ushbu raqamda Telegram bo'lishi kerak.",
-      code_send_rate_limited: "Kod yuborish vaqtincha to'xtatilgan. Birozdan so'ng urinib ko'ring.",
-      invalid_code: "Kod noto'g'ri.",
-      code_expired: 'Kod muddati tugadi. Yangi kod oling.',
-      too_many_attempts: "Juda ko'p noto'g'ri urinish. Yangi kod oling.",
-      name_required: 'Ismingizni kiriting.',
-      network_error: "Serverga ulanib bo'lmadi — qayta urinib ko'ring.",
-    }[code] ?? 'Kirish amalga oshmadi.'
-  )
+  return LOGIN_ERROR_CODES.has(code) ? t(`client.error.${code}`) : t('client.error.loginFallback')
 })
 const maskedPhone = computed(() =>
   normalizeUzPhone(phone.value).replace(/^(\+998)(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 ••• •• $5'),
@@ -156,21 +159,21 @@ async function resendOtp() {
 
       <div v-if="sessionExpired" class="client-banner warn mb-4" role="status">
         <span aria-hidden="true">!</span>
-        <span>Sessiya tugadi. Davom etish uchun qaytadan kiring.</span>
+        <span>{{ $t('client.login.expired') }}</span>
       </div>
 
       <form v-if="clientStep === 'phone'" class="space-y-4" novalidate @submit.prevent="sendOtp">
         <div>
           <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
-            Mijoz kabinetiga kirish
+            {{ $t('client.login.title') }}
           </h1>
-          <p class="mt-2 text-sm text-ink-muted">
-            Telefon raqamingizni kiriting — Telegram orqali tasdiqlash kodi yuboramiz.
-          </p>
+          <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.subtitle') }}</p>
         </div>
 
         <label class="block" for="client-phone">
-          <span class="mb-1 block text-sm font-bold text-ink">Telefon raqami</span>
+          <span class="mb-1 block text-sm font-bold text-ink">
+            {{ $t('client.login.phoneLabel') }}
+          </span>
           <PhoneInput id="client-phone" v-model="phone" required />
         </label>
 
@@ -196,7 +199,7 @@ async function resendOtp() {
           class="mp-button mp-button-primary min-h-[46px] w-full"
           :disabled="isSubmitting"
         >
-          {{ isSubmitting ? 'Yuborilmoqda' : 'Kod yuborish' }}
+          {{ isSubmitting ? $t('client.login.sending') : $t('client.login.sendCode') }}
         </button>
       </form>
 
@@ -207,14 +210,23 @@ async function resendOtp() {
         @submit.prevent="verifyOtp"
       >
         <div>
-          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">Kodni kiriting</h1>
-          <p class="mt-2 text-sm text-ink-muted">
-            <b>{{ maskedPhone }}</b> raqamiga kod yubordik.
-          </p>
+          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
+            {{ $t('client.login.codeTitle') }}
+          </h1>
+          <i18n-t
+            keypath="client.login.codeSentTo"
+            tag="p"
+            class="mt-2 text-sm text-ink-muted"
+            scope="global"
+          >
+            <template #phone>
+              <b>{{ maskedPhone }}</b>
+            </template>
+          </i18n-t>
         </div>
 
         <label class="block">
-          <span class="sr-only">Tasdiqlash kodi</span>
+          <span class="sr-only">{{ $t('client.login.codeLabel') }}</span>
           <input
             v-model="otpCode"
             class="mp-input font-mono tracking-[0.5em]"
@@ -227,9 +239,17 @@ async function resendOtp() {
             required
             @input="sanitizeOtp"
           />
-          <span v-if="isDev && resendAfter" class="mt-1 block text-xs text-ink-muted">
-            Dev rejimda test kodi: <b>000000</b>.
-          </span>
+          <i18n-t
+            v-if="isDev && resendAfter"
+            keypath="client.login.devCode"
+            tag="span"
+            class="mt-1 block text-xs text-ink-muted"
+            scope="global"
+          >
+            <template #code>
+              <b>000000</b>
+            </template>
+          </i18n-t>
         </label>
 
         <div v-if="clientErrorText" class="client-banner" :class="errorTone">
@@ -254,12 +274,12 @@ async function resendOtp() {
           class="mp-button mp-button-primary min-h-[46px] w-full"
           :disabled="isSubmitting"
         >
-          {{ isSubmitting ? 'Tekshirilmoqda' : 'Tasdiqlash' }}
+          {{ isSubmitting ? $t('client.login.verifying') : $t('client.login.verify') }}
         </button>
 
         <div class="flex justify-between gap-3 border-t border-hairline pt-4 text-sm font-bold">
           <button type="button" class="text-accent" @click="editPhone">
-            ← Raqamni o'zgartirish
+            ← {{ $t('client.login.editPhone') }}
           </button>
           <button
             type="button"
@@ -267,21 +287,27 @@ async function resendOtp() {
             :disabled="resendLeft > 0 || isSubmitting"
             @click="resendOtp"
           >
-            {{ resendLeft > 0 ? `Kodni qayta yuborish (${resendLeft}s)` : 'Kodni qayta yuborish' }}
+            {{
+              resendLeft > 0
+                ? $t('client.login.resendIn', { seconds: resendLeft })
+                : $t('client.login.resend')
+            }}
           </button>
         </div>
       </form>
 
       <form v-else class="space-y-4" novalidate @submit.prevent="verifyOtp">
         <div>
-          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">Tanishib olaylik</h1>
-          <p class="mt-2 text-sm text-ink-muted">
-            Ustaxona buyurtmalarda sizga shu ism bilan murojaat qiladi.
-          </p>
+          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
+            {{ $t('client.login.nameTitle') }}
+          </h1>
+          <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.nameSubtitle') }}</p>
         </div>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-bold text-ink">Ismingiz</span>
+          <span class="mb-1 block text-sm font-bold text-ink">
+            {{ $t('client.login.nameLabel') }}
+          </span>
           <input
             v-model="clientName"
             class="mp-input"
@@ -314,15 +340,23 @@ async function resendOtp() {
           class="mp-button mp-button-primary min-h-[46px] w-full"
           :disabled="isSubmitting"
         >
-          {{ isSubmitting ? 'Saqlanmoqda' : 'Davom etish' }}
+          {{ isSubmitting ? $t('client.login.saving') : $t('client.common.continue') }}
         </button>
 
         <div class="flex border-t border-hairline pt-4 text-sm font-bold">
           <button type="button" class="text-accent" @click="editPhone">
-            ← Raqamni o'zgartirish
+            ← {{ $t('client.login.editPhone') }}
           </button>
         </div>
       </form>
+
+      <!-- Below the form, not above it: the card has one primary action and a
+           three-way radiogroup over the heading would compete with it. Still on
+           the first screen, spelled out in each language's own script, because
+           the one person who needs it cannot read the rest of this card. -->
+      <div class="mt-6 border-t border-hairline pt-5">
+        <LocaleSwitcher variant="segmented" />
+      </div>
     </section>
   </main>
 </template>

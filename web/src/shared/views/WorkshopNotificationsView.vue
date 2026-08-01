@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import {
@@ -22,15 +23,16 @@ const notifications = useNotificationsStore()
 const router = useRouter()
 const rolePath = useRolePath()
 const toast = useToast()
+const { t } = useI18n()
 const filter = ref('all')
 
-const filterOptions = [
-  { value: 'all', label: 'Hammasi' },
-  { value: 'unread', label: "O'qilmagan" },
-  { value: 'order', label: 'Buyurtmalar' },
-  { value: 'inventory', label: 'Ombor' },
-  { value: 'finance', label: 'Moliya' },
-]
+const filterOptions = computed(() => [
+  { value: 'all', label: t('shell.notifications.filterAll') },
+  { value: 'unread', label: t('shell.notifications.filterUnread') },
+  { value: 'order', label: t('shell.notifications.filterOrders') },
+  { value: 'inventory', label: t('shell.notifications.filterInventory') },
+  { value: 'finance', label: t('shell.notifications.filterFinance') },
+])
 
 const filtered = computed(() =>
   notifications.items.filter((item) => workshopNotificationMatchesFilter(item, filter.value)),
@@ -53,13 +55,13 @@ function destination(item: NotificationItem) {
 async function openItem(item: NotificationItem) {
   const to = destination(item)
   if (!to) {
-    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    toast.warn(t('shell.notifications.notOpenable'))
     return
   }
   if (item.read_at === null) {
     await notifications.markRead(item.id)
     if (notifications.actionError) {
-      toast.danger("Bildirishnomani o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+      toast.danger(t('shell.notifications.markReadFailed'))
     }
   }
   await router.push(rolePath(to))
@@ -68,11 +70,11 @@ async function openItem(item: NotificationItem) {
 async function markAll() {
   await notifications.markAllRead()
   if (notifications.actionError) {
-    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('shell.notifications.markAllFailed'))
     return
   }
   await notifications.loadList(50)
-  toast.success("Hammasi o'qilgan deb belgilandi.")
+  toast.success(t('shell.notifications.markAllDone'))
 }
 
 onMounted(() => {
@@ -84,12 +86,17 @@ onMounted(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Bildirishnomalar</h1>
+        <h1>{{ $t('shell.notifications.title') }}</h1>
       </div>
     </div>
 
     <div class="mp-filters">
-      <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" top-label />
+      <ProjectDropdown
+        v-model="filter"
+        :label="$t('shell.notifications.filterLabel')"
+        :options="filterOptions"
+        top-label
+      />
       <!-- Page heads are title-only; a bulk action lives at the right end of the
            filter row like every create button (DESIGN.md, QAD-182). -->
       <button
@@ -98,7 +105,7 @@ onMounted(() => {
         :disabled="notifications.unread === 0"
         @click="markAll"
       >
-        Hammasini o'qilgan deb belgilash
+        {{ $t('shell.notifications.markAll') }}
       </button>
     </div>
 
@@ -109,15 +116,15 @@ onMounted(() => {
     </div>
 
     <div v-else-if="notifications.error" class="st-error max-w-[800px]" role="alert">
-      <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
-      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <h3>{{ $t('shell.notifications.loadFailedTitle') }}</h3>
+      <p>{{ $t('shell.notifications.loadFailedBody') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="notifications.loading"
         @click="notifications.loadList(50)"
       >
-        Qayta urinish
+        {{ $t('shell.action.retry') }}
       </button>
       <p v-if="notifications.traceId" class="mt-3 text-xs text-ink-muted">
         trace_id: {{ notifications.traceId }}
@@ -125,8 +132,14 @@ onMounted(() => {
     </div>
 
     <div v-else-if="filtered.length === 0" class="st-empty max-w-[800px]">
-      <h3>{{ filter === 'unread' ? "O'qilmagan bildirishnoma yo'q" : "Bildirishnoma yo'q" }}</h3>
-      <p>Yangi buyurtma, ombor yoki moliya hodisalari shu yerda chiqadi.</p>
+      <h3>
+        {{
+          filter === 'unread'
+            ? $t('shell.notifications.emptyUnreadTitle')
+            : $t('shell.notifications.emptyTitle')
+        }}
+      </h3>
+      <p>{{ $t('shell.notifications.emptyWorkshopBody') }}</p>
     </div>
 
     <div v-else class="grid max-w-[800px] gap-2">

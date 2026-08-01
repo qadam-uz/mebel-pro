@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopDraftStatus, workshopErrorMessage } from '@/shared/app/workshopUi'
-import { formatRelativeUz } from '@/shared/formatters'
+import { formatRelative } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type WorkshopDraftSummary } from '@/shared/stores/cutting'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -17,6 +18,7 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const workshop = useWorkshopStore()
+const { t } = useI18n()
 
 // A branch-scoped page (routes.ts declares `branchScope: 'branch'`): a draft is
 // frozen to the branch it was started on, so the list follows the topbar branch
@@ -35,13 +37,13 @@ const contextBranchName = computed(() => {
 })
 const subtitle = computed(() =>
   contextBranchName.value
-    ? `${contextBranchName.value} — tugallanmagan mijoz chizmalari, davom eting yoki o'chiring.`
-    : "Tugallanmagan mijoz chizmalari — davom eting yoki o'chiring.",
+    ? t('cutting.drafts.subtitleBranch', { branch: contextBranchName.value })
+    : t('cutting.drafts.subtitle'),
 )
 const emptyMessage = computed(() =>
   contextBranchName.value
-    ? `${contextBranchName.value} filialida tugallanmagan chizma yo'q. Boshqa filialni topbardan tanlang yoki "+ Yangi buyurtma" orqali chizma boshlang.`
-    : 'Tugallanmagan chizmalar shu yerda saqlanadi. "+ Yangi buyurtma" orqali mijoz uchun chizma boshlang.',
+    ? t('cutting.drafts.emptyBranch', { branch: contextBranchName.value })
+    : t('cutting.drafts.empty'),
 )
 
 const pendingDelete = ref<WorkshopDraftSummary | null>(null)
@@ -51,7 +53,7 @@ const deleteError = ref<string | null>(null)
 const drafts = computed(() => cutting.workshopDrafts)
 
 function draftLabel(draft: WorkshopDraftSummary): string {
-  return draft.name?.trim() || draft.client_name || 'Nomsiz chizma'
+  return draft.name?.trim() || draft.client_name || t('cutting.editor.untitled')
 }
 
 function openDraft(draft: WorkshopDraftSummary) {
@@ -92,7 +94,7 @@ watch(
   <section>
     <div class="page-head">
       <div>
-        <h1>Saqlangan chizmalar</h1>
+        <h1>{{ $t('cutting.drafts.title') }}</h1>
         <div class="sub">{{ subtitle }}</div>
       </div>
       <div class="tools">
@@ -100,14 +102,14 @@ watch(
           :to="rolePath('/workshop/orders')"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
         >
-          ← Buyurtmalar
+          ← {{ $t('cutting.drafts.backToOrders') }}
         </RouterLink>
         <button
           type="button"
           class="mp-button mp-button-primary min-h-9 px-3 text-xs"
           @click="newOrder"
         >
-          + Yangi buyurtma
+          + {{ $t('cutting.drafts.newOrder') }}
         </button>
       </div>
     </div>
@@ -120,14 +122,14 @@ watch(
     </section>
 
     <section v-else-if="cutting.error" class="st-error" role="alert">
-      <h3>Chizmalarni yuklab bo'lmadi</h3>
+      <h3>{{ $t('cutting.drafts.loadErrorTitle') }}</h3>
       <p>{{ workshopErrorMessage(cutting.error) }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         @click="loadDrafts()"
       >
-        Qayta urinish
+        {{ $t('cutting.action.retry') }}
       </button>
     </section>
 
@@ -135,14 +137,14 @@ watch(
       v-else-if="drafts.length === 0"
       class="card grid place-items-center gap-2 p-10 text-center"
     >
-      <h3 class="text-base font-bold">Saqlangan chizma yo'q</h3>
+      <h3 class="text-base font-bold">{{ $t('cutting.drafts.emptyTitle') }}</h3>
       <p class="max-w-sm text-sm text-ink-soft">{{ emptyMessage }}</p>
       <button
         type="button"
         class="mp-button mp-button-primary mt-2 min-h-10 px-4"
         @click="newOrder"
       >
-        + Yangi buyurtma
+        + {{ $t('cutting.drafts.newOrder') }}
       </button>
     </section>
 
@@ -163,12 +165,16 @@ watch(
           <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span v-if="draft.branch_name" class="text-ink-soft">{{ draft.branch_name }}</span>
             <span
-              ><b class="font-mono text-ink">{{ draft.part_count }}</b> detal</span
+              ><b class="font-mono text-ink">{{ draft.part_count }}</b>
+              {{ $t('cutting.unit.part', draft.part_count) }}</span
             >
             <span v-if="draft.has_result">
-              <b class="font-mono text-ink">{{ draft.panel_count || '—' }}</b> panel
+              <b class="font-mono text-ink">{{ draft.panel_count || '—' }}</b>
+              {{ $t('cutting.unit.panel', draft.panel_count) }}
             </span>
-            <span>{{ formatRelativeUz(draft.updated_at) }} · tahrirlangan</span>
+            <span>{{
+              $t('cutting.drafts.editedAt', { time: formatRelative(draft.updated_at) })
+            }}</span>
           </span>
         </button>
         <div class="flex items-center gap-2">
@@ -177,12 +183,12 @@ watch(
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             @click="openDraft(draft)"
           >
-            Davom etish →
+            {{ $t('cutting.drafts.resume') }} →
           </button>
           <button
             type="button"
             class="grid size-9 place-items-center rounded-md border border-hairline text-lg text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
-            :aria-label="`${draftLabel(draft)} chizmasini o'chirish`"
+            :aria-label="$t('cutting.drafts.deleteAria', { name: draftLabel(draft) })"
             @click="pendingDelete = draft"
           >
             ×
@@ -193,11 +199,15 @@ watch(
 
     <ConfirmDialog
       :open="pendingDelete !== null"
-      title="Chizmani o'chirish"
-      :message="`${pendingDelete ? draftLabel(pendingDelete) : ''} chizmasi butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
-      confirm-label="O'chirish"
-      busy-label="O'chirilmoqda"
-      cancel-label="Bekor qilish"
+      :title="$t('cutting.editor.deleteDraft')"
+      :message="
+        $t('cutting.drafts.deleteMessage', {
+          name: pendingDelete ? draftLabel(pendingDelete) : '',
+        })
+      "
+      :confirm-label="$t('cutting.action.delete')"
+      :busy-label="$t('cutting.action.deleting')"
+      :cancel-label="$t('cutting.action.cancel')"
       :busy="deleting"
       danger
       @confirm="confirmDelete"

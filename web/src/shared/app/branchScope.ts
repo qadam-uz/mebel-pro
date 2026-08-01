@@ -1,5 +1,7 @@
 import type {} from 'vue-router'
 
+import { translate } from '@/shared/i18n'
+
 /**
  * How a workshop route relates to the topbar branch picker.
  *
@@ -26,10 +28,13 @@ declare module 'vue-router' {
   }
 }
 
-/** Topbar hint explaining why the picker is inert on a non-branch-scoped route. */
-export const branchScopeHints: Record<Exclude<BranchScope, 'branch'>, string> = {
-  workshop: "Bu sahifa butun ustaxona bo'yicha",
-  entity: 'Filial ochilgan yozuvdan olinadi',
+/** Topbar hint explaining why the picker is inert on a non-branch-scoped route.
+ *  A function, not a map: a module-level constant would hold the copy of
+ *  whichever locale was active when this module first evaluated. */
+export function branchScopeHint(scope: Exclude<BranchScope, 'branch'>): string {
+  return scope === 'workshop'
+    ? translate('shell.branchScope.workshop')
+    : translate('shell.branchScope.entity')
 }
 
 /** Routes default to `branch` so an undeclared route fails loud, not silent. */

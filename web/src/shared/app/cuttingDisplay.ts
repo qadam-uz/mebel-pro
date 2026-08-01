@@ -1,3 +1,4 @@
+import { translate } from '@/shared/i18n'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 import type { PanelMaterialType } from '@/shared/stores/admin'
 
@@ -5,23 +6,32 @@ import type { PanelMaterialType } from '@/shared/stores/admin'
 // (CuttingPartRow, the edge-banding modal) extracted from the editor view as part
 // of the CB-93 decomposition. No Vue/runtime dependencies — testable in isolation.
 
-// The four bandable sides of a part, in render order, plus their Uzbek labels.
+// The four bandable sides of a part, in render order, plus their labels.
 export const edgeFields = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
 export type EdgeField = (typeof edgeFields)[number]
 
+// Getters, not literals: a frozen record would keep whichever locale was active
+// when this module first evaluated, and `sideLabels[side]` is read from several
+// call sites that a plain function would have to change.
 export const sideLabels: Record<EdgeField, string> = {
-  edge_top: 'Yuqori',
-  edge_bottom: 'Pastki',
-  edge_left: 'Chap',
-  edge_right: "O'ng",
+  get edge_top() {
+    return translate('cutting.side.top')
+  },
+  get edge_bottom() {
+    return translate('cutting.side.bottom')
+  },
+  get edge_left() {
+    return translate('cutting.side.left')
+  },
+  get edge_right() {
+    return translate('cutting.side.right')
+  },
 }
 
-const PANEL_TYPE_LABELS: Record<PanelMaterialType, string> = {
-  dsp: 'LDSP',
-  mdf: 'MDF',
-  plywood: 'Fanera',
-  natural_wood: "Yog'och",
-  other: 'List',
+const PANEL_TYPES: readonly PanelMaterialType[] = ['dsp', 'mdf', 'plywood', 'natural_wood', 'other']
+
+function panelTypeLabel(type: PanelMaterialType): string {
+  return translate(`cutting.panelType.${type}`)
 }
 
 // Deterministic swatch colour for a material: a few named-colour shortcuts, then a
@@ -62,7 +72,7 @@ export function snapshotShortLabel(snapshot: Record<string, unknown> | undefined
   const color = typeof snapshot?.color === 'string' ? snapshot.color.trim() : ''
   if (color) return color
   const name = typeof snapshot?.name === 'string' ? snapshot.name.trim() : ''
-  return name ? name.slice(0, 18) : 'Material'
+  return name ? name.slice(0, 18) : translate('cutting.material.fallback')
 }
 
 function snapshotText(snapshot: Record<string, unknown> | undefined, key: string) {
@@ -78,11 +88,11 @@ function formatMm(value: unknown) {
 
 export function snapshotMaterialLabel(
   snapshot: Record<string, unknown> | undefined,
-  fallback = 'Material',
+  fallback = translate('cutting.material.fallback'),
 ): string {
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
   const rawType = snapshotText(snapshot, 'type') as PanelMaterialType | ''
-  const type = rawType && rawType in PANEL_TYPE_LABELS ? PANEL_TYPE_LABELS[rawType] : rawType
+  const type = rawType && PANEL_TYPES.includes(rawType) ? panelTypeLabel(rawType) : rawType
   const decor = snapshotText(snapshot, 'decor_code')
   const name = snapshotText(snapshot, 'name')
   const color = snapshotText(snapshot, 'color')
@@ -105,7 +115,7 @@ export function snapshotMaterialLabel(
 
 export function snapshotEdgeLabel(
   snapshot: Record<string, unknown> | undefined,
-  fallback = 'Kromka',
+  fallback = translate('cutting.edge.label'),
 ): string {
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
   const decor = snapshotText(snapshot, 'decor_code')

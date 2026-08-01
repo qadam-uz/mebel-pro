@@ -12,6 +12,8 @@
  * to the printable document.
  */
 
+import { translate } from '@/shared/i18n'
+
 export type DebtSide = 'suppliers' | 'clients'
 
 /** Which way a balance leans. `settled` is exactly zero — nobody owes anybody. */
@@ -47,8 +49,8 @@ export function balanceDirection(balanceTiyin: number): BalanceDirection {
 
 /** The direction in words. Settled balances say nothing — the zero is the word. */
 export function directionLabel(direction: BalanceDirection): string {
-  if (direction === 'they_owe') return 'bizga qarzi'
-  if (direction === 'we_owe') return 'qarzimiz'
+  if (direction === 'they_owe') return translate('finance.debts.directionTheyOwe')
+  if (direction === 'we_owe') return translate('finance.debts.directionWeOwe')
   return ''
 }
 

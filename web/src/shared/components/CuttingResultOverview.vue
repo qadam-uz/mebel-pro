@@ -184,7 +184,7 @@ function revealDrawing() {
 
     <aside class="order-2 space-y-4 xl:col-start-1 xl:row-start-1">
       <div class="rounded-lg border border-hairline p-4">
-        <h3 class="text-sm font-extrabold text-ink">Materiallar</h3>
+        <h3 class="text-sm font-extrabold text-ink">{{ $t('cutting.result.materialsTitle') }}</h3>
         <ul class="mt-2 space-y-1.5 text-sm">
           <li
             v-for="material in panelMaterials"
@@ -193,13 +193,15 @@ function revealDrawing() {
           >
             <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
             <span class="min-w-0 font-bold leading-tight text-ink-soft">{{ material.label }}</span>
-            <span class="shrink-0 font-mono text-ink">{{ material.count }} list</span>
+            <span class="shrink-0 font-mono text-ink"
+              >{{ material.count }} {{ $t('cutting.unit.sheet', material.count) }}</span
+            >
           </li>
         </ul>
 
         <div class="my-4 border-t border-hairline"></div>
 
-        <h3 class="text-sm font-extrabold text-ink">Kromka</h3>
+        <h3 class="text-sm font-extrabold text-ink">{{ $t('cutting.result.edgeTitle') }}</h3>
         <ul v-if="edgeByMaterial.length" class="mt-2 space-y-1.5 text-sm">
           <li
             v-for="row in edgeByMaterial"
@@ -220,7 +222,7 @@ function revealDrawing() {
             <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
           </li>
         </ul>
-        <p v-else class="mt-2 text-sm text-ink-soft">Kromka ishlatilmagan.</p>
+        <p v-else class="mt-2 text-sm text-ink-soft">{{ $t('cutting.result.noEdgeUsed') }}</p>
       </div>
 
       <!-- Superseded below `md` by CuttingPartsList, which covers every sheet
@@ -228,7 +230,7 @@ function revealDrawing() {
            screen is exactly what the design system forbids. -->
       <div v-if="activePanel" class="rounded-lg border border-hairline p-4 max-md:hidden">
         <h3 class="text-sm font-extrabold text-ink">
-          Detallar — List {{ panelDisplayIndex(result, activePanel) }}
+          {{ $t('cutting.result.partsOnSheet', { n: panelDisplayIndex(result, activePanel) }) }}
         </h3>
         <div class="mt-3 grid gap-2">
           <button

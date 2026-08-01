@@ -1,0 +1,51 @@
+{
+  "currency": {
+    "som": "so'm",
+    "million": "mln so'm",
+    "billion": "mlrd so'm"
+  },
+  "unit": {
+    "metre": "m",
+    "panel": "list",
+    "piece": "dona"
+  },
+  "relative": {
+    "today": "bugun",
+    "yesterday": "kecha",
+    "days": "{n} kun oldin",
+    "weeks": "{n} hafta oldin",
+    "months": "{n} oy oldin"
+  },
+  "month": {
+    "jan": "Yanvar",
+    "feb": "Fevral",
+    "mar": "Mart",
+    "apr": "Aprel",
+    "may": "May",
+    "jun": "Iyun",
+    "jul": "Iyul",
+    "aug": "Avgust",
+    "sep": "Sentabr",
+    "oct": "Oktabr",
+    "nov": "Noyabr",
+    "dec": "Dekabr"
+  },
+  "weekdayShort": {
+    "mon": "Du",
+    "tue": "Se",
+    "wed": "Ch",
+    "thu": "Pa",
+    "fri": "Ju",
+    "sat": "Sh",
+    "sun": "Ya"
+  },
+  "rangePreset": {
+    "all": "Barcha sanalar",
+    "today": "Bugun",
+    "week": "Oxirgi 7 kun",
+    "month": "Joriy oy",
+    "last_month": "O'tgan oy",
+    "days30": "Oxirgi 30 kun",
+    "custom": "Maxsus oraliq"
+  }
+}

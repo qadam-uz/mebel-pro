@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -8,9 +9,9 @@ import {
   workshopContextStorageKey,
 } from '@/shared/app/contextStorage'
 import { useRolePath } from '@/shared/app/paths'
-import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
+import { roleMessageKey, useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
-import { branchScopeHints, branchScopeOf } from '@/shared/app/branchScope'
+import { branchScopeHint, branchScopeOf } from '@/shared/app/branchScope'
 import {
   adminInitials,
   adminNavMetrics,
@@ -25,6 +26,7 @@ import {
 } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import ActionMenu from '@/shared/components/ActionMenu.vue'
+import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -47,14 +49,18 @@ const admin = useAdminStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { t } = useI18n()
+
+/** Shorthand for the role-scoped messages the shell reads a dozen times. */
+const roleText = (name: string) => t(roleMessageKey(config.role, name))
 
 // Profile / sessions / log out — the three things an avatar is expected to
 // offer. No confirm on the way out: logging out is not destructive, and
 // DESIGN.md prefers undo over a nag (QAD-182).
 const accountMenuItems = computed(() => [
-  { label: 'Mening profilim' },
-  { label: 'Sessiyalar' },
-  { label: 'Chiqib ketish', danger: true },
+  { label: t('shell.account.profile') },
+  { label: t('shell.account.sessions') },
+  { label: t('shell.account.logout'), danger: true },
 ])
 
 async function onAccountMenuSelect(index: number) {
@@ -70,7 +76,7 @@ async function onAccountMenuSelect(index: number) {
     await auth.logoutCurrent()
     await router.replace(config.loginPath)
   } catch {
-    toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('shell.account.logoutFailed'))
   }
 }
 const rolePath = useRolePath()
@@ -106,7 +112,7 @@ const contextStorageKey = computed(() =>
 // line above it already shows (QAD-182). The login is what belongs there: it is
 // the one thing about themselves a staff member occasionally has to read out.
 const profileSubtitle = computed(() => {
-  if (auth.me?.password_reset_required) return "parolni o'zgartirish kerak"
+  if (auth.me?.password_reset_required) return t('shell.tenant.passwordResetHint')
   return auth.me?.login ?? ''
 })
 const tenantLabel = computed(() => {
@@ -114,22 +120,22 @@ const tenantLabel = computed(() => {
   // source everyone else has, because `/workshop/settings` is owner-only and
   // staff used to fall through to the generic label (QAD-168).
   if (config.role === 'workshop') {
-    return workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? config.tenantLabel
+    return workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? roleText('tenant')
   }
   if (config.role === 'client' && auth.isAllowedFor('client')) return auth.displayName
-  return config.tenantLabel
+  return roleText('tenant')
 })
 const tenantMeta = computed(() => {
-  if (!auth.me) return config.tenantMeta
+  if (!auth.me) return roleText('tenantMeta')
   if (config.role === 'workshop') {
-    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
+    return auth.me.is_owner ? t('shell.tenant.ownerMeta') : grantSummary(false, auth.me.grants)
   }
   if (config.role === 'client') return auth.me.phone ?? auth.displayName
   if (config.role === 'admin') return auth.displayName
-  return config.tenantMeta
+  return roleText('tenantMeta')
 })
 const tenantInitial = computed(() =>
-  (tenantLabel.value.trim().slice(0, 1) || config.roleLabel[0]).toUpperCase(),
+  (tenantLabel.value.trim().slice(0, 1) || roleText('label')[0]).toUpperCase(),
 )
 const workshopUserInitials = computed(() => initials(auth.displayName, 'MP'))
 const adminOperatorInitials = computed(() => adminInitials(auth.displayName, 'N'))
@@ -142,8 +148,8 @@ const dropdownOptions = computed(() => {
     return [
       {
         value: 'none',
-        label: "Filial yo'q",
-        meta: 'biriktirilmagan',
+        label: t('shell.branch.none'),
+        meta: t('shell.branch.noneMeta'),
         status: 'pending' as const,
       },
     ]
@@ -151,7 +157,8 @@ const dropdownOptions = computed(() => {
   return workshop.branches.map((branch) => ({
     value: branch.id,
     label: branch.name,
-    meta: branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address,
+    meta:
+      branch.status === 'temporarily_closed' ? t('shell.branch.temporarilyClosed') : branch.address,
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   }))
 })
@@ -181,7 +188,7 @@ const showBranchSwitcher = computed(
 const branchScope = computed(() => branchScopeOf(route.meta.branchScope))
 const branchPickerDisabled = computed(() => branchScope.value !== 'branch')
 const branchPickerHint = computed(() =>
-  branchScope.value === 'branch' ? null : branchScopeHints[branchScope.value],
+  branchScope.value === 'branch' ? null : branchScopeHint(branchScope.value),
 )
 const normalizedSearchBranchId = computed(() => selectedWorkshopBranch.value?.id ?? null)
 const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.permissions ?? []))
@@ -213,19 +220,9 @@ const workshopSearchResultCount = computed(
     workshopSearch.results.stock.length,
 )
 const hasWorkshopSearchQuery = computed(() => workshopSearchQuery.value.trim().length >= 2)
-const groupedWorkshopNav = computed(() => {
-  const groups: Array<{ label: string; items: NavItem[] }> = []
-  for (const item of visibleNav.value) {
-    const label = item.group ?? 'Boshqaruv'
-    let group = groups.find((current) => current.label === label)
-    if (!group) {
-      group = { label, items: [] }
-      groups.push(group)
-    }
-    group.items.push(item)
-  }
-  return groups
-})
+// One grouping for both sidebars — they only ever differed in the fallback for
+// an item with no group, and no item ships without one.
+const navGroups = computed(() => groupedNav(visibleNav.value))
 // Sidebar `+N` badge on Buyurtmalar (QAD-156): a live count of orders still in
 // NEW for the selected branch, so staff notice an arrival without being on the
 // board. Not an unread counter — it falls on its own as orders get confirmed.
@@ -241,9 +238,12 @@ const newOrderBadge = computed(() => {
 // screen reader hears "Buyurtmalar — 4 ta yangi buyurtma" in one go.
 function navAriaLabel(item: NavItem) {
   if (item.to !== ordersNavPath.value || !newOrderBadge.value) return undefined
-  return `${item.label} — ${orders.newOrderCount} ta yangi buyurtma`
+  return t(
+    'shell.nav.newOrdersAria',
+    { label: t(item.labelKey), n: orders.newOrderCount },
+    orders.newOrderCount,
+  )
 }
-const groupedAdminNav = computed(() => groupedNav(visibleNav.value))
 const adminMetrics = computed(() =>
   adminNavMetrics({
     workshops: admin.workshops.length,
@@ -570,26 +570,31 @@ onBeforeUnmount(() => {
   <div v-else-if="config.role === 'client'" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <header class="client-header">
       <div class="client-container client-header-row">
-        <RouterLink :to="config.homePath" class="client-brand" aria-label="Bosh sahifa">
+        <RouterLink
+          :to="config.homePath"
+          class="client-brand"
+          :aria-label="$t('shell.a11y.clientHome')"
+        >
           <img src="/favicon.svg" alt="" class="size-8" />
           <span class="client-brand-name">{{ config.productLabel }}</span>
         </RouterLink>
 
-        <nav class="client-nav" aria-label="Asosiy navigatsiya">
+        <nav class="client-nav" :aria-label="$t('shell.a11y.mainNav')">
           <RouterLink v-for="item in visibleNav" :key="item.to" :to="item.to">
             <span class="client-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
             </span>
-            {{ item.label }}
+            {{ t(item.labelKey) }}
           </RouterLink>
         </nav>
 
         <div class="client-actions">
+          <LocaleSwitcher />
           <NotificationsMenu />
           <RouterLink
             :to="config.profilePath"
             class="client-user-pill"
-            :aria-label="`Profil — ${auth.displayName}`"
+            :aria-label="$t('shell.a11y.clientProfile', { name: auth.displayName })"
           >
             <span class="client-user-avatar" aria-hidden="true">{{ clientInitial }}</span>
             <span class="client-user-name text-sm font-bold text-ink">{{ auth.displayName }}</span>
@@ -608,12 +613,12 @@ onBeforeUnmount(() => {
     class="workshop-app"
     :class="{ 'nav-collapsed': sidebarCollapsed }"
   >
-    <aside class="workshop-sidebar" aria-label="Ustaxona navigatsiyasi">
+    <aside class="workshop-sidebar" :aria-label="$t('shell.a11y.workshopNav')">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="workshop-brand-mark" />
         <span class="workshop-brand-copy">
           <span class="workshop-brand-name">{{ config.productLabel }}</span>
-          <span class="workshop-brand-role">{{ config.roleLabel }}</span>
+          <span class="workshop-brand-role">{{ roleText('label') }}</span>
         </span>
       </RouterLink>
 
@@ -625,22 +630,22 @@ onBeforeUnmount(() => {
         </span>
       </div>
 
-      <nav class="workshop-nav" aria-label="Asosiy navigatsiya">
-        <section v-for="group in groupedWorkshopNav" :key="group.label" class="workshop-nav-group">
-          <div class="workshop-nav-label">{{ group.label }}</div>
+      <nav class="workshop-nav" :aria-label="$t('shell.a11y.mainNav')">
+        <section v-for="group in navGroups" :key="group.id" class="workshop-nav-group">
+          <div class="workshop-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
           <RouterLink
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
             class="workshop-nav-item"
             active-class="on"
-            :title="item.label"
+            :title="t(item.labelKey)"
             :aria-label="navAriaLabel(item)"
           >
             <span class="workshop-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
             </span>
-            <span>{{ item.label }}</span>
+            <span>{{ t(item.labelKey) }}</span>
             <span
               v-if="newOrderBadge && item.to === ordersNavPath"
               class="workshop-nav-badge"
@@ -670,7 +675,7 @@ onBeforeUnmount(() => {
       <button
         class="workshop-drawer-scrim"
         type="button"
-        aria-label="Menyuni yopish"
+        :aria-label="$t('shell.a11y.closeMenu')"
         @click="closeMobileNav"
       ></button>
       <div ref="drawerPanelRef" class="workshop-drawer-panel" tabindex="-1">
@@ -679,19 +684,15 @@ onBeforeUnmount(() => {
           <button
             class="workshop-icon-button"
             type="button"
-            aria-label="Menyuni yopish"
+            :aria-label="$t('shell.a11y.closeMenu')"
             @click="closeMobileNav"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('close')"></svg>
           </button>
         </div>
-        <nav class="workshop-nav" aria-label="Mobil navigatsiya">
-          <section
-            v-for="group in groupedWorkshopNav"
-            :key="`m-${group.label}`"
-            class="workshop-nav-group"
-          >
-            <div class="workshop-nav-label">{{ group.label }}</div>
+        <nav class="workshop-nav" :aria-label="$t('shell.a11y.mobileNav')">
+          <section v-for="group in navGroups" :key="`m-${group.id}`" class="workshop-nav-group">
+            <div class="workshop-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
             <RouterLink
               v-for="item in group.items"
               :key="`m-${item.to}`"
@@ -703,7 +704,7 @@ onBeforeUnmount(() => {
               <span class="workshop-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
               </span>
-              <span>{{ item.label }}</span>
+              <span>{{ t(item.labelKey) }}</span>
               <span
                 v-if="newOrderBadge && item.to === ordersNavPath"
                 class="workshop-nav-badge"
@@ -722,7 +723,7 @@ onBeforeUnmount(() => {
           ref="mobileTriggerRef"
           class="workshop-mobile-button"
           type="button"
-          aria-label="Menyu"
+          :aria-label="$t('shell.a11y.menu')"
           @click="onNavTrigger"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
@@ -732,7 +733,7 @@ onBeforeUnmount(() => {
           v-if="showBranchSwitcher"
           v-model="selectedContext"
           class="workshop-branch-dd"
-          :label="config.dropdownLabel"
+          :label="roleText('dropdown')"
           :options="dropdownOptions"
           :disabled="branchPickerDisabled"
           :hint="branchPickerHint"
@@ -745,12 +746,12 @@ onBeforeUnmount(() => {
               <circle cx="8.5" cy="8.5" r="5.5"></circle>
               <path d="m13 13 4 4"></path>
             </svg>
-            <span class="sr-only">Global qidiruv</span>
+            <span class="sr-only">{{ $t('shell.search.label') }}</span>
             <input
               id="workshop-global-search"
               ref="workshopSearchInputRef"
               v-model="workshopSearchQuery"
-              placeholder="Buyurtma, mijoz, xodim yoki material"
+              :placeholder="$t('shell.search.placeholder')"
               autocomplete="off"
               :aria-expanded="workshopSearchOpen"
               aria-controls="workshop-global-search-panel"
@@ -766,25 +767,27 @@ onBeforeUnmount(() => {
             id="workshop-global-search-panel"
             class="workshop-search-panel"
             role="dialog"
-            aria-label="Qidiruv natijalari"
+            :aria-label="$t('shell.search.resultsAria')"
           >
             <div v-if="!canSearchWorkshop" class="workshop-search-empty">
-              Bu filial bo'yicha qidiruv uchun ruxsat yo'q.
+              {{ $t('shell.search.noPermission') }}
             </div>
             <div v-else-if="!hasWorkshopSearchQuery" class="workshop-search-empty">
-              Kamida 2 ta belgi kiriting.
+              {{ $t('shell.search.minChars') }}
             </div>
             <div v-else-if="workshopSearch.loading" class="workshop-search-empty">
-              Qidirilmoqda…
+              {{ $t('shell.search.searching') }}
             </div>
             <template v-else>
               <p v-if="workshopSearch.error" class="workshop-search-error">
-                Qidiruvning bir qismi yuklanmadi.
+                {{ $t('shell.search.partialError') }}
                 <span v-if="workshopSearch.traceId">Trace: {{ workshopSearch.traceId }}</span>
               </p>
 
               <div v-if="workshopSearch.results.orders.length" class="workshop-search-section">
-                <div class="workshop-search-section-title">Buyurtmalar</div>
+                <div class="workshop-search-section-title">
+                  {{ $t('shell.search.sectionOrders') }}
+                </div>
                 <RouterLink
                   v-for="order in workshopSearch.results.orders"
                   :key="order.id"
@@ -796,12 +799,14 @@ onBeforeUnmount(() => {
                     <strong>{{ order.order_number }}</strong>
                     <small>{{ order.client_name }} · {{ order.branch_name }}</small>
                   </span>
-                  <em>{{ workshopStatusUz[order.status] }}</em>
+                  <em>{{ workshopStatusUz(order.status) }}</em>
                 </RouterLink>
               </div>
 
               <div v-if="workshopSearch.results.users.length" class="workshop-search-section">
-                <div class="workshop-search-section-title">Xodimlar</div>
+                <div class="workshop-search-section-title">
+                  {{ $t('shell.search.sectionUsers') }}
+                </div>
                 <RouterLink
                   v-for="user in workshopSearch.results.users"
                   :key="user.id"
@@ -813,12 +818,18 @@ onBeforeUnmount(() => {
                     <strong>{{ user.full_name }}</strong>
                     <small>{{ user.login }} · {{ user.phone }}</small>
                   </span>
-                  <em>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}</em>
+                  <em>{{
+                    user.status === 'active'
+                      ? $t('shell.search.userActive')
+                      : $t('shell.search.userBlocked')
+                  }}</em>
                 </RouterLink>
               </div>
 
               <div v-if="workshopSearch.results.materials.length" class="workshop-search-section">
-                <div class="workshop-search-section-title">Material katalogi</div>
+                <div class="workshop-search-section-title">
+                  {{ $t('shell.search.sectionMaterials') }}
+                </div>
                 <RouterLink
                   v-for="row in workshopSearch.results.materials"
                   :key="row.id"
@@ -830,12 +841,18 @@ onBeforeUnmount(() => {
                     <strong>{{ row.material.name }}</strong>
                     <small>{{ row.material.manufacturer_name }} · {{ row.material.kind }}</small>
                   </span>
-                  <em>{{ row.status === 'active' ? 'Faol' : 'Yashirilgan' }}</em>
+                  <em>{{
+                    row.status === 'active'
+                      ? $t('shell.search.materialActive')
+                      : $t('shell.search.materialHidden')
+                  }}</em>
                 </RouterLink>
               </div>
 
               <div v-if="workshopSearch.results.stock.length" class="workshop-search-section">
-                <div class="workshop-search-section-title">Ombor</div>
+                <div class="workshop-search-section-title">
+                  {{ $t('shell.search.sectionStock') }}
+                </div>
                 <RouterLink
                   v-for="item in workshopSearch.results.stock"
                   :key="item.id"
@@ -848,13 +865,15 @@ onBeforeUnmount(() => {
                     <small>{{ item.material.manufacturer_name }} · {{ item.display_unit }}</small>
                   </span>
                   <em :class="{ danger: item.is_low_stock }">
-                    {{ item.is_low_stock ? 'Kam qoldi' : 'Omborda' }}
+                    {{
+                      item.is_low_stock ? $t('shell.search.stockLow') : $t('shell.search.stockOk')
+                    }}
                   </em>
                 </RouterLink>
               </div>
 
               <div v-if="workshopSearchResultCount === 0" class="workshop-search-empty">
-                Natija topilmadi.
+                {{ $t('shell.search.empty') }}
               </div>
 
               <div class="workshop-search-shortcuts">
@@ -863,28 +882,28 @@ onBeforeUnmount(() => {
                   :to="searchDestination('/workshop/orders')"
                   @click="closeWorkshopSearch"
                 >
-                  Buyurtmalar ro'yxatida ochish
+                  {{ $t('shell.search.openInOrders') }}
                 </RouterLink>
                 <RouterLink
                   v-if="canSearchCatalog"
                   :to="searchDestination('/workshop/catalog')"
                   @click="closeWorkshopSearch"
                 >
-                  Katalogda ochish
+                  {{ $t('shell.search.openInCatalog') }}
                 </RouterLink>
                 <RouterLink
                   v-if="canSearchInventory"
                   :to="searchDestination('/workshop/inventory')"
                   @click="closeWorkshopSearch"
                 >
-                  Omborda ochish
+                  {{ $t('shell.search.openInInventory') }}
                 </RouterLink>
                 <RouterLink
                   v-if="canSearchUsers"
                   :to="searchDestination('/workshop/settings/users')"
                   @click="closeWorkshopSearch"
                 >
-                  Xodimlarda ochish
+                  {{ $t('shell.search.openInUsers') }}
                 </RouterLink>
               </div>
             </template>
@@ -892,13 +911,14 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="workshop-top-actions">
+          <LocaleSwitcher />
           <NotificationsMenu />
           <!-- Logging out used to mean: click the avatar, wait for the profile
                page, find the button in its head, confirm. The most expected
                account action was three steps and a page load away (QAD-182). -->
           <ActionMenu
             :items="accountMenuItems"
-            :label="`${auth.displayName} — hisob menyusi`"
+            :label="$t('shell.account.menuAria', { name: auth.displayName })"
             trigger-class="workshop-top-user"
             @select="onAccountMenuSelect"
           >
@@ -920,13 +940,13 @@ onBeforeUnmount(() => {
   </div>
 
   <div v-else class="admin-app">
-    <a class="admin-skip-link" href="#admin-content">Kontentga o'tish</a>
-    <aside class="admin-sidebar" aria-label="Platforma navigatsiyasi">
+    <a class="admin-skip-link" href="#admin-content">{{ $t('shell.admin.skipLink') }}</a>
+    <aside class="admin-sidebar" :aria-label="$t('shell.a11y.platformNav')">
       <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="admin-brand-mark" />
         <span class="admin-brand-copy">
           <span class="admin-brand-name">{{ config.productLabel }}</span>
-          <span class="admin-brand-role">{{ config.roleLabel }}</span>
+          <span class="admin-brand-role">{{ roleText('label') }}</span>
         </span>
       </RouterLink>
 
@@ -934,17 +954,19 @@ onBeforeUnmount(() => {
         <span class="admin-tenant-avatar" aria-hidden="true">PL</span>
         <span class="min-w-0">
           <span class="admin-tenant-name">{{ tenantLabel }}</span>
-          <span class="admin-tenant-meta">{{ admin.workshops.length }} ta ustaxona · O'Z</span>
+          <span class="admin-tenant-meta">{{
+            $t('shell.admin.tenantMeta', { n: admin.workshops.length }, admin.workshops.length)
+          }}</span>
         </span>
       </div>
 
       <nav
         class="admin-nav"
         :class="{ 'is-locked': passwordResetRequired }"
-        aria-label="Asosiy navigatsiya"
+        :aria-label="$t('shell.a11y.mainNav')"
       >
-        <section v-for="group in groupedAdminNav" :key="group.label" class="admin-nav-group">
-          <div class="admin-nav-label">{{ group.label }}</div>
+        <section v-for="group in navGroups" :key="group.id" class="admin-nav-group">
+          <div class="admin-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
           <RouterLink
             v-for="item in group.items"
             :key="item.to"
@@ -958,7 +980,7 @@ onBeforeUnmount(() => {
             <span class="admin-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
             </span>
-            <span>{{ item.label }}</span>
+            <span>{{ t(item.labelKey) }}</span>
             <span
               v-if="adminMetrics.get(item.to)"
               class="admin-nav-count"
@@ -970,7 +992,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="admin-nav-group">
-          <div class="admin-nav-label">Ma'lumotnoma</div>
+          <div class="admin-nav-label">{{ $t('shell.admin.reference') }}</div>
           <button
             type="button"
             class="admin-nav-item"
@@ -981,7 +1003,7 @@ onBeforeUnmount(() => {
             <span class="admin-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="adminIconPath('book')"></svg>
             </span>
-            <span>Hujjatlar &amp; API</span>
+            <span>{{ $t('shell.admin.docsAndApi') }}</span>
             <span class="admin-nav-count">
               <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('external')"></svg>
             </span>
@@ -1004,7 +1026,7 @@ onBeforeUnmount(() => {
         <span class="admin-user-avatar" aria-hidden="true">{{ adminOperatorInitials }}</span>
         <span class="min-w-0">
           <span class="admin-user-name">{{ auth.displayName }}</span>
-          <span class="admin-user-meta">Platforma admini</span>
+          <span class="admin-user-meta">{{ $t('shell.admin.operatorRole') }}</span>
         </span>
       </RouterLink>
     </aside>
@@ -1020,7 +1042,7 @@ onBeforeUnmount(() => {
       <button
         class="admin-drawer-scrim"
         type="button"
-        aria-label="Menyuni yopish"
+        :aria-label="$t('shell.a11y.closeMenu')"
         @click="closeMobileNav"
       ></button>
       <div ref="drawerPanelRef" class="admin-drawer-panel" tabindex="-1">
@@ -1031,7 +1053,7 @@ onBeforeUnmount(() => {
           <button
             class="admin-icon-button"
             type="button"
-            aria-label="Menyuni yopish"
+            :aria-label="$t('shell.a11y.closeMenu')"
             @click="closeMobileNav"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('close')"></svg>
@@ -1040,14 +1062,10 @@ onBeforeUnmount(() => {
         <nav
           class="admin-nav"
           :class="{ 'is-locked': passwordResetRequired }"
-          aria-label="Mobil navigatsiya"
+          :aria-label="$t('shell.a11y.mobileNav')"
         >
-          <section
-            v-for="group in groupedAdminNav"
-            :key="`m-${group.label}`"
-            class="admin-nav-group"
-          >
-            <div class="admin-nav-label">{{ group.label }}</div>
+          <section v-for="group in navGroups" :key="`m-${group.id}`" class="admin-nav-group">
+            <div class="admin-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
             <RouterLink
               v-for="item in group.items"
               :key="`m-${item.to}`"
@@ -1061,11 +1079,11 @@ onBeforeUnmount(() => {
               <span class="admin-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
               </span>
-              <span>{{ item.label }}</span>
+              <span>{{ t(item.labelKey) }}</span>
             </RouterLink>
           </section>
           <section class="admin-nav-group">
-            <div class="admin-nav-label">Ma'lumotnoma</div>
+            <div class="admin-nav-label">{{ $t('shell.admin.reference') }}</div>
             <a
               v-for="link in adminDocsLinks"
               :key="`m-doc-${link.href}`"
@@ -1096,13 +1114,11 @@ onBeforeUnmount(() => {
           v-html="adminIconPath('lock')"
         ></svg>
         <div class="admin-reset-gate-body">
-          <strong>Parolni o'zgartiring</strong>
-          <span>
-            Platformaning boshqa bo'limlari vaqtinchalik parol almashtirilmaguncha bloklangan.
-          </span>
+          <strong>{{ $t('shell.admin.resetTitle') }}</strong>
+          <span>{{ $t('shell.admin.resetBody') }}</span>
         </div>
         <RouterLink :to="config.profilePath" class="admin-reset-gate-cta">
-          Parolni almashtirish
+          {{ $t('shell.admin.resetCta') }}
         </RouterLink>
       </div>
 
@@ -1115,20 +1131,20 @@ onBeforeUnmount(() => {
           @click="openMobileNav"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
-          Menyu
+          {{ $t('shell.a11y.menu') }}
         </button>
 
         <div class="admin-top-actions">
           <NotificationsMenu v-if="!passwordResetRequired" />
           <RouterLink
-            v-if="config.primaryActionLabel && config.primaryActionTo"
+            v-if="config.primaryActionTo"
             :to="config.primaryActionTo"
             class="admin-primary-action"
             :tabindex="passwordResetRequired ? -1 : undefined"
             :aria-disabled="passwordResetRequired ? 'true' : undefined"
             @click="onAdminNavClick"
           >
-            {{ config.primaryActionLabel }}
+            {{ roleText('primaryAction') }}
           </RouterLink>
         </div>
       </header>

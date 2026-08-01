@@ -6,7 +6,7 @@
 #        - verify-backend : ruff check · ruff format --check · mypy · pytest,
 #                           then the infra-gated suites (Postgres locking +
 #                           MinIO contract) against Compose data services
-#        - verify-web     : pnpm lint:check · format:check · typecheck · test · build
+#        - verify-web     : pnpm lint:check · format:check · typecheck · i18n:check · test · build
 #        - verify-e2e     : pnpm typecheck · Playwright browser tests
 #      These mirror the per-directory check gates documented in the repo
 #      AGENTS.md. Run them locally before pushing; CI is the safety net.
@@ -143,6 +143,11 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # A key spelled inside a template expression is a plain string to vue-tsc;
+      # this resolves every literal t()/$t() against the uz catalog instead.
+      - name: i18n keys
+        run: pnpm i18n:check
 
       - name: Unit tests
         run: pnpm test

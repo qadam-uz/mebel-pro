@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import { nextStableId } from '@/shared/app/listboxNav'
@@ -17,16 +18,21 @@ const props = withDefaults(
     confirmDisabled?: boolean
   }>(),
   {
-    // Uzbek is the only shipped locale: a call site that forgets to pass a label
-    // must still render Uzbek, never an English placeholder (QAD-163).
-    confirmLabel: 'Tasdiqlash',
-    cancelLabel: 'Bekor qilish',
-    busyLabel: 'Bajarilmoqda…',
     danger: false,
     busy: false,
     confirmDisabled: false,
   },
 )
+
+const { t } = useI18n()
+
+// The generic labels are resolved here rather than as prop defaults: a default
+// is evaluated once, so it would freeze at whichever locale happened to be
+// active when the module first ran. A call site that passes its own label — the
+// destructive confirms that name their consequence — still wins.
+const confirmText = computed(() => props.confirmLabel ?? t('shell.confirm.confirm'))
+const cancelText = computed(() => props.cancelLabel ?? t('shell.confirm.cancel'))
+const busyText = computed(() => props.busyLabel ?? t('shell.confirm.busy'))
 
 const emit = defineEmits<{
   cancel: []
@@ -156,7 +162,7 @@ onBeforeUnmount(() => {
             :disabled="busy"
             @click="emit('cancel')"
           >
-            {{ cancelLabel }}
+            {{ cancelText }}
           </button>
           <button
             type="button"
@@ -165,7 +171,7 @@ onBeforeUnmount(() => {
             :disabled="busy || confirmDisabled"
             @click="emit('confirm')"
           >
-            {{ busy ? busyLabel : confirmLabel }}
+            {{ busy ? busyText : confirmText }}
           </button>
         </div>
       </section>

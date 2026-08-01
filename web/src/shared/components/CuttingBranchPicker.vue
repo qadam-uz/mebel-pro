@@ -78,9 +78,9 @@ function select(row: ClientBranchOption) {
     v-if="options.length === 0"
     class="rounded-lg border border-hairline bg-sunk p-4 text-sm text-ink-muted"
   >
-    Hozircha tanlash uchun filial yo'q.
+    {{ $t('cutting.branch.emptyOptions') }}
   </div>
-  <div v-else class="grid gap-3" role="group" aria-label="Filial tanlash">
+  <div v-else class="grid gap-3" role="group" :aria-label="$t('cutting.branch.pick')">
     <div class="relative">
       <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
         ><Icon name="search" class="size-[18px]" /></span
@@ -88,13 +88,14 @@ function select(row: ClientBranchOption) {
         v-model="query"
         type="search"
         class="mp-input pl-10"
-        placeholder="Ustaxona, filial yoki manzil — masalan: Chilonzor"
-        aria-label="Filial qidirish"
+        :placeholder="$t('cutting.branch.searchPlaceholder')"
+        :aria-label="$t('cutting.branch.searchAria')"
       />
     </div>
     <div v-if="recommended" class="rounded-lg border-2 border-accent bg-accent-soft p-3">
-      <span class="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-white"
-        >Tavsiya — afzal filial</span
+      <span class="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-white">{{
+        $t('cutting.branch.recommended')
+      }}</span
       ><BranchRow
         :branch="recommended"
         :selected="recommended.branch_id === modelValue"
@@ -114,7 +115,10 @@ function select(row: ClientBranchOption) {
         <span
           class="grid size-7 place-items-center rounded-full bg-accent-soft text-[11px] text-accent"
           >{{ initials(rows[0].workshop_name) }}</span
-        >{{ rows[0].workshop_name }} <span class="text-ink-muted">{{ rows.length }} filial</span>
+        >{{ rows[0].workshop_name }}
+        <span class="text-ink-muted"
+          >{{ rows.length }} {{ $t('cutting.unit.branch', rows.length) }}</span
+        >
       </div>
       <BranchRow
         v-for="row in rows"
@@ -130,7 +134,7 @@ function select(row: ClientBranchOption) {
       v-if="filtered.length === 0"
       class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-4 text-center text-sm text-ink-muted"
     >
-      Mos filial topilmadi.
+      {{ $t('cutting.branch.noMatches') }}
     </div>
   </div>
 </template>

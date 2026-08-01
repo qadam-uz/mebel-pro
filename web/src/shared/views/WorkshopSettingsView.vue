@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { apiTraceId } from '@/shared/api/client'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
@@ -22,6 +23,7 @@ const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const files = useFilesStore()
 const toast = useToast()
+const { t } = useI18n()
 const form = reactive({
   name: '',
   logoFileId: '',
@@ -54,11 +56,9 @@ async function onLogoSelect(file: File) {
     const uploaded = await files.upload(file)
     form.logoFileId = uploaded.id
     saved.value = false
-    toast.success('Logo yuklandi. Saqlashni unutmang.')
+    toast.success(t('workshopAdmin.settings.logoUploaded'))
   } catch {
-    logoError.value = files.traceId
-      ? `Logoni yuklab bo'lmadi · trace_id: ${files.traceId}`
-      : "Logoni yuklab bo'lmadi"
+    logoError.value = t('workshopAdmin.settings.logoUploadFailed') + traceSuffix(files.traceId)
   }
 }
 
@@ -87,7 +87,7 @@ async function save() {
       logo_file_id: form.logoFileId || null,
     })
     saved.value = true
-    toast.success('Ustaxona sozlamalari saqlandi.')
+    toast.success(t('workshopAdmin.settings.saved'))
   } catch (caught) {
     Object.assign(
       fieldErrors,
@@ -114,13 +114,13 @@ onMounted(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Ustaxona sozlamalari</h1>
+        <h1>{{ $t('workshopAdmin.settings.title') }}</h1>
       </div>
     </div>
 
     <div v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu sahifa faqat ustaxona rahbariga ochiq</h3>
-      <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona rahbariga murojaat qiling.</p>
+      <h3>{{ $t('workshopAdmin.settings.ownerOnlyTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.settings.ownerOnlyBody') }}</p>
     </div>
 
     <div v-else-if="workshop.setupLoading" class="card max-w-[720px] p-5" aria-live="polite">
@@ -130,14 +130,14 @@ onMounted(() => {
     </div>
 
     <div v-else-if="workshop.setupError" class="st-error max-w-[720px]">
-      <h3>Sozlamalarni yuklab bo'lmadi</h3>
+      <h3>{{ $t('workshopAdmin.settings.loadFailed') }}</h3>
       <p>{{ traceLine(workshop.setupTraceId) }}</p>
     </div>
 
     <form v-else class="card max-w-[720px]" novalidate @submit.prevent="save">
       <div class="card-b">
         <label class="field" for="workshop-settings-name">
-          <span>Ustaxona nomi</span>
+          <span>{{ $t('workshopAdmin.settings.name') }}</span>
           <input
             id="workshop-settings-name"
             v-model="form.name"
@@ -153,23 +153,25 @@ onMounted(() => {
         <ImageUploadField
           id="workshop-logo-upload"
           :file-id="form.logoFileId || null"
-          alt="Ustaxona logosi"
-          label="Logo"
-          title="Ustaxona logotipi"
+          :alt="$t('workshopAdmin.settings.logoAlt')"
+          :label="$t('workshopAdmin.settings.logoLabel')"
+          :title="$t('workshopAdmin.settings.logoTitle')"
           accept="image/png,image/jpeg,image/webp"
-          helper="PNG, JPG yoki WebP. Saqlashdan keyin logo profilga biriktiriladi."
+          :helper="$t('workshopAdmin.settings.logoHelper')"
           :uploading="files.uploading"
           :error="logoError"
           @select="onLogoSelect"
           @remove="removeLogo"
         />
         <div class="mt-5 flex items-center justify-end gap-3">
-          <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
+          <p v-if="saved" class="text-sm font-bold text-success">
+            {{ $t('workshopAdmin.action.saved') }}
+          </p>
           <p v-else-if="saveError" class="text-sm font-bold text-danger">
-            Saqlab bo'lmadi{{ traceSuffix(saveTraceId) }}
+            {{ $t('workshopAdmin.action.saveFailed') }}{{ traceSuffix(saveTraceId) }}
           </p>
           <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
-            {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+            {{ saving ? $t('workshopAdmin.action.saving') : $t('workshopAdmin.action.save') }}
           </button>
         </div>
       </div>

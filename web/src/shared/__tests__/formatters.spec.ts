@@ -4,7 +4,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatDateTime,
-  formatRelativeUz,
+  formatRelative,
   formatStockQuantity,
   formatStockUnit,
   formatTiyin,
@@ -21,10 +21,10 @@ describe('shared formatters', () => {
   })
 
   it('formats calendar-relative age in Uzbek', () => {
-    expect(formatRelativeUz(new Date())).toBe('bugun')
+    expect(formatRelative(new Date())).toBe('bugun')
     const threeDaysAgo = new Date()
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
-    expect(formatRelativeUz(threeDaysAgo)).toBe('3 kun oldin')
+    expect(formatRelative(threeDaysAgo)).toBe('3 kun oldin')
   })
 
   it('formats dates with the Uzbek locale seed', () => {

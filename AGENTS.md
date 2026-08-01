@@ -44,7 +44,7 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
 ## Check gates (run before pushing)
 
 - `backend/`: `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`
-- `web/`: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`
+- `web/`: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm i18n:check && pnpm test && pnpm build`
 - `e2e/`: `pnpm typecheck && pnpm test`
 
 > ⚠️ CI (`.github/workflows/ci.yml`) mirrors these gates and **auto-deploys to production on a

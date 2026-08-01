@@ -34,7 +34,7 @@ function runToastAction(toast: Toast) {
           <button
             type="button"
             class="mp-toast-close"
-            aria-label="Yopish"
+            :aria-label="$t('shell.action.close')"
             @click="dismiss(toast.id)"
           >
             ×

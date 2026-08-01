@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -13,6 +14,7 @@ import {
 } from '@/shared/stores/finance'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
+const { t } = useI18n()
 const finance = useFinanceStore()
 const workshop = useWorkshopStore()
 const permissions = useWorkshopPermissions()
@@ -54,14 +56,14 @@ function edgeLengthLines(row: WorkerProductionRow): EdgeCellLine[] {
     }))
   }
   return Object.entries(row.edge_length_by_material).map(([key, length]) => ({
-    label: `Material ${key.slice(0, 8)}`,
+    label: t('finance.labour.materialFallback', { id: key.slice(0, 8) }),
     length: formatStockQuantity(length, 'm'),
   }))
 }
 
 function thicknessLines(row: WorkerProductionRow): EdgeCellLine[] {
   return row.edge_length_by_thickness.map((line) => ({
-    label: line.thickness_mm ? `${line.thickness_mm} mm` : "Noma'lum",
+    label: line.thickness_mm ? `${line.thickness_mm} mm` : t('finance.labour.unknownThickness'),
     length: formatStockQuantity(line.length_mm, 'm'),
   }))
 }
@@ -104,12 +106,12 @@ watch([dateFrom, dateTo], () => {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Xodimlar mehnati</h1>
+        <h1 class="font-serif text-3xl font-semibold text-ink">{{ $t('finance.labour.title') }}</h1>
       </div>
     </div>
 
     <section v-if="!canViewFinance" class="mp-surface p-5 text-sm font-bold text-warning">
-      Ishlab chiqarish hisobotlariga ruxsatingiz yo'q.
+      {{ $t('finance.labour.denied') }}
     </section>
 
     <!-- Bare filter row on the page background, like every other page — this was
@@ -126,18 +128,18 @@ watch([dateFrom, dateTo], () => {
       v-if="canViewFinance && finance.loading"
       class="mp-surface p-5 text-sm font-bold text-ink-soft"
     >
-      Hisobot yuklanmoqda
+      {{ $t('finance.labour.loading') }}
     </section>
     <section v-else-if="finance.error" class="mp-surface p-5" role="alert">
-      <p class="text-sm font-bold text-danger">Hisobotni yuklab bo'lmadi.</p>
-      <p class="mt-1 text-sm text-ink-soft">Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <p class="text-sm font-bold text-danger">{{ $t('finance.labour.loadFailed') }}</p>
+      <p class="mt-1 text-sm text-ink-soft">{{ $t('finance.error.checkConnection') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="finance.loading"
         @click="refresh"
       >
-        Qayta urinish
+        {{ $t('common.action.retry') }}
       </button>
       <p v-if="finance.traceId" class="mt-3 text-xs text-ink-muted">
         trace_id: {{ finance.traceId }}
@@ -147,19 +149,19 @@ watch([dateFrom, dateTo], () => {
       v-else-if="!finance.production || finance.production.rows.length === 0"
       class="mp-surface p-5 text-sm text-ink-soft"
     >
-      Bu davrda ishlab chiqarish yo'q.
+      {{ $t('finance.labour.empty') }}
     </section>
     <section v-else class="mp-surface overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full text-left text-sm">
           <thead class="bg-sunk text-xs uppercase text-ink-muted">
             <tr>
-              <th class="px-5 py-3">Xodim</th>
-              <th class="px-5 py-3 text-right">Kesilgan list</th>
-              <th class="px-5 py-3 text-right">Kesimlar</th>
-              <th class="px-5 py-3 text-right">Kromka qilingan buyurtma</th>
-              <th class="px-5 py-3">Kromka metri</th>
-              <th class="px-5 py-3">Qalinlik jamlanmasi</th>
+              <th class="px-5 py-3">{{ $t('finance.field.worker') }}</th>
+              <th class="px-5 py-3 text-right">{{ $t('finance.labour.colPanelsCut') }}</th>
+              <th class="px-5 py-3 text-right">{{ $t('finance.labour.colCuts') }}</th>
+              <th class="px-5 py-3 text-right">{{ $t('finance.labour.colOrdersBanded') }}</th>
+              <th class="px-5 py-3">{{ $t('finance.labour.colEdgeMetres') }}</th>
+              <th class="px-5 py-3">{{ $t('finance.labour.colThickness') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
@@ -176,7 +178,7 @@ watch([dateFrom, dateTo], () => {
               </td>
               <td class="px-5 py-3 text-xs">
                 <span v-if="edgeLengthLines(row).length === 0" class="text-ink-muted">
-                  Kromka metri yo'q
+                  {{ $t('finance.labour.noEdgeMetres') }}
                 </span>
                 <ul v-else class="grid min-w-52 gap-1">
                   <li
@@ -191,7 +193,7 @@ watch([dateFrom, dateTo], () => {
               </td>
               <td class="px-5 py-3 text-xs">
                 <span v-if="thicknessLines(row).length === 0" class="text-ink-muted">
-                  Jamlanma yo'q
+                  {{ $t('finance.labour.noThickness') }}
                 </span>
                 <ul v-else class="grid min-w-32 gap-1">
                   <li
@@ -208,7 +210,7 @@ watch([dateFrom, dateTo], () => {
           </tbody>
           <tfoot v-if="finance.production.rows.length > 1" class="border-t border-hairline-strong">
             <tr class="bg-sunk">
-              <td class="px-5 py-3 font-bold text-ink">Jami</td>
+              <td class="px-5 py-3 font-bold text-ink">{{ $t('common.field.total') }}</td>
               <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
                 {{ productionTotals.panelsCut }}
               </td>

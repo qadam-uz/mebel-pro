@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -18,6 +19,7 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const workshop = useWorkshopStore()
+const { t } = useI18n()
 
 const phone = ref('')
 const name = ref('')
@@ -34,7 +36,7 @@ const canResolve = computed(() => isUzPhone(phone.value) && !resolving.value)
 async function resolve() {
   error.value = null
   if (!isUzPhone(phone.value)) {
-    error.value = "Telefon raqamini to'g'ri kiriting."
+    error.value = t('orders.error.phoneInvalid')
     return
   }
   resolving.value = true
@@ -53,7 +55,7 @@ async function resolve() {
     const code = apiErrorCode(caught)
     error.value =
       code === 'client_name_required'
-        ? 'Yangi mijoz uchun ism kiriting.'
+        ? t('orders.error.clientNameRequired')
         : workshopErrorMessage(code)
   } finally {
     resolving.value = false
@@ -72,28 +74,36 @@ function enterEditor(clientId: string) {
   <section>
     <div class="page-head">
       <div>
-        <h1>Yangi buyurtma</h1>
+        <h1>{{ $t('orders.walkIn.title') }}</h1>
         <div class="sub">
-          {{ branch ? `${branch.name} · mijoz uchun` : 'Filial tanlang' }}
+          {{
+            branch
+              ? $t('orders.walkIn.branch', { branch: branch.name })
+              : $t('orders.walkIn.branchMissing')
+          }}
         </div>
       </div>
     </div>
 
     <div class="card max-w-[560px]">
       <div class="card-b grid gap-4">
-        <p class="text-sm text-ink-soft">
-          Mijozning telefon raqamini kiriting. Agar mijoz avval ro'yxatdan o'tgan bo'lsa, uni
-          topamiz; bo'lmasa, yangi mijoz sifatida qo'shamiz.
-        </p>
+        <p class="text-sm text-ink-soft">{{ $t('orders.walkIn.intro') }}</p>
 
         <template v-if="!matched">
           <label class="field">
-            <span>Telefon raqami</span>
+            <span>{{ $t('orders.walkIn.phone') }}</span>
             <PhoneInput v-model="phone" />
           </label>
           <label class="field">
-            <span>Ism <small class="text-ink-muted">(yangi mijoz uchun)</small></span>
-            <input v-model="name" class="mp-input" placeholder="Masalan: Dilshod" />
+            <span
+              >{{ $t('orders.walkIn.name') }}
+              <small class="text-ink-muted">{{ $t('orders.walkIn.nameHint') }}</small></span
+            >
+            <input
+              v-model="name"
+              class="mp-input"
+              :placeholder="$t('orders.walkIn.namePlaceholder')"
+            />
           </label>
 
           <p v-if="error" class="mp-field-error">{{ error }}</p>
@@ -105,7 +115,7 @@ function enterEditor(clientId: string) {
               :disabled="!canResolve"
               @click="resolve"
             >
-              {{ resolving ? 'Tekshirilmoqda…' : 'Davom etish' }}
+              {{ resolving ? $t('orders.walkIn.checking') : $t('orders.walkIn.continue') }}
             </button>
           </div>
         </template>
@@ -113,25 +123,22 @@ function enterEditor(clientId: string) {
         <template v-else>
           <div class="rounded-lg border border-hairline bg-sunk p-4">
             <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-              Topilgan mijoz
+              {{ $t('orders.walkIn.found') }}
             </div>
             <div class="mt-1 text-lg font-bold text-ink">{{ matched.name }}</div>
             <div class="font-mono text-sm text-ink-muted">{{ matched.phone }}</div>
           </div>
-          <p class="text-sm text-ink-soft">
-            Bu mijoz uchun buyurtma yaratilsinmi? Agar bu boshqa odam bo'lsa, orqaga qaytib raqamni
-            tekshiring.
-          </p>
+          <p class="text-sm text-ink-soft">{{ $t('orders.walkIn.confirm') }}</p>
           <div class="flex justify-between gap-2">
             <button type="button" class="mp-button mp-button-outline" @click="matched = null">
-              Orqaga
+              {{ $t('orders.walkIn.back') }}
             </button>
             <button
               type="button"
               class="mp-button mp-button-primary"
               @click="enterEditor(matched.id)"
             >
-              Ha, davom etish
+              {{ $t('orders.walkIn.confirmContinue') }}
             </button>
           </div>
         </template>

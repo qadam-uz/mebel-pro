@@ -1,4 +1,5 @@
 import { edgeFields } from '@/shared/app/cuttingDisplay'
+import { translate } from '@/shared/i18n'
 import type { ClientCatalogMaterialOption, CuttingPart } from '@/shared/stores/cutting'
 
 export interface EdgeRegistryColorStyle {
@@ -117,7 +118,9 @@ export function groupCuttingParts(
       group = {
         key,
         materialId,
-        label: materialId ? resolveMaterialLabel(materialId) : 'Material tanlanmagan',
+        label: materialId
+          ? resolveMaterialLabel(materialId)
+          : translate('cutting.material.unassigned'),
         parts: [],
         quantity: 0,
         areaM2: 0,
@@ -218,6 +221,6 @@ export function registryEntryForBand(
 }
 
 export function shortMaterialName(material: ClientCatalogMaterialOption | null | undefined) {
-  if (!material) return 'Material'
+  if (!material) return translate('cutting.material.fallback')
   return material.decor_code || material.name || material.color || material.id.slice(0, 8)
 }

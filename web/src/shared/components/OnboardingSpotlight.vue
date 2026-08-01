@@ -287,7 +287,7 @@ onBeforeUnmount(detachTarget)
         </p>
         <div class="mt-3 flex items-center justify-between gap-3">
           <span class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-deep">
-            {{ onboarding.activeHint.step }}-qadam
+            {{ $t('shell.onboarding.stepBadge', { n: onboarding.activeHint.step }) }}
           </span>
           <button
             ref="skipButtonRef"
@@ -295,7 +295,7 @@ onBeforeUnmount(detachTarget)
             class="mp-button mp-button-outline min-h-8 px-3 text-xs"
             @click="skip"
           >
-            Keyinroq
+            {{ $t('shell.onboarding.later') }}
           </button>
         </div>
       </div>

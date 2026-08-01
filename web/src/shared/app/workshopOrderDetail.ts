@@ -1,4 +1,5 @@
 import { parseSomToTiyin } from '@/shared/formatters'
+import { translate, translatePlural } from '@/shared/i18n'
 import type { OrderStatus } from '@/shared/stores/orders'
 
 // A manual price adjustment — a discount (chegirma) or a surcharge (ustama).
@@ -23,18 +24,18 @@ export function parseOrderAdjustmentDraft(
   if (kind === 'percent') {
     const percent = Number(valueText)
     if (!Number.isInteger(percent) || percent <= 0 || percent > 100) {
-      return { ok: false, message: 'Foizni 1 dan 100 gacha butun son qilib kiriting.' }
+      return { ok: false, message: translate('orders.adjustment.percentError') }
     }
-    if (!reason) return { ok: false, message: 'Sababni kiriting.' }
+    if (!reason) return { ok: false, message: translate('orders.adjustment.reasonError') }
     return { ok: true, payload: { kind: 'percent', value: percent, reason } }
   }
   // Fixed sum is entered in so'm and stored as tiyin — parseSomToTiyin rejects
   // zero, blanks, and unparseable input (returns null).
   const tiyin = parseSomToTiyin(valueText)
   if (tiyin === null) {
-    return { ok: false, message: "Qiymatni to'g'ri kiriting — masalan: 50 000." }
+    return { ok: false, message: translate('orders.adjustment.valueError') }
   }
-  if (!reason) return { ok: false, message: 'Sababni kiriting.' }
+  if (!reason) return { ok: false, message: translate('orders.adjustment.reasonError') }
   return { ok: true, payload: { kind: 'fixed', value: tiyin, reason } }
 }
 
@@ -80,10 +81,18 @@ export function revertTargetLabelForOrder(order: {
   status: OrderStatus
   has_banding: boolean
 }): string {
-  if (order.status === 'cutting') return 'tasdiqlangan holatiga'
-  if (order.status === 'edge_banding') return 'kesishga'
-  if (order.status === 'ready') return order.has_banding ? 'kromkaga' : 'kesishga'
+  if (order.status === 'cutting') return translate('orders.revertTarget.confirmed')
+  if (order.status === 'edge_banding') return translate('orders.revertTarget.cutting')
+  if (order.status === 'ready')
+    return order.has_banding
+      ? translate('orders.revertTarget.banding')
+      : translate('orders.revertTarget.cutting')
   return ''
+}
+
+/** "kesishga qaytarish" — the revert action named by where it lands. */
+function revertActionLabel(order: { status: OrderStatus; has_banding: boolean }): string {
+  return translate('orders.action.revertTo', { target: revertTargetLabelForOrder(order) })
 }
 
 export function workshopOrderListActions(
@@ -96,61 +105,49 @@ export function workshopOrderListActions(
   // The start action is the queued order's primary forward action for whoever
   // may perform it (the assigned master, or the office on-behalf).
   if (order.status === 'confirmed' && access.canCompleteCutting && order.assigned_cutter_user_id) {
-    actions.push({ kind: 'start_cutting', label: 'Kesishni boshlash' })
+    actions.push({ kind: 'start_cutting', label: translate('orders.action.startCutting') })
   }
 
   if (access.canManageOrders) {
     if (order.status === 'new') {
-      actions.push({ kind: 'approve', label: 'Tasdiqlash' })
-      actions.push({ kind: 'cancel', label: 'Bekor qilish', danger: true })
+      actions.push({ kind: 'approve', label: translate('orders.action.approve') })
+      actions.push({ kind: 'cancel', label: translate('orders.action.cancel'), danger: true })
     } else if (order.status === 'confirmed') {
-      actions.push({ kind: 'assign', label: 'Tayinlash' })
-      actions.push({ kind: 'cancel', label: 'Bekor qilish', danger: true })
+      actions.push({ kind: 'assign', label: translate('orders.action.assign') })
+      actions.push({ kind: 'cancel', label: translate('orders.action.cancel'), danger: true })
     }
   }
 
   if (order.status === 'cutting') {
     if (access.canCompleteCutting && order.assigned_cutter_user_id) {
-      actions.push({ kind: 'complete_cutting', label: 'Kesish tugadi' })
+      actions.push({ kind: 'complete_cutting', label: translate('orders.action.completeCutting') })
     }
     if (access.canManageOrders) {
       if (!order.assigned_cutter_user_id) {
-        actions.push({ kind: 'assign', label: 'Kesuvchini tanlash' })
+        actions.push({ kind: 'assign', label: translate('orders.action.pickCutter') })
       }
-      actions.push({
-        kind: 'revert',
-        label: `${revertTargetLabelForOrder(order)} qaytarish`,
-        danger: true,
-      })
+      actions.push({ kind: 'revert', label: revertActionLabel(order), danger: true })
     }
   }
 
   if (order.status === 'edge_banding') {
     if (access.canCompleteBanding && order.assigned_edger_user_id) {
       if (!order.banding_started_at) {
-        actions.push({ kind: 'start_banding', label: 'Kromka boshlash' })
+        actions.push({ kind: 'start_banding', label: translate('orders.action.startBanding') })
       }
-      actions.push({ kind: 'complete_banding', label: 'Kromka tugadi' })
+      actions.push({ kind: 'complete_banding', label: translate('orders.action.completeBanding') })
     }
     if (access.canManageOrders) {
       if (!order.assigned_edger_user_id) {
-        actions.push({ kind: 'assign', label: 'Kromka ustasini tanlash' })
+        actions.push({ kind: 'assign', label: translate('orders.action.pickEdger') })
       }
-      actions.push({
-        kind: 'revert',
-        label: `${revertTargetLabelForOrder(order)} qaytarish`,
-        danger: true,
-      })
+      actions.push({ kind: 'revert', label: revertActionLabel(order), danger: true })
     }
   }
 
   if (order.status === 'ready' && access.canManageOrders) {
-    actions.push({ kind: 'mark_collected', label: 'Mijoz olib ketdi' })
-    actions.push({
-      kind: 'revert',
-      label: `${revertTargetLabelForOrder(order)} qaytarish`,
-      danger: true,
-    })
+    actions.push({ kind: 'mark_collected', label: translate('orders.action.markCollected') })
+    actions.push({ kind: 'revert', label: revertActionLabel(order), danger: true })
   }
 
   if (
@@ -158,10 +155,10 @@ export function workshopOrderListActions(
     !['completed', 'cancelled'].includes(order.status) &&
     !actions.some((action) => action.kind === 'cancel')
   ) {
-    actions.push({ kind: 'cancel', label: 'Bekor qilish', danger: true })
+    actions.push({ kind: 'cancel', label: translate('orders.action.cancel'), danger: true })
   }
 
-  actions.push({ kind: 'detail', label: 'Tafsilotlar' })
+  actions.push({ kind: 'detail', label: translate('orders.action.detail') })
   return actions
 }
 
@@ -174,8 +171,10 @@ function summedRecordValue(value: unknown): number | null {
   return total > 0 ? total : null
 }
 
-function formatMetres(mm: number) {
-  return `${String(mm / 1000).replace(',', '.')} m`
+// Bare number — the unit sits in the message, which is where a locale can move
+// or respell it.
+function metresValue(mm: number) {
+  return String(mm / 1000).replace(',', '.')
 }
 
 // A same-status `edited` event (orders.md "Revising a placed order") — the
@@ -195,13 +194,22 @@ export function revisionTimelineDetails(
     typeof metadata.previous_total_tiyin === 'number' ? metadata.previous_total_tiyin : null
   const next = typeof metadata.total_tiyin === 'number' ? metadata.total_tiyin : null
   if (previous !== null && next !== null && previous !== next) {
-    details.push(`Narx: ${formatMoney(previous)} → ${formatMoney(next)}`)
+    details.push(
+      translate('orders.timeline.price', {
+        from: formatMoney(previous),
+        to: formatMoney(next),
+      }),
+    )
   }
   if (typeof metadata.discount_cleared_tiyin === 'number') {
-    details.push(`Chegirma bekor qilindi: ${formatMoney(metadata.discount_cleared_tiyin)}`)
+    details.push(
+      translate('orders.timeline.discountCleared', {
+        amount: formatMoney(metadata.discount_cleared_tiyin),
+      }),
+    )
   }
   if (metadata.edger_assignment_cleared === true) {
-    details.push('Krom tayinlovi olib tashlandi')
+    details.push(translate('orders.timeline.edgerCleared'))
   }
   return details
 }
@@ -215,13 +223,15 @@ export function productionTimelineDetails(
   const details: string[] = []
   const creditedUserId =
     typeof metadata.credited_user_id === 'string' ? metadata.credited_user_id : null
-  if (creditedUserId) details.push(`Bajardi: ${workerName(creditedUserId)}`)
+  if (creditedUserId)
+    details.push(translate('orders.timeline.completedBy', { name: workerName(creditedUserId) }))
 
   const panelCount = summedRecordValue(metadata.panel_demands)
-  if (panelCount !== null) details.push(`List sarfi: ${panelCount} list`)
+  if (panelCount !== null) details.push(translatePlural('orders.timeline.panelUsage', panelCount))
 
   const edgeMillimetres = summedRecordValue(metadata.edge_demands)
-  if (edgeMillimetres !== null) details.push(`Kromka sarfi: ${formatMetres(edgeMillimetres)}`)
+  if (edgeMillimetres !== null)
+    details.push(translate('orders.timeline.edgeUsage', { value: metresValue(edgeMillimetres) }))
 
   return details
 }

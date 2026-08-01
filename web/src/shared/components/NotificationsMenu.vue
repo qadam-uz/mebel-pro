@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import {
@@ -22,6 +23,7 @@ const router = useRouter()
 const roleConfig = useRoleConfig()
 const rolePath = useRolePath()
 const toast = useToast()
+const { t } = useI18n()
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
@@ -32,8 +34,11 @@ const isClient = computed(() => roleConfig.role === 'client')
 const isWorkshop = computed(() => roleConfig.role === 'workshop')
 const isAdmin = computed(() => roleConfig.role === 'admin')
 // Accessible name for the dropdown + its header (notifications.md: a proper menu
-// with a descriptive name). Uzbek is the only shipped locale in all three apps.
-const menuLabel = 'Bildirishnomalar'
+// with a descriptive name), shared by the panel's `aria-label` and its heading.
+const menuLabel = computed(() => t('shell.notifications.title'))
+const bellLabel = computed(() =>
+  t('shell.notifications.bellAria', { n: notifications.unread }, notifications.unread),
+)
 const menuPositionClass = computed(() =>
   isAdmin.value
     ? 'fixed inset-x-4 top-16 mt-0 w-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(360px,calc(100vw-2rem))]'
@@ -113,7 +118,7 @@ async function openItem(item: NotificationItem) {
   if (!to) {
     // No viewable target (entity gone / not visible): don't silently mark read —
     // tell the user and keep the row unread (CB-125).
-    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    toast.warn(t('shell.notifications.notOpenable'))
     return
   }
   // markRead is best-effort: opening the entity is the user's intent, so navigate
@@ -134,12 +139,12 @@ async function openAll() {
 async function markAllRead() {
   await notifications.markAllRead()
   if (notifications.actionError) {
-    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('shell.notifications.markAllFailed'))
     return
   }
   await notifications.loadList()
   listLoadedAt = Date.now()
-  toast.success("Hammasi o'qilgan deb belgilandi.")
+  toast.success(t('shell.notifications.markAllDone'))
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -175,7 +180,7 @@ let primed = false
 watch(
   () => notifications.unread,
   (unread) => {
-    if (primed && unread > seenUnread) toast.success('Yangi bildirishnoma bor.')
+    if (primed && unread > seenUnread) toast.success(t('shell.notifications.newArrived'))
     seenUnread = unread
   },
 )
@@ -209,7 +214,7 @@ onBeforeUnmount(() => {
       :class="isClient ? 'client-icon-button' : isWorkshop ? 'workshop-bell' : 'admin-icon-button'"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :aria-label="`Bildirishnomalar — ${notifications.unread} o'qilmagan`"
+      :aria-label="bellLabel"
       @click="toggle"
     >
       <template v-if="isClient || isWorkshop || isAdmin">
@@ -228,7 +233,7 @@ onBeforeUnmount(() => {
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
       </template>
-      <template v-else>Bildirishnomalar</template>
+      <template v-else>{{ menuLabel }}</template>
       <span
         v-if="notifications.unread > 0"
         :class="
@@ -257,17 +262,17 @@ onBeforeUnmount(() => {
           :disabled="notifications.unread === 0"
           @click="markAllRead"
         >
-          Hammasini o'qilgan deb belgilash
+          {{ $t('shell.notifications.markAll') }}
         </button>
       </div>
       <div v-if="notifications.loading" class="px-4 py-5 text-sm font-bold text-ink-soft">
-        Bildirishnomalar yuklanmoqda…
+        {{ $t('shell.notifications.loading') }}
       </div>
       <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-bold text-danger">
-        Bildirishnomalarni yuklab bo'lmadi. Qayta urinib ko'ring.
+        {{ $t('shell.notifications.loadFailedMenu') }}
       </div>
       <div v-else-if="notifications.items.length === 0" class="px-4 py-5 text-sm text-ink-soft">
-        Bildirishnoma yo'q — buyurtma va ombor hodisalari shu yerda chiqadi.
+        {{ $t('shell.notifications.emptyMenu') }}
       </div>
       <template v-else>
         <button
@@ -305,7 +310,7 @@ onBeforeUnmount(() => {
         class="block w-full border-t border-hairline px-4 py-3 text-center text-xs font-bold text-accent transition hover:bg-sunk"
         @click="openAll"
       >
-        Hammasini ko'rish
+        {{ $t('shell.notifications.viewAll') }}
       </button>
     </div>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -20,7 +21,7 @@ import {
   grantSummary,
   initials,
   loginPrefix,
-  permissionLabels,
+  permissionLabel,
   workshopErrorMessage,
 } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
@@ -40,6 +41,7 @@ const workshop = useWorkshopStore()
 const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
+const { t } = useI18n()
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
@@ -75,10 +77,10 @@ async function copyTempPassword(value: string | null) {
   if (!value) return
   const ok = await copyText(value)
   if (!ok) {
-    toast.danger("Nusxalab bo'lmadi. Parolni belgilab, qo'lda nusxalang.")
+    toast.danger(t('workshopAdmin.staff.copyFailed'))
     return
   }
-  toast.success('Parol nusxalandi.')
+  toast.success(t('workshopAdmin.staff.passwordCopied'))
   copiedTempPassword.value = true
   window.clearTimeout(copiedResetTimer)
   copiedResetTimer = window.setTimeout(() => {
@@ -111,14 +113,14 @@ const branchOptions = computed(() => [
   })),
 ])
 const branchFilterOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: 'Barcha filiallar' },
+  { value: 'all', label: t('workshopAdmin.staff.allBranches') },
   ...workshop.branches.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
-const statusOptions: DropdownOption[] = [
-  { value: 'all', label: 'Hammasi' },
-  { value: 'active', label: 'Faol', dot: 'success' },
-  { value: 'blocked', label: 'Bloklangan', dot: 'danger' },
-]
+const statusOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('workshopAdmin.staff.statusAll') },
+  { value: 'active', label: t('workshopAdmin.staff.statusActive'), dot: 'success' },
+  { value: 'blocked', label: t('workshopAdmin.staff.statusBlocked'), dot: 'danger' },
+])
 const createGrantBranches = computed(() =>
   workshop.branches.filter((branch) => form.branchIds.includes(branch.id)),
 )
@@ -131,11 +133,14 @@ const homeBranchName = computed(() =>
 
 function branchName(id: string | null) {
   if (!id) return '—'
-  return workshop.branches.find((branch) => branch.id === id)?.name ?? 'Filial'
+  return (
+    workshop.branches.find((branch) => branch.id === id)?.name ??
+    t('workshopAdmin.staff.branchFallback')
+  )
 }
 
 function lastLoginLabel(value: string | null) {
-  return value ? formatDate(value) : "Hali yo'q"
+  return value ? formatDate(value) : t('workshopAdmin.staff.neverLoggedIn')
 }
 
 function userFilters() {
@@ -234,7 +239,8 @@ function validateCreateStaff() {
   staffFieldErrors.fullName = requiredText(form.fullName) ?? undefined
   staffFieldErrors.phone = requiredText(form.phone) ?? uzPhone(form.phone) ?? undefined
   staffFieldErrors.login = requiredText(form.login) ?? undefined
-  staffFieldErrors.branches = form.branchIds.length > 0 ? undefined : 'Kamida bitta filial tanlang.'
+  staffFieldErrors.branches =
+    form.branchIds.length > 0 ? undefined : t('workshopAdmin.staff.branchRequired')
   staffFieldErrors.tempPassword = tempPassword(form.tempPassword) ?? undefined
   const hasErrors = staffFieldOrder.some((field) => Boolean(staffFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(staffFieldErrors, staffFieldOrder, staffFieldIds)
@@ -301,7 +307,7 @@ async function createStaff() {
     selected.value = new Set()
     showCreate.value = false
     createdTempPassword.value = created.temp_password
-    toast.success("Xodim qo'shildi.")
+    toast.success(t('workshopAdmin.staff.created'))
   } catch (caught) {
     Object.assign(
       staffFieldErrors,
@@ -358,19 +364,19 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Xodimlar ro'yxati</h1>
+        <h1>{{ $t('workshopAdmin.staff.title') }}</h1>
       </div>
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
-      <p>Xodimlar va ruxsatlar matritsasini rahbar boshqaradi.</p>
+      <h3>{{ $t('workshopAdmin.access.ownerOnlyTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.staff.ownerOnlyBody') }}</p>
     </section>
 
     <template v-else>
       <AppModal
         :open="showCreate"
-        title="Yangi xodim"
+        :title="$t('workshopAdmin.staff.createTitle')"
         max-width="max-w-2xl"
         @close="showCreate = false"
       >
@@ -379,7 +385,7 @@ onBeforeUnmount(() => {
         <form class="grid grid-cols-1 gap-4" novalidate @submit.prevent="createStaff">
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="staff-full-name">
-              <span>F.I.O</span>
+              <span>{{ $t('workshopAdmin.staff.fullName') }}</span>
               <input
                 id="staff-full-name"
                 v-model="form.fullName"
@@ -398,7 +404,7 @@ onBeforeUnmount(() => {
               </span>
             </label>
             <label class="field" for="staff-phone">
-              <span>Telefon</span>
+              <span>{{ $t('workshopAdmin.staff.phone') }}</span>
               <PhoneInput
                 id="staff-phone"
                 v-model="form.phone"
@@ -411,7 +417,7 @@ onBeforeUnmount(() => {
               </span>
             </label>
             <label class="field" for="staff-login">
-              <span>Login</span>
+              <span>{{ $t('workshopAdmin.staff.login') }}</span>
               <input
                 id="staff-login"
                 v-model="form.login"
@@ -425,7 +431,7 @@ onBeforeUnmount(() => {
                 @focus="collapseLoginCaret"
               />
               <span v-if="!staffFieldErrors.login" id="staff-login-hint" class="mp-field-hint">
-                Ustaxona prefiksi — o'zgartirish mumkin.
+                {{ $t('workshopAdmin.staff.loginHint') }}
               </span>
               <span v-if="staffFieldErrors.login" id="staff-login-error" class="mp-field-error">
                 {{ staffFieldErrors.login }}
@@ -435,25 +441,33 @@ onBeforeUnmount(() => {
               <MultiSelectFilter
                 id="staff-branches"
                 v-model="form.branchIds"
-                label="Filiallar"
+                :label="$t('workshopAdmin.staff.branches')"
                 :options="branchOptions"
-                empty-label="Filial tanlang"
-                selected-label="filial tanlandi"
+                :empty-label="$t('workshopAdmin.staff.branchesEmpty')"
+                :selected-label="$t('workshopAdmin.staff.branchesSelected')"
                 :error="staffFieldErrors.branches"
                 required
               />
-              <p v-if="homeBranchName" class="text-xs text-ink-soft">
-                Asosiy filial: <b class="text-ink">{{ homeBranchName }}</b> (birinchi tanlangan)
-              </p>
+              <i18n-t
+                v-if="homeBranchName"
+                keypath="workshopAdmin.staff.homeBranchNote"
+                tag="p"
+                scope="global"
+                class="text-xs text-ink-soft"
+              >
+                <template #branch>
+                  <b class="text-ink">{{ homeBranchName }}</b>
+                </template>
+              </i18n-t>
             </div>
             <label class="field md:col-span-2" for="staff-temp-password">
-              <span>Vaqtinchalik parol</span>
+              <span>{{ $t('workshopAdmin.staff.tempPassword') }}</span>
               <input
                 id="staff-temp-password"
                 v-model="form.tempPassword"
                 class="mp-input"
                 autocomplete="new-password"
-                placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
+                :placeholder="$t('workshopAdmin.staff.tempPasswordPlaceholder')"
                 :aria-invalid="!!staffFieldErrors.tempPassword"
                 :aria-describedby="
                   staffFieldErrors.tempPassword ? 'staff-temp-password-error' : undefined
@@ -470,21 +484,18 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="banner info">
-            <div class="grow">
-              Vaqtinchalik parol faqat 1 marta ko'rsatiladi. Xodim kirgandan keyin parolni yangilash
-              haqida ogohlantirish ko'radi.
-            </div>
+            <div class="grow">{{ $t('workshopAdmin.staff.tempPasswordNotice') }}</div>
           </div>
 
           <div>
             <h3 class="mb-2 text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
-              Boshlang'ich ruxsatlar
+              {{ $t('workshopAdmin.staff.initialGrants') }}
             </h3>
             <div v-if="createGrantBranches.length > 0" class="table-wrap">
               <table class="matrix">
                 <thead>
                   <tr>
-                    <th class="permission">Ruxsat</th>
+                    <th class="permission">{{ $t('workshopAdmin.staff.colPermission') }}</th>
                     <th v-for="branch in createGrantBranches" :key="branch.id">
                       {{ branch.name }}
                     </th>
@@ -493,7 +504,7 @@ onBeforeUnmount(() => {
                 <tbody>
                   <tr v-for="permission in permissionCatalog" :key="permission">
                     <td class="permission">
-                      {{ permissionLabels[permission] ?? permission }}
+                      {{ permissionLabel(permission) }}
                       <small class="block font-mono text-[10.5px] font-normal text-ink-muted">{{
                         permission
                       }}</small>
@@ -502,7 +513,12 @@ onBeforeUnmount(() => {
                       <input
                         type="checkbox"
                         class="size-4 accent-accent"
-                        :aria-label="`${permissionLabels[permission] ?? permission} — ${branch.name}`"
+                        :aria-label="
+                          $t('workshopAdmin.staff.permissionCell', {
+                            permission: permissionLabel(permission),
+                            branch: branch.name,
+                          })
+                        "
                         :checked="selected.has(grantKey(permission, branch.id))"
                         @change="toggleGrant(permission, branch.id)"
                       />
@@ -512,12 +528,12 @@ onBeforeUnmount(() => {
               </table>
             </div>
             <div v-else class="st-empty !border-0 !py-6">
-              <h3>Filial tanlang</h3>
+              <h3>{{ $t('workshopAdmin.staff.branchesEmpty') }}</h3>
             </div>
           </div>
 
           <button class="mp-button mp-button-primary" type="submit" :disabled="creating">
-            {{ creating ? "Qo'shilmoqda" : "Qo'shish" }}
+            {{ creating ? $t('workshopAdmin.action.adding') : $t('workshopAdmin.action.add') }}
           </button>
           <p
             v-if="createError"
@@ -530,7 +546,7 @@ onBeforeUnmount(() => {
 
       <div v-if="createdTempPassword" class="banner info" role="status">
         <div class="grow">
-          <b>Vaqtinchalik parol</b>
+          <b>{{ $t('workshopAdmin.staff.tempPassword') }}</b>
           <div class="mt-1.5 flex flex-wrap items-center gap-2">
             <span
               class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
@@ -542,29 +558,36 @@ onBeforeUnmount(() => {
               class="mp-button mp-button-outline min-h-9 px-3 text-xs"
               @click="copyTempPassword(createdTempPassword)"
             >
-              {{ copiedTempPassword ? 'Nusxalandi' : 'Nusxalash' }}
+              {{
+                copiedTempPassword
+                  ? $t('workshopAdmin.action.copied')
+                  : $t('workshopAdmin.action.copy')
+              }}
             </button>
           </div>
-          <p class="mt-1.5 text-xs">
-            Bu parol faqat 1 marta ko'rsatiladi — xodimga yetkazib qo'ying.
-          </p>
+          <p class="mt-1.5 text-xs">{{ $t('workshopAdmin.staff.tempPasswordOnce') }}</p>
         </div>
       </div>
 
       <div class="mp-filters">
         <label class="mp-filter-input">
-          <span>Qidirish</span>
-          <input v-model="search" placeholder="Ism yoki login" />
+          <span>{{ $t('workshopAdmin.staff.search') }}</span>
+          <input v-model="search" :placeholder="$t('workshopAdmin.staff.searchPlaceholder')" />
         </label>
         <ProjectDropdown
           v-model="branchFilter"
-          label="Filial"
+          :label="$t('workshopAdmin.staff.branchFilter')"
           :options="branchFilterOptions"
           top-label
         />
-        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <ProjectDropdown
+          v-model="statusFilter"
+          :label="$t('workshopAdmin.staff.statusFilter')"
+          :options="statusOptions"
+          top-label
+        />
         <button type="button" class="mp-button mp-button-primary" @click="openCreateForm">
-          + Yangi xodim
+          {{ $t('workshopAdmin.staff.create') }}
         </button>
       </div>
 
@@ -572,7 +595,7 @@ onBeforeUnmount(() => {
         :active="activeUserFilterCount > 0"
         :loading="workshop.loading"
         :count="workshop.users.length"
-        noun="xodim"
+        :noun="$t('workshopAdmin.staff.filterNoun')"
         :on-reset="activeUserFilterCount > 1 ? resetUserFilters : null"
       />
 
@@ -585,7 +608,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section v-else-if="workshop.error" class="st-error">
-        <h3>Xodimlarni yuklab bo'lmadi</h3>
+        <h3>{{ $t('workshopAdmin.staff.loadFailed') }}</h3>
         <p>{{ traceLine(workshop.traceId) }}</p>
       </section>
 
@@ -594,12 +617,12 @@ onBeforeUnmount(() => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>Xodim</th>
-                <th>Login</th>
-                <th>Asosiy filial</th>
-                <th>Ruxsatlar</th>
-                <th>Oxirgi kirish</th>
-                <th>Holat</th>
+                <th>{{ $t('workshopAdmin.staff.colStaff') }}</th>
+                <th>{{ $t('workshopAdmin.staff.colLogin') }}</th>
+                <th>{{ $t('workshopAdmin.staff.colHomeBranch') }}</th>
+                <th>{{ $t('workshopAdmin.staff.colGrants') }}</th>
+                <th>{{ $t('workshopAdmin.staff.colLastLogin') }}</th>
+                <th>{{ $t('workshopAdmin.staff.colStatus') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -617,7 +640,9 @@ onBeforeUnmount(() => {
                         >
                           {{ user.full_name }}
                         </RouterLink>
-                        <span v-if="user.is_owner" class="pill p-cut ml-1">Rahbar</span>
+                        <span v-if="user.is_owner" class="pill p-cut ml-1">
+                          {{ $t('workshopAdmin.staff.owner') }}
+                        </span>
                       </span>
                       <small class="block truncate text-ink-muted">{{ user.phone }}</small>
                     </span>
@@ -633,19 +658,30 @@ onBeforeUnmount(() => {
                 <td class="num text-ink-muted">{{ lastLoginLabel(user.last_login_at) }}</td>
                 <td>
                   <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
-                    <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
+                    <span class="pd"></span>
+                    {{
+                      user.status === 'active'
+                        ? $t('workshopAdmin.staff.statusActive')
+                        : $t('workshopAdmin.staff.statusBlocked')
+                    }}
                   </span>
                 </td>
               </tr>
               <tr v-if="workshop.users.length === 0">
                 <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
-                    <h3>{{ search.trim() ? 'Mos xodim topilmadi' : "Hali xodim yo'q" }}</h3>
+                    <h3>
+                      {{
+                        search.trim()
+                          ? $t('workshopAdmin.staff.emptyFilteredTitle')
+                          : $t('workshopAdmin.staff.emptyTitle')
+                      }}
+                    </h3>
                     <p>
                       {{
                         search.trim()
-                          ? "Ism yoki login bo'yicha qidiruvni o'zgartiring."
-                          : "«+ Yangi xodim» orqali birinchi xodimni qo'shing."
+                          ? $t('workshopAdmin.staff.emptyFilteredBody')
+                          : $t('workshopAdmin.staff.emptyBody')
                       }}
                     </p>
                   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { nextStableId } from '@/shared/app/listboxNav'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const { t } = useI18n()
+
 const DOT_CLASS: Record<NonNullable<DropdownOption['dot']>, string> = {
   success: 'bg-success',
   warning: 'bg-warning',
@@ -53,7 +56,7 @@ const selected = computed(
   () =>
     props.options.find((option) => option.value === props.modelValue) ?? {
       value: '',
-      label: 'Tanlanmagan',
+      label: t('forms.dropdown.unselected'),
       meta: '',
       status: 'pending' as const,
       dot: undefined,

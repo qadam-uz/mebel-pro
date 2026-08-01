@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -20,6 +21,7 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
+const { t } = useI18n()
 
 const draftId = computed(() => String(route.params.draft_id))
 const loading = ref(true)
@@ -74,11 +76,11 @@ async function place() {
   placeError.value = null
   if (!branchId.value) return
   if (!contactName.value.trim()) {
-    placeError.value = 'Mijoz ismini kiriting.'
+    placeError.value = t('orders.error.nameRequired')
     return
   }
   if (!isUzPhone(contactPhone.value)) {
-    placeError.value = "Telefon raqamini to'g'ri kiriting."
+    placeError.value = t('orders.error.phoneInvalid')
     return
   }
   placing.value = true
@@ -95,7 +97,7 @@ async function place() {
     const code = apiErrorCode(caught)
     placeError.value =
       code === 'missing_cutting_rate' || code === 'missing_edge_banding_rate'
-        ? 'Bu filialda kesish/kromka narxi belgilanmagan — avval rahbar narxlarni kiritishi kerak.'
+        ? t('orders.error.missingRates')
         : workshopErrorMessage(code)
   } finally {
     placing.value = false
@@ -107,15 +109,17 @@ async function place() {
   <section>
     <div class="page-head">
       <div>
-        <h1>Buyurtmani rasmiylashtirish</h1>
-        <div class="sub">{{ quote ? quote.branch_name : 'Filial' }}</div>
+        <h1>{{ $t('orders.checkout.title') }}</h1>
+        <div class="sub">
+          {{ quote ? quote.branch_name : $t('orders.checkout.branchFallback') }}
+        </div>
       </div>
       <div class="tools">
         <RouterLink
           :to="rolePath(`/workshop/orders/cutting/${draftId}`)"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
         >
-          Chizmaga qaytish
+          {{ $t('orders.action.backToDrawing') }}
         </RouterLink>
       </div>
     </div>
@@ -126,38 +130,43 @@ async function place() {
     </section>
 
     <section v-else-if="loadError" class="st-error" role="alert">
-      <h3>Ma'lumotni yuklab bo'lmadi</h3>
+      <h3>{{ $t('orders.state.loadFailed') }}</h3>
       <p>{{ loadError }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         @click="router.go(0)"
       >
-        Qayta urinish
+        {{ $t('orders.state.retry') }}
       </button>
     </section>
 
     <div v-else-if="quote" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div class="card">
-        <div class="card-h"><h2>Mijoz ma'lumotlari</h2></div>
+        <div class="card-h">
+          <h2>{{ $t('orders.checkout.client') }}</h2>
+        </div>
         <div class="card-b grid gap-4">
           <label class="field">
-            <span>Ism</span>
+            <span>{{ $t('orders.checkout.name') }}</span>
             <input v-model="contactName" class="mp-input" autocomplete="name" />
           </label>
           <label class="field">
-            <span>Telefon</span>
+            <span>{{ $t('orders.checkout.phone') }}</span>
             <PhoneInput v-model="contactPhone" />
             <span v-if="contactPhone && !isUzPhone(contactPhone)" class="mp-field-error">
-              Telefon raqami noto'g'ri
+              {{ $t('orders.checkout.phoneInvalid') }}
             </span>
           </label>
           <label class="field">
-            <span>Izoh <small class="text-ink-muted">(ixtiyoriy)</small></span>
+            <span
+              >{{ $t('orders.checkout.note') }}
+              <small class="text-ink-muted">{{ $t('orders.checkout.optional') }}</small></span
+            >
             <input
               v-model="note"
               class="mp-input"
-              placeholder="Masalan: kesishdan oldin qo'ng'iroq"
+              :placeholder="$t('orders.checkout.notePlaceholder')"
             />
           </label>
           <p v-if="placeError" class="mp-field-error">{{ placeError }}</p>
@@ -165,22 +174,24 @@ async function place() {
       </div>
 
       <div class="card content-start">
-        <div class="card-h"><h2>Narx</h2></div>
+        <div class="card-h">
+          <h2>{{ $t('orders.checkout.price') }}</h2>
+        </div>
         <div class="card-b grid gap-2 text-sm">
           <div class="flex justify-between">
-            <span class="text-ink-soft">Kesish</span>
+            <span class="text-ink-soft">{{ $t('orders.checkout.cutting') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_cutting_tiyin) }}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-ink-soft">Material</span>
+            <span class="text-ink-soft">{{ $t('orders.checkout.materials') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_materials_tiyin) }}</span>
           </div>
           <div v-if="quote.subtotal_edge_banding_tiyin > 0" class="flex justify-between">
-            <span class="text-ink-soft">Kromka</span>
+            <span class="text-ink-soft">{{ $t('orders.checkout.edge') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}</span>
           </div>
           <div class="mt-1 flex justify-between border-t border-hairline pt-2 font-bold">
-            <span>Jami</span>
+            <span>{{ $t('orders.checkout.total') }}</span>
             <span class="num">{{ formatTiyin(quote.total_tiyin) }}</span>
           </div>
           <button
@@ -189,9 +200,9 @@ async function place() {
             :disabled="!canPlace"
             @click="place"
           >
-            {{ placing ? 'Yaratilmoqda…' : 'Buyurtmani yaratish' }}
+            {{ placing ? $t('orders.checkout.placing') : $t('orders.checkout.place') }}
           </button>
-          <p class="text-center text-xs text-ink-muted">Buyurtma darhol tasdiqlanadi.</p>
+          <p class="text-center text-xs text-ink-muted">{{ $t('orders.checkout.autoConfirm') }}</p>
         </div>
       </div>
     </div>

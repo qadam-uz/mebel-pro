@@ -1,18 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import Icon from '@/shared/components/AppIcon.vue'
+import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 import workshopSceneUrl from '@/assets/login-workshop-scene.svg'
 
-// The shared composable owns the Uzbek sign-in copy (QAD-163) — this view used
+// The shared composable owns the sign-in failure copy (QAD-163) — this view used
 // to re-declare a byte-identical map of its own.
 const { config, login, password, isSubmitting, errorText, submit } = useStaffLogin()
 
+const { t } = useI18n()
 const showPassword = ref(false)
 
-const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va moliya']
+const valuePoints = computed(() => [
+  t('shell.login.valueOrders'),
+  t('shell.login.valueProduction'),
+  t('shell.login.valueInventory'),
+])
 </script>
 
 <template>
@@ -30,7 +37,7 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
 
       <div class="z-10 my-auto max-w-md py-10">
         <h1 class="font-serif text-4xl font-semibold leading-tight">
-          Ustaxonangizni bir joydan boshqaring
+          {{ $t('shell.login.headline') }}
         </h1>
         <ul class="mt-7 space-y-3.5">
           <li
@@ -66,11 +73,15 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
         </RouterLink>
 
         <div class="mp-surface p-6 md:p-7" aria-labelledby="signin-title">
-          <h2 id="signin-title" class="font-serif text-2xl font-semibold">Kirish</h2>
+          <h2 id="signin-title" class="font-serif text-2xl font-semibold">
+            {{ $t('shell.login.title') }}
+          </h2>
 
           <form class="mt-6 space-y-4" @submit.prevent="submit">
             <label class="block">
-              <span class="mb-2 block text-sm font-bold text-ink">Login</span>
+              <span class="mb-2 block text-sm font-bold text-ink">{{
+                $t('shell.login.loginLabel')
+              }}</span>
               <input
                 v-model="login"
                 class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
@@ -80,7 +91,9 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
               />
             </label>
             <label class="block">
-              <span class="mb-2 block text-sm font-bold text-ink">Parol</span>
+              <span class="mb-2 block text-sm font-bold text-ink">{{
+                $t('shell.login.passwordLabel')
+              }}</span>
               <div class="relative">
                 <input
                   v-model="password"
@@ -92,7 +105,9 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
                 <button
                   type="button"
                   class="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted transition hover:text-ink"
-                  :aria-label="showPassword ? 'Parolni yashirish' : 'Parolni ko\'rsatish'"
+                  :aria-label="
+                    showPassword ? $t('shell.login.hidePassword') : $t('shell.login.showPassword')
+                  "
                   :aria-pressed="showPassword"
                   @click="showPassword = !showPassword"
                 >
@@ -112,9 +127,16 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
               class="mp-button mp-button-primary w-full"
               :disabled="isSubmitting"
             >
-              {{ isSubmitting ? 'Tekshirilmoqda' : 'Kirish' }}
+              {{ isSubmitting ? $t('shell.login.submitting') : $t('shell.login.submit') }}
             </button>
           </form>
+
+          <!-- The shell — and with it the topbar switcher — does not render on
+               an auth route, so the one screen a user who cannot read Uzbek
+               meets first would otherwise have no way to change the language. -->
+          <div class="mt-6 border-t border-hairline pt-5">
+            <LocaleSwitcher variant="segmented" />
+          </div>
         </div>
       </div>
     </section>

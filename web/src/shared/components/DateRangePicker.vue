@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import {
-  DATE_RANGE_PRESET_LABELS,
+  dateRangePresetLabel,
   isoDate,
   presetRange,
   type DateRangePreset,
@@ -24,7 +25,9 @@ const props = withDefaults(
   }>(),
   {
     presets: () => ['all', 'today', 'week', 'month', 'last_month', 'days30'],
-    label: 'Sana',
+    // No literal default: a prop default is evaluated once, at module load, so
+    // it would freeze at whatever locale happened to be active then.
+    label: undefined,
   },
 )
 
@@ -33,6 +36,9 @@ const emit = defineEmits<{
   'update:dateFrom': [value: string]
   'update:dateTo': [value: string]
 }>()
+
+const { t } = useI18n()
+const labelText = computed(() => props.label ?? t('forms.dateRange.label'))
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const panelRef = ref<HTMLDivElement | null>(null)
@@ -72,9 +78,9 @@ const triggerText = computed(() => {
     if (props.dateFrom && props.dateTo) {
       return `${formatDotted(props.dateFrom)} – ${formatDotted(props.dateTo)}`
     }
-    return "Sana oralig'i"
+    return t('forms.dateRange.range')
   }
-  return DATE_RANGE_PRESET_LABELS[props.preset]
+  return dateRangePresetLabel(props.preset)
 })
 
 // What the calendar highlights: the in-flight draft while picking, otherwise
@@ -199,7 +205,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="mp-filter-date relative flex flex-col gap-1">
-    <span class="mp-filter-dd-label" aria-hidden="true">{{ label }}</span>
+    <span class="mp-filter-dd-label" aria-hidden="true">{{ labelText }}</span>
     <button
       ref="buttonRef"
       type="button"
@@ -224,7 +230,7 @@ onBeforeUnmount(() => {
         />
         <path d="M3 8.5h14M7 3v3M13 3v3" fill="none" stroke="currentColor" stroke-width="1.6" />
       </svg>
-      <span class="sr-only">{{ label }}</span>
+      <span class="sr-only">{{ labelText }}</span>
       <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
         {{ triggerText }}
       </span>
@@ -246,7 +252,7 @@ onBeforeUnmount(() => {
         :id="panelId"
         ref="panelRef"
         role="dialog"
-        aria-label="Sana oralig'i"
+        :aria-label="$t('forms.dateRange.range')"
         tabindex="-1"
         class="fixed z-50 max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)] outline-none"
         :style="panelStyle"
@@ -274,7 +280,7 @@ onBeforeUnmount(() => {
               "
               @click="choosePreset(presetOption)"
             >
-              {{ DATE_RANGE_PRESET_LABELS[presetOption] }}
+              {{ dateRangePresetLabel(presetOption) }}
             </button>
           </div>
 

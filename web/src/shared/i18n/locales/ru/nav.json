@@ -1,0 +1,74 @@
+{
+  "group": {
+    "management": "Управление",
+    "production": "Производство",
+    "resources": "Ресурсы",
+    "finance": "Финансы",
+    "system": "Система",
+    "platform": "Платформа",
+    "catalog": "Каталог",
+    "admin": "Админ"
+  },
+  "item": {
+    "clientHome": "Главная",
+    "clientDrafts": "Раскрои",
+    "clientOrders": "Заказы",
+    "clientBranches": "Мастерские",
+    "dashboard": "Главная",
+    "orders": "Заказы",
+    "cutting": "Распил",
+    "banding": "Кромка",
+    "inventory": "Склад",
+    "catalog": "Каталог материалов",
+    "financeExpenses": "Поступления и расходы",
+    "financeDebts": "Задолженность",
+    "financeProduction": "Труд сотрудников",
+    "branches": "Филиалы",
+    "staff": "Список сотрудников",
+    "settings": "Настройки",
+    "workshops": "Мастерские",
+    "manufacturers": "Производители",
+    "materials": "Материалы",
+    "jobs": "Фоновые задачи",
+    "errors": "Монитор ошибок",
+    "audit": "Журнал аудита",
+    "admins": "Администраторы"
+  },
+  "role": {
+    "client": {
+      "label": "Клиент",
+      "tenant": "Кабинет клиента",
+      "tenantMeta": "вход по телефону",
+      "dashboardTitle": "Главная",
+      "dashboardSubtitle": "Раскрои, заказы и мастерские.",
+      "primaryAction": "Новый раскрой",
+      "dropdown": "Контекст раскроя",
+      "backHome": "Вернуться на главную",
+      "notFoundBody": "Этой страницы нет в кабинете клиента."
+    },
+    "workshop": {
+      "label": "Управление",
+      "tenant": "Кабинет мастерской",
+      "tenantMeta": "права по филиалам",
+      "dashboardTitle": "Главная",
+      "dashboardSubtitle": "Заказы, производство, склад и финансы.",
+      "primaryAction": "Филиалы",
+      "dropdown": "Филиал",
+      "backHome": "Вернуться на главную",
+      "notFoundBody": "Этой страницы нет в кабинете мастерской."
+    },
+    "admin": {
+      "label": "Суперадмин",
+      "tenant": "Платформа",
+      "tenantMeta": "админ · UZ",
+      "dashboardTitle": "Главная",
+      "dashboardSubtitle": "Состояние платформы, инциденты и создание мастерских.",
+      "dropdown": "Монитор",
+      "backHome": "Вернуться на главную",
+      "notFoundBody": "Этой страницы нет в панели суперадмина."
+    }
+  },
+  "notFound": {
+    "title": "Страница не найдена"
+  }
+}

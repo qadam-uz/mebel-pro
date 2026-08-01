@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode, apiTraceId } from '@/shared/api/client'
@@ -52,6 +53,7 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const toast = useToast()
+const { t } = useI18n()
 // Role adapter (see cuttingEditorAdapter.ts): the route carries a factory under
 // `meta.cuttingEditorAdapter`; resolve it once at mount and provide it so the
 // results section (a grandchild) can read the same link targets. No route
@@ -279,7 +281,7 @@ function catalogChoice(material: ClientCatalogMaterialOption): ChoiceOption {
     value: material.id,
     label: materialLabel(material),
     meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
-      material.branch_carried ? '' : " · filialda yo'q"
+      material.branch_carried ? '' : ` · ${t('cutting.editor.notCarriedMeta')}`
     }`,
   }
 }
@@ -353,16 +355,16 @@ const canOptimize = computed(
     totalQuantity.value <= MAX_PARTS,
 )
 const optimizeDisabledHint = computed(() => {
-  if (isReadOnly.value) return 'Bu chizma buyurtmaga biriktirilgan'
-  if (!activeBranchId.value) return 'Avval ustaxona tanlang'
-  if (parts.value.length === 0) return "Avval detal qo'shing"
-  if (!hasPersistableParts.value) return "To'ldirilmagan qatorlarni to'ldiring"
-  if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
+  if (isReadOnly.value) return t('cutting.editor.hintReadOnly')
+  if (!activeBranchId.value) return t('cutting.editor.hintNoBranch')
+  if (parts.value.length === 0) return t('cutting.editor.hintNoParts')
+  if (!hasPersistableParts.value) return t('cutting.editor.hintIncomplete')
+  if (totalQuantity.value > MAX_PARTS) return t('cutting.editor.hintOverCap', { max: MAX_PARTS })
   return ''
 })
 const primaryCtaLabel = computed(() => {
-  if (cutting.optimizing || creatingDraft.value) return 'Hisoblanmoqda'
-  return 'Davom etish'
+  if (cutting.optimizing || creatingDraft.value) return t('cutting.editor.ctaCalculating')
+  return t('cutting.editor.ctaContinue')
 })
 const primaryCtaDisabled = computed(
   () =>
@@ -512,7 +514,10 @@ function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
     const panel = materialById(part.material_id)
     const panelThickness = Number(panel?.thickness_mm)
     if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
-      return `Lenta kengligi (${edge.edge_width_mm} mm) list qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
+      return t('cutting.edge.narrowWarning', {
+        width: edge.edge_width_mm,
+        thickness: panelThickness,
+      })
     }
   }
   return null
@@ -563,8 +568,12 @@ function partSizeError(part: CuttingPart): string | null {
   const usableLength = panel.panel_length_mm - 2 * trimMm
   const usableWidth = panel.panel_width_mm - 2 * trimMm
   if (code === 'impossible_grain')
-    return `Tekstura yo'nalishi qat'iy — detal ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
-  return `Detal listga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (list − 2×${trimMm} mm chetki qirqim).`
+    return t('cutting.editor.grainFitError', { length: usableLength, width: usableWidth })
+  return t('cutting.editor.sizeFitError', {
+    length: usableLength,
+    width: usableWidth,
+    trim: trimMm,
+  })
 }
 
 // A chosen panel id that no longer resolves in the loaded catalog — e.g. the
@@ -589,14 +598,13 @@ function partIsInvalid(part: CuttingPart) {
   )
 }
 
+const OPTIMIZE_ROW_CODES = ['part_too_large', 'impossible_grain', 'material_not_found'] as const
+
 function optimizeRowMessage(code: string | undefined): string {
-  if (code === 'part_too_large')
-    return "Bu detal listga sig'maydi — o'lchamini kichraytiring yoki boshqa list tanlang."
-  if (code === 'impossible_grain')
-    return "Tekstura yo'nalishi bu detalni joylashtirishga to'sqinlik qiladi."
-  if (code === 'material_not_found')
-    return "Bu qatordagi material endi katalogda yo'q — boshqasini tanlang."
-  return "Bu qatorni optimallashtirib bo'lmadi."
+  if (code && (OPTIMIZE_ROW_CODES as readonly string[]).includes(code)) {
+    return t(`cutting.error.${code}`)
+  }
+  return t('cutting.error.rowOptimizeFailed')
 }
 
 function optimizeRowFromError(errorValue: unknown) {
@@ -634,10 +642,10 @@ function rowHasError(part: CuttingPart, index: number): boolean {
 function saveLabel() {
   // Self-describing for SR users (CB-53): the autosave chip is a role=status live
   // region, so the announced text must stand on its own, not a bare "Saqlangan".
-  if (saveState.value === 'saved') return 'Chizma saqlandi'
-  if (saveState.value === 'saving') return 'Chizma saqlanmoqda'
-  if (saveState.value === 'editing') return 'Tahrirlanmoqda'
-  return "Saqlash xatosi — qayta urinib ko'ring"
+  if (saveState.value === 'saved') return t('cutting.editor.saveSaved')
+  if (saveState.value === 'saving') return t('cutting.editor.saveSaving')
+  if (saveState.value === 'editing') return t('cutting.editor.saveEditing')
+  return t('cutting.editor.saveError')
 }
 
 function addRow(
@@ -681,8 +689,8 @@ function deleteRow(index: number) {
     }
     const label = partDisplayName(removed, index)
     toast.action(
-      `«${label}» o'chirildi`,
-      'Qaytarish',
+      t('cutting.editor.partDeleted', { name: label }),
+      t('cutting.action.undo'),
       () => {
         parts.value = [...parts.value.slice(0, index), removed, ...parts.value.slice(index)]
       },
@@ -760,7 +768,7 @@ async function confirmDeleteDraft() {
   } catch (errorValue) {
     deleteDraftError.value = clientErrorLabel(
       apiErrorCode(errorValue),
-      "Chizmani o'chirib bo'lmadi.",
+      t('cutting.error.draftDeleteFailed'),
     )
     deleteDraftTraceId.value = apiTraceId(errorValue)
   } finally {
@@ -916,14 +924,17 @@ const materialPickerSubtitle = computed(() => {
   if (target.type === 'part') {
     const index = parts.value.findIndex((part) => part.part_ref === target.partRef)
     const part = parts.value[index]
-    return part ? `«${partDisplayName(part, index)}» detali uchun` : 'Detal uchun'
+    return part
+      ? t('cutting.material.forPart', { name: partDisplayName(part, index) })
+      : t('cutting.material.forPartGeneric')
   }
   if (target.type === 'group') {
     const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
-    return `Ushbu guruhdagi ${count} detal uchun`
+    return t('cutting.material.forGroup', { n: count }, count)
   }
-  if (target.type === 'new') return 'Material tanlang'
-  return `Tanlangan ${selectedParts.value.length} ta detal uchun`
+  if (target.type === 'new') return t('cutting.material.pick')
+  const selected = selectedParts.value.length
+  return t('cutting.material.forSelection', { n: selected }, selected)
 })
 
 function applyMaterialPicker(materialId: string) {
@@ -951,7 +962,7 @@ function applyMaterialPicker(materialId: string) {
 }
 
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
-  return material.grain_direction ? 'Teksturali material' : 'Teksturasiz material'
+  return material.grain_direction ? t('cutting.material.grained') : t('cutting.material.grainless')
 }
 
 function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
@@ -1189,7 +1200,7 @@ async function setPreferredBranch(branchId: string | null) {
   try {
     await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
   } catch {
-    toast.danger("Afzal filialni saqlab bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('cutting.error.branchSaveFailed'))
     return
   }
   branchPickerOpen.value = false
@@ -1266,10 +1277,7 @@ async function optimize() {
     await router.push(rolePath(adapter.paths.result(draftId.value)))
     return
   } catch (errorValue) {
-    optimizeError.value = clientErrorLabel(
-      cutting.error,
-      "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
-    )
+    optimizeError.value = clientErrorLabel(cutting.error, t('cutting.error.optimizeFailed'))
     optimizeRowError.value = optimizeRowFromError(errorValue)
     if (optimizeRowError.value?.partRef) failedRowRef = optimizeRowError.value.partRef
     else if (optimizeRowError.value?.rowIndex != null) {
@@ -1324,7 +1332,7 @@ async function optimizeNewDraft() {
     // retry; the row attribution still maps because the parts are unchanged.
     optimizeError.value = clientErrorLabel(
       cutting.error ?? apiErrorCode(errorValue),
-      "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
+      t('cutting.error.optimizeFailed'),
     )
     optimizeRowError.value = optimizeRowFromError(errorValue)
     // The error banner sits next to the optimise button, already in view — no
@@ -1511,12 +1519,12 @@ onBeforeRouteLeave(async () => {
          lands on its own list, and the route guard still flushes the autosave
          on the way out. -->
     <RouterLink :to="rolePath(adapter.paths.drafts)" class="client-back">
-      <span aria-hidden="true">←</span> Chizmalar
+      <span aria-hidden="true">←</span> {{ $t('cutting.editor.backToDrafts') }}
     </RouterLink>
 
     <div class="client-page-head">
       <div>
-        <h1>Chizma</h1>
+        <h1>{{ $t('cutting.editor.title') }}</h1>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
         <span
@@ -1537,11 +1545,11 @@ onBeforeRouteLeave(async () => {
           v-if="!isNewDraft"
           type="button"
           class="mp-button mp-button-outline gap-2 border-danger text-danger hover:border-danger hover:bg-danger-soft"
-          aria-label="Chizmani o'chirish"
+          :aria-label="$t('cutting.editor.deleteDraft')"
           @click="requestDeleteDraft"
         >
           <Icon name="trash" class="size-[18px]" />
-          Chizmani o'chirish
+          {{ $t('cutting.editor.deleteDraft') }}
         </button>
       </div>
     </div>
@@ -1553,8 +1561,8 @@ onBeforeRouteLeave(async () => {
 
     <section v-else-if="cutting.error" class="client-error">
       <div class="client-error-icon">!</div>
-      <h3>Chizma yuklanmadi</h3>
-      <p>Chizmani ochish uchun sahifani qayta yuklang yoki saqlangan chizmalarga qayting.</p>
+      <h3>{{ $t('cutting.editor.loadErrorTitle') }}</h3>
+      <p>{{ $t('cutting.editor.loadErrorBody') }}</p>
       <p class="client-trace">{{ traceLine(cutting.traceId) }}</p>
     </section>
 
@@ -1568,8 +1576,8 @@ onBeforeRouteLeave(async () => {
           <Icon name="lock" />
         </span>
         <span class="min-w-0 flex-1">
-          Bu chizma tasdiqlangan buyurtmaga bog'langan, shuning uchun faqat o'qish uchun.
-          <span class="font-bold text-accent">Buyurtmani ochish →</span>
+          {{ $t('cutting.editor.readOnlyBanner') }}
+          <span class="font-bold text-accent">{{ $t('cutting.editor.openOrder') }} →</span>
         </span>
       </RouterLink>
 
@@ -1590,8 +1598,8 @@ onBeforeRouteLeave(async () => {
             <b class="text-ink">
               {{
                 revisionOrder
-                  ? `${revisionOrder.order_number} tahrirlanmoqda`
-                  : 'Buyurtma tahrirlanmoqda'
+                  ? $t('cutting.editor.revisionOf', { order: revisionOrder.order_number })
+                  : $t('cutting.editor.revisionGeneric')
               }}
             </b>
             <span v-if="revisionOrder" class="ml-2 text-xs text-ink-muted">{{
@@ -1602,7 +1610,7 @@ onBeforeRouteLeave(async () => {
             :to="rolePath(adapter.paths.orderDetail(String(revisionOrderId)))"
             class="text-xs font-bold text-accent"
           >
-            Buyurtmaga qaytish →
+            {{ $t('cutting.editor.backToOrder') }} →
           </RouterLink>
         </section>
 
@@ -1657,7 +1665,7 @@ onBeforeRouteLeave(async () => {
               v-model="draftNameValue"
               class="mp-input max-w-sm"
               maxlength="64"
-              placeholder="Chizmaga nom bering"
+              :placeholder="$t('cutting.editor.namePlaceholder')"
               autofocus
               @keydown.enter.prevent="commitDraftName"
               @keydown.esc.prevent="cancelDraftNameEdit"
@@ -1673,15 +1681,15 @@ onBeforeRouteLeave(async () => {
             >
               <span>{{
                 isNewDraft
-                  ? localDraftName || 'Nomsiz chizma'
+                  ? localDraftName || $t('cutting.editor.untitled')
                   : draft
                     ? draftDisplayName(draft)
-                    : 'Nomsiz chizma'
+                    : $t('cutting.editor.untitled')
               }}</span>
               <Icon name="pencil" class="inline size-4 text-ink-muted" />
             </button>
             <span v-else class="text-lg font-bold text-ink">{{
-              draft ? draftDisplayName(draft) : 'Nomsiz chizma'
+              draft ? draftDisplayName(draft) : $t('cutting.editor.untitled')
             }}</span>
           </section>
           <section
@@ -1705,7 +1713,7 @@ onBeforeRouteLeave(async () => {
               class="mp-button mp-button-outline"
               @click="branchPickerOpen = true"
             >
-              O'zgartirish
+              {{ $t('cutting.editor.change') }}
             </button>
           </section>
         </template>
@@ -1713,12 +1721,13 @@ onBeforeRouteLeave(async () => {
         <section class="client-card">
           <div class="client-card-h">
             <div>
-              <h2>Detallar</h2>
+              <h2>{{ $t('cutting.parts.heading') }}</h2>
               <p class="mt-1 text-sm text-ink-muted">
-                {{ totalQuantity }} detal · {{ materialCount }} material · ~{{
+                {{ totalQuantity }} {{ $t('cutting.unit.part', totalQuantity) }} ·
+                {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }} · ~{{
                   totalAreaM2.toFixed(1)
                 }}
-                m²
+                {{ $t('cutting.unit.areaM2') }}
               </p>
             </div>
             <div v-if="!isReadOnly && activeBranchId" class="flex flex-wrap items-center gap-2">
@@ -1729,7 +1738,7 @@ onBeforeRouteLeave(async () => {
                 :aria-pressed="errorFilterEnabled"
                 @click="errorFilterEnabled = !errorFilterEnabled"
               >
-                {{ errorCount }} to'ldirilmagan
+                {{ $t('cutting.editor.unfilledCount', { n: errorCount }, errorCount) }}
               </button>
               <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
                 <button
@@ -1743,7 +1752,7 @@ onBeforeRouteLeave(async () => {
                   :aria-pressed="!importWizardOpen"
                   @click="importWizardOpen = false"
                 >
-                  Qo'lda kiritish
+                  {{ $t('cutting.editor.manualEntry') }}
                 </button>
                 <button
                   type="button"
@@ -1756,7 +1765,7 @@ onBeforeRouteLeave(async () => {
                   :aria-pressed="importWizardOpen"
                   @click="openImportWizard"
                 >
-                  Fayldan import
+                  {{ $t('cutting.import.title') }}
                 </button>
               </div>
             </div>
@@ -1768,52 +1777,54 @@ onBeforeRouteLeave(async () => {
           <div
             v-if="selectedParts.length > 0"
             role="group"
-            :aria-label="`${selectedParts.length} detal tanlandi — guruh amallari`"
+            :aria-label="
+              $t('cutting.editor.bulkGroupLabel', { n: selectedParts.length }, selectedParts.length)
+            "
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
             <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
-              Kromka qo'llash
+              {{ $t('cutting.editor.bulkApplyEdge') }}
             </button>
             <button type="button" class="text-accent hover:underline" @click="openBulkMaterial">
-              Material almashtirish
+              {{ $t('cutting.editor.bulkChangeMaterial') }}
             </button>
             <button type="button" class="text-danger hover:underline" @click="bulkDelete">
-              O'chirish
+              {{ $t('cutting.action.delete') }}
             </button>
             <button
               type="button"
               class="ml-auto text-ink-muted hover:text-ink"
               @click="clearSelection"
             >
-              Bekor qilish
+              {{ $t('cutting.action.cancel') }}
             </button>
           </div>
 
           <div v-if="!activeBranchId" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="store" /></div>
-              <h3>Avval filial tanlang</h3>
-              <p>Materiallar va narxlar filialga qarab farq qiladi — avval filialni tanlang.</p>
+              <h3>{{ $t('cutting.editor.pickBranchTitle') }}</h3>
+              <p>{{ $t('cutting.editor.pickBranchBody') }}</p>
               <button
                 type="button"
                 class="mp-button mp-button-primary mt-4"
                 @click="branchPickerOpen = true"
               >
-                Filial tanlash
+                {{ $t('cutting.branch.pick') }}
               </button>
             </div>
           </div>
 
           <div v-else-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
-              <h3>Bu chizmada detal yo'q</h3>
-              <p>Kesish ro'yxatini boshlash uchun avval materialni tanlang.</p>
+              <h3>{{ $t('cutting.editor.emptyTitle') }}</h3>
+              <p>{{ $t('cutting.editor.emptyBody') }}</p>
               <button
                 type="button"
                 class="mp-button mp-button-primary mt-4"
                 @click="openNewMaterial"
               >
-                + Material tanlash
+                + {{ $t('cutting.editor.emptyAction') }}
               </button>
             </div>
           </div>
@@ -1832,12 +1843,18 @@ onBeforeRouteLeave(async () => {
                 class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
               >
                 <span aria-hidden="true" class="text-center">#</span>
-                <span aria-hidden="true" class="text-center">Nomi</span>
-                <span aria-hidden="true" class="text-center">Uzunlik</span>
-                <span aria-hidden="true" class="text-center">Kenglik</span>
-                <span aria-hidden="true" class="text-center">Soni</span>
-                <span aria-hidden="true" class="text-center">Burilish</span>
-                <span aria-hidden="true" class="text-center">Kromka</span>
+                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.name') }}</span>
+                <span aria-hidden="true" class="text-center">{{
+                  $t('cutting.column.length')
+                }}</span>
+                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.width') }}</span>
+                <span aria-hidden="true" class="text-center">{{
+                  $t('cutting.column.quantity')
+                }}</span>
+                <span aria-hidden="true" class="text-center">{{
+                  $t('cutting.column.rotation')
+                }}</span>
+                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.edge') }}</span>
                 <span aria-hidden="true"></span>
               </div>
             </div>
@@ -1882,12 +1899,21 @@ onBeforeRouteLeave(async () => {
                     }}</span>
                   </span>
                   <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
-                    <span>{{ group.quantity }} detal · {{ group.areaM2.toFixed(1) }} m²</span>
+                    <span
+                      >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                      {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}</span
+                    >
                     <span
                       v-if="groupErrorCount(group.key) > 0"
                       class="rounded-md bg-danger-soft px-2 py-1 text-danger"
                     >
-                      {{ groupErrorCount(group.key) }} to'ldirilmagan
+                      {{
+                        $t(
+                          'cutting.editor.unfilledCount',
+                          { n: groupErrorCount(group.key) },
+                          groupErrorCount(group.key),
+                        )
+                      }}
                     </span>
                   </span>
                 </button>
@@ -1898,7 +1924,7 @@ onBeforeRouteLeave(async () => {
                   @click="addGroupRow(group)"
                 >
                   <Icon name="plus" class="size-3.5" />
-                  Detal
+                  {{ $t('cutting.editor.addPart') }}
                 </button>
               </div>
               <div
@@ -1924,7 +1950,9 @@ onBeforeRouteLeave(async () => {
                   :material-missing="rowMaterialMissing(part)"
                   :optimize-error="rowOptimizeError(part, index)"
                   :not-carried="rowNotCarried(part)"
-                  :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+                  :preferred-branch-name="
+                    preferredBranch?.branch_name ?? $t('cutting.branch.fallbackName')
+                  "
                   :edge-registry="edgeRegistry"
                   @toggle-select="toggleSelect(part.part_ref)"
                   @update:name="setPartName(part, $event)"
@@ -1952,7 +1980,7 @@ onBeforeRouteLeave(async () => {
               @click="openNewMaterial"
             >
               <Icon name="plus" class="size-4" />
-              Boshqa material
+              {{ $t('cutting.editor.addMaterial') }}
             </button>
           </div>
 
@@ -1981,7 +2009,8 @@ onBeforeRouteLeave(async () => {
         >
           <div class="text-sm">
             <span class="font-mono font-bold text-ink"
-              >{{ parts.length }} xil · {{ totalQuantity }} dona</span
+              >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} · {{ totalQuantity }}
+              {{ $t('cutting.unit.piece', totalQuantity) }}</span
             >
             <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
           </div>
@@ -2009,14 +2038,18 @@ onBeforeRouteLeave(async () => {
 
     <ConfirmDialog
       :open="deleteDraftDialogOpen"
-      title="Chizmani o'chirish"
+      :title="$t('cutting.editor.deleteDraft')"
       :message="
         draft
-          ? `«${draftDisplayName(draft)}» — ${totalQuantity} detalli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`
+          ? $t(
+              'cutting.editor.deleteDraftMessage',
+              { name: draftDisplayName(draft), n: totalQuantity },
+              totalQuantity,
+            )
           : ''
       "
-      confirm-label="O'chirish"
-      cancel-label="Bekor qilish"
+      :confirm-label="$t('cutting.action.delete')"
+      :cancel-label="$t('cutting.action.cancel')"
       danger
       :busy="deletingDraft"
       @cancel="closeDeleteDraftDialog"
@@ -2044,7 +2077,7 @@ onBeforeRouteLeave(async () => {
     />
     <AppModal
       :open="branchPickerOpen"
-      title="Filialni tanlang"
+      :title="$t('cutting.branch.modalTitle')"
       max-width="max-w-2xl"
       @close="closeBranchPicker"
     >
@@ -2057,10 +2090,10 @@ onBeforeRouteLeave(async () => {
 
     <ConfirmDialog
       :open="importReplaceConfirmOpen"
-      title="Detallarni almashtirish"
-      :message="`Hozirgi ${parts.length} xil import qilingan ro'yxat bilan almashtirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
-      confirm-label="Almashtirish"
-      cancel-label="Bekor qilish"
+      :title="$t('cutting.import.replaceTitle')"
+      :message="$t('cutting.import.replaceMessage', { n: parts.length }, parts.length)"
+      :confirm-label="$t('cutting.import.replaceConfirm')"
+      :cancel-label="$t('cutting.action.cancel')"
       danger
       @cancel="cancelImportReplace"
       @confirm="confirmImportReplace"
@@ -2068,10 +2101,10 @@ onBeforeRouteLeave(async () => {
 
     <ConfirmDialog
       :open="importedLayoutWarningOpen"
-      title="Import qilingan joylashuvga ta'sir qiladi"
-      message="Bu o'zgarish fayldagi chizmani bekor qiladi. Saqlangandan keyin yangi optimallashtirilgan chizma yaratiladi."
-      confirm-label="O'zgartirishni saqlash"
-      cancel-label="Bekor qilish"
+      :title="$t('cutting.import.layoutWarningTitle')"
+      :message="$t('cutting.import.layoutWarningBody')"
+      :confirm-label="$t('cutting.import.layoutWarningConfirm')"
+      :cancel-label="$t('cutting.action.cancel')"
       @cancel="resolveImportedLayoutWarning(false)"
       @confirm="resolveImportedLayoutWarning(true)"
     />
@@ -2080,14 +2113,18 @@ onBeforeRouteLeave(async () => {
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
-      :title-suffix="bulkEdgeMode ? `${selectedParts.length} detalga` : undefined"
+      :title-suffix="
+        bulkEdgeMode
+          ? $t('cutting.edge.bulkSuffix', { n: selectedParts.length }, selectedParts.length)
+          : undefined
+      "
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
       :edge-registry="edgeRegistry"
       :edge-assignment-entries="edgeAssignmentEntries"
       :group-edge-ids="groupEdgeIds(edgePickerPart)"
       :other-group-edge-ids="otherGroupEdgeIds(edgePickerPart)"
       :preferred-branch-id="activeBranchId"
-      :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+      :preferred-branch-name="preferredBranch?.branch_name ?? $t('cutting.branch.fallbackName')"
       @edges-change="onEdgePickerChange"
       @close="closeEdgePicker"
     />
@@ -2097,7 +2134,7 @@ onBeforeRouteLeave(async () => {
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Kromka tanlash"
+      :aria-label="$t('cutting.edge.pickTitle')"
       @keydown.esc="closeRegistryPicker"
     >
       <div
@@ -2109,16 +2146,21 @@ onBeforeRouteLeave(async () => {
       >
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 class="font-serif text-lg font-semibold text-ink">Kromka almashtirish</h3>
+            <h3 class="font-serif text-lg font-semibold text-ink">
+              {{ $t('cutting.edge.replaceTitle') }}
+            </h3>
             <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
-              {{ edgeRegistryLabel(registryReplaceEntry.materialId) }} ishlatilgan tomonlar
-              almashtiriladi.
+              {{
+                $t('cutting.edge.replaceBody', {
+                  name: edgeRegistryLabel(registryReplaceEntry.materialId),
+                })
+              }}
             </p>
           </div>
           <button
             type="button"
             class="client-edge-close"
-            aria-label="Yopish"
+            :aria-label="$t('cutting.action.close')"
             @click="closeRegistryPicker"
           >
             ×
@@ -2126,14 +2168,14 @@ onBeforeRouteLeave(async () => {
         </div>
         <SearchCombobox
           :model-value="registryPickedEdgeId"
-          label="Kromka"
+          :label="$t('cutting.edge.label')"
           :options="allEdgeChoices"
-          placeholder="Kromka tanlang"
+          :placeholder="$t('cutting.edge.placeholder')"
           @update:model-value="registryPickedEdgeId = $event"
         />
         <div class="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" class="mp-button mp-button-outline" @click="closeRegistryPicker">
-            Bekor qilish
+            {{ $t('cutting.action.cancel') }}
           </button>
           <button
             type="button"
@@ -2141,7 +2183,7 @@ onBeforeRouteLeave(async () => {
             :disabled="!registryPickedEdgeId"
             @click="applyRegistryPicker"
           >
-            Qo'llash
+            {{ $t('cutting.action.apply') }}
           </button>
         </div>
       </div>
@@ -2152,7 +2194,7 @@ onBeforeRouteLeave(async () => {
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Materialni almashtirish"
+      :aria-label="$t('cutting.material.replaceTitle')"
       @keydown.esc="closeMaterialPicker"
     >
       <div
@@ -2164,13 +2206,15 @@ onBeforeRouteLeave(async () => {
       >
         <div class="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
           <div>
-            <h3 class="text-base font-extrabold text-ink">Materialni almashtirish</h3>
+            <h3 class="text-base font-extrabold text-ink">
+              {{ $t('cutting.material.replaceTitle') }}
+            </h3>
             <p class="mt-1 text-sm text-ink-muted">{{ materialPickerSubtitle }}</p>
           </div>
           <button
             type="button"
             class="client-edge-close"
-            aria-label="Yopish"
+            :aria-label="$t('cutting.action.close')"
             @click="closeMaterialPicker"
           >
             ×
@@ -2205,18 +2249,18 @@ onBeforeRouteLeave(async () => {
             <span
               v-if="material.id === materialPickerCurrentId"
               class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
-              aria-label="Tanlangan"
+              :aria-label="$t('cutting.material.selected')"
             >
               <Icon name="check" class="size-3.5" />
             </span>
           </button>
           <p v-if="materialPickerMaterials.length === 0" class="p-4 text-sm text-ink-muted">
-            Bu filialda list materiali topilmadi.
+            {{ $t('cutting.material.emptyInBranch') }}
           </p>
         </div>
         <div class="flex justify-end border-t border-hairline px-5 py-3">
           <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
-            Bekor qilish
+            {{ $t('cutting.action.cancel') }}
           </button>
         </div>
       </div>

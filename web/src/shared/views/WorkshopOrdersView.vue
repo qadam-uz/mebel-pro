@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
@@ -15,8 +16,8 @@ import {
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
-  STOCK_SHORTFALL_MESSAGE,
   orderPillClass,
+  stockShortfallMessage,
   workshopErrorMessage,
   workshopStatusUz,
 } from '@/shared/app/workshopUi'
@@ -26,7 +27,7 @@ import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatRelativeUz, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatRelative, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import {
@@ -52,6 +53,7 @@ const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 // "+ Yangi buyurtma" is enabled only when the staffer can place orders on the
 // CURRENT topbar branch and that branch is open — the flow is fixed to it.
 const currentBranch = computed(() =>
@@ -106,12 +108,12 @@ const hydrated = ref(false)
 // break down the active statuses, so listing them here only duplicated that.
 // "Hammasi" stays (last) so a search can span old orders. Dots mirror the
 // order-status pill palette (orderPillClass).
-const statusOptions: DropdownOption[] = [
-  { value: 'active', label: 'Faol', dot: 'accent' },
-  { value: 'completed', label: 'Tugatilgan', dot: 'muted' },
-  { value: 'cancelled', label: 'Bekor qilingan', dot: 'danger' },
-  { value: 'all', label: 'Hammasi' },
-]
+const statusOptions = computed<DropdownOption[]>(() => [
+  { value: 'active', label: t('orders.list.statusActive'), dot: 'accent' },
+  { value: 'completed', label: t('orders.list.statusCompleted'), dot: 'muted' },
+  { value: 'cancelled', label: t('orders.list.statusCancelled'), dot: 'danger' },
+  { value: 'all', label: t('orders.list.statusAll') },
+])
 const boardColumns = computed(() =>
   activeWorkshopStatuses.map((state) => ({
     state,
@@ -196,10 +198,14 @@ function listFilters() {
 // "{item_count} detal", so returning the count here too double-printed it.
 function assignedText(order: OrderSummary) {
   if (order.status === 'cutting')
-    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : "kesuvchi yo'q"
+    return order.assigned_cutter_user_id
+      ? t('orders.assignment.cutterAssigned')
+      : t('orders.assignment.cutterMissing')
   if (order.status === 'edge_banding')
-    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : "kromka ustasi yo'q"
-  if (order.status === 'confirmed') return 'tayinlash kerak'
+    return order.assigned_edger_user_id
+      ? t('orders.assignment.edgerAssigned')
+      : t('orders.assignment.edgerMissing')
+  if (order.status === 'confirmed') return t('orders.assignment.needed')
   return ''
 }
 
@@ -323,14 +329,14 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
   if (to < from) {
     const revert = list.find((action) => action.kind === 'revert')
     if (!revert) {
-      toast.danger("Bu buyurtmani orqaga qaytarib bo'lmaydi.")
+      toast.danger(t('orders.list.revertBlocked'))
       return
     }
     startListAction(revert, order)
     return
   }
   if (to > from + 1) {
-    toast.danger("Faqat keyingi bosqichga o'tkazish mumkin.")
+    toast.danger(t('orders.list.forwardOnly'))
     return
   }
   // Forward one stage: the order's primary forward action, falling back to
@@ -339,7 +345,7 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
     list.find((item) => item.kind === FORWARD_ACTION_KIND[order.status]) ??
     list.find((item) => item.kind === 'assign')
   if (!action) {
-    toast.danger("Bu o'tishni hozir bajarib bo'lmaydi — ruxsat yoki tayinlash kerak.")
+    toast.danger(t('orders.list.transitionBlocked'))
     return
   }
   if (action.kind === 'assign') {
@@ -350,46 +356,47 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
 }
 
 function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
+  const named = { order: order.order_number }
   if (action.kind === 'approve') {
     return {
-      title: 'Buyurtmani tasdiqlash',
-      message: `${order.order_number} tasdiqlanadi va ishlab chiqarishga tayyorlanadi.`,
-      confirmLabel: 'Tasdiqlash',
+      title: t('orders.confirm.approveTitle'),
+      message: t('orders.confirm.approveMessage', named),
+      confirmLabel: t('orders.action.approve'),
     }
   }
   if (action.kind === 'start_cutting') {
     return {
-      title: 'Kesish boshlansinmi?',
-      message: `${order.order_number} kesish bosqichiga o'tadi — usta ishni boshlagan bo'lishi kerak.`,
-      confirmLabel: 'Boshlash',
+      title: t('orders.confirm.startCuttingTitle'),
+      message: t('orders.confirm.startCuttingMessage', named),
+      confirmLabel: t('orders.confirm.startCuttingAction'),
     }
   }
   if (action.kind === 'start_banding') {
     return {
-      title: 'Kromka boshlansinmi?',
-      message: `${order.order_number} uchun kromka ishi boshlanganini belgilaysiz.`,
-      confirmLabel: 'Boshlash',
+      title: t('orders.confirm.startBandingTitle'),
+      message: t('orders.confirm.startBandingMessage', named),
+      confirmLabel: t('orders.confirm.startBandingAction'),
     }
   }
   if (action.kind === 'complete_cutting') {
     return {
-      title: 'Kesish tugadimi?',
-      message: `${order.order_number} kesish bosqichi yakunlanadi va ombor zaxirasi yangilanadi.`,
-      confirmLabel: 'Kesish tugadi',
+      title: t('orders.confirm.completeCuttingTitle'),
+      message: t('orders.confirm.completeCuttingMessage', named),
+      confirmLabel: t('orders.action.completeCutting'),
     }
   }
   if (action.kind === 'complete_banding') {
     return {
-      title: 'Kromka tugadimi?',
-      message: `${order.order_number} kromka bosqichi yakunlanadi va buyurtma tayyor holatga o'tadi.`,
-      confirmLabel: 'Kromka tugadi',
+      title: t('orders.confirm.completeBandingTitle'),
+      message: t('orders.confirm.completeBandingMessage', named),
+      confirmLabel: t('orders.action.completeBanding'),
     }
   }
   if (action.kind === 'mark_collected') {
     return {
-      title: 'Mijoz olib ketdimi?',
-      message: `${order.order_number} yakuniy «topshirildi» holatiga o'tadi.`,
-      confirmLabel: 'Ha, topshirildi',
+      title: t('orders.confirm.collectedTitle'),
+      message: t('orders.confirm.collectedMessage', named),
+      confirmLabel: t('orders.confirm.collectedAction'),
     }
   }
   return null
@@ -397,19 +404,21 @@ function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
 
 function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
   if (action.kind === 'revert') {
-    const target = revertTargetLabelForOrder(order)
     return {
-      title: 'Buyurtmani qaytarish',
-      message: `${order.order_number} ${target} qaytadi. Sababni yozing.`,
-      confirmLabel: 'Ha, qaytarilsin',
+      title: t('orders.confirm.revertTitle'),
+      message: t('orders.confirm.revertOrderMessage', {
+        order: order.order_number,
+        target: revertTargetLabelForOrder(order),
+      }),
+      confirmLabel: t('orders.confirm.revertAction'),
       danger: true,
     }
   }
   if (action.kind === 'cancel') {
     return {
-      title: 'Buyurtmani bekor qilish',
-      message: `${order.order_number} yopiladi. Bekor qilish sababini yozing.`,
-      confirmLabel: 'Bekor qilish',
+      title: t('orders.confirm.cancelTitle'),
+      message: t('orders.confirm.cancelOrderMessage', { order: order.order_number }),
+      confirmLabel: t('orders.action.cancel'),
       danger: true,
     }
   }
@@ -417,15 +426,15 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
 }
 
 function listActionSuccessMessage(action: WorkshopOrderListAction) {
-  if (action.kind === 'approve') return 'Buyurtma tasdiqlandi.'
-  if (action.kind === 'start_cutting') return 'Kesish boshlandi.'
-  if (action.kind === 'start_banding') return 'Kromka boshlandi.'
-  if (action.kind === 'complete_cutting') return 'Kesish yakunlandi.'
-  if (action.kind === 'complete_banding') return 'Kromka yakunlandi.'
-  if (action.kind === 'mark_collected') return 'Buyurtma topshirildi.'
-  if (action.kind === 'revert') return 'Buyurtma qaytarildi.'
-  if (action.kind === 'cancel') return 'Buyurtma bekor qilindi.'
-  return 'Amal bajarildi.'
+  if (action.kind === 'approve') return t('orders.toast.approved')
+  if (action.kind === 'start_cutting') return t('orders.toast.cuttingStarted')
+  if (action.kind === 'start_banding') return t('orders.toast.bandingStarted')
+  if (action.kind === 'complete_cutting') return t('orders.toast.cuttingDone')
+  if (action.kind === 'complete_banding') return t('orders.toast.bandingDone')
+  if (action.kind === 'mark_collected') return t('orders.toast.collected')
+  if (action.kind === 'revert') return t('orders.toast.reverted')
+  if (action.kind === 'cancel') return t('orders.toast.cancelled')
+  return t('orders.toast.done')
 }
 
 function startListAction(action: WorkshopOrderListAction, order: OrderSummary) {
@@ -477,7 +486,7 @@ async function confirmListAction() {
   } else if (action.kind === 'complete_cutting') {
     const completedBy = order.assigned_cutter_user_id
     if (!completedBy) {
-      listActionError.value = 'Kesishni bajargan xodim topilmadi.'
+      listActionError.value = t('orders.error.cuttingWorkerMissing')
       listActionTraceId.value = null
       ok = false
     } else {
@@ -492,7 +501,7 @@ async function confirmListAction() {
   } else if (action.kind === 'complete_banding') {
     const completedBy = order.assigned_edger_user_id
     if (!completedBy) {
-      listActionError.value = 'Kromka ishini bajargan xodim topilmadi.'
+      listActionError.value = t('orders.error.bandingWorkerMissing')
       listActionTraceId.value = null
       ok = false
     } else {
@@ -509,7 +518,7 @@ async function confirmListAction() {
   }
   if (ok) {
     toast.success(listActionSuccessMessage(action))
-    if (shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
+    if (shortfall) toast.warn(stockShortfallMessage())
     pendingConfirmAction.value = null
   }
 }
@@ -610,8 +619,8 @@ onBeforeUnmount(() => {
   <section class="flex min-h-full flex-col">
     <div class="page-head">
       <div>
-        <h1>Buyurtmalar</h1>
-        <p class="sub">Buyurtmalar oqimi.</p>
+        <h1>{{ $t('orders.list.title') }}</h1>
+        <p class="sub">{{ $t('orders.list.subtitle') }}</p>
       </div>
       <div class="tools">
         <RouterLink
@@ -619,7 +628,8 @@ onBeforeUnmount(() => {
           :to="rolePath('/workshop/orders/drafts')"
           class="mp-button mp-button-outline min-h-11 px-3 text-xs"
         >
-          Chizmalar<span v-if="draftCount > 0" class="ml-1 font-mono font-bold text-ink"
+          {{ $t('orders.list.drafts')
+          }}<span v-if="draftCount > 0" class="ml-1 font-mono font-bold text-ink"
             >· {{ draftCount }}</span
           >
         </RouterLink>
@@ -628,7 +638,7 @@ onBeforeUnmount(() => {
         <div
           class="flex gap-0.5 rounded-lg border border-hairline-strong bg-sunk p-0.5"
           role="group"
-          aria-label="Ko'rinish"
+          :aria-label="$t('orders.list.viewGroup')"
         >
           <button
             type="button"
@@ -638,10 +648,8 @@ onBeforeUnmount(() => {
             "
             :disabled="terminalStatus"
             :aria-pressed="mode === 'board'"
-            aria-label="Doska ko'rinishi"
-            :title="
-              terminalStatus ? 'Yakunlangan buyurtmalar faqat jadval rejimida' : `Doska ko'rinishi`
-            "
+            :aria-label="$t('orders.list.boardView')"
+            :title="terminalStatus ? $t('orders.list.boardLocked') : $t('orders.list.boardView')"
             @click="setMode('board')"
           >
             <AppIcon name="board" class="size-5" />
@@ -653,8 +661,8 @@ onBeforeUnmount(() => {
               mode === 'table' ? 'bg-accent text-white' : 'text-ink-soft hover:bg-bg hover:text-ink'
             "
             :aria-pressed="mode === 'table'"
-            aria-label="Jadval ko'rinishi"
-            title="Jadval ko'rinishi"
+            :aria-label="$t('orders.list.tableView')"
+            :title="$t('orders.list.tableView')"
             @click="setMode('table')"
           >
             <AppIcon name="table" class="size-5" />
@@ -664,21 +672,26 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="mp-filters">
-      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" top-label />
+      <ProjectDropdown
+        v-model="status"
+        :label="$t('orders.list.statusFilter')"
+        :options="statusOptions"
+        top-label
+      />
       <DateRangePicker
         v-model:preset="datePreset"
         v-model:date-from="dateFrom"
         v-model:date-to="dateTo"
       />
       <label class="mp-filter-input relative">
-        <span>Telefon</span>
+        <span>{{ $t('orders.list.phoneFilter') }}</span>
         <input
           v-model="phoneFilter"
           class="pr-9!"
           inputmode="tel"
           autocomplete="off"
-          placeholder="+998 yoki raqam qismi"
-          aria-label="Mijoz telefoni bo'yicha filtrlash"
+          :placeholder="$t('orders.list.phonePlaceholder')"
+          :aria-label="$t('orders.list.phoneFilterLabel')"
         />
         <!-- The input is the label's 40px bottom row; bottom-2 centers the 24px
              clear button on it (the CSS skin needs `> input`, so no wrapper). -->
@@ -686,14 +699,14 @@ onBeforeUnmount(() => {
           v-if="phoneFilter"
           type="button"
           class="absolute right-1.5 bottom-2 grid size-6 place-items-center rounded text-base text-ink-muted transition hover:bg-bg hover:text-ink"
-          aria-label="Telefon filtrini tozalash"
+          :aria-label="$t('orders.list.phoneFilterClear')"
           @click.prevent="phoneFilter = ''"
         >
           ×
         </button>
       </label>
       <button v-if="showResetAll" type="button" class="mp-filter-reset" @click="resetFilters">
-        Hammasini tozalash
+        {{ $t('orders.list.resetFilters') }}
       </button>
       <!-- Primary action lives on the filter line; the `.mp-filters > .mp-button`
            rule aligns it to the control baseline and pushes it to the far end. -->
@@ -702,16 +715,16 @@ onBeforeUnmount(() => {
         :to="rolePath('/workshop/orders/new')"
         class="mp-button mp-button-primary"
       >
-        + Yangi buyurtma
+        {{ $t('orders.list.create') }}
       </RouterLink>
       <button
         v-else
         class="mp-button mp-button-outline"
         type="button"
         disabled
-        title="Yangi buyurtma yaratish uchun tegishli filialni tanlang (buyurtma boshqaruvi ruxsati bilan)"
+        :title="$t('orders.list.createBlocked')"
       >
-        + Yangi buyurtma
+        {{ $t('orders.list.create') }}
       </button>
     </div>
 
@@ -723,14 +736,16 @@ onBeforeUnmount(() => {
       role="status"
       aria-live="polite"
     >
-      <template v-if="orders.loading">Yangilanmoqda…</template>
-      <template v-else>
-        Filtr bo'yicha
-        <b class="font-mono text-ink"
-          >{{ orders.workshopOrders.length }}{{ orders.workshopOrdersHasMore ? '+' : '' }}</b
-        >
-        ta buyurtma topildi
-      </template>
+      <template v-if="orders.loading">{{ $t('orders.list.refreshing') }}</template>
+      <!-- A slot, not an interpolated string: the figure keeps its mono weight
+           while the sentence around it stays one reorderable message. -->
+      <i18n-t v-else keypath="orders.list.filterCount" scope="global">
+        <template #count>
+          <b class="font-mono text-ink"
+            >{{ orders.workshopOrders.length }}{{ orders.workshopOrdersHasMore ? '+' : '' }}</b
+          >
+        </template>
+      </i18n-t>
     </p>
 
     <section
@@ -740,7 +755,7 @@ onBeforeUnmount(() => {
     >
       <div v-if="mode === 'board'" class="board">
         <div v-for="state in activeWorkshopStatuses" :key="state" class="board-col">
-          <h4>{{ workshopStatusUz[state] }}</h4>
+          <h4>{{ workshopStatusUz(state) }}</h4>
           <span class="sk mb-2 block h-24 w-full"></span>
           <span class="sk block h-24 w-full"></span>
         </div>
@@ -751,12 +766,12 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Mijoz</th>
-                <th>Filial</th>
-                <th>Holat</th>
-                <th>Mas'ul</th>
-                <th class="right">Summa</th>
-                <th>Vaqt</th>
+                <th>{{ $t('orders.list.colClient') }}</th>
+                <th>{{ $t('orders.list.colBranch') }}</th>
+                <th>{{ $t('orders.list.colStatus') }}</th>
+                <th>{{ $t('orders.list.colAssignee') }}</th>
+                <th class="right">{{ $t('orders.list.colTotal') }}</th>
+                <th>{{ $t('orders.list.colTime') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -774,15 +789,15 @@ onBeforeUnmount(() => {
       class="st-error"
       role="alert"
     >
-      <h3>Buyurtmalarni yuklab bo'lmadi</h3>
-      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <h3>{{ $t('orders.list.loadFailedTitle') }}</h3>
+      <p>{{ $t('orders.state.connectionRetry') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="orders.loading"
         @click="refresh"
       >
-        Qayta urinish
+        {{ $t('orders.state.retry') }}
       </button>
       <p v-if="orders.traceId" class="mt-3 text-xs text-ink-muted">
         trace_id: {{ orders.traceId }}
@@ -790,27 +805,25 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="workshop.branches.length === 0" class="st-empty">
-      <h3>Filial biriktirilmagan — ustaxona rahbariga murojaat qiling</h3>
-      <p>Filial biriktirilgach, buyurtmalar shu yerda ko'rinadi.</p>
+      <h3>{{ $t('orders.list.noBranchTitle') }}</h3>
+      <p>{{ $t('orders.list.noBranchBody') }}</p>
     </section>
 
     <!-- Filtered-empty and first-run are different situations and get different
          copy: "change the filter" is useless advice when no order exists yet. -->
     <section v-else-if="orders.workshopOrders.length === 0" class="st-empty">
-      <h3>{{ hasActiveFilters ? 'Filtrga mos buyurtma topilmadi' : "Hali buyurtma yo'q" }}</h3>
+      <h3>
+        {{ hasActiveFilters ? $t('orders.list.emptyFilteredTitle') : $t('orders.list.emptyTitle') }}
+      </h3>
       <p>
-        {{
-          hasActiveFilters
-            ? "Filtrlarni o'zgartiring yoki tozalang."
-            : "Mijoz buyurtma bergach yoki «+ Yangi buyurtma» orqali yozilgach shu yerda ko'rinadi."
-        }}
+        {{ hasActiveFilters ? $t('orders.list.emptyFilteredBody') : $t('orders.list.emptyBody') }}
       </p>
     </section>
 
     <template v-else>
       <div v-if="orders.error" class="banner danger mb-4" aria-live="polite">
         <div class="grow">
-          Buyurtmalarni yuklashda xato yuz berdi · {{ traceLine(orders.traceId) }}
+          {{ $t('orders.list.loadErrorBanner') }} · {{ traceLine(orders.traceId) }}
         </div>
       </div>
 
@@ -831,7 +844,7 @@ onBeforeUnmount(() => {
           @drop.prevent="onColumnDrop(column.state)"
         >
           <h4>
-            {{ workshopStatusUz[column.state] }}
+            {{ workshopStatusUz(column.state) }}
             <span class="ct">{{ column.orders.length }}</span>
           </h4>
           <article
@@ -847,7 +860,7 @@ onBeforeUnmount(() => {
               class="block text-inherit no-underline"
               role="link"
               tabindex="0"
-              :aria-label="`${order.order_number} — tafsilotlar`"
+              :aria-label="$t('orders.list.cardLink', { order: order.order_number })"
               @click="openOrder(order.id)"
               @keydown.enter="openOrder(order.id)"
               @keydown.space.prevent="openOrder(order.id)"
@@ -858,10 +871,12 @@ onBeforeUnmount(() => {
               </span>
               <span class="who">{{ order.contact_name }}</span>
               <span class="meta">
-                <span>{{ order.item_count }} detal</span>
+                <span>{{
+                  $t('orders.unit.parts', { n: order.item_count }, order.item_count)
+                }}</span>
                 <span v-if="branchId === 'all'">{{ order.branch_name }}</span>
                 <span :title="formatDate(order.created_at)">{{
-                  formatRelativeUz(order.created_at)
+                  formatRelative(order.created_at)
                 }}</span>
                 <span v-if="assignmentChips(order).length === 0 && assignedText(order)">{{
                   assignedText(order)
@@ -883,15 +898,17 @@ onBeforeUnmount(() => {
                   <AppIcon name="alert" />
                   {{
                     order.stock_warnings.length > 1
-                      ? `zaxira yetishmaydi (${order.stock_warnings.length})`
-                      : 'zaxira yetishmaydi'
+                      ? $t('orders.list.stockWarningCount', {
+                          count: order.stock_warnings.length,
+                        })
+                      : $t('orders.list.stockWarning')
                   }}
                 </span>
               </span>
               <span
                 v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
                 class="worker-chips mt-3"
-                :aria-label="`${order.order_number} mas'ullari`"
+                :aria-label="$t('orders.list.assigneesLabel', { order: order.order_number })"
               >
                 <span
                   v-for="chip in assignmentChips(order)"
@@ -907,10 +924,10 @@ onBeforeUnmount(() => {
                 <span
                   v-if="edgerMissingForOrder(order)"
                   class="pill p-warn"
-                  title="Kromka ustasi tayinlanmagan"
+                  :title="$t('orders.assignment.edgerMissingTitle')"
                 >
                   <AppIcon name="alert" />
-                  kromka ustasi yo'q
+                  {{ $t('orders.assignment.edgerMissing') }}
                 </span>
               </span>
             </div>
@@ -924,12 +941,12 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Mijoz</th>
-                <th>Filial</th>
-                <th>Holat</th>
-                <th>Mas'ul</th>
-                <th class="right">Summa</th>
-                <th>Vaqt</th>
+                <th>{{ $t('orders.list.colClient') }}</th>
+                <th>{{ $t('orders.list.colBranch') }}</th>
+                <th>{{ $t('orders.list.colStatus') }}</th>
+                <th>{{ $t('orders.list.colAssignee') }}</th>
+                <th class="right">{{ $t('orders.list.colTotal') }}</th>
+                <th>{{ $t('orders.list.colTime') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -950,7 +967,7 @@ onBeforeUnmount(() => {
                 <td>{{ order.branch_name }}</td>
                 <td>
                   <span :class="orderPillClass(order.status as OrderStatus)">
-                    <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+                    <span class="pd"></span>{{ workshopStatusUz(order.status) }}
                   </span>
                 </td>
                 <td>
@@ -972,10 +989,10 @@ onBeforeUnmount(() => {
                     <span
                       v-if="edgerMissingForOrder(order)"
                       class="pill p-warn"
-                      title="Kromka ustasi tayinlanmagan"
+                      :title="$t('orders.assignment.edgerMissingTitle')"
                     >
                       <AppIcon name="alert" />
-                      kromka ustasi yo'q
+                      {{ $t('orders.assignment.edgerMissing') }}
                     </span>
                   </span>
                   <small v-else class="text-ink-soft">{{ assignedText(order) || '—' }}</small>
@@ -995,7 +1012,7 @@ onBeforeUnmount(() => {
           :disabled="orders.loading"
           @click="loadMore"
         >
-          {{ orders.loading ? 'Yuklanmoqda' : "Yana ko'rsatish" }}
+          {{ orders.loading ? $t('orders.list.loadingMore') : $t('orders.list.loadMore') }}
         </button>
       </div>
     </template>
@@ -1004,8 +1021,8 @@ onBeforeUnmount(() => {
       :open="pendingConfirmAction !== null"
       :title="pendingConfirmAction?.title ?? ''"
       :message="pendingConfirmAction?.message ?? ''"
-      :confirm-label="pendingConfirmAction?.confirmLabel ?? 'Tasdiqlash'"
-      cancel-label="Orqaga"
+      :confirm-label="pendingConfirmAction?.confirmLabel ?? $t('orders.confirm.defaultAction')"
+      :cancel-label="$t('orders.confirm.backLabel')"
       :danger="pendingConfirmAction?.danger ?? false"
       :busy="orders.actionLoading"
       @cancel="pendingConfirmAction = null"
@@ -1016,8 +1033,8 @@ onBeforeUnmount(() => {
       :open="pendingReasonAction !== null"
       :title="pendingReasonAction?.title ?? ''"
       :message="pendingReasonAction?.message ?? ''"
-      :confirm-label="pendingReasonAction?.confirmLabel ?? 'Tasdiqlash'"
-      cancel-label="Yopish"
+      :confirm-label="pendingReasonAction?.confirmLabel ?? $t('orders.confirm.defaultAction')"
+      :cancel-label="$t('orders.confirm.closeLabel')"
       :danger="pendingReasonAction?.danger ?? false"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"
@@ -1025,7 +1042,7 @@ onBeforeUnmount(() => {
       @confirm="confirmReasonAction"
     >
       <label class="field !mb-0">
-        <span>Sabab</span>
+        <span>{{ $t('orders.confirm.reason') }}</span>
         <textarea v-model="reasonDraft" class="mp-input min-h-24 resize-y" />
       </label>
     </ConfirmDialog>

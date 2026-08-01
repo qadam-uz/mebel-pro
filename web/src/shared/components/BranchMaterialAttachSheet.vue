@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { apiTraceId, ApiError } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
@@ -13,8 +14,9 @@ import type { Material, MaterialKind } from '@/shared/stores/admin'
 import {
   defaultLowStockThreshold,
   thresholdUnit,
-  LOW_STOCK_THRESHOLD_HINT,
-  LOW_STOCK_THRESHOLD_LABEL,
+  lowStockThresholdColumn,
+  lowStockThresholdHint,
+  lowStockThresholdLabel,
 } from '@/shared/app/lowStockThreshold'
 import { useWorkshopStore, type BranchMaterialBulkItem } from '@/shared/stores/workshop'
 
@@ -25,6 +27,7 @@ const emit = defineEmits<{ close: []; attached: [count: number] }>()
 // the endpoint's `total`, so this bounds the DOM, not the selection.
 const PAGE_LIMIT = 100
 
+const { t } = useI18n()
 const workshop = useWorkshopStore()
 
 const step = ref<1 | 2>(1)
@@ -65,19 +68,19 @@ const selectedCount = computed(() => selected.value.size)
 // `FormSelect`, not `ProjectDropdown`: the latter teleports its panel at z-50 and
 // would render behind the modal layer (z-80) — see web/DESIGN.md → Shapes.
 const manufacturerOptions = computed<ChoiceOption[]>(() => [
-  { value: 'all', label: 'Barcha ishlab chiqaruvchilar' },
+  { value: 'all', label: t('inventory.attach.manufacturerAll') },
   ...workshop.catalogFilters.manufacturers.map((row) => ({ value: row.id, label: row.name })),
 ])
-const kindOptions: ChoiceOption[] = [
-  { value: 'all', label: 'Barcha turlar' },
-  { value: 'panel', label: 'List' },
-  { value: 'edge', label: 'Kromka' },
-]
+const kindOptions = computed<ChoiceOption[]>(() => [
+  { value: 'all', label: t('inventory.attach.kindAll') },
+  { value: 'panel', label: t('inventory.attach.kindPanel') },
+  { value: 'edge', label: t('inventory.attach.kindEdge') },
+])
 const thicknessOptions = computed<ChoiceOption[]>(() => [
-  { value: 'all', label: 'Barcha qalinliklar' },
+  { value: 'all', label: t('inventory.attach.thicknessAll') },
   ...workshop.catalogFilters.thicknesses.map((value) => ({
     value,
-    label: `${value} mm`,
+    label: t('inventory.attach.thicknessOption', { value }),
   })),
 ])
 
@@ -101,14 +104,24 @@ const mixedKinds = computed(() => {
 // wrapped lines per row on a phone.
 function optionMeta(material: Material) {
   if (material.kind === 'edge') {
-    return `Kromka · ${material.thickness_mm}×${material.edge_width_mm} mm`
+    return t('inventory.attach.metaEdge', {
+      thickness: material.thickness_mm,
+      width: material.edge_width_mm,
+    })
   }
-  const type = material.type ? material.type.toUpperCase() : 'List'
-  return `${type} · ${material.panel_length_mm}×${material.panel_width_mm}×${material.thickness_mm} mm`
+  const type = material.type ? material.type.toUpperCase() : t('inventory.attach.panelTypeFallback')
+  return t('inventory.attach.metaPanel', {
+    type,
+    length: material.panel_length_mm,
+    width: material.panel_width_mm,
+    thickness: material.thickness_mm,
+  })
 }
 
 function priceUnit(kind: MaterialKind) {
-  return kind === 'edge' ? '/ metr' : '/ list'
+  return kind === 'edge'
+    ? t('inventory.attach.priceUnitMetre')
+    : t('inventory.attach.priceUnitSheet')
 }
 
 function filters(offset = 0) {
@@ -252,8 +265,8 @@ async function submit() {
     // Name the field that actually failed — over 40 rows, "something is wrong"
     // leaves the user hunting.
     saveError.value = missingPrice
-      ? "Har bir material uchun narx kiriting — narxsiz material qo'shilmaydi."
-      : `Belgilangan qatorlarda ${LOW_STOCK_THRESHOLD_LABEL.toLowerCase()}ni to'g'ri kiriting.`
+      ? t('inventory.attach.priceRequired')
+      : t('inventory.attach.thresholdInvalid')
     return
   }
   saving.value = true
@@ -263,7 +276,7 @@ async function submit() {
   } catch (caught) {
     // The bulk endpoint rejects the whole batch naming the offending material —
     // surface that message verbatim rather than a generic failure.
-    saveError.value = apiMessage(caught) ?? "Materiallarni qo'shib bo'lmadi."
+    saveError.value = apiMessage(caught) ?? t('inventory.attach.saveFailed')
     saveTraceId.value = apiTraceId(caught)
   } finally {
     saving.value = false
@@ -337,23 +350,37 @@ function sanitizeRowThreshold(row: SelectedRow) {
 <template>
   <AppModal
     :open="open"
-    :title="step === 1 ? `Material qo'shish` : 'Narx va chegara'"
+    :title="
+      step === 1 ? $t('inventory.attach.stepPickTitle') : $t('inventory.attach.stepPriceTitle')
+    "
     max-width="max-w-4xl"
     @close="emit('close')"
   >
     <div v-if="step === 1" class="grid gap-3">
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label class="field">
-          <span>Qidirish</span>
-          <input v-model="search" class="mp-input" placeholder="Material nomi yoki dekor kodi" />
+          <span>{{ $t('inventory.attach.searchLabel') }}</span>
+          <input
+            v-model="search"
+            class="mp-input"
+            :placeholder="$t('inventory.attach.searchPlaceholder')"
+          />
         </label>
         <FormSelect
           v-model="manufacturerFilter"
-          label="Ishlab chiqaruvchi"
+          :label="$t('inventory.attach.manufacturerLabel')"
           :options="manufacturerOptions"
         />
-        <FormSelect v-model="kindFilter" label="Tur" :options="kindOptions" />
-        <FormSelect v-model="thicknessFilter" label="Qalinlik" :options="thicknessOptions" />
+        <FormSelect
+          v-model="kindFilter"
+          :label="$t('inventory.attach.kindLabel')"
+          :options="kindOptions"
+        />
+        <FormSelect
+          v-model="thicknessFilter"
+          :label="$t('inventory.attach.thicknessLabel')"
+          :options="thicknessOptions"
+        />
       </div>
 
       <div
@@ -368,10 +395,16 @@ function sanitizeRowThreshold(row: SelectedRow) {
             @change="toggleSelectAllInFilter"
           />
           <span class="min-w-0">
-            {{ selectAllPending ? 'Tanlanmoqda…' : `Filtrdagi hammasi (${total})` }}
+            {{
+              selectAllPending
+                ? $t('inventory.attach.selectAllPending')
+                : $t('inventory.attach.selectAllInFilter', { count: total })
+            }}
           </span>
         </label>
-        <span class="text-sm font-bold text-ink-muted">{{ selectedCount }} ta tanlandi</span>
+        <span class="text-sm font-bold text-ink-muted">{{
+          $t('inventory.attach.selectedCount', { n: selectedCount }, selectedCount)
+        }}</span>
       </div>
 
       <div v-if="loading" class="grid gap-3 p-2" aria-live="polite">
@@ -380,12 +413,12 @@ function sanitizeRowThreshold(row: SelectedRow) {
         <span class="sk-line"></span>
       </div>
       <div v-else-if="loadError" class="st-error">
-        <h3>Katalogni yuklab bo'lmadi</h3>
-        <p>Birozdan so'ng qayta urinib ko'ring.</p>
+        <h3>{{ $t('inventory.attach.loadErrorTitle') }}</h3>
+        <p>{{ $t('inventory.attach.loadErrorBody') }}</p>
       </div>
       <div v-else-if="options.length === 0" class="st-empty !py-8">
-        <h3>Qo'shiladigan material topilmadi</h3>
-        <p>Filtrni o'zgartiring — bu filialda barcha mos materiallar allaqachon bor.</p>
+        <h3>{{ $t('inventory.attach.emptyTitle') }}</h3>
+        <p>{{ $t('inventory.attach.emptyBody') }}</p>
       </div>
       <ul v-else class="grid max-h-[42dvh] gap-1 overflow-y-auto overflow-x-hidden">
         <li v-for="material in options" :key="material.id" class="min-w-0">
@@ -414,10 +447,10 @@ function sanitizeRowThreshold(row: SelectedRow) {
           :disabled="selectedCount === 0"
           @click="step = 2"
         >
-          Davom etish ({{ selectedCount }})
+          {{ $t('inventory.attach.continue', { count: selectedCount }) }}
         </button>
         <button type="button" class="mp-button mp-button-outline" @click="emit('close')">
-          Bekor
+          {{ $t('inventory.action.cancel') }}
         </button>
       </div>
     </div>
@@ -425,13 +458,17 @@ function sanitizeRowThreshold(row: SelectedRow) {
     <div v-else class="grid gap-3">
       <div class="grid gap-2 rounded-md border border-hairline bg-sunk px-3 py-3">
         <div class="flex flex-wrap items-end gap-2">
-          <span class="self-center text-sm font-bold text-ink">Hammasiga</span>
+          <span class="self-center text-sm font-bold text-ink">{{
+            $t('inventory.attach.bulkAll')
+          }}</span>
           <label class="grid min-w-0 flex-1 basis-40 gap-1">
-            <span class="text-xs font-bold text-ink-muted">Narx (so'm)</span>
+            <span class="text-xs font-bold text-ink-muted">{{
+              $t('inventory.attach.priceLabel')
+            }}</span>
             <input v-model="bulkFill.price" class="mp-input" inputmode="numeric" />
           </label>
           <label class="grid min-w-0 flex-1 basis-32 gap-1">
-            <span class="text-xs font-bold text-ink-muted">Chegara</span>
+            <span class="text-xs font-bold text-ink-muted">{{ lowStockThresholdColumn() }}</span>
             <input v-model="bulkFill.threshold" class="mp-input" inputmode="decimal" />
           </label>
           <button
@@ -440,15 +477,13 @@ function sanitizeRowThreshold(row: SelectedRow) {
             :disabled="!bulkFill.price.trim() && !bulkFill.threshold.trim()"
             @click="applyBulkFill"
           >
-            Qo'llash
+            {{ $t('inventory.attach.apply') }}
           </button>
         </div>
         <small class="text-ink-muted">
-          To'ldirilgan maydon barcha qatorlarga qo'llanadi; keyin har bir qatorni alohida
-          o'zgartirsa bo'ladi.
+          {{ $t('inventory.attach.bulkHint') }}
           <template v-if="mixedKinds">
-            Tanlovda list ham, kromka ham bor — qiymat har bir qatorning o'z birligida (list uchun
-            dona, kromka uchun metr) qo'llanadi.
+            {{ $t('inventory.attach.mixedKindsHint') }}
           </template>
         </small>
       </div>
@@ -457,9 +492,9 @@ function sanitizeRowThreshold(row: SelectedRow) {
         <table class="tbl tbl-fluid">
           <thead>
             <tr>
-              <th class="w-full">Material</th>
-              <th class="nowrap right">Narx (so'm)</th>
-              <th class="nowrap right">Chegara</th>
+              <th class="w-full">{{ $t('inventory.attach.columnMaterial') }}</th>
+              <th class="nowrap right">{{ $t('inventory.attach.priceLabel') }}</th>
+              <th class="nowrap right">{{ lowStockThresholdColumn() }}</th>
               <th></th>
             </tr>
           </thead>
@@ -476,7 +511,7 @@ function sanitizeRowThreshold(row: SelectedRow) {
                   v-model="row.price"
                   class="mp-input w-28 text-right"
                   inputmode="numeric"
-                  :aria-label="`${row.material.name} narxi`"
+                  :aria-label="$t('inventory.attach.priceAria', { name: row.material.name })"
                   :aria-invalid="row.priceError || undefined"
                   :class="row.priceError ? '!border-danger' : ''"
                   @input="sanitizeRowPrice(row)"
@@ -488,7 +523,7 @@ function sanitizeRowThreshold(row: SelectedRow) {
                   v-model="row.threshold"
                   class="mp-input w-20 text-right"
                   inputmode="decimal"
-                  :aria-label="`${row.material.name} kam qoldiq chegarasi`"
+                  :aria-label="$t('inventory.attach.thresholdAria', { name: row.material.name })"
                   :aria-invalid="row.thresholdError || undefined"
                   :class="row.thresholdError ? '!border-danger' : ''"
                   @input="sanitizeRowThreshold(row)"
@@ -499,10 +534,10 @@ function sanitizeRowThreshold(row: SelectedRow) {
                 <button
                   type="button"
                   class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                  :aria-label="`${row.material.name} ni tanlovdan olib tashlash`"
+                  :aria-label="$t('inventory.attach.removeAria', { name: row.material.name })"
                   @click="removeSelected(row.material.id)"
                 >
-                  Olib tashlash
+                  {{ $t('inventory.attach.remove') }}
                 </button>
               </td>
             </tr>
@@ -511,7 +546,7 @@ function sanitizeRowThreshold(row: SelectedRow) {
       </div>
 
       <p class="text-xs text-ink-muted">
-        {{ LOW_STOCK_THRESHOLD_LABEL }} — {{ LOW_STOCK_THRESHOLD_HINT }}
+        {{ lowStockThresholdLabel() }} — {{ lowStockThresholdHint() }}
       </p>
 
       <p v-if="saveError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
@@ -525,9 +560,15 @@ function sanitizeRowThreshold(row: SelectedRow) {
           :disabled="saving || selectedCount === 0"
           @click="submit"
         >
-          {{ saving ? "Qo'shilmoqda" : `${selectedCount} ta materialni qo'shish` }}
+          {{
+            saving
+              ? $t('inventory.attach.saving')
+              : $t('inventory.attach.submit', { n: selectedCount }, selectedCount)
+          }}
         </button>
-        <button type="button" class="mp-button mp-button-outline" @click="step = 1">Orqaga</button>
+        <button type="button" class="mp-button mp-button-outline" @click="step = 1">
+          {{ $t('inventory.attach.back') }}
+        </button>
       </div>
     </div>
   </AppModal>

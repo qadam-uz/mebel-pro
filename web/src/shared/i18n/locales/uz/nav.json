@@ -1,0 +1,74 @@
+{
+  "group": {
+    "management": "Boshqaruv",
+    "production": "Ishlab chiqarish",
+    "resources": "Resurslar",
+    "finance": "Moliya",
+    "system": "Tizim",
+    "platform": "Platforma",
+    "catalog": "Katalog",
+    "admin": "Admin"
+  },
+  "item": {
+    "clientHome": "Bosh sahifa",
+    "clientDrafts": "Chizmalar",
+    "clientOrders": "Buyurtmalar",
+    "clientBranches": "Ustaxonalar",
+    "dashboard": "Asosiy",
+    "orders": "Buyurtmalar",
+    "cutting": "Kesish",
+    "banding": "Krom",
+    "inventory": "Ombor",
+    "catalog": "Material katalogi",
+    "financeExpenses": "Tushum va xarajat",
+    "financeDebts": "Qarzdorlik",
+    "financeProduction": "Xodimlar mehnati",
+    "branches": "Filiallar",
+    "staff": "Xodimlar ro'yxati",
+    "settings": "Sozlamalar",
+    "workshops": "Ustaxonalar",
+    "manufacturers": "Ishlab chiqaruvchilar",
+    "materials": "Materiallar",
+    "jobs": "Fon vazifalar",
+    "errors": "Xatolik monitor",
+    "audit": "Audit log",
+    "admins": "Adminlar"
+  },
+  "role": {
+    "client": {
+      "label": "Mijoz",
+      "tenant": "Mijoz kabineti",
+      "tenantMeta": "telefon orqali kirish",
+      "dashboardTitle": "Bosh sahifa",
+      "dashboardSubtitle": "Chizmalar, buyurtmalar va ustaxonalar.",
+      "primaryAction": "Yangi kesim chizmasi",
+      "dropdown": "Chizma konteksti",
+      "backHome": "Bosh sahifaga qaytish",
+      "notFoundBody": "Bu sahifa mijoz ilovasida mavjud emas."
+    },
+    "workshop": {
+      "label": "Boshqaruv",
+      "tenant": "Ustaxona kabineti",
+      "tenantMeta": "filial ruxsatlari",
+      "dashboardTitle": "Asosiy",
+      "dashboardSubtitle": "Buyurtmalar, ishlab chiqarish, ombor va moliya holati.",
+      "primaryAction": "Filiallar",
+      "dropdown": "Filial",
+      "backHome": "Asosiyga qaytish",
+      "notFoundBody": "Bu sahifa boshqaruv ilovasida mavjud emas."
+    },
+    "admin": {
+      "label": "Superadmin",
+      "tenant": "Platforma",
+      "tenantMeta": "admin · O'Z",
+      "dashboardTitle": "Asosiy",
+      "dashboardSubtitle": "Platforma sog'ligi, insidentlar va ustaxona yaratish holati.",
+      "dropdown": "Monitor",
+      "backHome": "Asosiyga qaytish",
+      "notFoundBody": "Bu sahifa superadmin ilovasida mavjud emas."
+    }
+  },
+  "notFound": {
+    "title": "Sahifa topilmadi"
+  }
+}

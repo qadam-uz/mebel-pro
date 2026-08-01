@@ -1,3 +1,5 @@
+import { translate } from '@/shared/i18n'
+
 // Shared date-range presets for list filters (workshop app).
 //
 // Every from/to filter surface (orders, inventory transactions, finance
@@ -20,33 +22,37 @@ export interface DateRangeValue {
   to: string | null
 }
 
-export const DATE_RANGE_PRESET_LABELS: Record<DateRangePreset, string> = {
-  all: 'Barcha sanalar',
-  today: 'Bugun',
-  week: 'Oxirgi 7 kun',
-  month: 'Joriy oy',
-  last_month: "O'tgan oy",
-  days30: 'Oxirgi 30 kun',
-  custom: 'Maxsus oraliq',
-}
-
-export const UZ_MONTHS = [
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'Iyun',
-  'Iyul',
-  'Avgust',
-  'Sentabr',
-  'Oktabr',
-  'Noyabr',
-  'Dekabr',
+const MONTH_KEYS = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
 ] as const
 
 // Monday-first, matching the local calendar convention.
-export const UZ_WEEKDAYS = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'] as const
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+
+export function dateRangePresetLabel(preset: DateRangePreset): string {
+  return translate(`formats.rangePreset.${preset}`)
+}
+
+/** Month names in calendar order — read through a function, not frozen into a
+ *  module constant, so the array follows a language switched mid-session. */
+export function monthNames(): string[] {
+  return MONTH_KEYS.map((key) => translate(`formats.month.${key}`))
+}
+
+export function weekdayShortNames(): string[] {
+  return WEEKDAY_KEYS.map((key) => translate(`formats.weekdayShort.${key}`))
+}
 
 /**
  * The weeks of a month as a Monday-first matrix of ISO dates; cells outside

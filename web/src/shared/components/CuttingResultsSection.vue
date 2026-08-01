@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -46,6 +47,7 @@ const emit = defineEmits<{
 const cutting = useCuttingStore()
 const rolePath = useRolePath()
 const toast = useToast()
+const { t } = useI18n()
 
 const chosenResult = computed(() => {
   const draft = props.draft
@@ -107,7 +109,7 @@ watch(
       quote.value = await props.quoteForDraft(props.draft.id, branchId)
     } catch (errorValue) {
       quote.value = null
-      quoteError.value = clientErrorLabel(apiErrorCode(errorValue), "Narxni hisoblab bo'lmadi")
+      quoteError.value = clientErrorLabel(apiErrorCode(errorValue), t('cutting.error.quoteFailed'))
     } finally {
       quoteLoading.value = false
     }
@@ -125,7 +127,7 @@ async function choose(result: CuttingResult) {
   try {
     await cutting.chooseResult(props.draft.id, result.id)
   } catch {
-    toast.danger("Natijani tanlab bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('cutting.error.resultChooseFailed'))
     return
   }
   emit('update:activePanelId', result.panels[0]?.id ?? null)
@@ -136,21 +138,21 @@ async function choose(result: CuttingResult) {
   <section id="cutting-results" class="client-card mt-6 scroll-mt-28 min-[860px]:scroll-mt-20">
     <div class="client-card-h">
       <div>
-        <h2>Kesish natijasi</h2>
+        <h2>{{ $t('cutting.result.title') }}</h2>
       </div>
       <div v-if="chosenResult" class="flex flex-wrap items-center gap-2">
         <span
           v-if="chosenResult.source === 'imported_map'"
           class="client-pill bg-info-soft text-info"
         >
-          Fayldan joylashuv
+          {{ $t('cutting.result.fromFile') }}
         </span>
         <span class="client-pill" :class="allPlaced ? 'client-pill-done' : 'client-pill-danger'">
-          Joylashtirildi {{ placedCount }}/{{ requestedCount }}
+          {{ $t('cutting.result.placed', { placed: placedCount, requested: requestedCount }) }}
         </span>
       </div>
       <span v-if="chosenResult?.status === 'invalidated'" class="client-pill client-pill-danger">
-        eskirgan
+        {{ $t('cutting.result.stale') }}
       </span>
     </div>
 
@@ -169,8 +171,8 @@ async function choose(result: CuttingResult) {
     <div v-if="!chosenResult && !optimizeError" class="client-card-b">
       <div class="client-empty">
         <div class="client-empty-icon"><Icon name="layers" /></div>
-        <h3>Optimizer natijasi yo'q</h3>
-        <p>Detallar saqlangach optimallashtirishni ishga tushiring.</p>
+        <h3>{{ $t('cutting.result.emptyTitle') }}</h3>
+        <p>{{ $t('cutting.result.emptyBody') }}</p>
       </div>
     </div>
 
@@ -187,10 +189,7 @@ async function choose(result: CuttingResult) {
           <template #banners>
             <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
               <span class="font-mono font-black">!</span>
-              <span
-                >Detallar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
-                tushiring.</span
-              >
+              <span>{{ $t('cutting.result.invalidatedBanner') }}</span>
             </div>
 
             <div v-if="!activeResultIsChosen" class="flex justify-end">
@@ -199,15 +198,20 @@ async function choose(result: CuttingResult) {
                 class="mp-button mp-button-outline"
                 @click="choose(chosenResult)"
               >
-                Shu variantni tanlash
+                {{ $t('cutting.result.chooseVariant') }}
               </button>
             </div>
 
             <div v-if="!allPlaced" class="client-banner danger" role="alert">
               <span class="font-mono font-black">!</span>
               <span>
-                {{ requestedCount - placedCount }} ta detal listga joylashmadi — detal o'lchamini
-                kichraytiring yoki boshqa list tanlang.
+                {{
+                  $t(
+                    'cutting.result.notPlaced',
+                    { n: requestedCount - placedCount },
+                    requestedCount - placedCount,
+                  )
+                }}
               </span>
             </div>
           </template>
@@ -215,17 +219,23 @@ async function choose(result: CuttingResult) {
 
         <aside class="order-2 xl:col-start-2 xl:row-start-1">
           <section class="rounded-lg border border-hairline bg-sunk p-4">
-            <h3 class="font-serif text-xl font-semibold text-ink">Buyurtmangiz</h3>
+            <h3 class="font-serif text-xl font-semibold text-ink">
+              {{ $t('cutting.result.orderTitle') }}
+            </h3>
 
             <dl class="mt-4 grid grid-cols-2 gap-4 border-b border-hairline pb-4">
               <div>
-                <dt class="text-xs font-bold uppercase text-ink-muted">Listlar</dt>
+                <dt class="text-xs font-bold uppercase text-ink-muted">
+                  {{ $t('cutting.result.sheets') }}
+                </dt>
                 <dd class="mt-1 font-serif text-xl font-semibold text-ink">
-                  {{ orderPanelCount }} dona
+                  {{ orderPanelCount }} {{ $t('cutting.unit.piece', orderPanelCount) }}
                 </dd>
               </div>
               <div>
-                <dt class="text-xs font-bold uppercase text-ink-muted">Kromka</dt>
+                <dt class="text-xs font-bold uppercase text-ink-muted">
+                  {{ $t('cutting.result.edgeTitle') }}
+                </dt>
                 <dd class="mt-1 font-serif text-xl font-semibold text-ink">
                   {{ orderEdgeLength }}
                 </dd>
@@ -233,41 +243,43 @@ async function choose(result: CuttingResult) {
             </dl>
 
             <div v-if="!branchId" class="py-4 text-sm text-ink-muted">
-              Narxni ko'rish uchun filialni tanlang.
+              {{ $t('cutting.result.priceNeedsBranch') }}
             </div>
             <div v-else-if="quoteLoading" class="py-4 text-sm font-bold text-ink-muted">
-              Hisoblanmoqda…
+              {{ $t('cutting.result.priceLoading') }}
             </div>
             <div v-else-if="quoteError" class="py-4 text-sm font-bold text-danger" role="alert">
               {{ quoteError }}
             </div>
             <dl v-else-if="quote" class="divide-y divide-hairline py-2">
               <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">Kesish</dt>
+                <dt class="text-ink-soft">{{ $t('cutting.result.lineCutting') }}</dt>
                 <dd class="font-mono font-bold text-ink">
                   {{ formatTiyin(quote.subtotal_cutting_tiyin) }}
                 </dd>
               </div>
               <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">Materiallar</dt>
+                <dt class="text-ink-soft">{{ $t('cutting.result.materialsTitle') }}</dt>
                 <dd class="font-mono font-bold text-ink">
                   {{ formatTiyin(quote.subtotal_materials_tiyin) }}
                 </dd>
               </div>
               <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">Kromka</dt>
+                <dt class="text-ink-soft">{{ $t('cutting.result.edgeTitle') }}</dt>
                 <dd class="font-mono font-bold text-ink">
                   {{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}
                 </dd>
               </div>
               <div class="flex items-center justify-between gap-4 py-4">
-                <dt class="text-lg font-extrabold text-ink">Jami</dt>
+                <dt class="text-lg font-extrabold text-ink">{{ $t('cutting.result.total') }}</dt>
                 <dd class="font-mono text-lg font-extrabold text-ink">
                   {{ formatTiyin(quote.total_tiyin) }}
                 </dd>
               </div>
             </dl>
-            <p v-else class="py-4 text-sm text-ink-muted">Narx hozircha mavjud emas.</p>
+            <p v-else class="py-4 text-sm text-ink-muted">
+              {{ $t('cutting.result.priceUnavailable') }}
+            </p>
 
             <div class="mt-3 grid gap-2">
               <button
@@ -276,14 +288,18 @@ async function choose(result: CuttingResult) {
                 :disabled="cutting.downloadingId === chosenResult.id"
                 @click="cutting.openClientPdf(chosenResult.id)"
               >
-                {{ cutting.downloadingId === chosenResult.id ? 'Ochilmoqda…' : 'PDF ochish' }}
+                {{
+                  cutting.downloadingId === chosenResult.id
+                    ? $t('cutting.result.pdfOpening')
+                    : $t('cutting.result.pdfOpen')
+                }}
               </button>
               <RouterLink
                 v-if="draft.chosen_result_id"
                 :to="rolePath(props.checkoutPath)"
                 class="mp-button mp-button-primary w-full"
               >
-                {{ props.checkoutLabel ?? 'Buyurtmaga davom etish' }}
+                {{ props.checkoutLabel ?? $t('cutting.result.checkout') }}
               </RouterLink>
             </div>
             <p

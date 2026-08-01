@@ -1,4 +1,5 @@
 import { uzPhone } from '@/shared/app/adminValidation'
+import { translate } from '@/shared/i18n'
 
 // A branch publishes one primary number (the one clients see on their orders)
 // plus at most this many extras — mirrors MAX_ADDITIONAL_BRANCH_PHONES on the
@@ -18,11 +19,11 @@ export function additionalPhoneErrors(
   const seen = new Set<string>()
   return additional.map((raw) => {
     const value = raw.trim()
-    if (!value) return "Raqamni kiriting yoki qatorni o'chiring."
+    if (!value) return translate('forms.phone.errorEmptyRow')
     const format = uzPhone(value)
     if (format) return format
-    if (value === primary.trim()) return 'Bu asosiy raqam bilan bir xil.'
-    if (seen.has(value)) return "Bu raqam ro'yxatda bor."
+    if (value === primary.trim()) return translate('forms.phone.errorSameAsPrimary')
+    if (seen.has(value)) return translate('forms.phone.errorDuplicate')
     seen.add(value)
     return undefined
   })

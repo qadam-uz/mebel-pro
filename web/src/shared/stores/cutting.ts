@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
+import { translate } from '@/shared/i18n'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 import type { ImportMapLayout } from '@/shared/stores/cuttingImport'
 
@@ -182,12 +183,12 @@ export interface ClientBranchOption {
 }
 
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
-  if (!material) return "Material yo'q"
+  if (!material) return translate('cutting.material.none')
   return material.name
 }
 
 export function metres(mm: number) {
-  return `${(mm / 1000).toFixed(2)} m`
+  return `${(mm / 1000).toFixed(2)} ${translate('cutting.unit.metre')}`
 }
 
 /**
@@ -572,8 +573,8 @@ export const useCuttingStore = defineStore('cutting', () => {
     } catch (errorValue) {
       downloadError.value =
         errorValue instanceof PopupBlockedError
-          ? "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering."
-          : "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
+          ? translate('cutting.error.popupBlocked')
+          : translate('cutting.error.pdfFailed')
       downloadTraceId.value = apiTraceId(errorValue)
     } finally {
       downloadingId.value = null

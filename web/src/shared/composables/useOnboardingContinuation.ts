@@ -2,6 +2,7 @@ import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
+import { translate } from '@/shared/i18n'
 import { useOnboardingStore } from '@/shared/stores/onboarding'
 
 // The "system leads" thread between setup steps (docs/ref/features/onboarding.md):
@@ -23,16 +24,13 @@ export function useOnboardingContinuation() {
     // Guided-thread toasts linger past the 4 s default: they carry the owner's
     // next move, so they must survive a moment of reading and deciding.
     if (after.setup_complete) {
-      toast.success(
-        'Dastlabki sozlash yakunlandi — ustaxonangiz buyurtma qabul qilishga tayyor.',
-        8000,
-      )
+      toast.success(translate('workshopAdmin.onboarding.setupComplete'), 8000)
       return true
     }
     if (!before.branch_configured && after.branch_configured && !after.materials_added) {
       toast.action(
-        'Narxlar saqlandi. Keyingi qadam — materiallar katalogi.',
-        "Katalogga o'tish",
+        translate('workshopAdmin.onboarding.pricingSaved'),
+        translate('workshopAdmin.onboarding.openCatalog'),
         () => {
           onboarding.queueHint('catalog-add')
           void router.push(rolePath('/workshop/catalog'))
@@ -47,8 +45,8 @@ export function useOnboardingContinuation() {
         ? `/workshop/branches/${after.first_branch_id}`
         : '/workshop/branches'
       toast.action(
-        "Material qo'shildi. Endi filial narxlarini kiriting.",
-        'Narxlarni kiritish',
+        translate('workshopAdmin.onboarding.materialAdded'),
+        translate('workshopAdmin.onboarding.openPricing'),
         () => {
           onboarding.queueHint('branch-pricing')
           void router.push(rolePath(target))

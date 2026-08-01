@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
@@ -19,7 +20,7 @@ import {
   deriveSnapshotEdgeRegistry,
   edgeRegistryEntryByMaterial,
 } from '@/shared/app/cuttingResultsDisplay'
-import { STOCK_SHORTFALL_MESSAGE, workshopErrorMessage } from '@/shared/app/workshopUi'
+import { stockShortfallMessage, workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -31,6 +32,7 @@ import { useProductionStore, type ProductionJobItem } from '@/shared/stores/prod
 
 const POLL_INTERVAL_MS = 15_000
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -54,7 +56,9 @@ const completeOpen = ref(false)
 const station = computed<ProductionStationKey>(() =>
   job.value?.status === 'edge_banding' ? 'banding' : 'cutting',
 )
-const stationTitle = computed(() => (station.value === 'cutting' ? 'Kesish' : 'Krom'))
+const stationTitle = computed(() =>
+  station.value === 'cutting' ? t('finance.station.cutting') : t('finance.station.banding'),
+)
 const stationListPath = computed(() =>
   rolePath(station.value === 'cutting' ? '/workshop/cutting' : '/workshop/banding'),
 )
@@ -80,17 +84,17 @@ const primaryAction = computed<'start' | 'complete' | null>(() => {
   return null
 })
 const primaryLabel = computed(() => {
-  if (primaryAction.value === 'start') return 'Boshlash'
-  if (primaryAction.value === 'complete') return '✓ Tugatdim'
+  if (primaryAction.value === 'start') return t('finance.action.start')
+  if (primaryAction.value === 'complete') return t('finance.action.finish')
   return ''
 })
 
 const statusNote = computed(() => {
   const current = job.value
   if (!current) return null
-  if (current.status === 'ready') return 'Buyurtma tayyor — mijoz olib ketishini kutmoqda.'
-  if (current.status === 'completed') return 'Buyurtma topshirilgan.'
-  if (current.status === 'cancelled') return 'Buyurtma bekor qilingan.'
+  if (current.status === 'ready') return t('finance.job.statusReady')
+  if (current.status === 'completed') return t('finance.job.statusCompleted')
+  if (current.status === 'cancelled') return t('finance.job.statusCancelled')
   return null
 })
 
@@ -110,7 +114,8 @@ const markedCount = computed(() => {
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+  const name = String(snapshot?.name ?? t('finance.job.panelFallback'))
+  return `${name} · ${panel.panel_index}`
 }
 
 function isPanelMarked(panel: CuttingPanel) {
@@ -155,11 +160,13 @@ function bandedSides(item: ProductionJobItem) {
 
 function bandedSidesText(item: ProductionJobItem) {
   const names: string[] = []
-  if (item.edge_top) names.push('yuqori')
-  if (item.edge_bottom) names.push('pastki')
-  if (item.edge_left) names.push('chap')
-  if (item.edge_right) names.push("o'ng")
-  return names.length > 0 ? `kromka: ${names.join(', ')}` : 'kromkasiz'
+  if (item.edge_top) names.push(t('finance.job.sideTop'))
+  if (item.edge_bottom) names.push(t('finance.job.sideBottom'))
+  if (item.edge_left) names.push(t('finance.job.sideLeft'))
+  if (item.edge_right) names.push(t('finance.job.sideRight'))
+  return names.length > 0
+    ? t('finance.job.bandedSides', { sides: names.join(', ') })
+    : t('finance.job.noBanding')
 }
 
 const metaLine = computed(() => (job.value ? productionJobMetaLine(job.value, station.value) : ''))
@@ -223,7 +230,11 @@ async function runStart() {
   try {
     if (station.value === 'cutting') await orders.startCutting(current.id, current.version)
     else await orders.startBanding(current.id, current.version)
-    toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Kromka boshlandi.')
+    toast.success(
+      station.value === 'cutting'
+        ? t('finance.toast.cuttingStarted')
+        : t('finance.toast.bandingStartedSheet'),
+    )
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
   } finally {
@@ -242,11 +253,15 @@ async function openComplete() {
 const completeMessage = computed(() => {
   const current = job.value
   if (!current) return ''
+  const intro = `${current.order_number} · ${metaLine.value}`
   if (station.value === 'banding' || !current.has_banding) {
-    return `${current.order_number} · ${metaLine.value}. Keyin buyurtma tayyor holatga o'tadi.`
+    return t('finance.complete.toReady', { job: intro })
   }
-  const edger = current.assigned_edger ? ` (${current.assigned_edger.full_name} navbatiga)` : ''
-  return `${current.order_number} · ${metaLine.value}. Keyin buyurtma kromka bosqichiga o'tadi${edger}.`
+  if (!current.assigned_edger) return t('finance.complete.toBanding', { job: intro })
+  return t('finance.complete.toBandingWithEdger', {
+    job: intro,
+    edger: current.assigned_edger.full_name,
+  })
 })
 
 async function confirmComplete() {
@@ -257,7 +272,7 @@ async function confirmComplete() {
   // credit uses the office order page, which keeps its own "who did this" flow.
   const completedBy = assignee.value?.id ?? null
   if (!completedBy) {
-    actionError.value = 'Buyurtmaga usta tayinlanmagan.'
+    actionError.value = t('finance.error.noAssignee')
     return
   }
   try {
@@ -268,9 +283,9 @@ async function confirmComplete() {
         : await orders.bandingDone(current.id, payload)
     completeOpen.value = false
     clearPanelMarks(current.id)
-    toast.success(`${current.order_number} yakunlandi.`)
+    toast.success(t('finance.toast.jobFinished', { order: current.order_number }))
     // The books went negative — say so, but only after the job is marked done.
-    if (updated.stock_shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
+    if (updated.stock_shortfall) toast.warn(stockShortfallMessage())
     void router.push(stationListPath.value)
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
@@ -309,7 +324,9 @@ onBeforeUnmount(() => {
 
 <template>
   <section>
-    <RouterLink :to="stationListPath" class="back">← {{ stationTitle }}</RouterLink>
+    <RouterLink :to="stationListPath" class="back">{{
+      $t('finance.job.back', { station: stationTitle })
+    }}</RouterLink>
 
     <section v-if="production.jobLoading && !job" class="card p-5" aria-live="polite">
       <div class="grid gap-3">
@@ -320,15 +337,15 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="production.jobError || !job" class="st-error" role="alert">
-      <h3>Ish varag'ini yuklab bo'lmadi</h3>
-      <p>Buyurtma topilmadi yoki sizga tayinlanmagan.</p>
+      <h3>{{ $t('finance.job.loadFailed') }}</h3>
+      <p>{{ $t('finance.job.loadFailedBody') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="production.jobLoading"
         @click="load"
       >
-        Qayta urinish
+        {{ $t('common.action.retry') }}
       </button>
       <p v-if="production.jobTraceId" class="mt-3 text-xs text-ink-muted">
         trace_id: {{ production.jobTraceId }}
@@ -350,13 +367,13 @@ onBeforeUnmount(() => {
               <b>{{ job.client_first_name }}</b>
             </span>
             <span class="prod-stat"
-              >Detallar <b class="font-mono">{{ job.item_count }}</b></span
+              >{{ $t('finance.job.parts') }} <b class="font-mono">{{ job.item_count }}</b></span
             >
             <span v-if="job.planned_panels > 0" class="prod-stat">
-              Listlar <b class="font-mono">{{ job.planned_panels }}</b>
+              {{ $t('finance.job.panels') }} <b class="font-mono">{{ job.planned_panels }}</b>
             </span>
             <span v-if="kromTotal" class="prod-stat">
-              Krom <b class="font-mono">{{ kromTotal }}</b>
+              {{ $t('finance.station.banding') }} <b class="font-mono">{{ kromTotal }}</b>
             </span>
           </div>
         </div>
@@ -397,9 +414,9 @@ onBeforeUnmount(() => {
             </div>
             <div class="prod-rail">
               <div class="prod-rail-h">
-                <span>Listlar</span>
+                <span>{{ $t('finance.job.panels') }}</span>
                 <span v-if="marksEnabled">{{ markedCount }}/{{ result.panels.length }}</span>
-                <span v-else>{{ result.panels.length }} ta</span>
+                <span v-else>{{ $t('finance.unit.count', { n: result.panels.length }) }}</span>
               </div>
               <div
                 v-for="panel in result.panels"
@@ -423,7 +440,9 @@ onBeforeUnmount(() => {
                   type="button"
                   class="prod-rail-mark"
                   :aria-pressed="isPanelMarked(panel)"
-                  :aria-label="`${panelTitle(result, panel)} kesildi`"
+                  :aria-label="
+                    $t('finance.job.panelCutAction', { panel: panelTitle(result, panel) })
+                  "
                   @click="togglePanelMark(panel)"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -439,7 +458,9 @@ onBeforeUnmount(() => {
       <!-- Parts with per-side banding: the glyph mirrors the text for eyes,
            the text carries it for screen readers. -->
       <section class="card mt-4">
-        <div class="card-h"><h2>Detallar</h2></div>
+        <div class="card-h">
+          <h2>{{ $t('finance.job.parts') }}</h2>
+        </div>
         <div class="card-b !p-0">
           <div
             v-for="(item, index) in job.items"
@@ -481,25 +502,27 @@ onBeforeUnmount(() => {
           :disabled="actionBusy || orders.actionLoading"
           @click="onPrimary"
         >
-          {{ actionBusy ? 'Bajarilmoqda…' : primaryLabel }}
+          {{ actionBusy ? $t('finance.action.busyProgress') : primaryLabel }}
         </button>
       </div>
     </template>
 
     <ConfirmDialog
       :open="completeOpen"
-      :title="station === 'cutting' ? 'Kesish tugadimi?' : 'Kromka tugadimi?'"
+      :title="
+        station === 'cutting'
+          ? $t('finance.complete.titleCutting')
+          : $t('finance.complete.titleBanding')
+      "
       :message="completeMessage"
-      confirm-label="✓ Ha, tugatdim"
-      cancel-label="Bekor qilish"
-      busy-label="Bajarilmoqda"
+      :confirm-label="$t('finance.action.finishConfirm')"
+      :cancel-label="$t('common.action.cancel')"
+      :busy-label="$t('finance.action.busy')"
       :busy="orders.actionLoading"
       @cancel="completeOpen = false"
       @confirm="confirmComplete"
     >
-      <p class="mt-2 text-xs text-ink-muted">
-        Xatolik bo'lsa, rahbar bir qadam orqaga qaytara oladi.
-      </p>
+      <p class="mt-2 text-xs text-ink-muted">{{ $t('finance.complete.revertNote') }}</p>
       <p v-if="actionError" class="mt-2 text-sm font-bold text-danger">{{ actionError }}</p>
     </ConfirmDialog>
   </section>

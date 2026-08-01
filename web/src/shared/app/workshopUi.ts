@@ -1,24 +1,17 @@
+import { translate, translatePlural } from '@/shared/i18n'
 import type { OrderStatus } from '@/shared/stores/orders'
 import type { BranchStatus, StockTransactionType } from '@/shared/stores/workshop'
 
-export const workshopStatusUz: Record<OrderStatus, string> = {
-  new: 'Yangi',
-  confirmed: 'Tasdiqlangan',
-  cutting: 'Kesilmoqda',
-  edge_banding: 'Kromkada',
-  ready: 'Tayyor',
-  completed: 'Tugatilgan',
-  cancelled: 'Bekor qilingan',
+// Labels are resolved on every call, never captured in a module-level const: a
+// record built at import time would freeze at whatever locale happened to be
+// active then, and a language switch would leave the words already on screen.
+
+export function workshopStatusUz(status: OrderStatus): string {
+  return translate(`workshopAdmin.orderStatus.${status}`)
 }
 
-export const workshopStatusHint: Record<OrderStatus, string> = {
-  new: "ko'rib chiqish kerak",
-  confirmed: 'kesuvchi kutilmoqda',
-  cutting: 'arra oldida',
-  edge_banding: 'kromka yopishtirilmoqda',
-  ready: 'olib ketishni kutmoqda',
-  completed: 'mijoz olib ketgan',
-  cancelled: "to'xtatilgan",
+export function workshopStatusHint(status: OrderStatus): string {
+  return translate(`workshopAdmin.orderStatusHint.${status}`)
 }
 
 export function orderPillClass(status: OrderStatus) {
@@ -36,14 +29,12 @@ export function orderPillClass(status: OrderStatus) {
 // otherwise the operator still has parts to finish.
 export function workshopDraftStatus(hasResult: boolean): { label: string; pill: string } {
   return hasResult
-    ? { label: 'Tayyor — buyurtma berish mumkin', pill: 'pill p-rdy' }
-    : { label: 'Tahrirlanmoqda', pill: 'pill p-new' }
+    ? { label: translate('workshopAdmin.draft.ready'), pill: 'pill p-rdy' }
+    : { label: translate('workshopAdmin.draft.editing'), pill: 'pill p-new' }
 }
 
-export const branchStatusUz: Record<BranchStatus, string> = {
-  active: 'Faol',
-  temporarily_closed: 'Vaqtincha yopiq',
-  inactive: 'Faol emas',
+export function branchStatusUz(status: BranchStatus): string {
+  return translate(`workshopAdmin.branchStatus.${status}`)
 }
 
 export function branchPillClass(status: BranchStatus) {
@@ -52,41 +43,55 @@ export function branchPillClass(status: BranchStatus) {
   return 'pill p-dn'
 }
 
-export const stockTransactionTypeUz: Record<StockTransactionType, string> = {
-  stock_in: 'Kirim',
-  consume: 'Sarf',
-  restore: 'Qaytarish',
-  adjust: 'Tuzatish',
-}
+const STOCK_TRANSACTION_TYPES: ReadonlySet<string> = new Set<StockTransactionType>([
+  'stock_in',
+  'consume',
+  'restore',
+  'adjust',
+])
 
 export function stockTransactionTypeLabel(type: StockTransactionType) {
-  return stockTransactionTypeUz[type] ?? type
+  return STOCK_TRANSACTION_TYPES.has(type) ? translate(`workshopAdmin.stockType.${type}`) : type
 }
 
 // The job is done — the books just went below zero because an arrival was never
 // recorded. Informational only: raised as a `warn` toast next to the success
 // one, never as danger, and never in place of completing the transition (QAD-150).
-export const STOCK_SHORTFALL_MESSAGE = 'Omborda qoldiq yetarli emas'
+export function stockShortfallMessage(): string {
+  return translate('workshopAdmin.stock.shortfall')
+}
 
-export const permissionLabels: Record<string, string> = {
-  view_orders: "Buyurtmalarni ko'rish (faqat o'qish)",
-  manage_orders: 'Buyurtmalar',
-  process_production: 'Ishlab chiqarish',
-  manage_catalog: 'Material katalogi',
-  manage_inventory: 'Ombor',
-  manage_finance: 'Moliya yozuvlari',
-  view_finance_reports: 'Moliya hisobotlari',
+const PERMISSION_CODES: ReadonlySet<string> = new Set([
+  'view_orders',
+  'manage_orders',
+  'process_production',
+  'manage_catalog',
+  'manage_inventory',
+  'manage_finance',
+  'view_finance_reports',
+])
+
+/** Operator name for a permission; an unknown code stays visible as itself. */
+export function permissionLabel(permission: string): string {
+  return PERMISSION_CODES.has(permission)
+    ? translate(`workshopAdmin.permission.${permission}`)
+    : permission
 }
 
 export function grantSummary(
   isOwner: boolean,
   grants: Array<{ permission: string; branch_id: string }>,
 ) {
-  if (isOwner) return 'Rahbar · barcha ruxsatlar'
-  if (grants.length === 0) return 'Ruxsat berilmagan'
+  if (isOwner) return translate('workshopAdmin.staff.ownerGrants')
+  if (grants.length === 0) return translate('workshopAdmin.staff.noGrants')
   const branches = new Set(grants.map((grant) => grant.branch_id))
   const permissions = new Set(grants.map((grant) => grant.permission))
-  return `${permissions.size} ruxsat · ${branches.size} filial`
+  // Two counted nouns, so two messages: one plural rule cannot agree both, and
+  // `·` separates fields rather than joining a sentence.
+  return [
+    translatePlural('workshopAdmin.staff.permissionCount', permissions.size),
+    translatePlural('workshopAdmin.staff.branchCount', branches.size),
+  ].join(' · ')
 }
 
 /**
@@ -137,79 +142,79 @@ export function loginPrefix(workshopName: string | null | undefined) {
   return slug ? `${slug}_` : ''
 }
 
-export const workshopErrorMessages: Record<string, string> = {
-  permission_denied: "Bu amal uchun ruxsatingiz yo'q.",
-  order_action_failed: "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",
-  order_version_conflict:
-    "Buyurtma boshqa joyda o'zgargan. Ma'lumot yangilandi, qayta urinib ko'ring.",
-  order_edit_not_allowed:
-    "Bu buyurtmani endi tahrirlab bo'lmaydi — ishlab chiqarish boshlangan yoki buyurtma yopilgan.",
-  order_revision_not_found: 'Bu buyurtmada ochiq tahrir topilmadi.',
-  order_revision_branch_locked:
-    "Tahrir buyurtmaning filialida qoladi — filialni o'zgartirib bo'lmaydi.",
-  order_revision_failed: "Tahrirni boshlab bo'lmadi. Qayta urinib ko'ring.",
-  cutting_already_started: "Kesish allaqachon boshlangan — kesuvchini o'zgartirib bo'lmaydi.",
-  banding_already_started: "Kromka ishi allaqachon boshlangan — ustani o'zgartirib bo'lmaydi.",
-  cutter_required: 'Avval kesuvchini tayinlang.',
-  edger_required: 'Avval kromka yopishtiruvchini tayinlang.',
-  cutting_complete_failed: "Kesishni tugatib bo'lmadi. Qayta urinib ko'ring.",
-  banding_complete_failed: "Kromka ishini tugatib bo'lmadi. Qayta urinib ko'ring.",
-  expense_save_failed: "Xarajatni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
-  income_save_failed: "Tushumni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
-  ledger_void_failed: "Yozuvni bekor qilib bo'lmadi. Qayta urinib ko'ring.",
-  statement_pdf_failed: "Akt sverkani yuklab bo'lmadi. Qayta urinib ko'ring.",
-  grants_save_failed: "Ruxsatlarni saqlab bo'lmadi. Qayta urinib ko'ring.",
-  password_reset_failed: "Parolni qaytarib bo'lmadi. Qayta urinib ko'ring.",
-  user_save_failed:
-    "Xodim profilini saqlab bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
-  user_block_failed: "Xodimni bloklab bo'lmadi. Qayta urinib ko'ring.",
-  user_unblock_failed: "Xodimni faollashtirib bo'lmadi. Qayta urinib ko'ring.",
-  sessions_revoke_failed: "Sessiyalarni yopib bo'lmadi. Qayta urinib ko'ring.",
-  session_revoke_failed: "Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.",
+// Every `APIError` code a workshop user can realistically trigger has its own
+// entry under `workshopAdmin.error` (DESIGN.md, copy rule 2). The set is the
+// catalog's key inventory: a code outside it is genuinely unexpected and gets
+// the generic recovery line rather than a rendered key path.
+const WORKSHOP_ERROR_CODES: ReadonlySet<string> = new Set([
+  'permission_denied',
+  'order_action_failed',
+  'order_version_conflict',
+  'order_edit_not_allowed',
+  'order_revision_not_found',
+  'order_revision_branch_locked',
+  'order_revision_failed',
+  'cutting_already_started',
+  'banding_already_started',
+  'cutter_required',
+  'edger_required',
+  'cutting_complete_failed',
+  'banding_complete_failed',
+  'expense_save_failed',
+  'income_save_failed',
+  'ledger_void_failed',
+  'statement_pdf_failed',
+  'grants_save_failed',
+  'password_reset_failed',
+  'user_save_failed',
+  'user_block_failed',
+  'user_unblock_failed',
+  'sessions_revoke_failed',
+  'session_revoke_failed',
   // Finance ledger codes (QAD-123). The generic fallback is for genuinely
   // unexpected failures — a rejected save the operator can fix must say what
   // to fix, in the words the form uses.
-  order_required: "Buyurtma to'lovi uchun buyurtma tanlang.",
-  order_not_allowed: "Faqat buyurtma to'loviga buyurtma biriktiriladi.",
-  scope_mismatch: 'Tushum filiali buyurtma filialiga mos emas.',
-  order_payment_exceeds_total: "Summa buyurtma qoldig'idan oshib ketdi.",
-  order_not_found: "Buyurtma topilmadi — ro'yxatdan qaytadan tanlang.",
-  branch_required: 'Filialni tanlang — yozuv qaysi filialga tegishli ekani kerak.',
-  forbidden: "Bu amal uchun ruxsatingiz yo'q.",
-  invalid_amount: "Summa noldan katta bo'lishi kerak.",
-  invalid_amount_range: 'Eng kichik summa eng kattasidan oshib ketmasin.',
-  invalid_status: "Faqat yozilgan yozuvni o'zgartirish mumkin.",
-  ledger_not_recorded: "Bu yozuv allaqachon bekor qilingan — uni o'zgartirib bo'lmaydi.",
-  future_date_not_allowed: "Sana kelajakda bo'lishi mumkin emas.",
-  description_required: 'Tavsifni yozing.',
-  note_required: 'Izohni yozing — tuzatish sababsiz saqlanmaydi.',
-  reason_required: 'Sababni yozing.',
-  income_not_found: "Tushum topilmadi — ro'yxatni yangilang.",
-  expense_not_found: "Xarajat topilmadi — ro'yxatni yangilang.",
-  supplier_not_found: "Ta'minotchi topilmadi — ro'yxatdan qaytadan tanlang.",
-  client_not_found: "Mijoz topilmadi — ro'yxatdan qaytadan tanlang.",
-  adjustment_not_found: "Tuzatish topilmadi — ro'yxatni yangilang.",
-  invalid_party: "Tuzatish bitta tomonga yoziladi: yo ta'minotchi, yo mijoz.",
-}
+  'order_required',
+  'order_not_allowed',
+  'scope_mismatch',
+  'order_payment_exceeds_total',
+  'order_not_found',
+  'branch_required',
+  'forbidden',
+  'invalid_amount',
+  'invalid_amount_range',
+  'invalid_status',
+  'ledger_not_recorded',
+  'future_date_not_allowed',
+  'description_required',
+  'note_required',
+  'reason_required',
+  'income_not_found',
+  'expense_not_found',
+  'supplier_not_found',
+  'client_not_found',
+  'adjustment_not_found',
+  'invalid_party',
+])
 
 export function workshopErrorMessage(code: string | null | undefined) {
-  if (!code) return "Amal bajarilmadi. Qayta urinib ko'ring."
-  return workshopErrorMessages[code] ?? "Amal bajarilmadi. Qayta urinib ko'ring."
+  if (!code || !WORKSHOP_ERROR_CODES.has(code)) return translate('workshopAdmin.error.generic')
+  return translate(`workshopAdmin.error.${code}`)
 }
 
 export interface DashboardSectionFailure {
-  /** Uzbek section label shown to the operator; also the per-section dedupe key. */
+  /** Section label shown to the operator; also the per-section dedupe key. */
   section: string
   code: string
   traceId: string | null
 }
 
-const dashboardFailureCauses: Record<string, string> = {
-  permission_denied: "ruxsat yo'q",
-  internal_error: 'serverda ichki xatolik',
-  validation_error: "so'rov xato tuzilgan",
-  not_found: "ma'lumot topilmadi",
-}
+const DASHBOARD_FAILURE_CAUSES: ReadonlySet<string> = new Set([
+  'permission_denied',
+  'internal_error',
+  'validation_error',
+  'not_found',
+])
 
 /**
  * One diagnostic line per failed dashboard section: the named cause plus the
@@ -220,8 +225,15 @@ const dashboardFailureCauses: Record<string, string> = {
  */
 export function dashboardFailureLine(failure: DashboardSectionFailure): string {
   if (failure.traceId === null) {
-    return `${failure.section} — serverga ulanib bo'lmadi`
+    return translate('workshopAdmin.dashboard.failureConnection', { section: failure.section })
   }
-  const cause = dashboardFailureCauses[failure.code] ?? 'kutilmagan xatolik'
-  return `${failure.section} — ${cause} (${failure.code} · trace: ${failure.traceId})`
+  const cause = DASHBOARD_FAILURE_CAUSES.has(failure.code)
+    ? translate(`workshopAdmin.dashboard.failureCause.${failure.code}`)
+    : translate('workshopAdmin.dashboard.failureCause.unknown')
+  return translate('workshopAdmin.dashboard.failureLine', {
+    section: failure.section,
+    cause,
+    code: failure.code,
+    trace: failure.traceId,
+  })
 }

@@ -45,25 +45,29 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/auth/login',
     name: 'workshop-login',
     component: () => import('@/shared/views/WorkshopLoginView.vue'),
-    meta: { layout: 'auth', title: 'Kirish', branchScope: 'workshop' },
+    meta: { layout: 'auth', titleKey: 'routes.login', branchScope: 'workshop' },
   },
   {
     path: '/workshop',
     name: 'workshop-home',
     component: () => import('@/shared/views/WorkshopDashboardView.vue'),
-    meta: { title: 'Asosiy', branchScope: 'branch' },
+    meta: { titleKey: 'routes.dashboard', branchScope: 'branch' },
   },
   {
     path: '/workshop/profile',
     name: 'workshop-profile',
     component: () => import('@/shared/views/WorkshopProfileView.vue'),
-    meta: { title: 'Mening profilim', branchScope: 'workshop' },
+    meta: { titleKey: 'routes.myProfile', branchScope: 'workshop' },
   },
   {
     path: '/workshop/orders',
     name: 'workshop-orders',
     component: () => import('@/shared/views/WorkshopOrdersView.vue'),
-    meta: { title: 'Buyurtmalar', workshopAccess: { any: orderAccess }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.orders',
+      workshopAccess: { any: orderAccess },
+      branchScope: 'branch',
+    },
   },
   // Staff order-creation flow. All under /workshop/orders/* and declared BEFORE
   // the `:order_id` detail route so `new`/`cutting` aren't captured as order ids.
@@ -71,7 +75,11 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/orders/new',
     name: 'workshop-order-new-walkin',
     component: () => import('@/shared/views/WorkshopWalkInClientView.vue'),
-    meta: { title: 'Yangi buyurtma', workshopAccess: { any: orderAccess }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.newOrder',
+      workshopAccess: { any: orderAccess },
+      branchScope: 'branch',
+    },
   },
   {
     path: '/workshop/orders/new/cutting',
@@ -79,7 +87,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     component: () => import('@/shared/views/CuttingEditorView.vue'),
     beforeEnter: ensureWalkInClient,
     meta: {
-      title: 'Kesim chizmasi',
+      titleKey: 'routes.draft',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
       // The editor freezes its branch at mount and keeps its own in-page
@@ -92,7 +100,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-cutting-editor',
     component: () => import('@/shared/views/CuttingEditorView.vue'),
     meta: {
-      title: 'Kesim chizmasi',
+      titleKey: 'routes.draft',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
       branchScope: 'entity',
@@ -103,7 +111,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-cutting-result',
     component: () => import('@/shared/views/CuttingResultView.vue'),
     meta: {
-      title: 'Kesish natijasi',
+      titleKey: 'routes.cuttingResult',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
       branchScope: 'entity',
@@ -114,7 +122,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-checkout',
     component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),
     meta: {
-      title: 'Buyurtmani rasmiylashtirish',
+      titleKey: 'routes.checkout',
       workshopAccess: { any: orderAccess },
       branchScope: 'entity',
     },
@@ -126,7 +134,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-drafts',
     component: () => import('@/shared/views/WorkshopDraftsView.vue'),
     meta: {
-      title: 'Saqlangan chizmalar',
+      titleKey: 'routes.savedDrafts',
       workshopAccess: { any: orderAccess },
       branchScope: 'branch',
     },
@@ -138,7 +146,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-edit-review',
     component: () => import('@/shared/views/WorkshopOrderEditReviewView.vue'),
     meta: {
-      title: 'Tahrirni saqlash',
+      titleKey: 'routes.editReview',
       workshopAccess: { any: orderAccess },
       branchScope: 'entity',
     },
@@ -148,7 +156,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-detail',
     component: () => import('@/shared/views/WorkshopOrderDetailView.vue'),
     meta: {
-      title: 'Buyurtma tafsilotlari',
+      titleKey: 'routes.orderDetail',
       workshopAccess: { any: orderDetailAccess },
       branchScope: 'entity',
     },
@@ -168,34 +176,50 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/production/:order_id',
     name: 'workshop-production-job',
     component: () => import('@/shared/views/WorkshopProductionJobView.vue'),
-    meta: { title: 'Chizma', workshopAccess: { any: productionAccess }, branchScope: 'entity' },
+    meta: {
+      titleKey: 'routes.drawing',
+      workshopAccess: { any: productionAccess },
+      branchScope: 'entity',
+    },
   },
   {
     path: '/workshop/cutting',
     name: 'workshop-cutting',
     component: () => import('@/shared/views/WorkshopProductionView.vue'),
     props: { station: 'cutting' },
-    meta: { title: 'Kesish', workshopAccess: { any: productionAccess }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.cutting',
+      workshopAccess: { any: productionAccess },
+      branchScope: 'branch',
+    },
   },
   {
     path: '/workshop/banding',
     name: 'workshop-banding',
     component: () => import('@/shared/views/WorkshopProductionView.vue'),
     props: { station: 'banding' },
-    meta: { title: 'Krom', workshopAccess: { any: productionAccess }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.banding',
+      workshopAccess: { any: productionAccess },
+      branchScope: 'branch',
+    },
   },
   {
     path: '/workshop/inventory',
     name: 'workshop-inventory',
     component: () => import('@/shared/views/WorkshopInventoryView.vue'),
-    meta: { title: 'Ombor', workshopAccess: { any: [p.manageInventory] }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.inventory',
+      workshopAccess: { any: [p.manageInventory] },
+      branchScope: 'branch',
+    },
   },
   {
     path: '/workshop/catalog',
     name: 'workshop-catalog',
     component: () => import('@/shared/views/WorkshopCatalogView.vue'),
     meta: {
-      title: 'Material katalogi',
+      titleKey: 'routes.materialCatalog',
       workshopAccess: { any: [p.manageCatalog] },
       branchScope: 'branch',
     },
@@ -208,7 +232,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
       // A Tizim page, so it is workshop-wide and the topbar picker steps aside
       // (QAD-182). The page keeps its own Filial filter — on a workshop-scoped
       // page that is the only branch control, not a second one.
-      title: "Xodimlar ro'yxati",
+      titleKey: 'routes.staff',
       workshopAccess: { ownerOnly: true },
       branchScope: 'workshop',
     },
@@ -217,20 +241,28 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/settings',
     name: 'workshop-settings',
     component: () => import('@/shared/views/WorkshopSettingsView.vue'),
-    meta: { title: 'Sozlamalar', workshopAccess: { ownerOnly: true }, branchScope: 'workshop' },
+    meta: {
+      titleKey: 'routes.settings',
+      workshopAccess: { ownerOnly: true },
+      branchScope: 'workshop',
+    },
   },
   {
     path: '/workshop/branches',
     name: 'workshop-branches',
     component: () => import('@/shared/views/WorkshopBranchesView.vue'),
-    meta: { title: 'Filiallar', workshopAccess: { ownerOnly: true }, branchScope: 'workshop' },
+    meta: {
+      titleKey: 'routes.branches',
+      workshopAccess: { ownerOnly: true },
+      branchScope: 'workshop',
+    },
   },
   {
     path: '/workshop/branches/:branch_id',
     name: 'workshop-branch-detail',
     component: () => import('@/shared/views/WorkshopBranchDetailView.vue'),
     meta: {
-      title: 'Filial tafsilotlari',
+      titleKey: 'routes.branchDetail',
       workshopAccess: { ownerOnly: true },
       branchScope: 'entity',
     },
@@ -239,14 +271,18 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/finance/income',
     name: 'workshop-finance-income',
     component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
-    meta: { title: 'Tushum', workshopAccess: { any: [p.manageFinance] }, branchScope: 'branch' },
+    meta: {
+      titleKey: 'routes.income',
+      workshopAccess: { any: [p.manageFinance] },
+      branchScope: 'branch',
+    },
   },
   {
     path: '/workshop/finance/expenses',
     name: 'workshop-finance-expenses',
     component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
     meta: {
-      title: 'Tushum va xarajat',
+      titleKey: 'routes.finance',
       workshopAccess: { any: [p.manageFinance] },
       branchScope: 'branch',
     },
@@ -258,7 +294,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     meta: {
       // Every term in the debt fold names a branch now (QAD-182), so the page
       // follows the picker like the rest of the finance module.
-      title: 'Qarzdorlik',
+      titleKey: 'routes.debts',
       workshopAccess: { any: [p.manageFinance] },
       branchScope: 'branch',
     },
@@ -271,7 +307,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
       // One name in the nav, the tab title and the heading (QAD-182). Branch
       // scope like the rest of the finance module — the picker governs, and the
       // page carries no branch control of its own.
-      title: 'Xodimlar mehnati',
+      titleKey: 'routes.labour',
       workshopAccess: { any: financeAccess },
       branchScope: 'branch',
     },
@@ -281,7 +317,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-user-detail',
     component: () => import('@/shared/views/WorkshopUserDetailView.vue'),
     meta: {
-      title: 'Xodim tafsilotlari',
+      titleKey: 'routes.staffDetail',
       workshopAccess: { ownerOnly: true },
       branchScope: 'entity',
     },
@@ -290,12 +326,12 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/notifications',
     name: 'workshop-notifications',
     component: () => import('@/shared/views/WorkshopNotificationsView.vue'),
-    meta: { title: 'Bildirishnomalar', branchScope: 'workshop' },
+    meta: { titleKey: 'routes.notifications', branchScope: 'workshop' },
   },
   {
     path: '/:pathMatch(.*)*',
     name: 'workshop-not-found',
     component: () => import('@/shared/views/RoleNotFoundView.vue'),
-    meta: { title: 'Sahifa topilmadi', branchScope: 'workshop' },
+    meta: { titleKey: 'routes.notFound', branchScope: 'workshop' },
   },
 ]

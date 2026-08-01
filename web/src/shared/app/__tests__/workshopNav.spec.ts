@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { i18n } from '@/shared/i18n'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 
 const identity = (path: string) => path
@@ -12,7 +13,7 @@ describe('workshop navigation permissions', () => {
         branches: [],
         selectedBranchId: '',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual([
       'Asosiy',
       'Buyurtmalar',
@@ -36,7 +37,7 @@ describe('workshop navigation permissions', () => {
         branches: [],
         selectedBranchId: '',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy'])
   })
 
@@ -47,7 +48,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['manage_inventory'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy', 'Ombor'])
   })
 
@@ -58,7 +59,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['view_orders'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy'])
   })
 
@@ -69,7 +70,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['manage_orders'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy', 'Buyurtmalar'])
   })
 
@@ -80,7 +81,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['process_production'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy', 'Kesish', 'Krom'])
   })
 
@@ -91,7 +92,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['view_finance_reports'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy', 'Xodimlar mehnati'])
   })
 
@@ -102,7 +103,7 @@ describe('workshop navigation permissions', () => {
         branches: [{ id: 'branch-1', permissions: ['manage_finance'] }],
         selectedBranchId: 'branch-1',
         path: identity,
-      }).map((item) => item.label),
+      }).map((item) => i18n.global.t(item.labelKey)),
     ).toEqual(['Asosiy', 'Tushum va xarajat', 'Qarzdorlik', 'Xodimlar mehnati'])
   })
 })

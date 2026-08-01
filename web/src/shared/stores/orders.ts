@@ -13,6 +13,7 @@ import {
 import { authInit } from '@/shared/app/authInit'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
+import { translate } from '@/shared/i18n'
 import type { CuttingDraft, CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
 export type OrderStatus =
@@ -696,8 +697,8 @@ export const useOrdersStore = defineStore('orders', () => {
     } catch (errorValue) {
       downloadError.value =
         errorValue instanceof PopupBlockedError
-          ? "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering."
-          : "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
+          ? translate('orders.error.popupBlocked')
+          : translate('orders.error.pdfFailed')
       downloadTraceId.value = apiTraceId(errorValue)
     } finally {
       downloadingId.value = null

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
 import { type EdgeField } from '@/shared/app/cuttingDisplay'
@@ -43,6 +44,8 @@ const emit = defineEmits<{
   'open-material-picker': []
   'toggle-select': []
 }>()
+
+const { t } = useI18n()
 
 const actionsOpen = ref(false)
 // Writable computeds keep the original `v-model.number` semantics while emitting
@@ -89,9 +92,7 @@ const followsGrain = computed(() => props.part.follow_grain !== false)
 // stored field keeps its meaning; only this control is flipped.
 const rotationAllowed = computed(() => !followsGrain.value)
 const grainTitle = computed(() =>
-  rotationAllowed.value
-    ? "Burilishi mumkin — tekstura yo'nalishi erkin, list tejaladi"
-    : "Burilmaydi — tekstura yo'nalishi saqlanadi",
+  rotationAllowed.value ? t('cutting.parts.rotationAllowed') : t('cutting.parts.rotationLocked'),
 )
 
 const notCarriedNonPanel = computed(() => props.notCarried.some((issue) => issue !== 'panel'))
@@ -185,21 +186,21 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-2 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Nomi</span>
+          <span class="@min-[920px]:hidden">{{ $t('cutting.column.name') }}</span>
           <input
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
             class="mp-input border-hairline bg-elevated/40 @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :placeholder="partDisplayName(part, index)"
-            aria-label="Nomi"
+            :aria-label="$t('cutting.column.name')"
             @keydown="onRapidEntryKeydown($event, 'name')"
           />
         </label>
         <div
           class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-6 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Burilish</span>
+          <span class="@min-[920px]:hidden">{{ $t('cutting.column.rotation') }}</span>
           <!-- A bare checkbox under a one-word header never said which way it
                meant; the glyph shows the state itself. `switch` (not a checkbox)
                because the two states are both meaningful, not on/absent. -->
@@ -224,15 +225,15 @@ function focusNumericFromPointer(event: MouseEvent) {
         <div
           class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-7 @min-[680px]:row-start-1"
         >
-          <span class="@min-[680px]:hidden">Kromka</span>
+          <span class="@min-[680px]:hidden">{{ $t('cutting.column.edge') }}</span>
           <button
             type="button"
             :data-part-index="index"
             data-cell="edge"
             class="size-8 rounded-md bg-sunk/30 transition hover:bg-sunk"
             :style="edgeGlyphStyle()"
-            title="Kromka"
-            aria-label="Kromka tomonlari"
+            :title="$t('cutting.column.edge')"
+            :aria-label="$t('cutting.edge.sidesAria')"
             aria-haspopup="dialog"
             @click="emit('open-edge-picker', $event)"
           ></button>
@@ -240,19 +241,19 @@ function focusNumericFromPointer(event: MouseEvent) {
         <div
           class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-8 @min-[680px]:row-start-1 @min-[680px]:flex @min-[680px]:justify-end"
         >
-          <span class="@min-[680px]:hidden">Amallar</span>
+          <span class="@min-[680px]:hidden">{{ $t('cutting.column.actions') }}</span>
           <button
             v-if="actionsOpen"
             type="button"
             class="fixed inset-0 z-20 cursor-default"
-            aria-label="Amallar menyusini yopish"
+            :aria-label="$t('cutting.parts.closeActions')"
             @click="actionsOpen = false"
           ></button>
           <button
             type="button"
             class="mp-action-icon-button size-8 min-h-0"
-            :aria-label="`Detal #${index + 1} amallari`"
-            title="Amallar"
+            :aria-label="$t('cutting.parts.rowActionsAria', { n: index + 1 })"
+            :title="$t('cutting.column.actions')"
             @click="actionsOpen = !actionsOpen"
           >
             ⋯
@@ -267,7 +268,7 @@ function focusNumericFromPointer(event: MouseEvent) {
               @click="duplicateFromMenu"
             >
               <Icon name="layers" class="size-4 text-ink-muted" />
-              Nusxalash
+              {{ $t('cutting.parts.duplicate') }}
             </button>
             <button
               type="button"
@@ -275,7 +276,7 @@ function focusNumericFromPointer(event: MouseEvent) {
               @click="moveFromMenu"
             >
               <Icon name="swap" class="size-4 text-ink-muted" />
-              Boshqa materialga ko'chirish
+              {{ $t('cutting.parts.moveToMaterial') }}
             </button>
             <button
               type="button"
@@ -283,7 +284,7 @@ function focusNumericFromPointer(event: MouseEvent) {
               @click="deleteFromMenu"
             >
               <Icon name="trash" class="size-4" />
-              O'chirish
+              {{ $t('cutting.action.delete') }}
             </button>
           </div>
         </div>
@@ -296,7 +297,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-3 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Uzunlik</span>
+          <span class="@min-[920px]:hidden">{{ $t('cutting.column.length') }}</span>
           <input
             v-model.number="lengthModel"
             :data-part-index="index"
@@ -307,7 +308,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             enterkeyhint="next"
             class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
-            aria-label="Uzunlik millimetr"
+            :aria-label="$t('cutting.parts.lengthAria')"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'length')"
@@ -317,7 +318,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-4 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Kenglik</span>
+          <span class="@min-[920px]:hidden">{{ $t('cutting.column.width') }}</span>
           <input
             v-model.number="widthModel"
             :data-part-index="index"
@@ -328,7 +329,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             enterkeyhint="next"
             class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
-            aria-label="Kenglik millimetr"
+            :aria-label="$t('cutting.parts.widthAria')"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'width')"
@@ -338,7 +339,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         <label
           class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-5 @min-[680px]:row-start-1"
         >
-          <span class="@min-[920px]:hidden">Soni</span>
+          <span class="@min-[920px]:hidden">{{ $t('cutting.column.quantity') }}</span>
           <input
             v-model.number="quantityModel"
             :data-part-index="index"
@@ -349,7 +350,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             enterkeyhint="done"
             class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
-            aria-label="Soni"
+            :aria-label="$t('cutting.column.quantity')"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'quantity')"
@@ -371,7 +372,7 @@ function focusNumericFromPointer(event: MouseEvent) {
       class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
     >
       <span aria-hidden="true">!</span>
-      <span>Bu qatordagi list materiali endi katalogda yo'q — boshqasini tanlang.</span>
+      <span>{{ $t('cutting.parts.materialMissing') }}</span>
     </p>
 
     <p
@@ -387,19 +388,21 @@ function focusNumericFromPointer(event: MouseEvent) {
       class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
     >
       <span class="font-black">!</span>
-      <span class="min-w-0 flex-1">
-        Bu qator
-        <b>{{ preferredBranchName }}</b>
-        filialida mavjud bo'lmagan materialdan foydalanadi — boshqa material tanlang yoki filialni
-        o'zgartiring.
-      </span>
+      <!-- `i18n-t` rather than `$t`: the branch name is bold *inside* the
+           sentence, and Russian does not put it where Uzbek does — splitting the
+           message around the <b> would make the word order untranslatable. -->
+      <i18n-t keypath="cutting.parts.notCarried" tag="span" scope="global" class="min-w-0 flex-1">
+        <template #branch>
+          <b>{{ preferredBranchName }}</b>
+        </template>
+      </i18n-t>
       <button
         v-if="notCarriedNonPanel"
         type="button"
         class="mp-button mp-button-outline"
         @click="emit('open-edge-picker', undefined)"
       >
-        Boshqa kromka tanlash
+        {{ $t('cutting.parts.pickAnotherEdge') }}
       </button>
     </div>
   </article>

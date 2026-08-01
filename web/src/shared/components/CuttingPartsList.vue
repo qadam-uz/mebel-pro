@@ -44,11 +44,13 @@ function isSelected(panelId: string, partRef: string) {
     class="rounded-lg border border-hairline bg-elevated p-4"
     aria-labelledby="cutting-parts-list-heading"
   >
-    <h3 id="cutting-parts-list-heading" class="text-sm font-extrabold text-ink">Detallar</h3>
-    <p class="mt-1 text-xs text-ink-muted">Chizmada ko'rish uchun qatorni bosing.</p>
+    <h3 id="cutting-parts-list-heading" class="text-sm font-extrabold text-ink">
+      {{ $t('cutting.parts.heading') }}
+    </h3>
+    <p class="mt-1 text-xs text-ink-muted">{{ $t('cutting.parts.listHint') }}</p>
 
     <p v-if="!sheets.length" class="mt-3 text-sm text-ink-soft">
-      Bu natijada joylashtirilgan detal yo'q.
+      {{ $t('cutting.parts.noPlacements') }}
     </p>
 
     <div v-else class="mt-3 grid gap-4">
@@ -83,14 +85,16 @@ function isSelected(panelId: string, partRef: string) {
               </span>
               <span class="shrink-0 text-right">
                 <span class="block font-mono text-sm font-bold text-ink">
-                  {{ group.count }} dona
+                  {{ group.count }} {{ $t('cutting.unit.piece', group.count) }}
                 </span>
                 <span
                   v-if="group.rotatedCount > 0"
                   class="mt-0.5 block font-mono text-[11px] font-bold text-accent"
                 >
                   <span aria-hidden="true">↻ {{ group.rotatedCount }}</span>
-                  <span class="sr-only">{{ group.rotatedCount }} ta burilgan</span>
+                  <span class="sr-only">{{
+                    $t('cutting.parts.rotatedCount', { n: group.rotatedCount }, group.rotatedCount)
+                  }}</span>
                 </span>
               </span>
             </button>

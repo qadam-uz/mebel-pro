@@ -1,13 +1,24 @@
 import { formatStockUnit } from '@/shared/formatters'
+import { translate } from '@/shared/i18n'
 import type { MaterialKind } from '@/shared/stores/admin'
 
 // QAD-159: the branch material's `min_stock` is the **low-stock alert threshold**,
 // not a minimum the branch must hold. One place for its copy so the attach sheet,
 // the edit form, and the table can never drift apart.
-export const LOW_STOCK_THRESHOLD_LABEL = 'Kam qoldiq chegarasi'
-export const LOW_STOCK_THRESHOLD_COLUMN = 'Chegara'
-export const LOW_STOCK_THRESHOLD_HINT =
-  'Zaxira shu miqdorga tushganda ogohlantiramiz. 0 = faqat butunlay tugaganda.'
+//
+// Functions, not constants: a module-level string would freeze at whatever locale
+// happened to be active when this module first evaluated.
+export function lowStockThresholdLabel(): string {
+  return translate('inventory.threshold.label')
+}
+
+export function lowStockThresholdColumn(): string {
+  return translate('inventory.threshold.column')
+}
+
+export function lowStockThresholdHint(): string {
+  return translate('inventory.threshold.hint')
+}
 
 // A pre-filled 0 switched low-stock alerts off for every material ever attached,
 // so new attachments start from a threshold that actually warns in time. UI-only

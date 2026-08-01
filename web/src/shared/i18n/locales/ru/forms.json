@@ -1,0 +1,52 @@
+{
+  "select": {
+    "placeholder": "Выберите"
+  },
+  "combobox": {
+    "placeholder": "Поиск",
+    "noResults": "Нет подходящих вариантов",
+    "loading": "Поиск…",
+    "clearSelection": "{label} — очистить выбор"
+  },
+  "multiSelect": {
+    "all": "Все",
+    "selectedCount": "Выбрано {count}"
+  },
+  "dropdown": {
+    "unselected": "Не выбрано"
+  },
+  "actionMenu": {
+    "trigger": "Действия"
+  },
+  "date": {
+    "placeholder": "дд.мм.гггг",
+    "openCalendar": "Открыть календарь",
+    "pickDay": "Выберите дату",
+    "errorFormat": "Дата в формате дд.мм.гггг",
+    "errorBefore": "Не раньше {date}",
+    "errorAfter": "Не позже {date}"
+  },
+  "dateRange": {
+    "label": "Дата",
+    "range": "Диапазон дат"
+  },
+  "calendar": {
+    "previousMonth": "Предыдущий месяц",
+    "nextMonth": "Следующий месяц"
+  },
+  "filterStatus": {
+    "refreshing": "Обновление…",
+    "found": "По фильтру найдено {count} {noun}",
+    "count": "{count} {noun}",
+    "total": "итого {total}",
+    "resetAll": "Очистить всё"
+  },
+  "phone": {
+    "errorEmptyRow": "Введите номер или удалите строку.",
+    "errorSameAsPrimary": "Совпадает с основным номером.",
+    "errorDuplicate": "Этот номер уже в списке."
+  },
+  "autosave": {
+    "saveFailed": "Не удалось сохранить раскрой. Повторите попытку."
+  }
+}

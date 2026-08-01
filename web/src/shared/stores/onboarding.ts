@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { translate } from '@/shared/i18n'
 import { useAuthStore } from '@/shared/stores/auth'
 
 // Guided first-run setup for workshop owners (docs/ref/features/onboarding.md).
@@ -30,23 +31,30 @@ export interface OnboardingHint {
   step: string
 }
 
+// `title` / `body` are getters, not values: the record is module-level, so a
+// plain string would freeze at whatever locale was active on first import and
+// survive a language switch. Reading them inside a render keeps them reactive.
 export const ONBOARDING_HINTS: Record<OnboardingHintKey, OnboardingHint> = {
   'branch-pricing': {
     key: 'branch-pricing',
     routeName: 'workshop-branch-detail',
-    title: 'Kesish narxlarini kiriting',
-    body:
-      'Kesish va kromka yopishtirish narxlarini shu maydonlarga yozib, «Saqlash» tugmasini ' +
-      "bosing. Narxlar kiritilmaguncha buyurtma summasini hisoblab bo'lmaydi.",
+    get title() {
+      return translate('workshopAdmin.onboarding.pricingTitle')
+    },
+    get body() {
+      return translate('workshopAdmin.onboarding.pricingBody')
+    },
     step: '2/3',
   },
   'catalog-add': {
     key: 'catalog-add',
     routeName: 'workshop-catalog',
-    title: "Katalogga material qo'shing",
-    body:
-      "«+ Material qo'shish» tugmasini bosib, filial sotadigan materiallarni tanlang. " +
-      "Mijozlar faqat shu ro'yxatdagi materiallardan buyurtma bera oladi.",
+    get title() {
+      return translate('workshopAdmin.onboarding.catalogTitle')
+    },
+    get body() {
+      return translate('workshopAdmin.onboarding.catalogBody')
+    },
     step: '3/3',
   },
 }

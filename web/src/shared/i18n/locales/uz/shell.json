@@ -1,0 +1,163 @@
+{
+  "a11y": {
+    "mainNav": "Asosiy navigatsiya",
+    "workshopNav": "Ustaxona navigatsiyasi",
+    "platformNav": "Platforma navigatsiyasi",
+    "mobileNav": "Mobil navigatsiya",
+    "menu": "Menyu",
+    "closeMenu": "Menyuni yopish",
+    "clientHome": "Bosh sahifa",
+    "clientProfile": "Profil — {name}"
+  },
+  "action": {
+    "close": "Yopish",
+    "retry": "Qayta urinish",
+    "back": "← Orqaga",
+    "loadMore": "Yana ko'rsatish"
+  },
+  "account": {
+    "profile": "Mening profilim",
+    "sessions": "Sessiyalar",
+    "logout": "Chiqib ketish",
+    "menuAria": "{name} — hisob menyusi",
+    "logoutFailed": "Chiqib bo'lmadi. Qayta urinib ko'ring."
+  },
+  "tenant": {
+    "ownerMeta": "Rahbar · barcha ruxsatlar",
+    "passwordResetHint": "parolni o'zgartirish kerak"
+  },
+  "branch": {
+    "none": "Filial yo'q",
+    "noneMeta": "biriktirilmagan",
+    "temporarilyClosed": "vaqtincha yopiq"
+  },
+  "branchScope": {
+    "workshop": "Bu sahifa butun ustaxona bo'yicha",
+    "entity": "Filial ochilgan yozuvdan olinadi"
+  },
+  "nav": {
+    "newOrdersAria": "{label} — {n} ta yangi buyurtma"
+  },
+  "search": {
+    "label": "Global qidiruv",
+    "placeholder": "Buyurtma, mijoz, xodim yoki material",
+    "resultsAria": "Qidiruv natijalari",
+    "noPermission": "Bu filial bo'yicha qidiruv uchun ruxsat yo'q.",
+    "minChars": "Kamida 2 ta belgi kiriting.",
+    "searching": "Qidirilmoqda…",
+    "partialError": "Qidiruvning bir qismi yuklanmadi.",
+    "empty": "Natija topilmadi.",
+    "sectionOrders": "Buyurtmalar",
+    "sectionUsers": "Xodimlar",
+    "sectionMaterials": "Material katalogi",
+    "sectionStock": "Ombor",
+    "userActive": "Faol",
+    "userBlocked": "Bloklangan",
+    "materialActive": "Faol",
+    "materialHidden": "Yashirilgan",
+    "stockLow": "Kam qoldi",
+    "stockOk": "Omborda",
+    "openInOrders": "Buyurtmalar ro'yxatida ochish",
+    "openInCatalog": "Katalogda ochish",
+    "openInInventory": "Omborda ochish",
+    "openInUsers": "Xodimlarda ochish"
+  },
+  "notifications": {
+    "title": "Bildirishnomalar",
+    "bellAria": "Bildirishnomalar — {n} o'qilmagan",
+    "markAll": "Hammasini o'qilgan deb belgilash",
+    "markAllDone": "Hammasi o'qilgan deb belgilandi.",
+    "markAllFailed": "Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.",
+    "markReadFailed": "Bildirishnomani o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.",
+    "notOpenable": "Bu bildirishnoma ochib bo'lmaydi.",
+    "newArrived": "Yangi bildirishnoma bor.",
+    "loading": "Bildirishnomalar yuklanmoqda…",
+    "loadFailedMenu": "Bildirishnomalarni yuklab bo'lmadi. Qayta urinib ko'ring.",
+    "emptyMenu": "Bildirishnoma yo'q — buyurtma va ombor hodisalari shu yerda chiqadi.",
+    "viewAll": "Hammasini ko'rish",
+    "loadFailedTitle": "Bildirishnomalarni yuklab bo'lmadi",
+    "loadFailedBody": "Internet aloqasini tekshirib, qayta urinib ko'ring.",
+    "loadFailedClientBody": "Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring.",
+    "filterLabel": "Tur",
+    "filterAll": "Hammasi",
+    "filterUnread": "O'qilmagan",
+    "filterOrders": "Buyurtmalar",
+    "filterInventory": "Ombor",
+    "filterFinance": "Moliya",
+    "emptyTitle": "Bildirishnoma yo'q",
+    "emptyUnreadTitle": "O'qilmagan bildirishnoma yo'q",
+    "emptyWorkshopBody": "Yangi buyurtma, ombor yoki moliya hodisalari shu yerda chiqadi.",
+    "clientSubtitle": "Buyurtma o'zgarishlari va ustaxonadan xabarlar.",
+    "readFilterLabel": "Holat",
+    "clientFilterAll": "Hammasi",
+    "clientFilterAllMeta": "barcha xabarlar",
+    "clientFilterUnread": "O'qilmagan",
+    "clientFilterUnreadMeta": "hali ochilmagan",
+    "clientFilterRead": "O'qilgan",
+    "clientFilterReadMeta": "ko'rilgan xabarlar",
+    "emptyUnreadBody": "O'qilmagan bildirishnoma yo'q — hammasini ko'rib chiqdingiz.",
+    "emptyReadBody": "O'qilgan bildirishnoma yo'q.",
+    "emptyClientBody": "Hozircha bildirishnoma yo'q — buyurtma holati o'zgarsa shu yerda ko'rinadi."
+  },
+  "confirm": {
+    "confirm": "Tasdiqlash",
+    "cancel": "Bekor qilish",
+    "busy": "Bajarilmoqda…"
+  },
+  "errorState": {
+    "message": "Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring."
+  },
+  "session": {
+    "browserFallback": "Brauzer",
+    "deviceFallback": "Qurilma",
+    "revoked": "Sessiya yopildi.",
+    "revokeFailed": "Sessiyani yopib bo'lmadi. Qayta urinib ko'ring."
+  },
+  "login": {
+    "headline": "Ustaxonangizni bir joydan boshqaring",
+    "valueOrders": "Buyurtmalar oqimi",
+    "valueProduction": "Ishlab chiqarish navbati",
+    "valueInventory": "Ombor va moliya",
+    "title": "Kirish",
+    "loginLabel": "Login",
+    "passwordLabel": "Parol",
+    "showPassword": "Parolni ko'rsatish",
+    "hidePassword": "Parolni yashirish",
+    "submit": "Kirish",
+    "submitting": "Tekshirilmoqda",
+    "errorFallback": "Kirib bo'lmadi. Qayta urinib ko'ring."
+  },
+  "error": {
+    "invalid_credentials": "Login yoki parol noto'g'ri.",
+    "account_locked": "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
+    "account_blocked": "Hisob bloklangan — ustaxona rahbariga murojaat qiling.",
+    "login_rate_limited": "Juda ko'p urinish. Birozdan so'ng urinib ko'ring.",
+    "network_error": "Server bilan bog'lanib bo'lmadi. Internet aloqasini tekshiring."
+  },
+  "onboarding": {
+    "title": "Ishni boshlash",
+    "remaining": "Buyurtma qabul qilishni boshlash uchun {n} ta qadam qoldi.",
+    "progress": "{done}/{total} bajarildi",
+    "doneSr": "— bajarildi",
+    "passwordTitle": "Parolni o'zgartirish",
+    "passwordBody": "Vaqtinchalik parol yangi parolga almashtirildi.",
+    "pricingTitle": "Filial narxlarini kiritish",
+    "pricingBody": "Kesish va kromka yopishtirish narxlari buyurtma summasini hisoblashda ishlatiladi.",
+    "pricingCta": "Narxlarni kiritish",
+    "materialsTitle": "Materiallar katalogini to'ldirish",
+    "materialsBody": "Mijozlar faqat filial katalogiga qo'shilgan materiallardan buyurtma beradi.",
+    "materialsCta": "Material qo'shish",
+    "stepBadge": "{n}-qadam",
+    "later": "Keyinroq"
+  },
+  "admin": {
+    "skipLink": "Kontentga o'tish",
+    "tenantMeta": "{n} ta ustaxona · O'Z",
+    "reference": "Ma'lumotnoma",
+    "docsAndApi": "Hujjatlar & API",
+    "operatorRole": "Platforma admini",
+    "resetTitle": "Parolni o'zgartiring",
+    "resetBody": "Platformaning boshqa bo'limlari vaqtinchalik parol almashtirilmaguncha bloklangan.",
+    "resetCta": "Parolni almashtirish"
+  }
+}

@@ -150,6 +150,12 @@ semantic `--color-*` tokens.
   pinned to regular — a filled field must read as data, a hint must not. This spans all
   three apps and the composed controls (PhoneInput, FormSelect, SearchCombobox selected
   values); `textarea.mp-input` reason fields stay regular. Buttons are 700.
+- **Cyrillic locales swap the sans, not the design.** Hanken Grotesk has no Cyrillic —
+  Google serves it no `cyrillic` subset at all — so under `ru` and `uz-Cyrl` the
+  `--font-sans` token becomes **Manrope**, the nearest geometric grotesk carrying both
+  scripts at 400–800. The swap is whole-locale on `html[data-locale]`, never per-glyph
+  fallback: a browser mixing two families inside one word is visible in a way a different
+  family across a whole screen is not. Serif and mono already carry Cyrillic and stay put.
 
 ## Layout
 
@@ -287,10 +293,15 @@ touching them; don't add new off-scale values.
 
 ## Copy
 
-Uzbek (Latin) is the only shipped locale. Copy is part of the design contract, not a
-finishing touch: one failure explained two different ways is the same defect as two
-different button radii. The rules below are the standard; the glossary under them is the
-whole vocabulary.
+Three locales ship: **`uz`** (Latin) is the one copy is *written* in, **`ru`** is its
+translation, and **`uz-Cyrl`** is transliterated from `uz` automatically. Every string lives in
+`src/shared/i18n/locales/<locale>/<namespace>.json` and reaches the screen through `$t()` — a
+literal in a template is a bug in two languages. Copy is part of the design contract, not a
+finishing touch: one failure explained two different ways is the same defect as two different
+button radii. The rules below are the standard; the glossary under them is the whole vocabulary.
+
+Rules 1–7 are language-independent and bind every locale. Rule 8 is Uzbek orthography and binds
+the two Uzbek scripts only.
 
 **1. Say what happened, then what to do.** One sentence where it fits.
 `Summa buyurtma qoldig'idan oshib ketdi.` beats `Amal bajarilmadi.` A message the operator
@@ -329,41 +340,56 @@ names what the search covers (`Ism yoki login`) and carries **no trailing ellips
 **7. One term per concept.** The glossary below is the list. When a new concept needs a
 word, it goes in the glossary in the same commit that introduces it.
 
-**8. Uzbek Latin orthography.** The tutuq belgisi is the **ASCII apostrophe `'`** (U+0027)
+**8. Uzbek Latin orthography** (the `uz` catalog; `uz-Cyrl` is derived from it, so this is
+where its quality comes from). The tutuq belgisi is the **ASCII apostrophe `'`** (U+0027)
 throughout — `bo'ladi`, `yo'q`, `to'lov`, `ta'minotchi`. Never a backtick (`` ` ``), never
 a curly `'`/`'`, never the modifier letters `ʻ`/`ʼ`; they render as visibly different
-glyphs and there is no reason for a screen to show four of them. Ellipsis is the single
-character `…` and belongs only to progress labels (`Saqlanmoqda…`). Separators are `—` (em
-dash) between clauses and `·` between fields, never a hyphen. No Russian transliteration
-(`chegirma`, not `skidka`) and no developer shorthand in anything a user can see.
+glyphs and there is no reason for a screen to show four of them. In Uzbek, no Russian
+transliteration (`chegirma`, not `skidka`) and no developer shorthand in anything a user can
+see — the ban is on borrowing *into Uzbek*, and inverts in the `ru` catalog, where `скидка` is
+simply the right word.
+
+**Punctuation is shared by all three locales.** Ellipsis is the single character `…` and belongs
+only to progress labels (`Saqlanmoqda…` / `Сохранение…`). Separators are `—` (em dash) between
+clauses and `·` between fields, never a hyphen.
+
+**Russian agrees its nouns with numbers.** A counted noun carries three forms in the catalog,
+`one | few | many` — `{n} деталь | {n} детали | {n} деталей` — resolved by `Intl.PluralRules`.
+Uzbek keeps its single form. A Russian message that concatenates a number and a noun is wrong
+even when it reads fine at n=1.
 
 ### Glossary
 
-One term per concept, across client, workshop and admin.
+One term per concept, across client, workshop and admin — and one Russian term per Uzbek one,
+so the `ru` catalog does not drift into synonyms screen by screen. The **Not** column is the
+Uzbek ban list; several of those words (`skidka`, `rasxod`, `nadbavka`) are the *correct*
+Russian and appear in the Russian column on purpose.
 
-| Concept                                | Term                | Not                       |
-| -------------------------------------- | ------------------- | ------------------------- |
-| A client's cutting order               | `buyurtma`          | `zakaz`                   |
-| A cut piece on a drawing               | `detal`             | `qism`, `part`            |
-| A distinct part size on a drawing      | `xil`               | `qator`, `tur`            |
-| A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
-| A panel sheet                          | `list`              | `plita`, `panel`          |
-| Edge tape (the material)               | `kromka`            | `krom`                    |
-| The edge-banding station / stage       | `Krom` / `Kromka`   | — _owner's ruling pending_ |
-| A workshop location                    | `filial`            | `bo'lim` (= a UI section) |
-| A permission a staff member holds      | `ruxsat`            | `grant`                   |
-| Everything, across branches            | `Barcha filiallar`  | `ustaxona-keng`           |
-| A supplier                             | `ta'minotchi`       | `yetkazib beruvchi`, `postavshik` |
-| Goods arriving into stock (a faktura)  | `kirim` (`K-…`)     | `tushum`                  |
-| Money coming in (the finance ledger)   | `tushum`            | `kirim`                   |
-| Money going out                        | `xarajat`           | `rasxod`                  |
-| A price reduction                      | `chegirma`          | `skidka`                  |
-| A price addition                       | `ustama`            | `nadbavka`                |
-| A background job                       | `fon vazifa`        | `ish`, `scheduler`        |
-| A signed statement of account          | `akt sverka`        | —                         |
-| A printed/served document              | `hujjat`            | `xujjat`                  |
-| A part fitted onto a sheet             | `joylashtirildi`    | — _orders never use it_   |
-| An order the client just submitted     | `Yuborildi`         | `Joylashtirildi`          |
+| Concept                                | Term                | Russian              | Not (in Uzbek)                    |
+| -------------------------------------- | ------------------- | -------------------- | --------------------------------- |
+| A client's cutting order               | `buyurtma`          | `заказ`              | `zakaz`                           |
+| A cut piece on a drawing               | `detal`             | `деталь`             | `qism`, `part`                    |
+| A distinct part size on a drawing      | `xil`               | `типоразмер`         | `qator`, `tur`                    |
+| A saved cutting drawing                | `chizma`            | `раскрой`            | `eskiz`, `draft`                  |
+| A panel sheet                          | `list`              | `лист`               | `plita`, `panel`                  |
+| Edge tape (the material)               | `kromka`            | `кромка`             | `krom`                            |
+| The edge-banding station / stage       | `Krom` / `Kromka`   | `Кромка`             | — _owner's ruling pending_        |
+| The cutting station / stage            | `Kesish`            | `Распил`             | —                                 |
+| A workshop location                    | `filial`            | `филиал`             | `bo'lim` (= a UI section)         |
+| A permission a staff member holds      | `ruxsat`            | `право доступа`      | `grant`                           |
+| Everything, across branches            | `Barcha filiallar`  | `Все филиалы`        | `ustaxona-keng`                   |
+| A supplier                             | `ta'minotchi`       | `поставщик`          | `yetkazib beruvchi`, `postavshik` |
+| Goods arriving into stock (a faktura)  | `kirim` (`K-…`)     | `приход`             | `tushum`                          |
+| Money coming in (the finance ledger)   | `tushum`            | `поступление`        | `kirim`                           |
+| Money going out                        | `xarajat`           | `расход`             | `rasxod`                          |
+| A price reduction                      | `chegirma`          | `скидка`             | `skidka`                          |
+| A price addition                       | `ustama`            | `наценка`            | `nadbavka`                        |
+| A background job                       | `fon vazifa`        | `фоновая задача`     | `ish`, `scheduler`                |
+| A signed statement of account          | `akt sverka`        | `акт сверки`         | —                                 |
+| A printed/served document              | `hujjat`            | `документ`           | `xujjat`                          |
+| A part fitted onto a sheet             | `joylashtirildi`    | `размещено`          | — _orders never use it_           |
+| An order the client just submitted     | `Yuborildi`         | `Отправлен`          | `Joylashtirildi`                  |
+| The currency unit                      | `so'm`              | `сум` (`сўм` in Cyrillic Uzbek) | —                      |
 
 `kirim` and `tushum` are **not** synonyms and must never be unified: `Kirim` is a stock
 arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
@@ -394,6 +420,10 @@ order. Submitting is `Yuborildi`.
 - Don't use placeholders as labels, or clear a form on a validation error.
 - Don't swallow an error code in a bare `catch {}`, or ship a string with a backtick
   apostrophe, an English fallback, or a term that isn't in the glossary.
+- Don't write user-facing text as a literal in a template or component — it goes in the
+  catalog, in `uz` and `ru`, or it ships in one language.
+- Don't split a sentence around an interpolation into two keys, and don't build a Russian
+  count by concatenating a number and a noun.
 - Don't put hover/pointer affordances on non-clickable rows.
 - Don't use serif for operational UI, or add font sizes below 10.5px.
 - Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.

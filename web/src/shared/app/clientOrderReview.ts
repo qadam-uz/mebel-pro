@@ -7,6 +7,7 @@ import { isUzPhone } from '@/shared/app/clientUi'
 import { sideLabels } from '@/shared/app/cuttingDisplay'
 import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
 import { formatTiyin } from '@/shared/formatters'
+import { translate, translatePlural } from '@/shared/i18n'
 import { EDGE_SIDES, metres, type CuttingPart } from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
 
@@ -17,10 +18,10 @@ import type { OrderQuote } from '@/shared/stores/orders'
 // to submit yet either way.
 export type CanPlaceBlocker = 'quote' | 'name' | 'phone'
 
-const BLOCKER_LABELS: Record<CanPlaceBlocker, string> = {
-  quote: 'Narx hali tayyor emas.',
-  name: 'Ismingizni kiriting.',
-  phone: "Telefon +998XXXXXXXXX shaklida bo'lishi kerak.",
+const BLOCKER_KEYS: Readonly<Record<CanPlaceBlocker, string>> = {
+  quote: 'client.orderNew.blockerQuote',
+  name: 'client.orderNew.blockerName',
+  phone: 'client.orderNew.blockerPhone',
 }
 
 export function canPlaceBlocker(input: {
@@ -34,9 +35,9 @@ export function canPlaceBlocker(input: {
   return null
 }
 
-/** Uzbek copy for a blocker, or null when nothing blocks placing the order. */
+/** Copy for a blocker, or null when nothing blocks placing the order. */
 export function canPlaceBlockerLabel(blocker: CanPlaceBlocker | null): string | null {
-  return blocker ? BLOCKER_LABELS[blocker] : null
+  return blocker ? translate(BLOCKER_KEYS[blocker]) : null
 }
 
 // ---- "Profildan tiklash" link visibility -----------------------------------
@@ -67,8 +68,11 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
   const rows: OrderBillRow[] = [
     {
       key: 'cutting',
-      label: 'Kesish xizmati',
-      detail: `${quote.panels_used} panel × ${formatTiyin(quote.cutting_rate_tiyin)}`,
+      label: translate('client.common.cuttingService'),
+      detail: translate('client.orderNew.billCuttingDetail', {
+        panels: translatePlural('client.unit.panels', quote.panels_used),
+        price: formatTiyin(quote.cutting_rate_tiyin),
+      }),
       amount_tiyin: quote.panels_used * quote.cutting_rate_tiyin,
     },
   ]
@@ -76,7 +80,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
     rows.push({
       key: `material:${line.material_id}`,
       label: line.material_name,
-      detail: `${line.panels_used} panel`,
+      detail: translatePlural('client.unit.panels', line.panels_used),
       amount_tiyin: line.line_total_tiyin,
     })
   }
@@ -86,7 +90,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
       // "Kromka" prefixed here (not bare) — the rail's cutting-stats block also
       // shows a "Kromka" figure (total banded length), a different meaning of
       // the same word. Money and metres must never share an unqualified label.
-      label: `Kromka: ${line.material_name}`,
+      label: translate('client.orderNew.billEdge', { material: line.material_name }),
       detail: metres(line.consumed_mm),
       amount_tiyin: line.line_total_tiyin,
     })
@@ -123,12 +127,15 @@ export function buildPartRows(
     return {
       key: part.part_ref || `part-${index}`,
       name: partDisplayName(part, index),
-      materialLabel: part.material_source === 'own' ? `${material} · o'z materiali` : material,
+      materialLabel:
+        part.material_source === 'own'
+          ? translate('client.orderNew.partOwnMaterial', { material })
+          : material,
       sizeLabel: `${part.length_mm}×${part.width_mm} mm`,
       quantity: part.quantity,
       edgeLabel: bandedSides.length
         ? bandedSides.map((side) => sideLabels[side]).join(' · ')
-        : "yo'q",
+        : translate('client.orderNew.partEdgeNone'),
       followGrain: part.follow_grain,
     }
   })

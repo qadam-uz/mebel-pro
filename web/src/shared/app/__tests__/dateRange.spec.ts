@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { isoDate, monthGrid, presetRange, UZ_MONTHS, UZ_WEEKDAYS } from '@/shared/app/dateRange'
+import {
+  isoDate,
+  monthGrid,
+  monthNames,
+  presetRange,
+  weekdayShortNames,
+} from '@/shared/app/dateRange'
 
 // Local-calendar reference point: Saturday, 4 July 2026.
 const NOW = new Date(2026, 6, 4)
@@ -47,10 +53,10 @@ describe('presetRange', () => {
 
 describe('calendar vocabulary', () => {
   it('names all twelve months and seven Monday-first weekdays', () => {
-    expect(UZ_MONTHS).toHaveLength(12)
-    expect(UZ_MONTHS[0]).toBe('Yanvar')
-    expect(UZ_MONTHS[11]).toBe('Dekabr')
-    expect(UZ_WEEKDAYS).toEqual(['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'])
+    expect(monthNames()).toHaveLength(12)
+    expect(monthNames()[0]).toBe('Yanvar')
+    expect(monthNames()[11]).toBe('Dekabr')
+    expect(weekdayShortNames()).toEqual(['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'])
   })
 })
 

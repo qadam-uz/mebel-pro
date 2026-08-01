@@ -46,13 +46,14 @@ pnpm build                   # vue-tsc --build && vite build  → dist/
 pnpm test                    # run unit tests once (test:watch / test:coverage exist)
 
 pnpm typecheck               # vue-tsc --build --force (no emit)
+pnpm i18n:check              # every literal t()/$t() key resolves in the uz catalog
 pnpm lint                    # eslint . --fix
 pnpm lint:check              # eslint . (no fix — CI)
 pnpm format                  # prettier --write src/
 pnpm format:check            # prettier --check src/
 ```
 
-Pre-push gate: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`.
+Pre-push gate: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm i18n:check && pnpm test && pnpm build`.
 
 Adding deps: `pnpm add <pkg>` / `pnpm add -D <pkg>`. If a dep needs a postinstall build script, add it to `pnpm.onlyBuiltDependencies` in `package.json` (already lists `esbuild`).
 
@@ -107,6 +108,16 @@ web/
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
+- **Copy**: every user-facing string lives in `src/shared/i18n/locales/<locale>/<namespace>.json`
+  and reaches the screen through **`$t('ns.section.key')`** in templates (global injection is on —
+  no import), `useI18n()` in `<script setup>`, or `translate()` / `translatePlural()` from
+  `@/shared/i18n` in plain modules. Two catalogs are maintained: **`uz`** is the source, **`ru`**
+  its translation with the same key set; **`uz-Cyrl`** is derived from `uz` by
+  `i18n/transliterate.ts` and is never hand-written — a word the rules get wrong goes in
+  `i18n/overrides/uz-Cyrl.json`. Adding a namespace means adding its file to *both* locale
+  `index.ts` files. A module-level `const LABELS = {...}` of copy is a bug: it freezes at
+  whatever locale was active when the module first evaluated — export a function instead. Copy
+  rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
 - **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`. API origin is not configurable — dev uses the Vite `/api` proxy and prod uses the Caddy same-origin `/api` edge.
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`.
 - **Clean gate**: `eslint`, `prettier --check`, `vue-tsc`, and the test suite must all pass; `pnpm build` must succeed (it type-checks via `vue-tsc --build`). Fix issues rather than disabling rules; scope any `eslint-disable` to the line with a reason.
