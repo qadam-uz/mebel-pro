@@ -105,6 +105,11 @@ web/
   (`/workshop/orders/new`) everywhere — `path`, `redirect`, and any target a `beforeEnter`
   guard returns. `normalizeRoleRoutes` strips the dev base off all three, so a raw literal is
   correct in both environments; a `useRolePath()` call there would double the base.
+  Because every route is a lazy `import()` of a content-hashed chunk, a tab left open across a
+  deploy holds filenames that no longer exist: the import 404s and vue-router aborts the
+  navigation **silently**, so the shell looks alive while every link is dead. `router.onError`
+  in `createRoleApp.ts` catches that and hard-loads the *target* route once per path per tab
+  (`staleChunkRecovery`). Keep it wired when you touch the bootstrap.
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
