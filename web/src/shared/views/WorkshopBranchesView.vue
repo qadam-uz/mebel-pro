@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import {
@@ -27,6 +28,7 @@ const workshop = useWorkshopStore()
 const rolePath = useRolePath()
 const router = useRouter()
 const toast = useToast()
+const { t } = useI18n()
 const showCreate = ref(false)
 const creatingBranch = ref(false)
 const branchError = ref<string | null>(null)
@@ -85,7 +87,7 @@ async function createBranch() {
     // The branch is live for client orders the moment it exists, but with no
     // cutting/banding pricing yet — land the owner on the detail page where
     // those two numbers are set instead of silently closing the form.
-    toast.success("Filial qo'shildi. Endi kesish va kromka narxlarini kiriting.")
+    toast.success(t('workshopAdmin.branches.created'))
     await router.push(rolePath(`/workshop/branches/${created.id}`))
   } catch (caught) {
     Object.assign(
@@ -125,13 +127,13 @@ onMounted(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Filiallar</h1>
+        <h1>{{ $t('workshopAdmin.branches.title') }}</h1>
       </div>
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
-      <p>Filial qo'shish va holatini boshqarish egaga tegishli.</p>
+      <h3>{{ $t('workshopAdmin.access.ownerOnlyTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.branches.ownerOnlyBody') }}</p>
     </section>
 
     <template v-else>
@@ -140,25 +142,25 @@ onMounted(() => {
            caption baseline offset). -->
       <div class="mp-filters">
         <button type="button" class="mp-button mp-button-primary" @click="showCreate = true">
-          + Yangi filial
+          {{ $t('workshopAdmin.branches.create') }}
         </button>
       </div>
 
       <AppModal
         :open="showCreate"
-        title="Yangi filial"
+        :title="$t('workshopAdmin.branches.createTitle')"
         max-width="max-w-2xl"
         @close="showCreate = false"
       >
         <form class="grid gap-3" novalidate @submit.prevent="createBranch">
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="branch-name">
-              <span>Nom</span>
+              <span>{{ $t('workshopAdmin.branches.name') }}</span>
               <input
                 id="branch-name"
                 v-model="branchForm.name"
                 class="mp-input"
-                placeholder="Sergeli"
+                :placeholder="$t('workshopAdmin.branches.namePlaceholder')"
                 required
                 :aria-invalid="!!branchFieldErrors.name"
                 :aria-describedby="branchFieldErrors.name ? 'branch-name-error' : undefined"
@@ -168,12 +170,12 @@ onMounted(() => {
               </span>
             </label>
             <label class="field" for="branch-address">
-              <span>Manzil</span>
+              <span>{{ $t('workshopAdmin.branches.address') }}</span>
               <input
                 id="branch-address"
                 v-model="branchForm.address"
                 class="mp-input"
-                placeholder="Sergeli 1-mavze 4"
+                :placeholder="$t('workshopAdmin.branches.addressPlaceholder')"
                 required
                 :aria-invalid="!!branchFieldErrors.address"
                 :aria-describedby="branchFieldErrors.address ? 'branch-address-error' : undefined"
@@ -188,7 +190,7 @@ onMounted(() => {
             </label>
           </div>
           <label class="field" for="branch-phone">
-            <span>Asosiy telefon</span>
+            <span>{{ $t('workshopAdmin.branches.phone') }}</span>
             <PhoneInput
               id="branch-phone"
               v-model="branchForm.phone"
@@ -199,7 +201,7 @@ onMounted(() => {
               "
             />
             <small id="branch-phone-hint" class="text-ink-muted">
-              Mijozlar buyurtmalarida shu raqam ko'rinadi.
+              {{ $t('workshopAdmin.branches.phoneHint') }}
             </small>
             <span v-if="branchFieldErrors.phone" id="branch-phone-error" class="mp-field-error">
               {{ branchFieldErrors.phone }}
@@ -214,12 +216,16 @@ onMounted(() => {
             {{ branchFieldErrors.phones }}
           </p>
           <div class="flex flex-wrap items-center justify-end gap-3">
-            <p v-if="branchError" class="text-sm font-bold text-danger">Filial qo'shilmadi.</p>
+            <p v-if="branchError" class="text-sm font-bold text-danger">
+              {{ $t('workshopAdmin.branches.createFailed') }}
+            </p>
             <button type="button" class="mp-button mp-button-outline" @click="showCreate = false">
-              Bekor
+              {{ $t('workshopAdmin.action.cancel') }}
             </button>
             <button type="submit" class="mp-button mp-button-primary" :disabled="creatingBranch">
-              {{ creatingBranch ? "Qo'shilmoqda" : "Qo'shish" }}
+              {{
+                creatingBranch ? $t('workshopAdmin.action.adding') : $t('workshopAdmin.action.add')
+              }}
             </button>
           </div>
         </form>
@@ -234,15 +240,15 @@ onMounted(() => {
       </section>
 
       <section v-else-if="workshop.setupError" class="st-error" role="alert">
-        <h3>Filiallarni yuklab bo'lmadi</h3>
-        <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+        <h3>{{ $t('workshopAdmin.branches.loadFailed') }}</h3>
+        <p>{{ $t('workshopAdmin.action.connectionRetry') }}</p>
         <button
           type="button"
           class="mp-button mp-button-outline mt-4 min-h-11 px-4"
           :disabled="workshop.setupLoading"
           @click="workshop.loadManagedBranches()"
         >
-          Qayta urinish
+          {{ $t('workshopAdmin.action.retry') }}
         </button>
         <p v-if="workshop.setupTraceId" class="mt-3 text-xs text-ink-muted">
           trace_id: {{ workshop.setupTraceId }}
@@ -250,8 +256,8 @@ onMounted(() => {
       </section>
 
       <section v-else-if="workshop.managedBranches.length === 0" class="st-empty">
-        <h3>Hali filial yo'q</h3>
-        <p>Birinchi filial qo'shilgach, mijozlar buyurtma beradigan manzil paydo bo'ladi.</p>
+        <h3>{{ $t('workshopAdmin.branches.emptyTitle') }}</h3>
+        <p>{{ $t('workshopAdmin.branches.emptyBody') }}</p>
       </section>
 
       <section v-else class="card">
@@ -262,11 +268,11 @@ onMounted(() => {
                 <!-- The number printed in the middle of this branch's order
                      numbers (#26-1-0003). First and mono so an owner holding a
                      cutting map can scan straight down it. -->
-                <th>Raqam</th>
-                <th>Filial</th>
-                <th>Manzil</th>
-                <th>Telefon</th>
-                <th>Holat</th>
+                <th>{{ $t('workshopAdmin.branches.colNumber') }}</th>
+                <th>{{ $t('workshopAdmin.branches.colBranch') }}</th>
+                <th>{{ $t('workshopAdmin.branches.colAddress') }}</th>
+                <th>{{ $t('workshopAdmin.branches.colPhone') }}</th>
+                <th>{{ $t('workshopAdmin.branches.colStatus') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -286,7 +292,7 @@ onMounted(() => {
                 <td class="num">{{ branch.phone }}</td>
                 <td>
                   <span :class="branchPillClass(branch.status)">
-                    <span class="pd"></span>{{ branchStatusUz[branch.status] }}
+                    <span class="pd"></span>{{ branchStatusUz(branch.status) }}
                   </span>
                 </td>
               </tr>

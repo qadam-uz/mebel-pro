@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-07-21
+updated: 2026-08-01
 order: 70
 ---
 
@@ -183,8 +183,30 @@ specifics, this section just states the requirement.
 
 ### Internationalization
 
-v1 ships Uzbek only. Strings are namespaced so adding `ru` / `en` is mechanical. Money, dates,
-phones (`+998XXXXXXXXX`), and dimensions (millimetres) have fixed display conventions.
+Three locales in the client and workshop SPAs: **`uz`** (Latin, the default), **`uz-Cyrl`**, and
+**`ru`**. Only two catalogs are maintained — `uz` is the source every string is written in, `ru`
+is its translation, and `uz-Cyrl` is *derived* from `uz` by transliteration at load time, with an
+overrides file for the handful of words the rules get wrong. A hand-maintained third script would
+drift from the Latin the first time anyone fixed one sentence and not the other.
+
+The locale is a **device preference** (`localStorage`), not a stored user attribute: it must
+resolve synchronously before the first paint, and no principal carries a locale column. It is
+never sniffed from `navigator.language` — a Russian-localised OS is the norm here and says
+nothing about which language the operator wants their tools in, so the app stays Uzbek until
+someone chooses otherwise.
+
+Two things stay outside the catalogs. **User data** — branch, material, client and workshop names
+— renders as entered, in whatever language it was typed. **Server-rendered documents** (the
+cutting-plan PDF and the akt sverka) are still Uzbek-only: they carry no locale channel, and their
+column widths are tuned to Uzbek string widths. A Russian-speaking user gets a Russian interface
+and an Uzbek printout until that is closed.
+
+Money, dates, phones (`+998XXXXXXXXX`) and dimensions (millimetres) keep fixed display
+conventions across all three locales; only the unit words change (`so'm` / `сўм` / `сум`). The
+superadmin app is deliberately not localized — its audience is the platform's own operators.
+
+Copy rules, the term glossary, and the Cyrillic font substitution are the design system's:
+[`web/DESIGN.md`](https://github.com/qadam-uz/mebel-pro/blob/main/web/DESIGN.md).
 
 ## Next
 

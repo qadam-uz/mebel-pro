@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { MAX_ADDITIONAL_BRANCH_PHONES } from '@/shared/app/branchPhones'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -18,6 +19,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
+const { t } = useI18n()
 
 const atCap = computed(() => props.modelValue.length >= MAX_ADDITIONAL_BRANCH_PHONES)
 
@@ -27,7 +29,11 @@ function rowId(index: number) {
 
 // The primary is the branch's first number, so the extras read as 2nd, 3rd, 4th.
 function rowLabel(index: number) {
-  return `${index + 2}-telefon`
+  return t('workshopAdmin.phones.rowLabel', { n: index + 2 })
+}
+
+function removeLabel(index: number) {
+  return t('workshopAdmin.phones.removeRow', { n: index + 2 })
 }
 
 function setPhone(index: number, value: string) {
@@ -54,13 +60,11 @@ function removePhone(index: number) {
 
 <template>
   <fieldset>
-    <legend class="text-sm font-extrabold text-ink">Qo'shimcha telefonlar</legend>
-    <p class="mb-2 mt-1 text-xs text-ink-muted">
-      Filial sahifasida mijozlarga ko'rinadi. Buyurtmalarda faqat asosiy raqam ishlatiladi.
-    </p>
+    <legend class="text-sm font-extrabold text-ink">{{ $t('workshopAdmin.phones.legend') }}</legend>
+    <p class="mb-2 mt-1 text-xs text-ink-muted">{{ $t('workshopAdmin.phones.hint') }}</p>
 
     <p v-if="modelValue.length === 0" class="mb-2 text-xs text-ink-muted">
-      Hozircha qo'shimcha raqam yo'q.
+      {{ $t('workshopAdmin.phones.empty') }}
     </p>
 
     <div v-for="(phone, index) in modelValue" :key="index" class="mb-2 last:mb-0">
@@ -80,7 +84,7 @@ function removePhone(index: number) {
           type="button"
           class="mp-button mp-button-outline size-10 shrink-0 px-0"
           :disabled="disabled"
-          :aria-label="`${rowLabel(index)}ni o'chirish`"
+          :aria-label="removeLabel(index)"
           @click="removePhone(index)"
         >
           <Icon name="trash" />
@@ -97,10 +101,16 @@ function removePhone(index: number) {
       :disabled="atCap || disabled"
       @click="addPhone"
     >
-      + Telefon qo'shish
+      {{ $t('workshopAdmin.phones.add') }}
     </button>
     <p v-if="atCap" class="mt-2 text-xs text-ink-muted">
-      Eng ko'pi {{ MAX_ADDITIONAL_BRANCH_PHONES }} ta qo'shimcha raqam qo'shiladi.
+      {{
+        $t(
+          'workshopAdmin.phones.cap',
+          { max: MAX_ADDITIONAL_BRANCH_PHONES },
+          MAX_ADDITIONAL_BRANCH_PHONES,
+        )
+      }}
     </p>
   </fieldset>
 </template>

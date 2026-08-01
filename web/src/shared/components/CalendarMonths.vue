@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 
-import { isoDate, monthGrid, UZ_MONTHS, UZ_WEEKDAYS } from '@/shared/app/dateRange'
+import { isoDate, monthGrid, monthNames, weekdayShortNames } from '@/shared/app/dateRange'
 
 // The app's one calendar surface: month navigation, a Monday-first day grid and
 // APG grid keyboard navigation. It renders inside a host popover
@@ -48,6 +48,11 @@ function parseIso(value: string): Date | null {
   if (!year || !month || !day) return null
   return new Date(year, month - 1, day)
 }
+
+// Computed, not module constants: the grid has to repaint in the new language
+// when someone switches locale with the picker open.
+const months = computed(() => monthNames())
+const weekdays = computed(() => weekdayShortNames())
 
 const rootRef = ref<HTMLDivElement | null>(null)
 
@@ -172,7 +177,7 @@ function dayClass(cell: string): string[] {
 
 function dayAriaLabel(cell: string): string {
   const [year, month, day] = cell.split('-').map(Number)
-  return `${day} ${UZ_MONTHS[(month ?? 1) - 1]} ${year}`
+  return `${day} ${months.value[(month ?? 1) - 1]} ${year}`
 }
 
 function onDayClick(cell: string) {
@@ -199,7 +204,7 @@ defineExpose({ shiftMonths, focusDay, onKeydown })
           v-if="monthIndex === 0"
           type="button"
           class="grid size-8 place-items-center rounded-md text-ink-soft transition hover:bg-sunk hover:text-ink"
-          aria-label="Oldingi oy"
+          :aria-label="$t('forms.calendar.previousMonth')"
           @click="shiftMonths(-1)"
         >
           <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
@@ -215,13 +220,13 @@ defineExpose({ shiftMonths, focusDay, onKeydown })
         </button>
         <span v-else class="size-8" aria-hidden="true"></span>
         <span class="text-[13px] font-bold text-ink">
-          {{ UZ_MONTHS[monthView.month] }} {{ monthView.year }}
+          {{ months[monthView.month] }} {{ monthView.year }}
         </span>
         <button
           v-if="monthIndex === visibleMonths.length - 1"
           type="button"
           class="grid size-8 place-items-center rounded-md text-ink-soft transition hover:bg-sunk hover:text-ink"
-          aria-label="Keyingi oy"
+          :aria-label="$t('forms.calendar.nextMonth')"
           @click="shiftMonths(1)"
         >
           <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
@@ -239,14 +244,14 @@ defineExpose({ shiftMonths, focusDay, onKeydown })
       </div>
       <div class="mb-1 grid grid-cols-7">
         <span
-          v-for="weekday in UZ_WEEKDAYS"
+          v-for="weekday in weekdays"
           :key="weekday"
           class="grid size-9 place-items-center text-[11px] font-bold text-ink-muted"
         >
           {{ weekday }}
         </span>
       </div>
-      <div role="grid" :aria-label="`${UZ_MONTHS[monthView.month]} ${monthView.year}`">
+      <div role="grid" :aria-label="`${months[monthView.month]} ${monthView.year}`">
         <div
           v-for="(week, weekIndex) in monthView.weeks"
           :key="weekIndex"

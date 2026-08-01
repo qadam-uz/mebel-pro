@@ -37,7 +37,11 @@ defineEmits<{ select: [] }>()
               ? 'bg-warning-soft text-warning'
               : 'bg-success-soft text-success'
           "
-          >{{ branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : 'faol' }}</span
+          >{{
+            branch.status === 'temporarily_closed'
+              ? $t('workshopAdmin.branchRow.closed')
+              : $t('workshopAdmin.branchRow.active')
+          }}</span
         ></span
       ><span class="mt-1 block text-xs text-ink-muted">{{ branch.address }}</span
       ><span
@@ -48,18 +52,28 @@ defineEmits<{ select: [] }>()
       ><span
         v-if="selected && quote"
         class="mt-2 grid gap-1 border-t border-hairline pt-2 text-xs text-ink-soft"
-        >Kesish xizmati: {{ formatTiyin(quote.subtotal_cutting_tiyin) }}<br />Materiallar:
-        {{ formatTiyin(quote.subtotal_materials_tiyin) }}<br />Kromka yopishtirish:
-        {{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}</span
+        >{{
+          $t('workshopAdmin.branchRow.cuttingService', {
+            amount: formatTiyin(quote.subtotal_cutting_tiyin),
+          })
+        }}<br />{{
+          $t('workshopAdmin.branchRow.materials', {
+            amount: formatTiyin(quote.subtotal_materials_tiyin),
+          })
+        }}<br />{{
+          $t('workshopAdmin.branchRow.edgeBanding', {
+            amount: formatTiyin(quote.subtotal_edge_banding_tiyin),
+          })
+        }}</span
       ></span
     ><span
       v-if="quote || error"
       class="shrink-0 text-right font-mono text-sm font-bold"
       :class="error ? 'text-ink-muted' : 'text-accent'"
       >{{ quote ? formatTiyin(quote.total_tiyin) : '—'
-      }}<small v-if="quote" class="mt-1 block text-[10px] text-ink-muted"
-        >so'm · {{ quote.panels_used }} list</small
-      ></span
+      }}<small v-if="quote" class="mt-1 block text-[10px] text-ink-muted">{{
+        $t('workshopAdmin.branchRow.unit', { n: quote.panels_used }, quote.panels_used)
+      }}</small></span
     >
   </button>
 </template>

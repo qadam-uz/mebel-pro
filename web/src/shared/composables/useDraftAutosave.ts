@@ -2,6 +2,7 @@ import { nextTick, ref, watch, type Ref } from 'vue'
 
 import { createAutosaveController } from '@/shared/app/autosaveController'
 import { AUTOSAVE_DEBOUNCE_MS } from '@/shared/app/constants'
+import { translate } from '@/shared/i18n'
 
 export type DraftSaveState = 'saved' | 'saving' | 'error' | 'editing'
 
@@ -38,8 +39,7 @@ export function useDraftAutosave<T>(opts: {
     canPersist: () => opts.canPersist() && !opts.isReadOnly(),
     onStatus: (status) => {
       saveState.value = status
-      saveError.value =
-        status === 'error' ? "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring." : null
+      saveError.value = status === 'error' ? translate('forms.autosave.saveFailed') : null
     },
   })
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
@@ -11,9 +12,9 @@ import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   thresholdUnit,
-  LOW_STOCK_THRESHOLD_COLUMN,
-  LOW_STOCK_THRESHOLD_HINT,
-  LOW_STOCK_THRESHOLD_LABEL,
+  lowStockThresholdColumn,
+  lowStockThresholdHint,
+  lowStockThresholdLabel,
 } from '@/shared/app/lowStockThreshold'
 import AppModal from '@/shared/components/AppModal.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
@@ -39,6 +40,7 @@ const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
 const toast = useToast()
 const route = useRoute()
+const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>('all')
 const kindFilter = ref<'all' | MaterialKind>('all')
@@ -95,22 +97,29 @@ const selectedBranchId = computed(() => {
   if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
   return accessibleBranches.value[0]?.id ?? ''
 })
-const statusOptions: DropdownOption[] = [
-  { value: 'all', label: 'Hammasi' },
-  { value: 'active', label: 'Faol', dot: 'success' },
-  { value: 'inactive', label: 'Faol emas', dot: 'muted' },
-]
-const kindOptions: DropdownOption[] = [
-  { value: 'all', label: 'Barcha turlar' },
-  { value: 'panel', label: 'List' },
-  { value: 'edge', label: 'Kromka' },
-]
+// Computed, not a plain array: a `const` built at setup would keep the labels of
+// whatever locale was active when the page mounted.
+const statusOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('catalog.filter.statusAll') },
+  { value: 'active', label: t('catalog.status.active'), dot: 'success' },
+  { value: 'inactive', label: t('catalog.status.inactive'), dot: 'muted' },
+])
+const kindOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('catalog.filter.kindAll') },
+  { value: 'panel', label: t('catalog.kind.panel') },
+  { value: 'edge', label: t('catalog.kind.edge') },
+])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
 )
+// The threshold's own copy lives in `lowStockThreshold.ts` so the attach sheet,
+// this form and the table can never name it differently.
+const thresholdLabel = computed(() => lowStockThresholdLabel())
+const thresholdColumn = computed(() => lowStockThresholdColumn())
+const thresholdHint = computed(() => lowStockThresholdHint())
 const materialThresholdUnit = computed(() => {
   const material = editingBranchMaterial.value?.material
-  return material ? thresholdUnit(material.kind) : 'dona'
+  return material ? thresholdUnit(material.kind) : t('catalog.unit.piece')
 })
 const materialPriceUnit = computed(() => {
   const material = editingBranchMaterial.value?.material
@@ -128,12 +137,23 @@ function applyRouteSearch() {
 
 function materialMeta(row: (typeof workshop.branchMaterials)[number]) {
   const material = row.material
-  if (material.kind === 'edge') return `kromka · ${material.thickness_mm} mm · ${material.color}`
-  return `${material.type?.toUpperCase() ?? 'panel'} · ${material.thickness_mm} mm · ${material.color} · ${material.panel_length_mm}x${material.panel_width_mm}`
+  if (material.kind === 'edge') {
+    return t('catalog.meta.edge', {
+      thickness: material.thickness_mm,
+      color: material.color,
+    })
+  }
+  return t('catalog.meta.panel', {
+    type: material.type?.toUpperCase() ?? 'panel',
+    thickness: material.thickness_mm,
+    color: material.color,
+    length: material.panel_length_mm,
+    width: material.panel_width_mm,
+  })
 }
 
 function priceUnit(kind: MaterialKind) {
-  return kind === 'edge' ? '/ metr' : '/ list'
+  return kind === 'edge' ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
 }
 
 // Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
@@ -190,11 +210,11 @@ async function saveBranchMaterial() {
     // never reach the client catalog by accident.
     const priceTiyin = priceTiyinParsed.value
     if (priceTiyin === null) {
-      priceFieldError.value = "Narxni to'g'ri kiriting — masalan: 350 000"
+      priceFieldError.value = t('catalog.form.priceInvalid')
       return
     }
     if (!Number.isFinite(minStock) || minStock < 0) {
-      minStockFieldError.value = `${LOW_STOCK_THRESHOLD_LABEL}ni to'g'ri kiriting`
+      minStockFieldError.value = t('catalog.form.thresholdInvalid')
       return
     }
     await workshop.updateBranchMaterial(selectedBranchId.value, editingBranchMaterialId.value, {
@@ -204,7 +224,7 @@ async function saveBranchMaterial() {
     resetMaterialForm()
     materialModalOpen.value = false
     await refreshCatalog()
-    toast.success('Material sozlamasi saqlandi.')
+    toast.success(t('catalog.toast.settingsSaved'))
   } catch {
     materialError.value = 'branch_material_save_failed'
   } finally {
@@ -220,9 +240,7 @@ async function onMaterialsAttached(count: number) {
   attachSheetOpen.value = false
   await refreshCatalog()
   if (!(await notifyProgress())) {
-    toast.success(
-      count === 1 ? "Material filialga qo'shildi." : `${count} ta material filialga qo'shildi.`,
-    )
+    toast.success(t('catalog.toast.attached', { n: count }, count))
   }
 }
 
@@ -261,9 +279,9 @@ async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) 
       row.id,
       row.status === 'active' ? 'inactive' : 'active',
     )
-    toast.success("Material holati o'zgartirildi.")
+    toast.success(t('catalog.toast.statusChanged'))
   } catch (caught) {
-    rowActionError.value = "Material holatini o'zgartirib bo'lmadi."
+    rowActionError.value = t('catalog.error.statusChangeFailed')
     rowActionTraceId.value = apiTraceId(caught)
   } finally {
     rowActionId.value = null
@@ -329,35 +347,45 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Material katalogi</h1>
+        <h1>{{ $t('catalog.page.title') }}</h1>
       </div>
     </div>
 
     <div v-if="!canUseCatalog" class="st-empty">
-      <h3>Material katalogiga ruxsatingiz yo'q</h3>
-      <p>Ustaxona rahbariga murojaat qiling.</p>
+      <h3>{{ $t('catalog.page.noAccessTitle') }}</h3>
+      <p>{{ $t('catalog.page.noAccessBody') }}</p>
     </div>
 
     <div v-else-if="accessibleBranches.length === 0" class="st-empty">
-      <h3>Filial biriktirilmagan</h3>
-      <p>Filial biriktirilgach, katalog shu yerda ko'rinadi.</p>
+      <h3>{{ $t('catalog.page.noBranchTitle') }}</h3>
+      <p>{{ $t('catalog.page.noBranchBody') }}</p>
     </div>
 
     <template v-else>
       <div class="mp-filters">
         <label class="mp-filter-input">
-          <span>Qidirish</span>
-          <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
+          <span>{{ $t('catalog.filter.searchLabel') }}</span>
+          <input v-model="search" :placeholder="$t('catalog.filter.searchPlaceholder')" />
         </label>
-        <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" top-label />
-        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <ProjectDropdown
+          v-model="kindFilter"
+          :label="$t('catalog.filter.kindLabel')"
+          :options="kindOptions"
+          top-label
+        />
+        <ProjectDropdown
+          v-model="statusFilter"
+          :label="$t('catalog.filter.statusLabel')"
+          :options="statusOptions"
+          top-label
+        />
         <button
           type="button"
           class="mp-button mp-button-primary"
           data-onboard="catalog-add"
           @click="openAttachSheet"
         >
-          + Material qo'shish
+          {{ $t('catalog.action.attach') }}
         </button>
       </div>
 
@@ -380,17 +408,21 @@ onBeforeUnmount(() => {
         @attached="onMaterialsAttached"
       />
 
-      <AppModal :open="materialModalOpen" title="Materialni tahrirlash" @close="closeMaterialModal">
+      <AppModal
+        :open="materialModalOpen"
+        :title="$t('catalog.form.title')"
+        @close="closeMaterialModal"
+      >
         <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
           <!-- The material itself is fixed once attached — show the name in a plain
                disabled field (finance-modal precedent); price and threshold are the
                only editable values. -->
           <label class="field">
-            <span>Material</span>
+            <span>{{ $t('catalog.form.material') }}</span>
             <input class="mp-input" :value="editingBranchMaterial?.material.name ?? ''" disabled />
           </label>
           <label class="field">
-            <span>Narx (so'm)</span>
+            <span>{{ $t('catalog.form.price') }}</span>
             <input
               v-model="materialForm.priceTiyin"
               class="mp-input"
@@ -405,25 +437,25 @@ onBeforeUnmount(() => {
             </small>
           </label>
           <label class="field">
-            <span>{{ LOW_STOCK_THRESHOLD_LABEL }} ({{ materialThresholdUnit }})</span>
+            <span>{{ thresholdLabel }} ({{ materialThresholdUnit }})</span>
             <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
             <small v-if="minStockFieldError" class="mp-field-error">
               {{ minStockFieldError }}
             </small>
-            <small v-else class="text-ink-muted">{{ LOW_STOCK_THRESHOLD_HINT }}</small>
+            <small v-else class="text-ink-muted">{{ thresholdHint }}</small>
           </label>
           <p
             v-if="materialError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Filial materiali saqlanmadi.
+            {{ $t('catalog.form.saveFailed') }}
           </p>
           <div class="flex items-center gap-2">
             <button class="mp-button mp-button-primary" type="submit" :disabled="materialSaving">
-              {{ materialSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+              {{ materialSaving ? $t('catalog.action.saving') : $t('catalog.action.save') }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="closeMaterialModal">
-              Bekor
+              {{ $t('catalog.action.cancel') }}
             </button>
           </div>
         </form>
@@ -442,7 +474,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section v-else-if="workshop.catalogError" class="st-error">
-        <h3>Ma'lumotni yuklab bo'lmadi</h3>
+        <h3>{{ $t('catalog.page.loadErrorTitle') }}</h3>
         <p>{{ traceLine(workshop.catalogTraceId) }}</p>
       </section>
 
@@ -458,11 +490,11 @@ onBeforeUnmount(() => {
                 <!-- Let the descriptive name column absorb the table's slack so the
                      narrow price/threshold/status columns hug their content on the
                      right instead of drifting apart across the full width. -->
-                <th class="w-full">Material</th>
-                <th class="nowrap hidden lg:table-cell">Tur</th>
-                <th class="nowrap right hidden sm:table-cell">Narx</th>
-                <th class="nowrap right hidden sm:table-cell">{{ LOW_STOCK_THRESHOLD_COLUMN }}</th>
-                <th class="nowrap">Holat</th>
+                <th class="w-full">{{ $t('catalog.table.material') }}</th>
+                <th class="nowrap hidden lg:table-cell">{{ $t('catalog.table.kind') }}</th>
+                <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
+                <th class="nowrap right hidden sm:table-cell">{{ thresholdColumn }}</th>
+                <th class="nowrap">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -479,7 +511,7 @@ onBeforeUnmount(() => {
                       <button
                         type="button"
                         class="nm row-open row-open-text break-words"
-                        :aria-label="`${row.material.name} — tahrirlash`"
+                        :aria-label="$t('catalog.table.editRow', { name: row.material.name })"
                         @click="editBranchMaterial(row)"
                       >
                         {{ row.material.name }}
@@ -493,7 +525,7 @@ onBeforeUnmount(() => {
                            dropped. -->
                       <small class="block text-ink-muted sm:hidden">
                         {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.material.kind) }} ·
-                        {{ LOW_STOCK_THRESHOLD_COLUMN }}: {{ thresholdParts(row).value }}
+                        {{ thresholdColumn }}: {{ thresholdParts(row).value }}
                         {{ thresholdParts(row).unit }}
                       </small>
                     </span>
@@ -502,7 +534,11 @@ onBeforeUnmount(() => {
                 <td class="nowrap hidden lg:table-cell">
                   <span :class="row.material.kind === 'edge' ? 'pill p-eb' : 'pill p-cut'">
                     <span class="pd"></span
-                    >{{ row.material.kind === 'edge' ? 'Kromka (metr)' : 'List' }}
+                    >{{
+                      row.material.kind === 'edge'
+                        ? $t('catalog.kind.edgeCounted')
+                        : $t('catalog.kind.panel')
+                    }}
                   </span>
                 </td>
                 <td class="amt nowrap hidden sm:table-cell">
@@ -522,7 +558,7 @@ onBeforeUnmount(() => {
                     type="button"
                     role="switch"
                     :aria-checked="row.status === 'active'"
-                    :aria-label="`${row.material.name} holati`"
+                    :aria-label="$t('catalog.table.statusToggle', { name: row.material.name })"
                     :aria-busy="rowActionId === row.id || undefined"
                     :disabled="rowActionId === row.id"
                     class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
@@ -544,7 +580,11 @@ onBeforeUnmount(() => {
                       class="hidden text-xs font-bold sm:inline"
                       :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
                     >
-                      {{ row.status === 'active' ? 'Faol' : 'Faol emas' }}
+                      {{
+                        row.status === 'active'
+                          ? $t('catalog.status.active')
+                          : $t('catalog.status.inactive')
+                      }}
                     </span>
                   </button>
                 </td>
@@ -553,12 +593,12 @@ onBeforeUnmount(() => {
                 <td colspan="5">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="catalogFiltered">
-                      <h3>Filtrga mos material topilmadi</h3>
-                      <p>Filtrni o'zgartiring yoki tozalang.</p>
+                      <h3>{{ $t('catalog.empty.filteredTitle') }}</h3>
+                      <p>{{ $t('catalog.empty.filteredBody') }}</p>
                     </template>
                     <template v-else>
-                      <h3>Bu filialga material qo'shilmagan</h3>
-                      <p>Platforma katalogidan material qo'shing.</p>
+                      <h3>{{ $t('catalog.empty.title') }}</h3>
+                      <p>{{ $t('catalog.empty.body') }}</p>
                       <!-- Only on first run: with a filter on, this button is a
                            second copy of the one in the bar above (QAD-182). -->
                       <button
@@ -566,7 +606,7 @@ onBeforeUnmount(() => {
                         class="mp-button mp-button-primary mt-3"
                         @click="openAttachSheet"
                       >
-                        + Material qo'shish
+                        {{ $t('catalog.action.attach') }}
                       </button>
                     </template>
                   </div>
@@ -584,7 +624,11 @@ onBeforeUnmount(() => {
           :disabled="workshop.catalogLoading"
           @click="loadMoreBranchMaterials"
         >
-          {{ workshop.catalogLoading ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
+          {{
+            workshop.catalogLoading
+              ? $t('catalog.action.loadingMore')
+              : $t('catalog.action.loadMore')
+          }}
         </button>
       </div>
     </template>

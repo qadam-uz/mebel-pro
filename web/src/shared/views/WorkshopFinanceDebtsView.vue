@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
@@ -35,6 +36,7 @@ import {
 import { useFinanceStore, type DebtRow, type DebtStatementRow } from '@/shared/stores/finance'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
+const { t } = useI18n()
 const router = useRouter()
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
@@ -46,10 +48,10 @@ const today = formatDateInputValue(new Date())
 const canManageFinance = computed(() => permissions.can(p.manageFinance))
 
 const activeTab = ref<DebtSide>('suppliers')
-const debtTabs: ChoiceOption[] = [
-  { value: 'suppliers', label: "Ta'minotchilar" },
-  { value: 'clients', label: 'Mijozlar' },
-]
+const debtTabs = computed<ChoiceOption[]>(() => [
+  { value: 'suppliers', label: t('finance.debts.tabSuppliers') },
+  { value: 'clients', label: t('finance.debts.tabClients') },
+])
 
 // List state. «Faqat qarzdorlar» is the default — the working list is who owes whom.
 const search = ref('')
@@ -79,12 +81,28 @@ const adjustmentForm = reactive({
 const directionOptions = computed<ChoiceOption[]>(() =>
   activeTab.value === 'suppliers'
     ? [
-        { value: 'debt_grows', label: 'Qarzimiz oshadi', meta: "ta'minotchiga qarzimiz ko'payadi" },
-        { value: 'debt_shrinks', label: 'Qarzimiz kamayadi', meta: 'chegirma, qaytarish, boshqa' },
+        {
+          value: 'debt_grows',
+          label: t('finance.statement.adjustSupplierGrows'),
+          meta: t('finance.statement.adjustSupplierGrowsHint'),
+        },
+        {
+          value: 'debt_shrinks',
+          label: t('finance.statement.adjustSupplierShrinks'),
+          meta: t('finance.statement.adjustSupplierShrinksHint'),
+        },
       ]
     : [
-        { value: 'debt_grows', label: 'Mijozning qarzi oshadi', meta: "daftar qarzi, qo'shimcha" },
-        { value: 'debt_shrinks', label: 'Mijozning qarzi kamayadi', meta: 'chegirma, kechirilgan' },
+        {
+          value: 'debt_grows',
+          label: t('finance.statement.adjustClientGrows'),
+          meta: t('finance.statement.adjustClientGrowsHint'),
+        },
+        {
+          value: 'debt_shrinks',
+          label: t('finance.statement.adjustClientShrinks'),
+          meta: t('finance.statement.adjustClientShrinksHint'),
+        },
       ],
 )
 
@@ -118,8 +136,8 @@ const netParts = computed(() => formatTiyinParts(Math.abs(netTiyin.value)))
 const listedCountLabel = computed(() => {
   const count = activeDebts.value?.rows.length ?? 0
   return activeTab.value === 'suppliers'
-    ? `Ro'yxatda ${count} ta ta'minotchi`
-    : `Ro'yxatda ${count} ta mijoz`
+    ? t('finance.debts.listedSuppliers', { n: count }, count)
+    : t('finance.debts.listedClients', { n: count }, count)
 })
 
 const statementName = computed(
@@ -134,10 +152,18 @@ const statementName = computed(
 // shared/app/debtStatement.ts and mirrored by the server's PDF.
 const columnHeaders = computed(() =>
   activeTab.value === 'suppliers'
-    ? { debit: 'Qarzimiz +', credit: 'Qarzimiz −' }
-    : { debit: 'Qarzi +', credit: 'Qarzi −' },
+    ? {
+        debit: t('finance.statement.colDebitSupplier'),
+        credit: t('finance.statement.colCreditSupplier'),
+      }
+    : {
+        debit: t('finance.statement.colDebitClient'),
+        credit: t('finance.statement.colCreditClient'),
+      },
 )
-const counterpartyRole = computed(() => (activeTab.value === 'suppliers' ? "Ta'minotchi" : 'Mijoz'))
+const counterpartyRole = computed(() =>
+  activeTab.value === 'suppliers' ? t('finance.field.supplier') : t('finance.field.client'),
+)
 
 const lines = computed(() =>
   finance.statement
@@ -157,9 +183,13 @@ const periodText = computed(() => {
   if (statement.date_from && statement.date_to) {
     return `${formatDate(statement.date_from)} — ${formatDate(statement.date_to)}`
   }
-  if (statement.date_from) return `${formatDate(statement.date_from)} dan`
-  if (statement.date_to) return `${formatDate(statement.date_to)} gacha`
-  return 'butun tarix'
+  if (statement.date_from) {
+    return t('finance.statement.periodFrom', { date: formatDate(statement.date_from) })
+  }
+  if (statement.date_to) {
+    return t('finance.statement.periodTo', { date: formatDate(statement.date_to) })
+  }
+  return t('finance.statement.periodAll')
 })
 
 function balanceWord(balanceTiyin: number) {
@@ -170,9 +200,19 @@ function balanceWord(balanceTiyin: number) {
 // signs — but the word goes under the figure, so a column of balances stays a
 // column of numbers you can compare down (QAD-182).
 function balanceChip(balance: number) {
-  if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
-  if (balance < 0) return { cls: 'pill p-bad', text: `Bizning qarzimiz: ${formatTiyin(-balance)}` }
-  return { cls: 'pill p-dn', text: "Qarz yo'q" }
+  if (balance > 0) {
+    return {
+      cls: 'pill p-ok',
+      text: t('finance.debts.chipTheyOwe', { amount: formatTiyin(balance) }),
+    }
+  }
+  if (balance < 0) {
+    return {
+      cls: 'pill p-bad',
+      text: t('finance.debts.chipWeOwe', { amount: formatTiyin(-balance) }),
+    }
+  }
+  return { cls: 'pill p-dn', text: t('finance.debts.chipSettled') }
 }
 
 function balanceToneClass(balance: number) {
@@ -189,18 +229,32 @@ function statementRowLabel(row: DebtStatementRow) {
   if (row.kind === 'delivery') {
     // A delivery term is one faktura, at the grain the supplier quotes: its
     // number, how many positions it carried, and any chegirma/ustama on it.
-    const parts = [`Kirim · ${row.invoice_no ?? 'faktura'}`]
-    if (row.line_count !== null) parts.push(`${row.line_count} pozitsiya`)
-    if (row.discount_tiyin) parts.push(`chegirma ${formatTiyin(row.discount_tiyin)}`)
-    if (row.surcharge_tiyin) parts.push(`ustama ${formatTiyin(row.surcharge_tiyin)}`)
+    const parts = [
+      t('finance.statement.rowDelivery', {
+        invoice: row.invoice_no ?? t('finance.statement.rowDeliveryFallback'),
+      }),
+    ]
+    if (row.line_count !== null) {
+      parts.push(t('finance.unit.positions', { n: row.line_count }, row.line_count))
+    }
+    if (row.discount_tiyin) {
+      parts.push(t('finance.statement.rowDiscount', { amount: formatTiyin(row.discount_tiyin) }))
+    }
+    if (row.surcharge_tiyin) {
+      parts.push(t('finance.statement.rowSurcharge', { amount: formatTiyin(row.surcharge_tiyin) }))
+    }
     return parts.join(' · ')
   }
   if (row.kind === 'payment') {
-    if (row.order_number) return `To'lov · ${row.order_number}`
-    return `Xarajat · ${row.note ?? "to'lov"}`
+    if (row.order_number) return t('finance.statement.rowPaymentOrder', { order: row.order_number })
+    return t('finance.statement.rowExpense', {
+      note: row.note ?? t('finance.statement.rowExpenseFallback'),
+    })
   }
-  if (row.kind === 'order') return `Buyurtma ${row.order_number ?? ''}`.trim()
-  return `Qarz tuzatish · ${row.note ?? ''}`.trim()
+  if (row.kind === 'order') {
+    return t('finance.statement.rowOrder', { order: row.order_number ?? '' }).trim()
+  }
+  return t('finance.statement.rowAdjustment', { note: row.note ?? '' }).trim()
 }
 
 // Debts follow the topbar picker like the rest of the finance module
@@ -291,7 +345,7 @@ function openAdjustment() {
 async function saveAdjustment() {
   if (!selectedId.value) return
   if (adjustmentAmountTiyin.value === null) {
-    adjustmentError.value = 'Summani tekshiring — masalan: 1 500 000'
+    adjustmentError.value = t('finance.form.amountHint')
     return
   }
   adjustmentSaving.value = true
@@ -311,7 +365,7 @@ async function saveAdjustment() {
       note: adjustmentForm.note,
     })
     adjustmentOpen.value = false
-    toast.success('Qarz tuzatish yozildi.')
+    toast.success(t('finance.statement.adjustSaved'))
     await refreshStatement()
   } catch {
     adjustmentError.value = workshopErrorMessage(finance.actionError ?? 'adjustment_save_failed')
@@ -333,7 +387,7 @@ async function confirmVoid() {
   try {
     await finance.voidAdjustment(voidTargetId.value, voidReason.value)
     voidTargetId.value = null
-    toast.success('Tuzatish bekor qilindi.')
+    toast.success(t('finance.statement.adjustVoided'))
     await refreshStatement()
   } catch {
     voidError.value = workshopErrorMessage(finance.actionError ?? 'ledger_void_failed')
@@ -382,20 +436,20 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Qarzdorlik</h1>
+        <h1>{{ $t('finance.debts.title') }}</h1>
       </div>
     </div>
 
     <section v-if="!canManageFinance" class="st-empty">
-      <h3>Qarzdorlik bo'limiga ruxsatingiz yo'q</h3>
-      <p>Bu bo'lim uchun moliya boshqaruvi ruxsati kerak.</p>
+      <h3>{{ $t('finance.debts.deniedTitle') }}</h3>
+      <p>{{ $t('finance.debts.deniedBody') }}</p>
     </section>
 
     <template v-else>
       <AppTabs
         v-model="activeTab"
         id-prefix="workshop-debts"
-        label="Qarzdorlik bo'limlari"
+        :label="$t('finance.debts.tabsLabel')"
         :tabs="debtTabs"
       />
 
@@ -405,7 +459,7 @@ onBeforeUnmount(() => {
              the number only — the label already says which way it points. -->
         <div class="figs">
           <div class="fig">
-            <span class="fig-l">Qarzimiz</span>
+            <span class="fig-l">{{ $t('finance.debts.figWeOwe') }}</span>
             <span
               class="fig-v"
               :class="(activeDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'danger-text' : ''"
@@ -414,7 +468,7 @@ onBeforeUnmount(() => {
             >
           </div>
           <div class="fig">
-            <span class="fig-l">Bizga qarz</span>
+            <span class="fig-l">{{ $t('finance.debts.figTheyOwe') }}</span>
             <span
               class="fig-v"
               :class="(activeDebts?.they_owe_total_tiyin ?? 0) > 0 ? 'success-text' : ''"
@@ -423,7 +477,7 @@ onBeforeUnmount(() => {
             >
           </div>
           <div class="fig">
-            <span class="fig-l">Sof holat</span>
+            <span class="fig-l">{{ $t('finance.debts.figNet') }}</span>
             <span
               class="fig-v"
               :class="netTiyin > 0 ? 'success-text' : netTiyin < 0 ? 'danger-text' : ''"
@@ -431,18 +485,20 @@ onBeforeUnmount(() => {
               ><template v-if="netTiyin < 0">−</template>{{ netParts.amount }}
               <small>{{ netParts.unit }}</small></span
             >
-            <span class="fig-note">{{ balanceWord(netTiyin) || 'balans nolda' }}</span>
+            <span class="fig-note">{{ balanceWord(netTiyin) || $t('finance.debts.figZero') }}</span>
           </div>
         </div>
         <p class="figs-meta">{{ listedCountLabel }}</p>
 
         <div class="mp-filters">
           <label class="mp-filter-input">
-            <span>Qidirish</span>
+            <span>{{ $t('common.action.search') }}</span>
             <input
               v-model="search"
               :placeholder="
-                activeTab === 'suppliers' ? `Ta'minotchi nomi` : 'Mijoz nomi yoki telefoni'
+                activeTab === 'suppliers'
+                  ? $t('finance.debts.searchSupplier')
+                  : $t('finance.debts.searchClient')
               "
             />
           </label>
@@ -453,7 +509,7 @@ onBeforeUnmount(() => {
             @click="onlyWithDebt = !onlyWithDebt"
           >
             <span class="mp-filter-chip-dot" aria-hidden="true"></span>
-            Faqat qarzdorlar
+            {{ $t('finance.debts.onlyDebtors') }}
           </button>
         </div>
 
@@ -466,7 +522,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section v-else-if="finance.error" class="st-error">
-          <h3>Qarzdorlikni yuklab bo'lmadi</h3>
+          <h3>{{ $t('finance.debts.loadFailed') }}</h3>
           <p>{{ traceLine(finance.traceId) }}</p>
         </section>
 
@@ -475,9 +531,11 @@ onBeforeUnmount(() => {
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>{{ activeTab === 'suppliers' ? "Ta'minotchi" : 'Mijoz' }}</th>
-                  <th>Telefon</th>
-                  <th class="right">Balans, so'm</th>
+                  <th>{{ counterpartyRole }}</th>
+                  <th>{{ $t('common.field.phone') }}</th>
+                  <th class="right">
+                    {{ $t('finance.debts.balanceColumn', { unit: $t('formats.currency.som') }) }}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -492,13 +550,13 @@ onBeforeUnmount(() => {
                     <button
                       type="button"
                       class="row-open row-open-text"
-                      :aria-label="`${row.name} — akt sverka`"
+                      :aria-label="$t('finance.debts.statementAction', { name: row.name })"
                       @click="openStatement(row)"
                     >
                       {{ row.name }}
                     </button>
                     <small v-if="row.inactive" class="block text-[11px] text-ink-muted">
-                      faol emas
+                      {{ $t('finance.status.inactive') }}
                     </small>
                   </td>
                   <td class="num">{{ row.phone ?? '—' }}</td>
@@ -507,7 +565,7 @@ onBeforeUnmount(() => {
                       {{ formatSom(Math.abs(row.balance_tiyin)) }}
                     </b>
                     <small class="block text-[11px] text-ink-muted">
-                      {{ balanceWord(row.balance_tiyin) || "qarz yo'q" }}
+                      {{ balanceWord(row.balance_tiyin) || $t('finance.debts.noDebt') }}
                     </small>
                   </td>
                 </tr>
@@ -518,14 +576,14 @@ onBeforeUnmount(() => {
                         {{
                           onlyWithDebt
                             ? activeTab === 'suppliers'
-                              ? "Qarzdor ta'minotchi yo'q"
-                              : "Qarzdor mijoz yo'q"
+                              ? $t('finance.debts.emptySuppliersWithDebt')
+                              : $t('finance.debts.emptyClientsWithDebt')
                             : activeTab === 'suppliers'
-                              ? "Ta'minotchi yo'q"
-                              : "Mijoz yo'q"
+                              ? $t('finance.debts.emptySuppliers')
+                              : $t('finance.debts.emptyClients')
                         }}
                       </h3>
-                      <p v-if="onlyWithDebt">Hamma balanslar nolda — bu yaxshi belgi.</p>
+                      <p v-if="onlyWithDebt">{{ $t('finance.debts.emptyAllSettled') }}</p>
                     </div>
                   </td>
                 </tr>
@@ -539,7 +597,7 @@ onBeforeUnmount(() => {
       <template v-else>
         <div class="mp-filters">
           <button type="button" class="mp-button mp-button-outline" @click="backToList">
-            ← Ro'yxat
+            {{ $t('finance.statement.backToList') }}
           </button>
           <DateRangePicker
             v-model:preset="datePreset"
@@ -547,7 +605,7 @@ onBeforeUnmount(() => {
             v-model:date-to="dateTo"
           />
           <button type="button" class="mp-button mp-button-outline" @click="printStatement">
-            Chop etish
+            {{ $t('finance.action.print') }}
           </button>
           <button
             type="button"
@@ -555,13 +613,13 @@ onBeforeUnmount(() => {
             :disabled="finance.statementPdfLoading"
             @click="downloadStatementPdf"
           >
-            {{ finance.statementPdfLoading ? 'Tayyorlanmoqda' : 'PDF' }}
+            {{ finance.statementPdfLoading ? $t('finance.action.preparing') : 'PDF' }}
           </button>
           <button type="button" class="mp-button mp-button-outline" @click="openAdjustment">
-            Tuzatish kiritish
+            {{ $t('finance.statement.addAdjustment') }}
           </button>
           <button type="button" class="mp-button mp-button-primary" @click="payCounterparty">
-            To'lov qilish
+            {{ $t('finance.statement.pay') }}
           </button>
         </div>
 
@@ -574,10 +632,10 @@ onBeforeUnmount(() => {
         </section>
 
         <section v-else-if="finance.error" class="st-error">
-          <h3>Akt sverkani yuklab bo'lmadi</h3>
+          <h3>{{ $t('finance.statement.loadFailed') }}</h3>
           <p>{{ traceLine(finance.traceId) }}</p>
           <button type="button" class="mp-button mp-button-outline" @click="refreshStatement">
-            Qayta urinish
+            {{ $t('common.action.retry') }}
           </button>
         </section>
 
@@ -586,8 +644,8 @@ onBeforeUnmount(() => {
                the title, the period, and both parties by name and number. -->
           <header class="akt-head">
             <div>
-              <h2 class="akt-title">Akt sverka</h2>
-              <p class="akt-meta">{{ periodText }} · summalar so'mda</p>
+              <h2 class="akt-title">{{ $t('finance.statement.title') }}</h2>
+              <p class="akt-meta">{{ periodText }} · {{ $t('finance.statement.amountsInSom') }}</p>
             </div>
             <span
               class="akt-live"
@@ -599,28 +657,30 @@ onBeforeUnmount(() => {
           </header>
           <div class="akt-parties">
             <div class="akt-party">
-              <span class="akt-role">Ustaxona</span>
+              <span class="akt-role">{{ $t('finance.statement.partyWorkshop') }}</span>
               <b>{{ finance.statement.workshop_name }}</b>
-              <small>{{ finance.statement.workshop_phone ?? "telefon ko'rsatilmagan" }}</small>
+              <small>{{
+                finance.statement.workshop_phone ?? $t('finance.statement.partyNoPhone')
+              }}</small>
             </div>
             <div class="akt-party">
               <span class="akt-role">{{ counterpartyRole }}</span>
               <b>{{ finance.statement.name }}</b>
-              <small>{{ finance.statement.phone ?? "telefon ko'rsatilmagan" }}</small>
+              <small>{{ finance.statement.phone ?? $t('finance.statement.partyNoPhone') }}</small>
             </div>
           </div>
           <div class="table-wrap">
             <table class="tbl tbl-fluid akt-tbl">
               <thead>
                 <tr>
-                  <th class="nowrap akt-wide">Sana</th>
-                  <th>Hujjat</th>
+                  <th class="nowrap akt-wide">{{ $t('finance.field.date') }}</th>
+                  <th>{{ $t('finance.field.document') }}</th>
                   <th class="right nowrap akt-wide">{{ columnHeaders.debit }}</th>
                   <th class="right nowrap akt-wide">{{ columnHeaders.credit }}</th>
-                  <th class="right nowrap akt-narrow">Summa</th>
+                  <th class="right nowrap akt-narrow">{{ $t('common.field.amount') }}</th>
                   <th class="right nowrap">
-                    Qoldiq
-                    <small>+ bizga qarzi · − qarzimiz</small>
+                    {{ $t('finance.statement.colBalance') }}
+                    <small>{{ $t('finance.statement.colBalanceHint') }}</small>
                   </th>
                 </tr>
               </thead>
@@ -634,8 +694,10 @@ onBeforeUnmount(() => {
                     }}
                   </td>
                   <td class="nm break-words">
-                    Boshlang'ich qoldiq
-                    <small v-if="!finance.statement.date_from">butun tarix boshida</small>
+                    {{ $t('finance.statement.opening') }}
+                    <small v-if="!finance.statement.date_from">{{
+                      $t('finance.statement.openingAllTime')
+                    }}</small>
                   </td>
                   <td class="amt akt-wide"></td>
                   <td class="amt akt-wide"></td>
@@ -660,7 +722,7 @@ onBeforeUnmount(() => {
                       class="mp-button mp-button-outline mt-1 min-h-8 px-2 text-xs"
                       @click="openVoid(line.row)"
                     >
-                      Bekor qilish
+                      {{ $t('finance.action.void') }}
                     </button>
                   </td>
                   <td class="amt akt-wide" :class="line.debit !== null ? 'danger-text' : ''">
@@ -689,8 +751,8 @@ onBeforeUnmount(() => {
                 <tr v-if="finance.statement.rows.length === 0">
                   <td colspan="6">
                     <div class="st-empty !border-0 !py-8">
-                      <h3>Bu davrda harakat yo'q</h3>
-                      <p>Boshlang'ich va yopilish qoldig'i bir xil.</p>
+                      <h3>{{ $t('finance.statement.emptyTitle') }}</h3>
+                      <p>{{ $t('finance.statement.emptyBody') }}</p>
                     </div>
                   </td>
                 </tr>
@@ -699,7 +761,7 @@ onBeforeUnmount(() => {
                 <tr class="akt-turnover">
                   <td class="akt-wide"></td>
                   <td class="nm">
-                    Davr aylanmasi
+                    {{ $t('finance.statement.turnover') }}
                     <small class="akt-narrow-date"
                       >+{{ formatSom(turnover.debit) }} · −{{ formatSom(turnover.credit) }}</small
                     >
@@ -711,14 +773,15 @@ onBeforeUnmount(() => {
                 </tr>
                 <tr class="akt-closing">
                   <td class="akt-wide"></td>
-                  <td class="nm">Yopilish qoldig'i</td>
+                  <td class="nm">{{ $t('finance.statement.closing') }}</td>
                   <td class="amt akt-wide"></td>
                   <td class="amt akt-wide"></td>
                   <td class="amt akt-narrow"></td>
                   <td class="amt">
                     {{ formatSom(Math.abs(finance.statement.closing_balance_tiyin)) }}
                     <small class="akt-dir">{{
-                      balanceWord(finance.statement.closing_balance_tiyin) || "qarz yo'q"
+                      balanceWord(finance.statement.closing_balance_tiyin) ||
+                      $t('finance.debts.noDebt')
                     }}</small>
                   </td>
                 </tr>
@@ -728,35 +791,41 @@ onBeforeUnmount(() => {
 
           <!-- Print only: the two signatures that make this a document. -->
           <div class="akt-sign">
-            <p class="akt-sign-lead">Yuqoridagi hisob-kitob tomonlar tomonidan tasdiqlandi.</p>
+            <p class="akt-sign-lead">{{ $t('finance.statement.signLead') }}</p>
             <div class="akt-sign-grid">
               <div>
-                <b>Ustaxona nomidan</b>
+                <b>{{ $t('finance.statement.signWorkshop') }}</b>
                 <small>{{ finance.statement.workshop_name }}</small>
-                <span>F.I.Sh.</span>
-                <span>Imzo</span>
-                <span>Sana</span>
+                <span>{{ $t('finance.statement.signFullName') }}</span>
+                <span>{{ $t('finance.statement.signSignature') }}</span>
+                <span>{{ $t('finance.field.date') }}</span>
               </div>
               <div>
-                <b>Kontragent nomidan</b>
+                <b>{{ $t('finance.statement.signCounterparty') }}</b>
                 <small>{{ finance.statement.name }}</small>
-                <span>F.I.Sh.</span>
-                <span>Imzo</span>
-                <span>Sana</span>
+                <span>{{ $t('finance.statement.signFullName') }}</span>
+                <span>{{ $t('finance.statement.signSignature') }}</span>
+                <span>{{ $t('finance.field.date') }}</span>
               </div>
             </div>
           </div>
         </section>
 
-        <AppModal :open="adjustmentOpen" title="Qarz tuzatish" @close="adjustmentOpen = false">
+        <AppModal
+          :open="adjustmentOpen"
+          :title="$t('finance.statement.adjustTitle')"
+          @close="adjustmentOpen = false"
+        >
           <form class="grid gap-3" @submit.prevent="saveAdjustment">
             <FormSelect
               v-model="adjustmentForm.direction"
-              label="Yo'nalish"
+              :label="$t('finance.field.direction')"
               :options="directionOptions"
             />
             <label class="field">
-              <span>Summa (so'm)</span>
+              <span>{{
+                $t('finance.field.amountInSom', { unit: $t('formats.currency.som') })
+              }}</span>
               <input
                 v-model="adjustmentForm.amount"
                 class="mp-input"
@@ -768,15 +837,15 @@ onBeforeUnmount(() => {
               </small>
             </label>
             <label class="field">
-              <span>Sana</span>
+              <span>{{ $t('finance.field.date') }}</span>
               <DateField v-model="adjustmentForm.adjustedOn" :max="today" required />
             </label>
             <label class="field">
-              <span>Izoh (majburiy)</span>
+              <span>{{ $t('finance.statement.adjustNote') }}</span>
               <input
                 v-model="adjustmentForm.note"
                 class="mp-input"
-                placeholder="masalan: boshlang'ich qoldiq"
+                :placeholder="$t('finance.statement.adjustNotePlaceholder')"
                 required
               />
             </label>
@@ -787,18 +856,18 @@ onBeforeUnmount(() => {
               {{ adjustmentError }}
             </p>
             <button type="submit" class="mp-button mp-button-primary" :disabled="adjustmentSaving">
-              {{ adjustmentSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+              {{ adjustmentSaving ? $t('finance.action.saving') : $t('common.action.save') }}
             </button>
           </form>
         </AppModal>
 
         <ConfirmDialog
           :open="voidTargetId !== null"
-          title="Tuzatishni bekor qilish"
-          message="Bekor qilingan tuzatish balansga ta'sir qilmaydi. Sababni yozing."
-          confirm-label="Bekor qilish"
-          cancel-label="Yopish"
-          busy-label="Bekor qilinmoqda"
+          :title="$t('finance.void.adjustmentTitle')"
+          :message="$t('finance.void.adjustmentMessage')"
+          :confirm-label="$t('finance.action.void')"
+          :cancel-label="$t('common.action.close')"
+          :busy-label="$t('finance.action.voiding')"
           danger
           :busy="voidSaving"
           :confirm-disabled="voidReason.trim().length === 0"
@@ -806,7 +875,7 @@ onBeforeUnmount(() => {
           @confirm="confirmVoid"
         >
           <label class="field !mb-0">
-            <span>Bekor qilish sababi</span>
+            <span>{{ $t('finance.void.reason') }}</span>
             <input v-model="voidReason" class="mp-input" required />
           </label>
           <p v-if="voidError" class="mt-2 text-sm font-bold text-danger">{{ voidError }}</p>

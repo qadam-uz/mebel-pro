@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
@@ -51,6 +52,7 @@ import {
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const permissions = useWorkshopPermissions()
@@ -61,10 +63,10 @@ const workshop = useWorkshopStore()
 const now = new Date()
 const today = formatDateInputValue(now)
 const activeTab = ref<'expense' | 'income'>(financeLedgerTabFromPath(route.path))
-const financeTabs: ChoiceOption[] = [
-  { value: 'expense', label: 'Xarajatlar' },
-  { value: 'income', label: 'Tushumlar' },
-]
+const financeTabs = computed<ChoiceOption[]>(() => [
+  { value: 'expense', label: t('finance.ledger.tabExpense') },
+  { value: 'income', label: t('finance.ledger.tabIncome') },
+])
 // One component serves both /finance/income and /finance/expenses; Vue Router reuses
 // the instance, so the active tab must track the path rather than only the initial setup.
 watch(
@@ -235,7 +237,10 @@ const supplierOptions = computed<ChoiceOption[]>(() =>
   workshop.suppliers.map((supplier) => ({
     value: supplier.id,
     label: supplier.name,
-    meta: supplier.status === 'active' ? (supplier.phone ?? 'faol') : 'faol emas',
+    meta:
+      supplier.status === 'active'
+        ? (supplier.phone ?? t('finance.status.active'))
+        : t('finance.status.inactive'),
   })),
 )
 
@@ -250,16 +255,20 @@ watch(
   },
 )
 
-const expenseModes: ChoiceOption[] = [
-  { value: 'invoice', label: "Kirim to'lovi" },
-  { value: 'other', label: 'Boshqa xarajat' },
-]
+const expenseModes = computed<ChoiceOption[]>(() => [
+  { value: 'invoice', label: t('finance.expense.modeInvoice') },
+  { value: 'other', label: t('finance.expense.modeOther') },
+])
 const isInvoicePayment = computed(() => expenseForm.mode === 'invoice')
 const payableInvoiceOptions = computed<ChoiceOption[]>(() =>
   finance.payableInvoices.map((invoice) => ({
     value: invoice.id,
-    label: `${invoice.invoice_no} · ${invoice.supplier_name ?? "ta'minotchisiz"}`,
-    meta: `${formatDate(invoice.invoice_date)} · ${invoice.branch_name ?? '—'} · ${invoice.line_count} pozitsiya`,
+    label: `${invoice.invoice_no} · ${invoice.supplier_name ?? t('finance.expense.noSupplier')}`,
+    meta: [
+      formatDate(invoice.invoice_date),
+      invoice.branch_name ?? '—',
+      t('finance.unit.positions', { n: invoice.line_count }, invoice.line_count),
+    ].join(' · '),
   })),
 )
 const selectedInvoice = computed(
@@ -272,7 +281,8 @@ const selectedInvoice = computed(
 const invoiceDerivedStrip = computed(() => {
   const invoice = selectedInvoice.value
   if (!invoice) return null
-  return `${invoice.supplier_name ?? "ta'minotchisiz"} · ${invoice.branch_name ?? 'filialsiz'}`
+  const supplier = invoice.supplier_name ?? t('finance.expense.noSupplier')
+  return `${supplier} · ${invoice.branch_name ?? t('finance.expense.noBranch')}`
 })
 // Overpayment is allowed on purpose — supplier prepayments are normal, and
 // blocking them pushes staff into inventing workarounds. Warn, don't refuse.
@@ -295,7 +305,9 @@ watch(
     if (!invoice) return
     expenseForm.supplierId = invoice.supplier_id
     if (!expenseForm.description.trim()) {
-      expenseForm.description = `${invoice.invoice_no} to'lovi`
+      expenseForm.description = t('finance.expense.invoicePaymentDescription', {
+        invoice: invoice.invoice_no,
+      })
     }
     if (!expenseForm.amount.trim()) expenseForm.amount = moneyInputValue(invoice.outstanding_tiyin)
   },
@@ -312,46 +324,88 @@ const selectedIncomeOrder = computed<IncomeOrderRef | PayableOrder | null>(() =>
 })
 // Shared by the filter dropdowns (compact skin ignores meta) and the modal
 // FormSelects (meta renders as the option's hint line).
-const categoryOptions: ChoiceOption[] = [
-  { value: 'all', label: 'Hamma kategoriyalar', meta: 'filtr' },
-  { value: 'rent', label: 'Ijara', meta: 'joy xarajati' },
-  { value: 'utilities', label: 'Kommunal', meta: 'elektr/gaz/suv' },
-  { value: 'raw_materials', label: 'Xom ashyo', meta: 'material xaridi' },
-  { value: 'supplies', label: 'Aksessuar', meta: "mayda ta'minot" },
-  { value: 'transport', label: 'Transport', meta: "yetkazish/yo'l" },
-  { value: 'equipment', label: 'Texnika', meta: 'uskuna' },
-  { value: 'marketing', label: 'Marketing', meta: 'reklama' },
-  { value: 'taxes_and_fees', label: 'Soliqlar', meta: "majburiy to'lovlar" },
-  { value: 'salary', label: 'Maosh', meta: "xodim to'lovi" },
-  { value: 'other', label: 'Boshqalar', meta: 'tasniflanmagan' },
-]
-const createCategoryOptions = categoryOptions.filter((option) => option.value !== 'all')
-const incomeTypeOptions: ChoiceOption[] = [
-  { value: 'all', label: 'Hamma turlar', meta: 'filtr' },
-  { value: 'order_payment', label: "Buyurtma to'lovi", meta: "buyurtmaga bog'langan" },
-  { value: 'other', label: 'Boshqa tushum', meta: "qo'lda yozuv" },
-]
-const createIncomeTypeOptions = incomeTypeOptions.filter((option) => option.value !== 'all')
+const categoryOptions = computed<ChoiceOption[]>(() => [
+  { value: 'all', label: t('finance.category.all'), meta: t('finance.category.allHint') },
+  { value: 'rent', label: t('finance.category.rent'), meta: t('finance.category.rentHint') },
+  {
+    value: 'utilities',
+    label: t('finance.category.utilities'),
+    meta: t('finance.category.utilitiesHint'),
+  },
+  {
+    value: 'raw_materials',
+    label: t('finance.category.rawMaterials'),
+    meta: t('finance.category.rawMaterialsHint'),
+  },
+  {
+    value: 'supplies',
+    label: t('finance.category.supplies'),
+    meta: t('finance.category.suppliesHint'),
+  },
+  {
+    value: 'transport',
+    label: t('finance.category.transport'),
+    meta: t('finance.category.transportHint'),
+  },
+  {
+    value: 'equipment',
+    label: t('finance.category.equipment'),
+    meta: t('finance.category.equipmentHint'),
+  },
+  {
+    value: 'marketing',
+    label: t('finance.category.marketing'),
+    meta: t('finance.category.marketingHint'),
+  },
+  {
+    value: 'taxes_and_fees',
+    label: t('finance.category.taxes'),
+    meta: t('finance.category.taxesHint'),
+  },
+  { value: 'salary', label: t('finance.category.salary'), meta: t('finance.category.salaryHint') },
+  { value: 'other', label: t('finance.category.other'), meta: t('finance.category.otherHint') },
+])
+const createCategoryOptions = computed(() =>
+  categoryOptions.value.filter((option) => option.value !== 'all'),
+)
+const incomeTypeOptions = computed<ChoiceOption[]>(() => [
+  { value: 'all', label: t('finance.incomeType.all'), meta: t('finance.incomeType.allHint') },
+  {
+    value: 'order_payment',
+    label: t('finance.incomeType.orderPayment'),
+    meta: t('finance.incomeType.orderPaymentHint'),
+  },
+  {
+    value: 'other',
+    label: t('finance.incomeType.other'),
+    meta: t('finance.incomeType.otherHint'),
+  },
+])
+const createIncomeTypeOptions = computed(() =>
+  incomeTypeOptions.value.filter((option) => option.value !== 'all'),
+)
 // One word per method. The three sit in a half-width segmented row, and
 // «Bank / karta» ran past its segment at desktop width — a choice you can't
 // read is not a visible choice. The card/terminal case lives in the meta line.
-const methodOptions: ChoiceOption[] = [
-  { value: 'cash', label: 'Naqd', meta: 'kassa' },
-  { value: 'bank_transfer', label: 'Bank', meta: "o'tkazma yoki karta" },
-  { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi' },
-]
-const statusOptions: DropdownOption[] = [
-  { value: 'recorded', label: 'Yozilgan', dot: 'success' },
-  { value: 'voided', label: 'Bekor qilingan', dot: 'danger' },
-  { value: 'all', label: 'Hammasi' },
-]
-const categoryLabel = Object.fromEntries(
-  categoryOptions.map((option) => [option.value, option.label]),
+const methodOptions = computed<ChoiceOption[]>(() => [
+  { value: 'cash', label: t('finance.method.cash'), meta: t('finance.method.cashHint') },
+  { value: 'bank_transfer', label: t('finance.method.bank'), meta: t('finance.method.bankHint') },
+  { value: 'other', label: t('finance.method.other'), meta: t('finance.method.otherHint') },
+])
+const statusOptions = computed<DropdownOption[]>(() => [
+  { value: 'recorded', label: t('finance.status.recorded'), dot: 'success' },
+  { value: 'voided', label: t('finance.status.voided'), dot: 'danger' },
+  { value: 'all', label: t('finance.status.all') },
+])
+const categoryLabel = computed(() =>
+  Object.fromEntries(categoryOptions.value.map((option) => [option.value, option.label])),
 )
-const incomeTypeLabel = Object.fromEntries(
-  incomeTypeOptions.map((option) => [option.value, option.label]),
+const incomeTypeLabel = computed(() =>
+  Object.fromEntries(incomeTypeOptions.value.map((option) => [option.value, option.label])),
 )
-const methodLabel = Object.fromEntries(methodOptions.map((option) => [option.value, option.label]))
+const methodLabel = computed(() =>
+  Object.fromEntries(methodOptions.value.map((option) => [option.value, option.label])),
+)
 
 watch(
   () => incomeForm.orderId,
@@ -412,12 +466,14 @@ function canEditLedgerRow(status: LedgerStatus): boolean {
 
 // Bekor qilish left the row for the ⋯ menu but keeps its word: a bare glyph is
 // all that would stand between a mis-click and a voided money row.
-const voidMenuItems: ActionMenuItem[] = [{ label: 'Bekor qilish', icon: 'ban', danger: true }]
+const voidMenuItems = computed<ActionMenuItem[]>(() => [
+  { label: t('finance.action.void'), icon: 'ban', danger: true },
+])
 
 // A tushum has no description column, so the type and the sum are what name the
 // row for the control that acts on it.
 function incomeRowLabel(income: Income): string {
-  return `${incomeTypeLabel[income.type] ?? income.type} ${formatTiyin(income.amount_tiyin)}`
+  return `${incomeTypeLabel.value[income.type] ?? income.type} ${formatTiyin(income.amount_tiyin)}`
 }
 
 const voidTargetLabel = computed(() => {
@@ -426,18 +482,16 @@ const voidTargetLabel = computed(() => {
   if (target.kind === 'expense') {
     const expense = finance.expenses.find((row) => row.id === target.id)
     if (!expense) return ''
-    return `${formatDate(expense.incurred_on)} · ${categoryLabel[expense.category] ?? expense.category} · ${formatTiyin(expense.amount_tiyin)}`
+    return `${formatDate(expense.incurred_on)} · ${categoryLabel.value[expense.category] ?? expense.category} · ${formatTiyin(expense.amount_tiyin)}`
   }
   const income = finance.incomes.find((row) => row.id === target.id)
   if (!income) return ''
-  return `${formatDate(income.received_on)} · ${incomeTypeLabel[income.type] ?? income.type} · ${formatTiyin(income.amount_tiyin)}`
+  return `${formatDate(income.received_on)} · ${incomeTypeLabel.value[income.type] ?? income.type} · ${formatTiyin(income.amount_tiyin)}`
 })
 
 // Live-parsed amounts drive both the "= 12 500 000 so'm" preview under the
 // input and the submit guard — an unparseable amount blocks the save instead
 // of silently booking 0 (or a 1000x-smaller sum).
-const AMOUNT_HINT = 'Summani tekshiring — masalan: 1 500 000'
-const OVER_BALANCE_HINT = 'Qoldiqdan oshib ketdi'
 const expenseAmountTiyin = computed(() => parseSomToTiyin(expenseForm.amount))
 const incomeAmountTiyin = computed(() => parseSomToTiyin(incomeForm.amount))
 
@@ -465,8 +519,10 @@ const showRemainingBalanceButton = computed(
 // Caught here so the operator sees the problem beside the field they typed it
 // in; the server's cap stays the authority, this only saves the round trip.
 const incomeAmountError = computed(() => {
-  if (incomeForm.amount.trim() && incomeAmountTiyin.value === null) return AMOUNT_HINT
-  if (incomeAmountOverBalance.value) return OVER_BALANCE_HINT
+  if (incomeForm.amount.trim() && incomeAmountTiyin.value === null) {
+    return t('finance.form.amountHint')
+  }
+  if (incomeAmountOverBalance.value) return t('finance.income.overBalance')
   return null
 })
 
@@ -585,7 +641,7 @@ function editExpense(expense: Expense) {
   expenseForm.vendor = expense.vendor ?? ''
   expenseForm.description = expense.description
   expenseForm.receiptFileId = expense.receipt_file_id
-  expenseForm.receiptName = expense.receipt_file_id ? 'Biriktirilgan chek' : ''
+  expenseForm.receiptName = expense.receipt_file_id ? t('finance.ledger.receiptName') : ''
   clearActionError()
   expenseModalOpen.value = true
 }
@@ -605,7 +661,7 @@ function editIncome(income: Income) {
   incomeForm.receivedOn = income.received_on
   incomeForm.note = income.note ?? ''
   incomeForm.receiptFileId = income.receipt_file_id
-  incomeForm.receiptName = income.receipt_file_id ? 'Biriktirilgan chek' : ''
+  incomeForm.receiptName = income.receipt_file_id ? t('finance.ledger.receiptName') : ''
   clearActionError()
   incomeModalOpen.value = true
 }
@@ -634,12 +690,12 @@ function closeVoidForm() {
 async function saveExpense() {
   if (!canManageFinance.value) return
   if (expenseAmountTiyin.value === null) {
-    actionError.value = AMOUNT_HINT
+    actionError.value = t('finance.form.amountHint')
     actionTraceId.value = null
     return
   }
   if (isInvoicePayment.value && !editingExpenseId.value && !expenseForm.invoiceId) {
-    actionError.value = "Kirimni tanlang yoki «Boshqa xarajat»ga o'ting."
+    actionError.value = t('finance.expense.invoiceRequired')
     actionTraceId.value = null
     return
   }
@@ -685,7 +741,7 @@ async function saveExpense() {
     }
     closeExpenseModal()
     await refresh()
-    toast.success(wasEditing ? 'Xarajat saqlandi.' : 'Xarajat yozildi.')
+    toast.success(wasEditing ? t('finance.expense.saved') : t('finance.expense.recorded'))
   } catch {
     actionError.value = workshopErrorMessage(finance.actionError ?? 'expense_save_failed')
     actionTraceId.value = finance.actionTraceId
@@ -697,12 +753,12 @@ async function saveExpense() {
 async function saveIncome() {
   if (!canManageFinance.value) return
   if (incomeAmountTiyin.value === null) {
-    actionError.value = AMOUNT_HINT
+    actionError.value = t('finance.form.amountHint')
     actionTraceId.value = null
     return
   }
   if (incomeAmountOverBalance.value) {
-    actionError.value = OVER_BALANCE_HINT
+    actionError.value = t('finance.income.overBalance')
     actionTraceId.value = null
     return
   }
@@ -750,7 +806,7 @@ async function saveIncome() {
     }
     closeIncomeModal()
     await refresh()
-    toast.success(wasEditing ? 'Tushum saqlandi.' : 'Tushum yozildi.')
+    toast.success(wasEditing ? t('finance.income.saved') : t('finance.income.recorded'))
   } catch {
     actionError.value = workshopErrorMessage(finance.actionError ?? 'income_save_failed')
     actionTraceId.value = finance.actionTraceId
@@ -770,7 +826,7 @@ async function uploadExpenseReceipt(event: Event) {
     const uploaded = await files.upload(file)
     expenseForm.receiptFileId = uploaded.id
     expenseForm.receiptName = uploaded.original_name
-    toast.success('Chek biriktirildi.')
+    toast.success(t('finance.ledger.receiptSaved'))
   } catch {
     actionError.value = workshopErrorMessage(files.error ?? 'file_upload_failed')
     actionTraceId.value = files.traceId
@@ -788,7 +844,7 @@ async function uploadIncomeReceipt(event: Event) {
     const uploaded = await files.upload(file)
     incomeForm.receiptFileId = uploaded.id
     incomeForm.receiptName = uploaded.original_name
-    toast.success('Chek biriktirildi.')
+    toast.success(t('finance.ledger.receiptSaved'))
   } catch {
     actionError.value = workshopErrorMessage(files.error ?? 'file_upload_failed')
     actionTraceId.value = files.traceId
@@ -816,7 +872,7 @@ async function confirmVoid() {
     else await finance.voidIncome(voidTarget.value.id, voidReason.value)
     closeVoidForm()
     await refresh()
-    toast.success('Yozuv bekor qilindi.')
+    toast.success(t('finance.ledger.rowVoided'))
   } catch {
     actionError.value = workshopErrorMessage(finance.actionError ?? 'ledger_void_failed')
     actionTraceId.value = finance.actionTraceId
@@ -862,26 +918,28 @@ onMounted(async () => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Tushum va xarajat</h1>
+        <h1>{{ $t('finance.ledger.title') }}</h1>
       </div>
     </div>
 
     <section v-if="!canManageFinance" class="st-empty">
-      <h3>Tushum va xarajat yozuvlariga ruxsatingiz yo'q</h3>
-      <p>Bu bo'limda yozuv kiritish yoki tuzatish uchun moliya boshqaruvi ruxsati kerak.</p>
+      <h3>{{ $t('finance.ledger.deniedTitle') }}</h3>
+      <p>{{ $t('finance.ledger.deniedBody') }}</p>
     </section>
 
     <template v-else>
       <AppTabs
         v-model="activeTab"
         id-prefix="workshop-finance-ledger"
-        label="Moliya yozuvlari"
+        :label="$t('finance.ledger.tabsLabel')"
         :tabs="financeTabs"
       />
 
       <AppModal
         :open="expenseModalOpen"
-        :title="editingExpenseId ? 'Xarajatni tahrirlash' : 'Xarajat yozish'"
+        :title="
+          editingExpenseId ? $t('finance.expense.editTitle') : $t('finance.expense.createTitle')
+        "
         max-width="max-w-2xl"
         @close="closeExpenseModal"
       >
@@ -889,14 +947,18 @@ onMounted(async () => {
           <SegmentedControl
             v-if="!editingExpenseId"
             v-model="expenseForm.mode"
-            label="Turi"
+            :label="$t('finance.field.kind')"
             :options="expenseModes"
           />
           <label v-else class="field">
-            <span>Turi</span>
+            <span>{{ $t('finance.field.kind') }}</span>
             <input
               class="mp-input"
-              :value="expenseForm.invoiceId ? `Kirim to'lovi` : 'Boshqa xarajat'"
+              :value="
+                expenseForm.invoiceId
+                  ? $t('finance.expense.modeInvoice')
+                  : $t('finance.expense.modeOther')
+              "
               disabled
             />
           </label>
@@ -907,14 +969,14 @@ onMounted(async () => {
             <SearchCombobox
               v-if="!editingExpenseId"
               v-model="expenseForm.invoiceId"
-              label="Kirim (faktura)"
+              :label="$t('finance.expense.invoiceLabel')"
               :options="payableInvoiceOptions"
-              placeholder="K-0007 yoki ta'minotchi"
-              no-results-text="To'lanmagan kirim topilmadi"
+              :placeholder="$t('finance.expense.invoicePlaceholder')"
+              :no-results-text="$t('finance.expense.invoiceNoResults')"
               clearable
             />
             <label v-else class="field">
-              <span>Kirim (faktura)</span>
+              <span>{{ $t('finance.expense.invoiceLabel') }}</span>
               <input
                 class="mp-input"
                 :value="editingExpenseInvoiceNo ?? selectedInvoice?.invoice_no ?? '—'"
@@ -928,11 +990,19 @@ onMounted(async () => {
               <div class="grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
                 <div class="grid gap-1">
                   <b class="text-base text-danger">
-                    Qoldiq: {{ formatTiyin(selectedInvoice.outstanding_tiyin) }}
+                    {{
+                      $t('finance.expense.invoiceOutstanding', {
+                        amount: formatTiyin(selectedInvoice.outstanding_tiyin),
+                      })
+                    }}
                   </b>
                   <span class="text-ink-muted">
-                    Jami {{ formatTiyin(selectedInvoice.total_tiyin) }} · to'langan
-                    {{ formatTiyin(selectedInvoice.paid_tiyin) }}
+                    {{
+                      $t('finance.expense.invoiceTotals', {
+                        total: formatTiyin(selectedInvoice.total_tiyin),
+                        paid: formatTiyin(selectedInvoice.paid_tiyin),
+                      })
+                    }}
                   </span>
                 </div>
                 <button
@@ -940,7 +1010,7 @@ onMounted(async () => {
                   class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                   @click="expenseForm.amount = moneyInputValue(selectedInvoice.outstanding_tiyin)"
                 >
-                  Qoldiq
+                  {{ $t('finance.field.remainder') }}
                 </button>
               </div>
             </div>
@@ -948,13 +1018,13 @@ onMounted(async () => {
               v-if="invoiceDerivedStrip"
               class="rounded-md border border-hairline px-3 py-2 text-sm text-ink-soft md:col-span-2"
             >
-              Ta'minotchi va filial kirimdan olinadi — {{ invoiceDerivedStrip }}
+              {{ $t('finance.expense.invoiceDerived', { detail: invoiceDerivedStrip }) }}
             </p>
           </template>
 
           <FormSelect
             v-model="expenseForm.category"
-            label="Kategoriya"
+            :label="$t('finance.field.category')"
             :options="createCategoryOptions"
           />
           <label
@@ -966,53 +1036,53 @@ onMounted(async () => {
               type="checkbox"
               class="size-4 accent-accent"
             />
-            <span>Ustaxona darajasida (filialsiz)</span>
+            <span>{{ $t('finance.expense.workshopLevel') }}</span>
           </label>
           <label class="field md:col-span-2">
-            <span>Tavsif</span>
+            <span>{{ $t('finance.field.description') }}</span>
             <input
               v-model="expenseForm.description"
               class="mp-input"
-              placeholder="Masalan: Bahodir T. · 19 list"
+              :placeholder="$t('finance.expense.descriptionPlaceholder')"
               required
             />
           </label>
           <SearchCombobox
             v-if="!isInvoicePayment"
             v-model="expenseForm.supplierId"
-            label="Ta'minotchi (qarz uchun)"
+            :label="$t('finance.expense.supplierLink')"
             :options="supplierOptions"
-            placeholder="ixtiyoriy — qarzga bog'lash"
+            :placeholder="$t('finance.expense.supplierLinkPlaceholder')"
             clearable
           />
           <label v-if="!isInvoicePayment" class="field">
-            <span>Ta'minotchi</span>
+            <span>{{ $t('finance.field.supplier') }}</span>
             <input
               v-model="expenseForm.vendor"
               class="mp-input"
-              placeholder="Masalan: Oq Mramor MChJ"
+              :placeholder="$t('finance.expense.vendorPlaceholder')"
             />
           </label>
           <label class="field">
-            <span>Summa (so'm)</span>
+            <span>{{ $t('finance.field.amountInSom', { unit: $t('formats.currency.som') }) }}</span>
             <input v-model="expenseForm.amount" class="mp-input" inputmode="numeric" required />
             <small v-if="expenseAmountTiyin !== null" class="text-ink-muted">
               = {{ formatTiyin(expenseAmountTiyin) }}
             </small>
             <small v-else-if="expenseForm.amount.trim()" class="mp-field-error">
-              {{ AMOUNT_HINT }}
+              {{ $t('finance.form.amountHint') }}
             </small>
             <!-- Allowed, not blocked: an advance is a real thing that happens. -->
             <small v-if="overpaysInvoice" class="font-bold text-warning">
-              Summa kirim qoldig'idan oshadi — avans sifatida yoziladi
+              {{ $t('finance.expense.overpays') }}
             </small>
           </label>
           <label class="field">
-            <span>Sana</span>
+            <span>{{ $t('finance.field.date') }}</span>
             <DateField v-model="expenseForm.incurredOn" :max="today" required />
           </label>
           <label class="field md:col-span-2">
-            <span>Chek</span>
+            <span>{{ $t('finance.field.receipt') }}</span>
             <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
               :uploading="files.uploading"
@@ -1030,10 +1100,16 @@ onMounted(async () => {
           </p>
           <div class="flex items-center gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
-              {{ saving ? 'Saqlanmoqda' : editingExpenseId ? 'Saqlash' : 'Yozish' }}
+              {{
+                saving
+                  ? $t('finance.action.saving')
+                  : editingExpenseId
+                    ? $t('common.action.save')
+                    : $t('finance.action.record')
+              }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="closeExpenseModal">
-              Bekor
+              {{ $t('finance.action.cancelShort') }}
             </button>
           </div>
         </form>
@@ -1041,7 +1117,7 @@ onMounted(async () => {
 
       <AppModal
         :open="incomeModalOpen"
-        :title="editingIncomeId ? 'Tushumni tahrirlash' : 'Tushum yozish'"
+        :title="editingIncomeId ? $t('finance.income.editTitle') : $t('finance.income.createTitle')"
         max-width="max-w-2xl"
         @close="closeIncomeModal"
       >
@@ -1049,32 +1125,36 @@ onMounted(async () => {
           <SegmentedControl
             v-if="!editingIncomeId"
             v-model="incomeForm.type"
-            label="Turi"
+            :label="$t('finance.field.kind')"
             :options="createIncomeTypeOptions"
           />
           <label v-else class="field">
-            <span>Turi</span>
+            <span>{{ $t('finance.field.kind') }}</span>
             <input
               class="mp-input"
               :value="(incomeForm.type && incomeTypeLabel[incomeForm.type]) || incomeForm.type"
               disabled
             />
           </label>
-          <SegmentedControl v-model="incomeForm.method" label="Usul" :options="methodOptions" />
+          <SegmentedControl
+            v-model="incomeForm.method"
+            :label="$t('finance.field.method')"
+            :options="methodOptions"
+          />
           <SearchCombobox
             v-if="incomeForm.type === 'order_payment' && !editingIncomeId"
             ref="incomeOrderCombobox"
             v-model="incomeForm.orderId"
             class="md:col-span-2"
-            label="Buyurtma"
+            :label="$t('finance.field.order')"
             :options="payableOrderOptions"
             :error="incomeOrderError"
             :loading="finance.payableOrdersLoading"
             :search-debounce-ms="250"
             server-filtered
-            placeholder="Raqam, ism yoki telefon"
-            no-results-text="Qoldig'i bor buyurtma topilmadi"
-            hint="Faqat qoldig'i bor buyurtmalar · raqam, ism yoki telefon bo'yicha qidiring"
+            :placeholder="$t('finance.income.orderPlaceholder')"
+            :no-results-text="$t('finance.income.orderNoResults')"
+            :hint="$t('finance.income.orderHint')"
             clearable
             @search="onPayableOrderSearch"
           >
@@ -1083,7 +1163,7 @@ onMounted(async () => {
             </template>
           </SearchCombobox>
           <label v-else-if="incomeForm.type === 'order_payment'" class="field md:col-span-2">
-            <span>Buyurtma</span>
+            <span>{{ $t('finance.field.order') }}</span>
             <input
               class="mp-input"
               :value="financeIncomeOrderLabel(incomeForm.orderId, editingIncomeOrder)"
@@ -1106,30 +1186,36 @@ onMounted(async () => {
               class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-hairline bg-sunk px-3 py-2 text-[12px] text-ink-soft"
             >
               <span>
-                Jami
+                {{ $t('common.field.total') }}
                 <b class="ml-1 font-mono text-ink">
                   {{ formatTiyin(incomeSettlement.total_tiyin) }}
                 </b>
               </span>
               <span aria-hidden="true">·</span>
               <span>
-                {{ editingIncomeId ? 'Boshqa yozuvlar' : 'Yozilgan' }}
+                {{
+                  editingIncomeId
+                    ? $t('finance.income.settlementOthers')
+                    : $t('finance.income.settlementRecorded')
+                }}
                 <b class="ml-1 font-mono text-ink">
                   {{ formatTiyin(incomeSettlement.recorded_tiyin) }}
                 </b>
               </span>
               <span aria-hidden="true">·</span>
               <span>
-                Qoldiq
+                {{ $t('finance.field.remainder') }}
                 <b class="ml-1 font-mono text-danger">
                   {{ formatTiyin(incomeSettlement.balance_tiyin) }}
                 </b>
               </span>
             </p>
-            <p v-else class="text-[12px] font-bold text-ink-soft">Qoldiq ma'lumoti topilmadi.</p>
+            <p v-else class="text-[12px] font-bold text-ink-soft">
+              {{ $t('finance.income.settlementMissing') }}
+            </p>
           </div>
           <label class="field">
-            <span>Summa (to'liq yoki qisman)</span>
+            <span>{{ $t('finance.income.amountLabel') }}</span>
             <div class="relative">
               <!-- Explicit name: the wrapping <label> now also contains the
                    Qoldiq button, whose text would otherwise be folded into this
@@ -1142,7 +1228,7 @@ onMounted(async () => {
                   showRemainingBalanceButton ? 'pr-16' : '',
                 ]"
                 :aria-invalid="incomeAmountError ? 'true' : undefined"
-                aria-label="Summa (to'liq yoki qisman)"
+                :aria-label="$t('finance.income.amountLabel')"
                 inputmode="numeric"
                 required
               />
@@ -1153,7 +1239,7 @@ onMounted(async () => {
                 class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm px-2 py-1 text-[11px] font-bold text-accent transition hover:bg-accent-soft"
                 @click="fillRemainingBalance"
               >
-                Qoldiq
+                {{ $t('finance.field.remainder') }}
               </button>
             </div>
             <small v-if="incomeAmountError" class="mp-field-error">{{ incomeAmountError }}</small>
@@ -1162,19 +1248,19 @@ onMounted(async () => {
             </small>
           </label>
           <label class="field">
-            <span>Qabul sanasi</span>
+            <span>{{ $t('finance.income.receivedOn') }}</span>
             <DateField v-model="incomeForm.receivedOn" :max="today" required />
           </label>
           <label class="field md:col-span-2">
-            <span>Izoh</span>
+            <span>{{ $t('common.field.comment') }}</span>
             <input
               v-model="incomeForm.note"
               class="mp-input"
-              placeholder="Masalan: Kapital bank, kassa 2"
+              :placeholder="$t('finance.income.notePlaceholder')"
             />
           </label>
           <label class="field md:col-span-2">
-            <span>Chek</span>
+            <span>{{ $t('finance.field.receipt') }}</span>
             <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
               :uploading="files.uploading"
@@ -1196,10 +1282,16 @@ onMounted(async () => {
               class="mp-button mp-button-primary"
               :disabled="saving || incomeAmountOverBalance"
             >
-              {{ saving ? 'Saqlanmoqda' : editingIncomeId ? 'Saqlash' : 'Yozish' }}
+              {{
+                saving
+                  ? $t('finance.action.saving')
+                  : editingIncomeId
+                    ? $t('common.action.save')
+                    : $t('finance.action.record')
+              }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="closeIncomeModal">
-              Bekor
+              {{ $t('finance.action.cancelShort') }}
             </button>
           </div>
         </form>
@@ -1214,28 +1306,33 @@ onMounted(async () => {
         <ProjectDropdown
           v-if="activeTab === 'expense'"
           v-model="expenseCategory"
-          label="Kategoriya"
+          :label="$t('finance.field.category')"
           :options="categoryOptions"
           top-label
         />
         <ProjectDropdown
           v-else
           v-model="incomeType"
-          label="Tur"
+          :label="$t('common.field.type')"
           :options="incomeTypeOptions"
           top-label
         />
-        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <ProjectDropdown
+          v-model="statusFilter"
+          :label="$t('common.field.status')"
+          :options="statusOptions"
+          top-label
+        />
         <button
           v-if="activeTab === 'expense'"
           type="button"
           class="mp-button mp-button-primary"
           @click="openCreateExpense"
         >
-          + Xarajat
+          {{ $t('finance.ledger.addExpense') }}
         </button>
         <button v-else type="button" class="mp-button mp-button-primary" @click="openCreateIncome">
-          + Tushum
+          {{ $t('finance.ledger.addIncome') }}
         </button>
       </div>
 
@@ -1243,7 +1340,11 @@ onMounted(async () => {
         :active="narrowingFilters.length > 0"
         :loading="finance.loading"
         :count="activeTab === 'expense' ? finance.expenses.length : finance.incomes.length"
-        :noun="activeTab === 'expense' ? 'xarajat' : 'tushum'"
+        :noun="
+          activeTab === 'expense'
+            ? $t('finance.ledger.nounExpense')
+            : $t('finance.ledger.nounIncome')
+        "
         :total="formatTiyin(periodTotalTiyin)"
         :on-reset="narrowingFilters.length > 1 ? resetLedgerFilters : null"
       />
@@ -1257,7 +1358,7 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="finance.error" class="st-error">
-        <h3>Yozuvlarni yuklab bo'lmadi</h3>
+        <h3>{{ $t('finance.ledger.loadFailed') }}</h3>
         <p>{{ traceLine(finance.traceId) }}</p>
       </section>
 
@@ -1273,12 +1374,12 @@ onMounted(async () => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>Sana</th>
-                <th>Kategoriya</th>
-                <th>Tavsif</th>
-                <th>Ta'minotchi</th>
-                <th class="right">Summa</th>
-                <th v-if="showStatusColumn">Holat</th>
+                <th>{{ $t('finance.field.date') }}</th>
+                <th>{{ $t('finance.field.category') }}</th>
+                <th>{{ $t('finance.field.description') }}</th>
+                <th>{{ $t('finance.field.supplier') }}</th>
+                <th class="right">{{ $t('common.field.amount') }}</th>
+                <th v-if="showStatusColumn">{{ $t('common.field.status') }}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1296,13 +1397,13 @@ onMounted(async () => {
                 <td class="num text-ink-muted">
                   {{ formatDate(expense.incurred_on) }}
                   <small class="block whitespace-nowrap font-sans text-[11px]">
-                    Kiritildi: {{ formatDateTime(expense.created_at) }}
+                    {{ $t('finance.ledger.enteredAt', { at: formatDateTime(expense.created_at) }) }}
                   </small>
                 </td>
                 <td>
                   {{ categoryLabel[expense.category] ?? expense.category }}
                   <small v-if="!expense.branch_id" class="block text-[11px] text-ink-muted">
-                    Barcha filiallar
+                    {{ $t('finance.ledger.allBranches') }}
                   </small>
                 </td>
                 <td class="nm">
@@ -1312,15 +1413,17 @@ onMounted(async () => {
                     v-if="canEditLedgerRow(expense.status)"
                     type="button"
                     class="row-open row-open-text"
-                    :aria-label="`${expense.description} — tahrirlash`"
+                    :aria-label="$t('finance.ledger.editAction', { name: expense.description })"
                     @click="editExpense(expense)"
                   >
                     {{ expense.description }}
                   </button>
                   <template v-else>{{ expense.description }}</template>
-                  <small v-if="expense.voided_reason">bekor: {{ expense.voided_reason }}</small>
+                  <small v-if="expense.voided_reason">{{
+                    $t('finance.ledger.voidedReason', { reason: expense.voided_reason })
+                  }}</small>
                   <small v-if="expense.receipt_file_id" class="block text-[11px] text-ink-muted">
-                    Chek biriktirilgan
+                    {{ $t('finance.ledger.receiptAttached') }}
                   </small>
                 </td>
                 <td>
@@ -1338,14 +1441,18 @@ onMounted(async () => {
                 <td v-if="showStatusColumn">
                   <span :class="expense.status === 'recorded' ? 'pill p-ok' : 'pill p-dn'">
                     <span class="pd"></span
-                    >{{ expense.status === 'recorded' ? 'Yozilgan' : 'Bekor qilingan' }}
+                    >{{
+                      expense.status === 'recorded'
+                        ? $t('finance.status.recorded')
+                        : $t('finance.status.voided')
+                    }}
                   </span>
                 </td>
                 <td class="right">
                   <ActionMenu
                     v-if="canEditLedgerRow(expense.status)"
                     :items="voidMenuItems"
-                    :label="`${expense.description} amallari`"
+                    :label="$t('finance.ledger.rowActions', { name: expense.description })"
                     @select="openVoidForm('expense', expense.id)"
                   />
                 </td>
@@ -1353,9 +1460,13 @@ onMounted(async () => {
               <tr v-if="finance.expenses.length === 0">
                 <td :colspan="showStatusColumn ? 6 : 5">
                   <div class="st-empty !border-0 !py-8">
-                    <h3 v-if="narrowingFilters.length">Filtrga mos xarajat topilmadi</h3>
-                    <h3 v-else>Bu davrda xarajat yo'q</h3>
-                    <p v-if="narrowingFilters.length">Filtrni o'zgartiring yoki tozalang.</p>
+                    <h3 v-if="narrowingFilters.length">
+                      {{ $t('finance.ledger.filterEmptyExpense') }}
+                    </h3>
+                    <h3 v-else>{{ $t('finance.ledger.emptyExpense') }}</h3>
+                    <p v-if="narrowingFilters.length">
+                      {{ $t('finance.ledger.filterEmptyBody') }}
+                    </p>
                   </div>
                 </td>
               </tr>
@@ -1376,13 +1487,13 @@ onMounted(async () => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>Sana</th>
-                <th>Turi</th>
-                <th>Buyurtma</th>
-                <th>Usul</th>
-                <th>Izoh</th>
-                <th class="right">Summa</th>
-                <th v-if="showStatusColumn">Holat</th>
+                <th>{{ $t('finance.field.date') }}</th>
+                <th>{{ $t('finance.field.kind') }}</th>
+                <th>{{ $t('finance.field.order') }}</th>
+                <th>{{ $t('finance.field.method') }}</th>
+                <th>{{ $t('common.field.comment') }}</th>
+                <th class="right">{{ $t('common.field.amount') }}</th>
+                <th v-if="showStatusColumn">{{ $t('common.field.status') }}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1398,7 +1509,7 @@ onMounted(async () => {
                 <td class="num text-ink-muted">
                   {{ formatDate(income.received_on) }}
                   <small class="block whitespace-nowrap font-sans text-[11px]">
-                    Kiritildi: {{ formatDateTime(income.created_at) }}
+                    {{ $t('finance.ledger.enteredAt', { at: formatDateTime(income.created_at) }) }}
                   </small>
                 </td>
                 <td>
@@ -1408,14 +1519,14 @@ onMounted(async () => {
                     v-if="canEditLedgerRow(income.status)"
                     type="button"
                     class="row-open row-open-text"
-                    :aria-label="`${incomeRowLabel(income)} — tahrirlash`"
+                    :aria-label="$t('finance.ledger.editAction', { name: incomeRowLabel(income) })"
                     @click="editIncome(income)"
                   >
                     {{ incomeTypeLabel[income.type] ?? income.type }}
                   </button>
                   <template v-else>{{ incomeTypeLabel[income.type] ?? income.type }}</template>
                   <small v-if="!income.branch_id" class="block text-[11px] text-ink-muted">
-                    Barcha filiallar
+                    {{ $t('finance.ledger.allBranches') }}
                   </small>
                 </td>
                 <td>{{ financeIncomeOrderLabel(income.order_id, income.order) }}</td>
@@ -1432,21 +1543,25 @@ onMounted(async () => {
                        pushed Summa off a phone screen (QAD-182); the receipt
                        says so beside the note it belongs to. -->
                   <small v-if="income.receipt_file_id" class="block text-[11px] text-ink-muted">
-                    Chek biriktirilgan
+                    {{ $t('finance.ledger.receiptAttached') }}
                   </small>
                 </td>
                 <td class="amt success-text">{{ formatTiyin(income.amount_tiyin) }}</td>
                 <td v-if="showStatusColumn">
                   <span :class="income.status === 'recorded' ? 'pill p-ok' : 'pill p-dn'">
                     <span class="pd"></span
-                    >{{ income.status === 'recorded' ? 'Yozilgan' : 'Bekor qilingan' }}
+                    >{{
+                      income.status === 'recorded'
+                        ? $t('finance.status.recorded')
+                        : $t('finance.status.voided')
+                    }}
                   </span>
                 </td>
                 <td class="right">
                   <ActionMenu
                     v-if="canEditLedgerRow(income.status)"
                     :items="voidMenuItems"
-                    :label="`${incomeRowLabel(income)} amallari`"
+                    :label="$t('finance.ledger.rowActions', { name: incomeRowLabel(income) })"
                     @select="openVoidForm('income', income.id)"
                   />
                 </td>
@@ -1454,9 +1569,13 @@ onMounted(async () => {
               <tr v-if="finance.incomes.length === 0">
                 <td :colspan="showStatusColumn ? 7 : 6">
                   <div class="st-empty !border-0 !py-8">
-                    <h3 v-if="narrowingFilters.length">Filtrga mos tushum topilmadi</h3>
-                    <h3 v-else>Bu davrda tushum yo'q</h3>
-                    <p v-if="narrowingFilters.length">Filtrni o'zgartiring yoki tozalang.</p>
+                    <h3 v-if="narrowingFilters.length">
+                      {{ $t('finance.ledger.filterEmptyIncome') }}
+                    </h3>
+                    <h3 v-else>{{ $t('finance.ledger.emptyIncome') }}</h3>
+                    <p v-if="narrowingFilters.length">
+                      {{ $t('finance.ledger.filterEmptyBody') }}
+                    </p>
                   </div>
                 </td>
               </tr>
@@ -1467,11 +1586,11 @@ onMounted(async () => {
 
       <ConfirmDialog
         :open="voidTarget !== null"
-        title="Yozuvni bekor qilish"
-        message="Bekor qilingan yozuv hisobotlarda va buyurtma to'lovlarida hisobga olinmaydi. Sababni yozing."
-        confirm-label="Bekor qilish"
-        cancel-label="Yopish"
-        busy-label="Bekor qilinmoqda"
+        :title="$t('finance.void.rowTitle')"
+        :message="$t('finance.void.rowMessage')"
+        :confirm-label="$t('finance.action.void')"
+        :cancel-label="$t('common.action.close')"
+        :busy-label="$t('finance.action.voiding')"
         danger
         :busy="saving"
         :confirm-disabled="voidReason.trim().length === 0"
@@ -1481,7 +1600,7 @@ onMounted(async () => {
         <!-- Names the record the void will hit (date · category/type · sum). -->
         <p v-if="voidTargetLabel" class="mb-3 text-sm font-bold text-ink">{{ voidTargetLabel }}</p>
         <label class="field !mb-0">
-          <span>Bekor qilish sababi</span>
+          <span>{{ $t('finance.void.reason') }}</span>
           <input v-model="voidReason" class="mp-input" required />
         </label>
         <p v-if="actionError" class="mt-2 text-sm font-bold text-danger">

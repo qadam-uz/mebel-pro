@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -42,17 +43,20 @@ const props = withDefaults(
     hint?: string
   }>(),
   {
-    placeholder: 'Qidiring',
+    // The three copy defaults carry no literal: a prop default is evaluated
+    // once, at module load, so it would freeze at whatever locale happened to
+    // be active then. They fall back to the catalog in a computed instead.
+    placeholder: undefined,
     error: null,
     disabled: false,
-    noResultsText: "Mos variant yo'q",
+    noResultsText: undefined,
     labelClass: '',
     compact: false,
     swatchColor: null,
     clearable: false,
     serverFiltered: false,
     loading: false,
-    loadingText: 'Qidirilmoqda…',
+    loadingText: undefined,
     searchDebounceMs: 0,
     hint: '',
   },
@@ -62,6 +66,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string | null]
   search: [value: string]
 }>()
+
+const { t } = useI18n()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
@@ -90,11 +96,14 @@ const activeOptionId = computed(() => {
   return option ? `${id}-${option.value}` : undefined
 })
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
+const placeholderText = computed(() => props.placeholder ?? t('forms.combobox.placeholder'))
+const noResultsLabel = computed(() => props.noResultsText ?? t('forms.combobox.noResults'))
+const loadingLabel = computed(() => props.loadingText ?? t('forms.combobox.loading'))
 // While the list is open the input is a search box, so it reads empty even when
 // a value is set. Echoing the picked label as the placeholder keeps the current
 // selection legible instead of the field claiming nothing is chosen.
 const inputPlaceholder = computed(() =>
-  open.value && props.modelValue ? selectedLabel() : props.placeholder,
+  open.value && props.modelValue ? selectedLabel() : placeholderText.value,
 )
 
 // Remember the chosen option's label so the input keeps showing it even when the
@@ -381,7 +390,7 @@ onBeforeUnmount(() => {
           type="button"
           class="absolute top-1/2 grid -translate-y-1/2 place-items-center rounded-full text-ink-muted transition hover:bg-sunk hover:text-ink"
           :class="compact ? 'right-1.5 size-6' : 'right-2 size-7'"
-          :aria-label="`${label} tanlovini tozalash`"
+          :aria-label="$t('forms.combobox.clearSelection', { label })"
           @click="clearSelection"
         >
           <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
@@ -452,13 +461,13 @@ onBeforeUnmount(() => {
           role="status"
           aria-live="polite"
         >
-          {{ loadingText }}
+          {{ loadingLabel }}
         </li>
         <li
           v-else-if="filteredOptions.length === 0"
           class="px-3 py-3 text-sm font-bold text-ink-muted"
         >
-          {{ noResultsText }}
+          {{ noResultsLabel }}
         </li>
         <li
           v-if="hint"

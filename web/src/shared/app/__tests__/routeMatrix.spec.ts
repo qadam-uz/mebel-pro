@@ -4,6 +4,8 @@ import process from 'node:process'
 
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
+
+import { i18n } from '@/shared/i18n'
 import type {
   NavigationGuardNext,
   RouteLocationNormalized,
@@ -212,7 +214,9 @@ describe('role route matrix', () => {
 
   it('keeps the client header nav to four items (Profil lives in the user pill, CB-37)', () => {
     expect(
-      normalizeRoleConfig(clientConfig, '/client', '/client/').nav.map((item) => item.label),
+      normalizeRoleConfig(clientConfig, '/client', '/client/').nav.map((item) =>
+        i18n.global.t(item.labelKey),
+      ),
     ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxonalar'])
     // Profile stays reachable via the user pill (config.profilePath), not the nav.
     expect(clientConfig.profilePath).toBe('/c/profile')

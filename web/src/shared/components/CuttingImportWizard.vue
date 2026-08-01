@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { MAX_PARTS } from '@/shared/app/constants'
@@ -10,16 +11,16 @@ import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 import {
-  IMPORT_ROLE_LABELS,
   IMPORT_ROLES,
-  IMPORT_SKIP_REASON_LABELS,
-  IMPORT_WARNING_LABELS,
   MAX_IMPORT_FILE_BYTES,
   areImportMaterialPicksComplete,
   buildMapImportedParts,
   buildMapPanelPicks,
   buildImportedParts,
   cuttingImportErrorLabel,
+  importRoleLabel,
+  importSkipReasonLabel,
+  importWarningLabel,
   isImportMappingComplete,
   parseCuttingImport,
   type ImportLoadMode,
@@ -59,6 +60,7 @@ const emit = defineEmits<{
 }>()
 
 const cutting = useCuttingStore()
+const { t } = useI18n()
 
 const step = ref<ImportStep>('file')
 const selectedFile = ref<File | null>(null)
@@ -107,7 +109,7 @@ const columnsExpanded = computed(() => columnsOpen.value || !mappingComplete.val
 const mappingSummary = computed(() =>
   IMPORT_ROLES.flatMap((role) => {
     const column = mappingPayload.value[role]
-    return column === undefined ? [] : [`${columnLetter(column)}→${IMPORT_ROLE_LABELS[role]}`]
+    return column === undefined ? [] : [`${columnLetter(column)}→${importRoleLabel(role)}`]
   }),
 )
 
@@ -119,9 +121,9 @@ const effectiveEdgeChoices = computed(() =>
 )
 const catalogHint = computed(() => {
   if (!props.preferredBranchName) return ''
-  return showAllCatalog.value
-    ? 'Barcha katalog'
-    : `${props.preferredBranchName} katalogi · ${effectivePanelChoices.value.length} ta list`
+  if (showAllCatalog.value) return t('cutting.import.allCatalog')
+  const count = effectivePanelChoices.value.length
+  return t('cutting.import.branchCatalog', { branch: props.preferredBranchName, n: count }, count)
 })
 const materialPicksComplete = computed(() =>
   parsed.value
@@ -154,35 +156,31 @@ const overCap = computed(() => totalAfterImport.value > MAX_PARTS)
 // and banding, `.csv` keeps only the dimensions. Russian menu labels stay in
 // Russian — that is what the operator sees on their own screen, and translating
 // them would send them hunting for a string their copy of Bazis does not have.
-const FILE_SOURCES = [
-  {
-    extension: '.map',
-    program: '2D-Place',
-    how: "Tayyor joylashuvni saqlang va shu faylni yuklang. Fayldagi joylashuv o'zgarmasdan saqlanadi — qayta optimallashtirish shart emas.",
-  },
-  {
-    extension: '.xml',
-    program: 'БАЗИС-Мебельщик',
-    how: "Мебель paneli → «Спецификация в XML». Butun loyiha uchun — «Формирование проекта» oynasidagi shu tugma. O'lchamlar, material va kromka belgilari bilan keladi.",
-  },
-  {
-    extension: '.csv',
-    program: 'БАЗИС-Мебельщик yoki Excel',
-    how: "БАЗИС'da: Мебель paneli → «Спецификация в CSV». Excel'da tayyorlangan ro'yxat bo'lsa: Файл → Сохранить как → CSV. Ustunlar avtomatik aniqlanadi, kerak bo'lsa o'zingiz to'g'rilaysiz.",
-  },
-]
-const modeOptions: ChoiceOption[] = [
-  { value: 'append', label: "Qo'shish" },
-  { value: 'replace', label: 'Almashtirish' },
-]
+const fileSources = computed(() =>
+  (['map', 'xml', 'csv'] as const).map((format) => ({
+    extension: `.${format}`,
+    program: t(`cutting.import.source.${format}.program`),
+    how: t(`cutting.import.source.${format}.how`),
+  })),
+)
+const modeOptions = computed<ChoiceOption[]>(() => [
+  { value: 'append', label: t('cutting.import.modeAppend') },
+  { value: 'replace', label: t('cutting.import.modeReplace') },
+])
 // Names the consequence rather than leaving it to a red button: the old dialog
 // offered `Qo'shish` and a `bg-danger` `Almashtirish` side by side, which read as
 // two competing actions instead of one action with a mode.
 const modeConsequence = computed(() => {
   if (!parsed.value) return ''
   const incoming = parsed.value.total_parts
-  if (mode.value === 'replace') return `Hozirgi ${props.currentParts} xil o'chadi`
-  return `${incoming} xil qo'shiladi — jami ${props.currentParts + incoming} xil`
+  if (mode.value === 'replace') {
+    return t('cutting.import.replaceConsequence', { n: props.currentParts }, props.currentParts)
+  }
+  return t(
+    'cutting.import.appendConsequence',
+    { n: incoming, total: props.currentParts + incoming },
+    incoming,
+  )
 })
 const commitDisabled = computed(
   () => loading.value || !parsed.value || !materialPicksComplete.value || overCap.value,
@@ -241,10 +239,10 @@ function toggleDiagnostic(name: Diagnostic) {
 }
 
 function validateFile(file: File): string | null {
-  if (file.size > MAX_IMPORT_FILE_BYTES) return 'Fayl 1 MB dan katta'
+  if (file.size > MAX_IMPORT_FILE_BYTES) return t('cutting.error.fileTooLargeShort')
   const name = file.name.toLowerCase()
   if (!name.endsWith('.csv') && !name.endsWith('.xml') && !name.endsWith('.map')) {
-    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV, XML yoki MAP."
+    return t('cutting.error.unsupportedFormatShort')
   }
   return null
 }
@@ -363,7 +361,7 @@ async function applyMapping() {
       cutting.scope,
     )
     if (response.status !== 'parsed') {
-      error.value = "Faylni o'qib bo'lmadi."
+      error.value = t('cutting.error.parseFailed')
       return
     }
     enterReview(response)
@@ -418,7 +416,7 @@ async function commitImport() {
     if (!parts) return
     emit('load', { mode: props.hasExistingParts ? mode.value : 'replace', parts })
   } catch {
-    error.value = "Material tanlovlari to'liq emas."
+    error.value = t('cutting.error.materialPicksIncomplete')
   }
 }
 
@@ -440,8 +438,7 @@ async function commitMapLayout() {
       // The server refused the layout; the next press imports the parts alone
       // rather than retrying a commit that cannot succeed.
       mapPartsOnlyAllowed.value = true
-      error.value =
-        "Tanlangan list o'lchami MAP dagi o'lchamga mos emas. Boshqa list tanlang yoki qaytadan bosing — detallar oddiy chizma bo'lib yuklanadi."
+      error.value = t('cutting.error.map_layout_material_mismatch')
     } else {
       error.value = cuttingImportErrorLabel(errorValue)
     }
@@ -456,7 +453,12 @@ function previewCell(row: (string | null)[], column: number) {
 </script>
 
 <template>
-  <AppModal :open="open" title="Fayldan import" max-width="max-w-3xl" @close="closeWizard">
+  <AppModal
+    :open="open"
+    :title="$t('cutting.import.title')"
+    max-width="max-w-3xl"
+    @close="closeWizard"
+  >
     <div class="grid gap-4">
       <div v-if="error" class="client-banner danger" role="alert">
         <span class="font-mono font-black">!</span>
@@ -468,10 +470,10 @@ function previewCell(row: (string | null)[], column: number) {
           class="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-hairline-strong bg-sunk px-5 py-6 text-center transition hover:border-accent hover:bg-accent-soft/40"
         >
           <Icon name="upload" class="size-9 text-accent" />
-          <span class="text-sm font-extrabold text-ink"
-            >CSV, XML yoki MAP (*.csv, *.xml, *.map)</span
-          >
-          <span class="text-xs font-semibold text-ink-muted">1 MB gacha</span>
+          <span class="text-sm font-extrabold text-ink">{{ $t('cutting.import.dropzone') }}</span>
+          <span class="text-xs font-semibold text-ink-muted">{{
+            $t('cutting.import.maxSize')
+          }}</span>
           <input
             :key="fileInputKey"
             type="file"
@@ -483,7 +485,7 @@ function previewCell(row: (string | null)[], column: number) {
         </label>
 
         <p v-if="loading" class="text-sm font-semibold text-ink-soft" aria-live="polite">
-          Fayl o'qilmoqda…
+          {{ $t('cutting.import.reading') }}
         </p>
 
         <!-- Which file comes from which program, and how to get it out of that
@@ -492,9 +494,9 @@ function previewCell(row: (string | null)[], column: number) {
              collapsed panel hides the answer behind a question they can't ask
              and a single paragraph makes them read all three to find theirs. -->
         <section class="grid gap-2 rounded-lg border border-hairline bg-elevated p-3">
-          <h3 class="text-sm font-extrabold text-ink">Faylni qayerdan olasiz</h3>
+          <h3 class="text-sm font-extrabold text-ink">{{ $t('cutting.import.sourcesTitle') }}</h3>
           <div
-            v-for="source in FILE_SOURCES"
+            v-for="source in fileSources"
             :key="source.extension"
             class="grid gap-x-3 gap-y-1 border-t border-hairline pt-2 sm:grid-cols-[68px_minmax(0,1fr)]"
           >
@@ -520,23 +522,21 @@ function previewCell(row: (string | null)[], column: number) {
             >{{ formatBadge }}</span
           >
           <span v-if="parsed" class="text-sm font-semibold text-ink-soft">
-            {{ parsed.total_parts }} xil · {{ parsed.total_pieces }} dona
+            {{ parsed.total_parts }} {{ $t('cutting.unit.kind', parsed.total_parts) }} ·
+            {{ parsed.total_pieces }} {{ $t('cutting.unit.piece', parsed.total_pieces) }}
           </span>
           <button
             type="button"
             class="ml-auto text-sm font-extrabold text-accent hover:text-accent-hover"
             @click="chooseAnotherFile"
           >
-            Boshqa fayl
+            {{ $t('cutting.import.anotherFile') }}
           </button>
         </div>
 
         <div v-if="canCommitMapLayout" class="client-banner info">
           <span class="font-mono font-black">i</span>
-          <span>
-            Fayldagi joylashuv saqlanadi va birinchi variant sifatida ko'rsatiladi. Narx va
-            statistika qayta hisoblanadi.
-          </span>
+          <span>{{ $t('cutting.import.mapLayoutKept') }}</span>
         </div>
 
         <!-- Diagnostics sit ahead of the commit, not on a report screen after it:
@@ -554,7 +554,7 @@ function previewCell(row: (string | null)[], column: number) {
               :aria-expanded="openDiagnostic === 'sheets'"
               @click="toggleDiagnostic('sheets')"
             >
-              {{ sheetCount }} list joylashuvi
+              {{ $t('cutting.import.sheetLayouts', { n: sheetCount }, sheetCount) }}
               <span aria-hidden="true">⌄</span>
             </button>
             <button
@@ -564,7 +564,7 @@ function previewCell(row: (string | null)[], column: number) {
               :aria-expanded="openDiagnostic === 'skipped'"
               @click="toggleDiagnostic('skipped')"
             >
-              {{ skippedCount }} qator o'tkazib yuborildi
+              {{ $t('cutting.import.skippedRows', { n: skippedCount }, skippedCount) }}
               <span aria-hidden="true">⌄</span>
             </button>
             <button
@@ -574,7 +574,7 @@ function previewCell(row: (string | null)[], column: number) {
               :aria-expanded="openDiagnostic === 'warnings'"
               @click="toggleDiagnostic('warnings')"
             >
-              {{ warningCount }} ogohlantirish
+              {{ $t('cutting.import.warnings', { n: warningCount }, warningCount) }}
               <span aria-hidden="true">⌄</span>
             </button>
             <button
@@ -584,7 +584,7 @@ function previewCell(row: (string | null)[], column: number) {
               :aria-expanded="openDiagnostic === 'ignored'"
               @click="toggleDiagnostic('ignored')"
             >
-              {{ ignoredCount }} obyekt import qilinmadi
+              {{ $t('cutting.import.ignoredObjects', { n: ignoredCount }, ignoredCount) }}
               <span aria-hidden="true">⌄</span>
             </button>
           </div>
@@ -605,8 +605,11 @@ function previewCell(row: (string | null)[], column: number) {
                 </span>
               </div>
               <p class="mt-1 text-xs font-semibold text-ink-muted">
-                {{ sheet.parts_count }} detal · {{ sheet.waste_count }} chiqindi ·
-                {{ sheet.remainder_count }} qoldiq · {{ sheet.fill_percentage }}%
+                {{ sheet.parts_count }} {{ $t('cutting.unit.part', sheet.parts_count) }} ·
+                {{ sheet.waste_count }} {{ $t('cutting.unit.waste', sheet.waste_count) }} ·
+                {{ sheet.remainder_count }}
+                {{ $t('cutting.unit.remainder', sheet.remainder_count) }} ·
+                {{ sheet.fill_percentage }}%
               </p>
             </div>
           </div>
@@ -617,8 +620,8 @@ function previewCell(row: (string | null)[], column: number) {
               :key="`${row.row}-${row.reason}`"
               class="rounded-md border border-hairline bg-elevated px-3 py-2 text-sm text-ink-soft"
             >
-              <b class="text-ink">{{ row.row }}-qator:</b>
-              {{ IMPORT_SKIP_REASON_LABELS[row.reason] }} · {{ row.preview }}
+              <b class="text-ink">{{ $t('cutting.import.rowLabel', { n: row.row }) }}</b>
+              {{ importSkipReasonLabel(row.reason) }} · {{ row.preview }}
             </li>
           </ul>
 
@@ -628,8 +631,8 @@ function previewCell(row: (string | null)[], column: number) {
               :key="warning.code"
               class="rounded-md border border-hairline bg-elevated px-3 py-2 text-sm text-ink-soft"
             >
-              <b class="text-ink">{{ IMPORT_WARNING_LABELS[warning.code] }}</b>
-              · qatorlar: {{ warning.rows.join(', ') }}
+              <b class="text-ink">{{ importWarningLabel(warning.code) }}</b>
+              · {{ $t('cutting.import.warningRows', { rows: warning.rows.join(', ') }) }}
             </li>
           </ul>
 
@@ -637,7 +640,7 @@ function previewCell(row: (string | null)[], column: number) {
             v-else-if="openDiagnostic === 'ignored'"
             class="rounded-md border border-hairline bg-elevated px-3 py-2 text-sm text-ink-soft"
           >
-            XML ichidagi {{ ignoredCount }} ta list bo'lmagan obyekt o'tkazib yuborildi.
+            {{ $t('cutting.import.ignoredBody', { n: ignoredCount }, ignoredCount) }}
           </p>
         </div>
 
@@ -653,7 +656,9 @@ function previewCell(row: (string | null)[], column: number) {
             >
             <span class="text-sm font-extrabold text-ink">
               {{
-                mappingComplete ? 'Ustunlar aniqlandi' : 'Uzunlik va kenglik ustunlarini tanlang'
+                mappingComplete
+                  ? $t('cutting.import.columnsDetected')
+                  : $t('cutting.import.columnsNeeded')
               }}
             </span>
             <span
@@ -669,17 +674,17 @@ function previewCell(row: (string | null)[], column: number) {
               :aria-expanded="columnsExpanded"
               @click="columnsOpen = !columnsOpen"
             >
-              {{ columnsExpanded ? 'Yopish' : "To'g'rilash" }}
+              {{ columnsExpanded ? $t('cutting.action.close') : $t('cutting.import.adjust') }}
             </button>
           </div>
 
           <div v-if="columnsExpanded && detection" class="grid gap-3 border-t border-hairline p-3">
             <div class="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
-              <span>Yuqoridan o'tkazib yuborish: {{ skipRows }} qator</span>
+              <span>{{ $t('cutting.import.skipRowsLabel', { n: skipRows }, skipRows) }}</span>
               <button
                 type="button"
                 class="mp-button mp-button-outline px-3"
-                aria-label="Bir qator kam"
+                :aria-label="$t('cutting.import.skipRowsLess')"
                 @click="adjustSkipRows(-1)"
               >
                 −
@@ -688,14 +693,14 @@ function previewCell(row: (string | null)[], column: number) {
                 class="h-10 w-20 rounded-md border border-hairline-strong bg-elevated px-3"
                 type="number"
                 min="0"
-                aria-label="O'tkazib yuboriladigan qatorlar"
+                :aria-label="$t('cutting.import.skipRowsInput')"
                 :value="skipRows"
                 @input="setSkipRows"
               />
               <button
                 type="button"
                 class="mp-button mp-button-outline px-3"
-                aria-label="Bir qator ko'p"
+                :aria-label="$t('cutting.import.skipRowsMore')"
                 @click="adjustSkipRows(1)"
               >
                 +
@@ -716,9 +721,7 @@ function previewCell(row: (string | null)[], column: number) {
                           class="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-hairline-strong bg-elevated px-2 text-xs font-bold text-ink"
                         >
                           <span class="min-w-0 truncate">
-                            {{
-                              columnRoles[column] ? IMPORT_ROLE_LABELS[columnRoles[column]] : '—'
-                            }}
+                            {{ columnRoles[column] ? importRoleLabel(columnRoles[column]) : '—' }}
                           </span>
                           <span class="text-ink-muted" aria-hidden="true">⌄</span>
                         </summary>
@@ -740,7 +743,7 @@ function previewCell(row: (string | null)[], column: number) {
                             :class="columnRoles[column] === role ? 'text-accent' : 'text-ink-soft'"
                             @click="setColumnRole(column, role)"
                           >
-                            {{ IMPORT_ROLE_LABELS[role] }}
+                            {{ importRoleLabel(role) }}
                           </button>
                         </div>
                       </details>
@@ -772,7 +775,7 @@ function previewCell(row: (string | null)[], column: number) {
                 :disabled="loading || !mappingComplete"
                 @click="applyMapping"
               >
-                {{ loading ? 'Tekshirilmoqda' : "Ustunlarni qo'llash" }}
+                {{ loading ? $t('cutting.import.checking') : $t('cutting.import.applyColumns') }}
               </button>
             </div>
           </div>
@@ -781,14 +784,20 @@ function previewCell(row: (string | null)[], column: number) {
         <!-- The only decision that always needs a person. -->
         <section v-if="parsed" class="grid gap-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="text-sm font-extrabold uppercase text-ink-muted">Materiallar</h3>
+            <h3 class="text-sm font-extrabold uppercase text-ink-muted">
+              {{ $t('cutting.import.materialsTitle') }}
+            </h3>
             <button
               v-if="preferredBranchName"
               type="button"
               class="text-sm font-semibold text-accent hover:text-accent-hover"
               @click="showAllCatalog = !showAllCatalog"
             >
-              {{ showAllCatalog ? 'Faqat filial katalogi' : "Barcha katalogni ko'rsatish" }}
+              {{
+                showAllCatalog
+                  ? $t('cutting.import.branchCatalogOnly')
+                  : $t('cutting.import.showAllCatalog')
+              }}
             </button>
           </div>
 
@@ -812,20 +821,29 @@ function previewCell(row: (string | null)[], column: number) {
               </div>
               <p class="mt-1 text-xs font-semibold text-ink-muted">
                 <template v-if="mapGroupForKey(group.key)">
-                  fayl nomidan · list {{ mapGroupForKey(group.key)?.width_mm }}×{{
-                    mapGroupForKey(group.key)?.height_mm
+                  {{
+                    $t(
+                      'cutting.import.mapGroupMeta',
+                      {
+                        width: mapGroupForKey(group.key)?.width_mm,
+                        height: mapGroupForKey(group.key)?.height_mm,
+                        n: group.part_count,
+                      },
+                      group.part_count,
+                    )
                   }}
-                  · {{ group.part_count }} xil
                 </template>
-                <template v-else>{{ group.part_count }} xil</template>
+                <template v-else
+                  >{{ group.part_count }} {{ $t('cutting.unit.kind', group.part_count) }}</template
+                >
               </p>
             </div>
             <div class="grid gap-2">
               <SearchCombobox
                 :model-value="panelPicks[group.key] ?? null"
-                label="List materiali"
+                :label="$t('cutting.import.panelLabel')"
                 :options="effectivePanelChoices"
-                placeholder="List tanlang"
+                :placeholder="$t('cutting.import.panelPlaceholder')"
                 :hint="catalogHint"
                 @update:model-value="setPanelPick(group.key, $event)"
               />
@@ -836,8 +854,8 @@ function previewCell(row: (string | null)[], column: number) {
               >
                 {{
                   selectedPanelMatchesMap(group.key)
-                    ? "O'lcham mos — fayldagi joylashuv saqlanadi"
-                    : "O'lcham mos emas — joylashuv tashlanadi, faqat detallar olinadi"
+                    ? $t('cutting.import.sizeMatch')
+                    : $t('cutting.import.sizeMismatch')
                 }}
               </span>
             </div>
@@ -851,18 +869,24 @@ function previewCell(row: (string | null)[], column: number) {
           >
             <div class="min-w-0">
               <p class="break-words text-sm font-extrabold text-ink">
-                <template v-if="isMapImport"> Kromka — {{ group.side_count }} tomonda </template>
+                <template v-if="isMapImport">
+                  {{ $t('cutting.import.edgeSides', { n: group.side_count }, group.side_count) }}
+                </template>
                 <template v-else>{{ group.label }}</template>
               </p>
               <p class="mt-1 text-xs font-semibold text-ink-muted">
-                {{ isMapImport ? "faylda ko'rsatilmagan" : `${group.side_count} ta tomon` }}
+                {{
+                  isMapImport
+                    ? $t('cutting.import.edgeNotInFile')
+                    : $t('cutting.import.sideCount', { n: group.side_count }, group.side_count)
+                }}
               </p>
             </div>
             <SearchCombobox
               :model-value="edgePicks[group.key] ?? null"
-              label="Kromka materiali"
+              :label="$t('cutting.import.edgeLabel')"
               :options="effectiveEdgeChoices"
-              placeholder="Kromka tanlang"
+              :placeholder="$t('cutting.edge.placeholder')"
               :hint="catalogHint"
               @update:model-value="setEdgePick(group.key, $event)"
             />
@@ -870,9 +894,7 @@ function previewCell(row: (string | null)[], column: number) {
 
           <div v-if="canCommitMapLayout && !mapMaterialSizesMatch" class="client-banner danger">
             <span class="font-mono font-black">!</span>
-            <span>
-              Joylashuv saqlanmaydi. Import qilinsa detallar oddiy chizma bo'lib tushadi.
-            </span>
+            <span>{{ $t('cutting.import.layoutDropped') }}</span>
           </div>
         </section>
 
@@ -883,7 +905,7 @@ function previewCell(row: (string | null)[], column: number) {
           <SegmentedControl
             v-if="hasExistingParts && !canCommitMapLayout"
             :model-value="mode"
-            label="Import rejimi"
+            :label="$t('cutting.import.modeLabel')"
             :options="modeOptions"
             @update:model-value="setMode"
           />
@@ -892,7 +914,13 @@ function previewCell(row: (string | null)[], column: number) {
             class="min-w-0 text-sm font-semibold text-danger"
             data-testid="import-cap-warning"
           >
-            Jami {{ totalAfterImport }} dona — {{ MAX_PARTS }} dan oshadi, detallarni kamaytiring.
+            {{
+              $t(
+                'cutting.import.capWarning',
+                { n: totalAfterImport, max: MAX_PARTS },
+                totalAfterImport,
+              )
+            }}
           </span>
           <span
             v-else-if="modeConsequence && hasExistingParts && !canCommitMapLayout"
@@ -907,7 +935,7 @@ function previewCell(row: (string | null)[], column: number) {
             :disabled="commitDisabled"
             @click="commitImport"
           >
-            {{ loading ? 'Yuklanmoqda' : 'Import qilish' }}
+            {{ loading ? $t('cutting.import.loading') : $t('cutting.import.commit') }}
           </button>
         </div>
       </section>

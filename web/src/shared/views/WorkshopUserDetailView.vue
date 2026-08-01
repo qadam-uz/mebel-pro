@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -14,7 +15,7 @@ import {
 import { copyText } from '@/shared/app/clipboard'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
-import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
+import { initials, permissionLabel, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -32,13 +33,16 @@ const rolePath = useRolePath()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const toast = useToast()
+const { t } = useI18n()
 const userId = String(route.params.user_id)
 const activeTab = ref<'profile' | 'permissions' | 'sessions'>('profile')
 const user = computed(() => workshop.selectedUser)
 const userTabs = computed<ChoiceOption[]>(() => [
-  { value: 'profile', label: 'Profil' },
-  { value: 'permissions', label: 'Ruxsatlar' },
-  ...(user.value?.is_owner ? [] : [{ value: 'sessions', label: 'Sessiyalar' }]),
+  { value: 'profile', label: t('workshopAdmin.staffDetail.tabProfile') },
+  { value: 'permissions', label: t('workshopAdmin.staffDetail.tabPermissions') },
+  ...(user.value?.is_owner
+    ? []
+    : [{ value: 'sessions', label: t('workshopAdmin.staffDetail.tabSessions') }]),
 ])
 const reason = ref('')
 const blockOpen = ref(false)
@@ -57,10 +61,10 @@ async function copyTempPassword(value: string | null) {
   if (!value) return
   const ok = await copyText(value)
   if (!ok) {
-    toast.danger("Nusxalab bo'lmadi. Parolni belgilab, qo'lda nusxalang.")
+    toast.danger(t('workshopAdmin.staff.copyFailed'))
     return
   }
-  toast.success('Parol nusxalandi.')
+  toast.success(t('workshopAdmin.staff.passwordCopied'))
   copiedTempPassword.value = true
   window.clearTimeout(copiedResetTimer)
   copiedResetTimer = window.setTimeout(() => {
@@ -113,7 +117,10 @@ const grants = computed(() =>
 
 function branchName(id: string | null) {
   if (!id) return '—'
-  return workshop.branches.find((branch) => branch.id === id)?.name ?? 'Filial'
+  return (
+    workshop.branches.find((branch) => branch.id === id)?.name ??
+    t('workshopAdmin.staff.branchFallback')
+  )
 }
 
 function grantKey(permission: string, branchId: string) {
@@ -175,8 +182,8 @@ async function saveProfile() {
       home_branch_id: profileForm.homeBranchId,
     })
     syncProfileForm()
-    profileSaved.value = 'Profil saqlandi.'
-    toast.success('Profil saqlandi.')
+    profileSaved.value = t('workshopAdmin.staffDetail.profileSaved')
+    toast.success(t('workshopAdmin.staffDetail.profileSaved'))
   } catch (caught) {
     Object.assign(
       profileFieldErrors,
@@ -218,7 +225,7 @@ async function saveGrants() {
   try {
     await workshop.replaceGrants(userId, grants.value)
     await load()
-    toast.success('Ruxsatlar saqlandi.')
+    toast.success(t('workshopAdmin.staffDetail.grantsSaved'))
   } catch {
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'grants_save_failed')
     actionTraceId.value = workshop.actionTraceId
@@ -234,7 +241,7 @@ async function resetPassword() {
   try {
     await workshop.resetPassword(userId)
     resetOpen.value = false
-    toast.success('Vaqtinchalik parol yaratildi.')
+    toast.success(t('workshopAdmin.staffDetail.tempPasswordCreated'))
   } catch {
     resetOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'password_reset_failed')
@@ -253,7 +260,7 @@ async function block() {
     await workshop.blockUser(userId, reason.value)
     reason.value = ''
     blockOpen.value = false
-    toast.success('Xodim bloklandi.')
+    toast.success(t('workshopAdmin.staffDetail.blocked'))
   } catch {
     blockOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_block_failed')
@@ -271,7 +278,7 @@ async function unblock() {
   try {
     await workshop.unblockUser(userId)
     unblockOpen.value = false
-    toast.success('Xodim faollashtirildi.')
+    toast.success(t('workshopAdmin.staffDetail.unblocked'))
   } catch {
     unblockOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_unblock_failed')
@@ -287,7 +294,7 @@ async function revokeAllSessions() {
   acting.value = true
   try {
     await workshop.revokeUserSessions(userId)
-    toast.success('Sessiyalar yopildi.')
+    toast.success(t('workshopAdmin.staffDetail.sessionsRevoked'))
   } catch {
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'sessions_revoke_failed')
     actionTraceId.value = workshop.actionTraceId
@@ -302,7 +309,7 @@ async function revokeSession(sessionId: string) {
   acting.value = true
   try {
     await workshop.revokeUserSession(userId, sessionId)
-    toast.success('Sessiya yopildi.')
+    toast.success(t('workshopAdmin.staffDetail.sessionRevoked'))
   } catch {
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'session_revoke_failed')
     actionTraceId.value = workshop.actionTraceId
@@ -321,11 +328,13 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 
 <template>
   <section>
-    <RouterLink :to="rolePath('/workshop/settings/users')" class="back">← Xodimlar</RouterLink>
+    <RouterLink :to="rolePath('/workshop/settings/users')" class="back">
+      {{ $t('workshopAdmin.staffDetail.back') }}
+    </RouterLink>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
-      <p>Ruxsatlar va sessiyalarni rahbar boshqaradi.</p>
+      <h3>{{ $t('workshopAdmin.access.ownerOnlyTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.staffDetail.ownerOnlyBody') }}</p>
     </section>
 
     <section v-else-if="workshop.loading" class="card p-5" aria-live="polite">
@@ -337,12 +346,12 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
     </section>
 
     <section v-else-if="workshop.error" class="st-error">
-      <h3>Xodimni yuklab bo'lmadi</h3>
+      <h3>{{ $t('workshopAdmin.staffDetail.loadFailed') }}</h3>
       <p>{{ traceLine(workshop.traceId) }}</p>
     </section>
 
     <section v-else-if="!user" class="st-empty">
-      <h3>Xodim topilmadi</h3>
+      <h3>{{ $t('workshopAdmin.staffDetail.notFound') }}</h3>
     </section>
 
     <template v-else>
@@ -357,13 +366,20 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             <div>
               <h1>
                 {{ user.full_name }}
-                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Rahbar</span>
+                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">
+                  {{ $t('workshopAdmin.staff.owner') }}
+                </span>
                 <span
                   v-else
                   class="ml-2 align-middle"
                   :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'"
                 >
-                  <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
+                  <span class="pd"></span>
+                  {{
+                    user.status === 'active'
+                      ? $t('workshopAdmin.staff.statusActive')
+                      : $t('workshopAdmin.staff.statusBlocked')
+                  }}
                 </span>
               </h1>
               <p class="sub">
@@ -379,7 +395,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             :disabled="acting"
             @click="resetOpen = true"
           >
-            Parolni tiklash
+            {{ $t('workshopAdmin.staffDetail.resetPassword') }}
           </button>
           <button
             v-if="user.status === 'active'"
@@ -388,7 +404,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             :disabled="acting"
             @click="openBlock"
           >
-            Bloklash
+            {{ $t('workshopAdmin.staffDetail.block') }}
           </button>
           <button
             v-else
@@ -397,14 +413,14 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             :disabled="acting"
             @click="openUnblock"
           >
-            Faollashtirish
+            {{ $t('workshopAdmin.staffDetail.unblock') }}
           </button>
         </div>
       </div>
 
       <div v-if="workshop.lastTempPassword" class="banner info mt-3" role="status">
         <div class="grow">
-          <b>Yangi vaqtinchalik parol</b>
+          <b>{{ $t('workshopAdmin.staffDetail.newTempPassword') }}</b>
           <div class="mt-1.5 flex flex-wrap items-center gap-2">
             <span
               class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
@@ -416,28 +432,28 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
               class="mp-button mp-button-outline min-h-9 px-3 text-xs"
               @click="copyTempPassword(workshop.lastTempPassword)"
             >
-              {{ copiedTempPassword ? 'Nusxalandi' : 'Nusxalash' }}
+              {{
+                copiedTempPassword
+                  ? $t('workshopAdmin.action.copied')
+                  : $t('workshopAdmin.action.copy')
+              }}
             </button>
           </div>
-          <p class="mt-1.5 text-xs">
-            Bu parol faqat 1 marta ko'rsatiladi — xodimga yetkazib qo'ying.
-          </p>
+          <p class="mt-1.5 text-xs">{{ $t('workshopAdmin.staff.tempPasswordOnce') }}</p>
         </div>
       </div>
 
       <div v-if="!user.is_owner && user.status === 'blocked'" class="banner warn mt-3">
-        <div class="grow">
-          Bu xodim bloklangan. Faollashtirish uchun amallar menyusidan foydalaning.
-        </div>
+        <div class="grow">{{ $t('workshopAdmin.staffDetail.blockedBanner') }}</div>
       </div>
       <div v-else-if="user.is_owner" class="banner info mt-3">
-        <div class="grow">Rahbar bloklanmaydi va barcha ruxsatlarga ega.</div>
+        <div class="grow">{{ $t('workshopAdmin.staffDetail.ownerBanner') }}</div>
       </div>
 
       <AppTabs
         v-model="activeTab"
         id-prefix="workshop-user"
-        label="Xodim bo'limlari"
+        :label="$t('workshopAdmin.staffDetail.tabsLabel')"
         :tabs="userTabs"
       />
 
@@ -450,11 +466,13 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         tabindex="0"
       >
         <div class="card">
-          <div class="card-h"><h2>Profil</h2></div>
+          <div class="card-h">
+            <h2>{{ $t('workshopAdmin.staffDetail.profileTitle') }}</h2>
+          </div>
           <div class="card-b">
             <form v-if="!user.is_owner" class="grid gap-3" novalidate @submit.prevent="saveProfile">
               <label class="field" for="user-profile-full-name">
-                <span>F.I.O</span>
+                <span>{{ $t('workshopAdmin.staff.fullName') }}</span>
                 <input
                   id="user-profile-full-name"
                   v-model="profileForm.fullName"
@@ -475,7 +493,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 </span>
               </label>
               <label class="field" for="user-profile-phone">
-                <span>Telefon</span>
+                <span>{{ $t('workshopAdmin.staff.phone') }}</span>
                 <PhoneInput
                   id="user-profile-phone"
                   v-model="profileForm.phone"
@@ -494,7 +512,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 </span>
               </label>
               <label class="field" for="user-profile-login">
-                <span>Login</span>
+                <span>{{ $t('workshopAdmin.staff.login') }}</span>
                 <input
                   id="user-profile-login"
                   v-model="profileForm.login"
@@ -517,13 +535,17 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
               <FormSelect
                 id="user-profile-home-branch"
                 v-model="profileForm.homeBranchId"
-                label="Asosiy filial"
+                :label="$t('workshopAdmin.staffDetail.homeBranch')"
                 :options="profileBranchOptions"
                 :error="profileFieldErrors.homeBranch"
                 required
               />
               <button class="mp-button mp-button-primary" type="submit" :disabled="profileSaving">
-                {{ profileSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+                {{
+                  profileSaving
+                    ? $t('workshopAdmin.action.saving')
+                    : $t('workshopAdmin.action.save')
+                }}
               </button>
               <p
                 v-if="profileSaved"
@@ -540,19 +562,27 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             </form>
             <div v-else>
               <div class="row-item">
-                <div><div class="nm">F.I.O</div></div>
+                <div>
+                  <div class="nm">{{ $t('workshopAdmin.staff.fullName') }}</div>
+                </div>
                 <div class="meta">{{ user.full_name }}</div>
               </div>
               <div class="row-item">
-                <div><div class="nm">Telefon</div></div>
+                <div>
+                  <div class="nm">{{ $t('workshopAdmin.staff.phone') }}</div>
+                </div>
                 <div class="meta">{{ user.phone }}</div>
               </div>
               <div class="row-item">
-                <div><div class="nm">Login</div></div>
+                <div>
+                  <div class="nm">{{ $t('workshopAdmin.staff.login') }}</div>
+                </div>
                 <div class="meta">{{ user.login }}</div>
               </div>
               <div class="row-item">
-                <div><div class="nm">Asosiy filial</div></div>
+                <div>
+                  <div class="nm">{{ $t('workshopAdmin.staffDetail.homeBranch') }}</div>
+                </div>
                 <div class="meta">{{ branchName(user.home_branch_id) }}</div>
               </div>
             </div>
@@ -569,7 +599,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         tabindex="0"
       >
         <div class="card-h">
-          <h2>Ruxsatlar matritsasi</h2>
+          <h2>{{ $t('workshopAdmin.staffDetail.matrixTitle') }}</h2>
           <button
             v-if="!user.is_owner"
             type="button"
@@ -577,25 +607,25 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             :disabled="acting"
             @click="saveGrants"
           >
-            Saqlash
+            {{ $t('workshopAdmin.action.save') }}
           </button>
         </div>
         <div class="card-b">
           <div v-if="user.is_owner" class="banner info">
-            <div class="grow">Rahbar avtomatik tarzda barcha filialda barcha ruxsatga ega.</div>
+            <div class="grow">{{ $t('workshopAdmin.staffDetail.ownerMatrixNote') }}</div>
           </div>
           <div class="table-wrap">
             <table class="matrix">
               <thead>
                 <tr>
-                  <th class="permission">Ruxsat</th>
+                  <th class="permission">{{ $t('workshopAdmin.staff.colPermission') }}</th>
                   <th v-for="branch in workshop.branches" :key="branch.id">{{ branch.name }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="permission in permissionCatalog" :key="permission">
                   <td class="permission">
-                    {{ permissionLabels[permission] ?? permission }}
+                    {{ permissionLabel(permission) }}
                     <small class="block font-mono text-[10.5px] font-normal text-ink-muted">{{
                       permission
                     }}</small>
@@ -604,7 +634,12 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                     <input
                       type="checkbox"
                       class="size-4 accent-accent"
-                      :aria-label="`${permissionLabels[permission] ?? permission} — ${branch.name}`"
+                      :aria-label="
+                        $t('workshopAdmin.staff.permissionCell', {
+                          permission: permissionLabel(permission),
+                          branch: branch.name,
+                        })
+                      "
                       :checked="user.is_owner || selected.has(grantKey(permission, branch.id))"
                       :disabled="user.is_owner"
                       @change="toggleGrant(permission, branch.id)"
@@ -626,30 +661,36 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         tabindex="0"
       >
         <div class="card-h">
-          <h2>Faol sessiyalar</h2>
+          <h2>{{ $t('workshopAdmin.staffDetail.sessionsTitle') }}</h2>
           <button
             type="button"
             class="mp-button bg-danger text-white min-h-9 px-3 text-xs"
             :disabled="acting || workshop.sessions.length === 0"
             @click="revokeAllSessions"
           >
-            Hammasi yopilsin
+            {{ $t('workshopAdmin.staffDetail.revokeAll') }}
           </button>
         </div>
         <div class="card-b">
           <div v-if="workshop.sessions.length === 0" class="st-empty !border-0 !py-8">
-            <h3>Faol sessiya yo'q</h3>
-            <p>Xodim tizimga kirgach sessiyalari shu yerda ko'rinadi.</p>
+            <h3>{{ $t('workshopAdmin.staffDetail.sessionsEmptyTitle') }}</h3>
+            <p>{{ $t('workshopAdmin.staffDetail.sessionsEmptyBody') }}</p>
           </div>
           <div v-for="session in workshop.sessions" v-else :key="session.id" class="row-item">
             <div>
               <div class="nm">
-                {{ session.device_info?.browser ?? 'Qurilma' }}
-                <span v-if="session.is_current" class="pill p-ok ml-1">Joriy</span>
+                {{ session.device_info?.browser ?? $t('workshopAdmin.staffDetail.deviceFallback') }}
+                <span v-if="session.is_current" class="pill p-ok ml-1">
+                  {{ $t('workshopAdmin.staffDetail.currentSession') }}
+                </span>
               </div>
               <small class="text-ink-muted">
-                Yaratildi {{ formatDate(session.created_at) }} · oxirgi
-                {{ formatDate(session.last_used_at) }}
+                {{
+                  $t('workshopAdmin.staffDetail.sessionMeta', {
+                    created: formatDate(session.created_at),
+                    last: formatDate(session.last_used_at),
+                  })
+                }}
               </small>
             </div>
             <div class="meta">
@@ -659,7 +700,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 :disabled="acting"
                 @click="revokeSession(session.id)"
               >
-                Yopish
+                {{ $t('workshopAdmin.action.close') }}
               </button>
             </div>
           </div>
@@ -672,11 +713,11 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 
       <ConfirmDialog
         :open="blockOpen"
-        title="Xodimni bloklash"
-        message="Bloklangan xodim tizimga kira olmaydi va barcha sessiyalari yopiladi."
-        confirm-label="Bloklash"
-        cancel-label="Bekor qilish"
-        busy-label="Bloklanmoqda"
+        :title="$t('workshopAdmin.staffDetail.blockTitle')"
+        :message="$t('workshopAdmin.staffDetail.blockMessage')"
+        :confirm-label="$t('workshopAdmin.staffDetail.block')"
+        :cancel-label="$t('workshopAdmin.action.cancelFull')"
+        :busy-label="$t('workshopAdmin.staffDetail.blockBusy')"
         danger
         :busy="acting"
         :confirm-disabled="!reason.trim()"
@@ -684,24 +725,24 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         @confirm="block"
       >
         <label class="field" for="block-reason">
-          <span>Bloklash sababi</span>
+          <span>{{ $t('workshopAdmin.staffDetail.blockReason') }}</span>
           <input
             id="block-reason"
             v-model="reason"
             class="mp-input"
             required
-            placeholder="Masalan: ishdan bo'shadi"
+            :placeholder="$t('workshopAdmin.staffDetail.blockReasonPlaceholder')"
           />
         </label>
       </ConfirmDialog>
 
       <ConfirmDialog
         :open="unblockOpen"
-        title="Xodimni faollashtirish"
-        message="Xodim yana tizimga kira oladi."
-        confirm-label="Faollashtirish"
-        cancel-label="Bekor qilish"
-        busy-label="Faollashtirilmoqda"
+        :title="$t('workshopAdmin.staffDetail.unblockTitle')"
+        :message="$t('workshopAdmin.staffDetail.unblockMessage')"
+        :confirm-label="$t('workshopAdmin.staffDetail.unblock')"
+        :cancel-label="$t('workshopAdmin.action.cancelFull')"
+        :busy-label="$t('workshopAdmin.staffDetail.unblockBusy')"
         :busy="acting"
         @cancel="unblockOpen = false"
         @confirm="unblock"
@@ -709,11 +750,11 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 
       <ConfirmDialog
         :open="resetOpen"
-        title="Parolni tiklash"
-        :message="`${user.full_name} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
-        confirm-label="Parolni tiklash"
-        cancel-label="Bekor qilish"
-        busy-label="Tiklanmoqda"
+        :title="$t('workshopAdmin.staffDetail.resetTitle')"
+        :message="$t('workshopAdmin.staffDetail.resetMessage', { name: user.full_name })"
+        :confirm-label="$t('workshopAdmin.staffDetail.resetPassword')"
+        :cancel-label="$t('workshopAdmin.action.cancelFull')"
+        :busy-label="$t('workshopAdmin.staffDetail.resetBusy')"
         danger
         :busy="acting"
         @cancel="resetOpen = false"

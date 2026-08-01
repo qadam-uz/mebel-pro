@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -24,6 +25,7 @@ import { useOrdersStore, type OrderStatus } from '@/shared/stores/orders'
 
 type DetailTab = 'overview' | 'parts' | 'cutting' | 'finance' | 'timeline'
 
+const { t } = useI18n()
 const route = useRoute()
 const rolePath = useRolePath()
 const orders = useOrdersStore()
@@ -35,7 +37,7 @@ const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const cancelDialogOpen = ref(false)
-const cancelReason = ref('Mijoz buyurtmani tasdiqlashdan oldin bekor qildi')
+const cancelReason = ref(t('client.orders.cancelReasonDefault'))
 
 const order = computed(() => orders.currentOrder)
 const cancelledReason = computed(
@@ -70,10 +72,10 @@ const financeOpen = computed(
 )
 
 function statusSubtext(status: OrderStatus) {
-  if (status === 'cutting') return 'Kesilmoqda'
-  if (status === 'edge_banding') return 'Kromka yopishtirilmoqda'
-  if (status === 'ready') return 'Olib ketishga tayyor'
-  if (status === 'cancelled') return 'Bekor qilingan'
+  if (status === 'cutting') return t('client.orderDetail.statusCutting')
+  if (status === 'edge_banding') return t('client.orderDetail.statusEdgeBanding')
+  if (status === 'ready') return t('client.orderDetail.statusReady')
+  if (status === 'cancelled') return t('client.status.cancelled')
   return ''
 }
 
@@ -103,7 +105,7 @@ function phaseTimestamp(index: number): string | null {
 }
 
 function requestCancelOrder() {
-  cancelReason.value = 'Mijoz buyurtmani tasdiqlashdan oldin bekor qildi'
+  cancelReason.value = t('client.orders.cancelReasonDefault')
   actionError.value = null
   cancelDialogOpen.value = true
 }
@@ -117,7 +119,7 @@ async function cancelOrder() {
   try {
     await orders.cancelClientOrder(current.id, current.version, reason)
     cancelDialogOpen.value = false
-    toast.success('Buyurtma bekor qilindi.')
+    toast.success(t('client.orderDetail.cancelledToast'))
   } catch {
     actionError.value = orders.actionError ?? 'order_cancel_failed'
   }
@@ -167,11 +169,13 @@ onMounted(() => {
 
 <template>
   <section>
-    <RouterLink :to="rolePath('/c/orders')" class="client-back">← Buyurtmalar</RouterLink>
+    <RouterLink :to="rolePath('/c/orders')" class="client-back"
+      >← {{ $t('client.orderDetail.back') }}</RouterLink
+    >
 
     <div v-if="isNew && order" class="client-banner success">
       <span class="font-bold">✓</span>
-      <span>Buyurtma berildi — ustaxona ko'rib chiqib siz bilan bog'lanadi.</span>
+      <span>{{ $t('client.orderDetail.placedBanner') }}</span>
     </div>
 
     <div v-if="orders.loading" class="client-card p-5" aria-live="polite">
@@ -182,17 +186,17 @@ onMounted(() => {
 
     <ClientErrorState
       v-else-if="orders.error"
-      title="Buyurtmani yuklab bo'lmadi"
+      :title="$t('client.orderDetail.loadFailed')"
       :trace-id="orders.traceId"
       @retry="orders.loadClientOrder(orderId)"
     />
 
     <div v-else-if="!order" class="client-empty">
       <div class="client-empty-icon"><Icon name="box" /></div>
-      <h3>Buyurtma topilmadi</h3>
-      <p>Bunday raqamli buyurtma yo'q yoki sizga tegishli emas.</p>
+      <h3>{{ $t('client.orderDetail.notFoundTitle') }}</h3>
+      <p>{{ $t('client.orderDetail.notFoundBody') }}</p>
       <RouterLink :to="rolePath('/c/orders')" class="mp-button mp-button-primary mt-4">
-        Buyurtmalarim
+        {{ $t('client.orderDetail.myOrders') }}
       </RouterLink>
     </div>
 
@@ -204,18 +208,20 @@ onMounted(() => {
               {{ order.order_number }}
             </h1>
             <p class="mt-2 text-sm text-ink-soft">
-              {{ order.branch_name }} · {{ formatRelativeDate(order.created_at) }} · ustaxonadan
-              olib ketish
+              {{ order.branch_name }} · {{ formatRelativeDate(order.created_at) }} ·
+              {{ $t('client.orderDetail.pickupAtWorkshop') }}
             </p>
           </div>
           <div class="text-left sm:text-right">
             <span :class="clientStatusPillClass(order.status)">
-              {{ clientStatusLabel[order.status] }}
+              {{ clientStatusLabel(order.status) }}
             </span>
             <div class="mt-2 font-mono text-xl font-bold text-ink">
               {{ formatTiyin(order.total_tiyin) }}
             </div>
-            <div class="text-xs font-semibold text-ink-muted">jami narx (qat'iy)</div>
+            <div class="text-xs font-semibold text-ink-muted">
+              {{ $t('client.orderDetail.fixedTotal') }}
+            </div>
           </div>
         </div>
         <div class="mt-4 flex flex-wrap gap-2">
@@ -226,7 +232,7 @@ onMounted(() => {
             :disabled="orders.actionLoading"
             @click="requestCancelOrder"
           >
-            Bekor qilish
+            {{ $t('client.common.cancel') }}
           </button>
           <button
             v-else-if="order.status !== 'cancelled'"
@@ -234,7 +240,7 @@ onMounted(() => {
             class="mp-button mp-button-outline min-h-8 px-3 text-xs"
             @click="switchTab('timeline')"
           >
-            Holatni kuzatish
+            {{ $t('client.orderDetail.track') }}
           </button>
           <button
             v-if="result"
@@ -243,7 +249,11 @@ onMounted(() => {
             :disabled="orders.downloadingId === order.id"
             @click="orders.openClientPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizmani PDF ochish' }}
+            {{
+              orders.downloadingId === order.id
+                ? $t('client.orderDetail.opening')
+                : $t('client.orderDetail.openPdf')
+            }}
           </button>
         </div>
         <!-- The header PDF button is reachable from every tab, so its failure
@@ -263,10 +273,10 @@ onMounted(() => {
       <div v-if="order.status === 'cancelled'" class="client-banner warn">
         <span class="font-bold">!</span>
         <span>
-          Buyurtma bekor qilindi<span v-if="order.cancelled_at">
-            · {{ formatDate(order.cancelled_at) }}</span
+          {{ $t('client.orderDetail.cancelledBanner')
+          }}<span v-if="order.cancelled_at"> · {{ formatDate(order.cancelled_at) }}</span
           >.<span v-if="cancelledReason">
-            Sabab: <b>{{ cancelledReason }}</b></span
+            {{ $t('client.orderDetail.reasonLabel') }} <b>{{ cancelledReason }}</b></span
           >
         </span>
       </div>
@@ -274,7 +284,7 @@ onMounted(() => {
       <div
         class="client-tabs"
         role="tablist"
-        aria-label="Buyurtma tafsilotlari"
+        :aria-label="$t('client.orderDetail.tabsLabel')"
         @keydown="onTabKeydown"
       >
         <button
@@ -288,7 +298,7 @@ onMounted(() => {
           :tabindex="activeTab === 'overview' ? 0 : -1"
           @click="switchTab('overview')"
         >
-          Umumiy
+          {{ $t('client.orderDetail.tabOverview') }}
         </button>
         <button
           id="tab-parts"
@@ -301,7 +311,7 @@ onMounted(() => {
           :tabindex="activeTab === 'parts' ? 0 : -1"
           @click="switchTab('parts')"
         >
-          Detallar
+          {{ $t('client.orderDetail.tabParts') }}
         </button>
         <button
           id="tab-cutting"
@@ -314,7 +324,7 @@ onMounted(() => {
           :tabindex="activeTab === 'cutting' ? 0 : -1"
           @click="switchTab('cutting')"
         >
-          Chizma
+          {{ $t('client.orderDetail.tabCutting') }}
         </button>
         <button
           id="tab-finance"
@@ -327,7 +337,7 @@ onMounted(() => {
           :tabindex="activeTab === 'finance' ? 0 : -1"
           @click="switchTab('finance')"
         >
-          To'lov
+          {{ $t('client.orderDetail.tabPayment') }}
         </button>
         <button
           id="tab-timeline"
@@ -340,7 +350,7 @@ onMounted(() => {
           :tabindex="activeTab === 'timeline' ? 0 : -1"
           @click="switchTab('timeline')"
         >
-          Tarix
+          {{ $t('client.orderDetail.tabHistory') }}
         </button>
       </div>
 
@@ -354,21 +364,29 @@ onMounted(() => {
           class="grid gap-4"
         >
           <div class="client-card">
-            <div class="client-card-h"><h2>Buyurtma tarkibi</h2></div>
+            <div class="client-card-h">
+              <h2>{{ $t('client.orderDetail.composition') }}</h2>
+            </div>
             <div class="client-card-b">
               <div class="client-row-item">
                 <div>
-                  <div class="client-row-name">Kesish xizmati</div>
+                  <div class="client-row-name">{{ $t('client.common.cuttingService') }}</div>
                   <div class="text-sm text-ink-muted">
-                    chizma {{ order.cutting_result_id.slice(0, 8) }}
+                    {{
+                      $t('client.orderDetail.cuttingDraftRef', {
+                        id: order.cutting_result_id.slice(0, 8),
+                      })
+                    }}
                   </div>
                 </div>
                 <div class="client-row-meta">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</div>
               </div>
               <div class="client-row-item">
                 <div>
-                  <div class="client-row-name">Material</div>
-                  <div class="text-sm text-ink-muted">ustaxona materiali</div>
+                  <div class="client-row-name">{{ $t('client.common.material') }}</div>
+                  <div class="text-sm text-ink-muted">
+                    {{ $t('client.orderDetail.workshopMaterial') }}
+                  </div>
                 </div>
                 <div class="client-row-meta">
                   {{ formatTiyin(order.subtotal_materials_tiyin) }}
@@ -377,9 +395,10 @@ onMounted(() => {
               <template v-if="order.subtotal_edge_banding_tiyin > 0">
                 <div class="client-row-item">
                   <div>
-                    <div class="client-row-name">Kromka</div>
+                    <div class="client-row-name">{{ $t('client.orderDetail.edge') }}</div>
                     <div class="text-sm text-ink-muted">
-                      {{ metres(totalEdge) }} · material + xizmat
+                      {{ metres(totalEdge) }} ·
+                      {{ $t('client.orderDetail.edgeMaterialAndService') }}
                     </div>
                   </div>
                   <div class="client-row-meta">
@@ -388,29 +407,33 @@ onMounted(() => {
                 </div>
                 <div class="client-row-item">
                   <div>
-                    <div class="client-row-name">Kromka materiali</div>
-                    <div class="text-sm text-ink-muted">lenta narxi</div>
+                    <div class="client-row-name">{{ $t('client.orderDetail.edgeMaterial') }}</div>
+                    <div class="text-sm text-ink-muted">
+                      {{ $t('client.orderDetail.edgeTapePrice') }}
+                    </div>
                   </div>
                   <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
                 </div>
                 <div class="client-row-item">
                   <div>
-                    <div class="client-row-name">Kromka yopishtirish xizmati</div>
-                    <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
+                    <div class="client-row-name">{{ $t('client.orderDetail.edgeService') }}</div>
+                    <div class="text-sm text-ink-muted">
+                      {{ $t('client.orderDetail.edgeServiceDetail') }}
+                    </div>
                   </div>
                   <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
                 </div>
               </template>
               <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
                 <div>
-                  <div class="client-row-name">Ustama</div>
+                  <div class="client-row-name">{{ $t('client.orderDetail.surcharge') }}</div>
                   <div class="text-sm text-ink-muted">{{ order.surcharge_reason ?? '' }}</div>
                 </div>
                 <div class="client-row-meta">+ {{ formatTiyin(order.surcharge_tiyin) }}</div>
               </div>
               <div v-if="order.discount_tiyin > 0" class="client-row-item">
                 <div>
-                  <div class="client-row-name">Chegirma</div>
+                  <div class="client-row-name">{{ $t('client.orderDetail.discount') }}</div>
                   <div class="text-sm text-ink-muted">{{ order.discount_reason ?? '' }}</div>
                 </div>
                 <div class="client-row-meta text-success">
@@ -421,30 +444,32 @@ onMounted(() => {
           </div>
 
           <div class="client-card">
-            <div class="client-card-h"><h2>Narx</h2></div>
+            <div class="client-card-h">
+              <h2>{{ $t('client.orderDetail.price') }}</h2>
+            </div>
             <div class="client-card-b">
               <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
                 <div class="flex justify-between py-1 text-ink-soft">
-                  <span>Kesish xizmati</span
+                  <span>{{ $t('client.common.cuttingService') }}</span
                   ><span class="font-mono text-ink">{{
                     formatTiyin(order.subtotal_cutting_tiyin)
                   }}</span>
                 </div>
                 <div class="flex justify-between py-1 text-ink-soft">
-                  <span>Material</span
+                  <span>{{ $t('client.common.material') }}</span
                   ><span class="font-mono text-ink">{{
                     formatTiyin(order.subtotal_materials_tiyin)
                   }}</span>
                 </div>
                 <template v-if="order.subtotal_edge_banding_tiyin > 0">
                   <div class="flex justify-between py-1 text-ink-soft">
-                    <span>Kromka materiali</span
+                    <span>{{ $t('client.orderDetail.edgeMaterial') }}</span
                     ><span class="font-mono text-ink">{{
                       formatTiyin(edgeCostSplit.materials)
                     }}</span>
                   </div>
                   <div class="flex justify-between py-1 text-ink-soft">
-                    <span>Kromka yopishtirish xizmati</span
+                    <span>{{ $t('client.orderDetail.edgeService') }}</span
                     ><span class="font-mono text-ink">{{
                       formatTiyin(edgeCostSplit.service)
                     }}</span>
@@ -454,28 +479,30 @@ onMounted(() => {
                   v-if="order.surcharge_tiyin > 0"
                   class="flex justify-between py-1 text-ink-soft"
                 >
-                  <span>Ustama</span
+                  <span>{{ $t('client.orderDetail.surcharge') }}</span
                   ><span class="font-mono text-ink"
                     >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
                   >
                 </div>
                 <div v-if="order.discount_tiyin > 0" class="flex justify-between py-1 text-success">
-                  <span>Chegirma</span
+                  <span>{{ $t('client.orderDetail.discount') }}</span
                   ><span class="font-mono">- {{ formatTiyin(order.discount_tiyin) }}</span>
                 </div>
                 <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
-                  <span>Jami</span
+                  <span>{{ $t('client.common.total') }}</span
                   ><span class="font-serif text-2xl">{{ formatTiyin(order.total_tiyin) }}</span>
                 </div>
               </div>
               <p class="mt-3 text-sm text-ink-muted">
-                Narx buyurtma berilganda qat'iy belgilangan — keyin o'zgarmaydi.
+                {{ $t('client.orderDetail.priceFixedNote') }}
               </p>
             </div>
           </div>
 
           <div class="client-card">
-            <div class="client-card-h"><h2>Olib ketish</h2></div>
+            <div class="client-card-h">
+              <h2>{{ $t('client.orderDetail.pickup') }}</h2>
+            </div>
             <div class="client-card-b">
               <div class="client-row-item">
                 <div>
@@ -487,7 +514,7 @@ onMounted(() => {
                 <div class="client-row-meta">{{ order.branch_phone }}</div>
               </div>
               <div class="client-row-item">
-                <div class="client-row-name">Aloqa</div>
+                <div class="client-row-name">{{ $t('client.orderDetail.contact') }}</div>
                 <div class="client-row-meta">
                   {{ order.contact_name }} · {{ order.contact_phone }}
                 </div>
@@ -496,24 +523,32 @@ onMounted(() => {
           </div>
 
           <div v-if="order.note_workshop || order.note_client" class="client-card">
-            <div class="client-card-h"><h2>Izoh</h2></div>
+            <div class="client-card-h">
+              <h2>{{ $t('client.orderDetail.note') }}</h2>
+            </div>
             <div class="client-card-b space-y-3">
               <div v-if="order.note_workshop">
-                <div class="text-xs font-bold uppercase text-ink-muted">Ustaxonadan</div>
+                <div class="text-xs font-bold uppercase text-ink-muted">
+                  {{ $t('client.orderDetail.noteWorkshop') }}
+                </div>
                 <p class="mt-1 text-sm text-ink">{{ order.note_workshop }}</p>
               </div>
               <div v-if="order.note_client">
-                <div class="text-xs font-bold uppercase text-ink-muted">Sizning izohingiz</div>
+                <div class="text-xs font-bold uppercase text-ink-muted">
+                  {{ $t('client.orderDetail.noteClient') }}
+                </div>
                 <p class="mt-1 text-sm text-ink">{{ order.note_client }}</p>
               </div>
             </div>
           </div>
           <section class="client-card">
-            <div class="client-card-h"><h2 class="!text-base">Holat</h2></div>
+            <div class="client-card-h">
+              <h2 class="!text-base">{{ $t('client.orderDetail.statusCard') }}</h2>
+            </div>
             <div class="client-card-b">
               <div class="grid gap-3">
                 <div
-                  v-for="(label, index) in clientPhaseLabels"
+                  v-for="(label, index) in clientPhaseLabels()"
                   :key="label"
                   class="flex items-center gap-3"
                 >
@@ -537,7 +572,9 @@ onMounted(() => {
           </section>
 
           <section class="client-card">
-            <div class="client-card-h"><h2 class="!text-base">Ustaxonaga aloqa</h2></div>
+            <div class="client-card-h">
+              <h2 class="!text-base">{{ $t('client.orderDetail.workshopContact') }}</h2>
+            </div>
             <div class="client-card-b">
               <div class="client-row-item">
                 <div class="client-row-name">{{ order.workshop_name }}</div>
@@ -566,14 +603,17 @@ onMounted(() => {
           class="client-card"
         >
           <div class="client-card-h">
-            <h2>Detallar</h2>
+            <h2>{{ $t('client.common.parts') }}</h2>
             <span class="font-mono text-sm text-ink-muted">
-              {{ order.item_count }} detal · {{ materialCount }} material
+              {{ $t('client.unit.parts', order.item_count) }} ·
+              {{ $t('client.unit.materials', materialCount) }}
             </span>
           </div>
           <div class="client-card-b">
             <CuttingPartsByMaterial v-if="result" :result="result" />
-            <div v-else class="text-sm text-ink-muted">Bu buyurtmada detal yo'q.</div>
+            <div v-else class="text-sm text-ink-muted">
+              {{ $t('client.orderDetail.partsEmpty') }}
+            </div>
           </div>
         </section>
 
@@ -586,7 +626,7 @@ onMounted(() => {
           class="client-card"
         >
           <div class="client-card-h">
-            <h2>Chizma</h2>
+            <h2>{{ $t('client.orderDetail.tabCutting') }}</h2>
             <button
               v-if="result"
               type="button"
@@ -594,7 +634,11 @@ onMounted(() => {
               :disabled="orders.downloadingId === order.id"
               @click="orders.openClientPdf(order.id)"
             >
-              {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'PDF ochish →' }}
+              {{
+                orders.downloadingId === order.id
+                  ? $t('client.orderDetail.opening')
+                  : `${$t('client.orderDetail.openPdfShort')} →`
+              }}
             </button>
           </div>
           <div class="client-card-b">
@@ -608,7 +652,9 @@ onMounted(() => {
                 trace {{ orders.downloadTraceId }}
               </span>
             </p>
-            <div v-if="!result" class="text-sm text-ink-muted">Chizma natijasi topilmadi.</div>
+            <div v-if="!result" class="text-sm text-ink-muted">
+              {{ $t('client.orderDetail.resultMissing') }}
+            </div>
             <!-- The same component the cutting-result page renders — material
                  and edge tally, sheet strip, drawing, per-sheet rail — so a
                  placed order's drawing is not a second, thinner version of the
@@ -629,38 +675,39 @@ onMounted(() => {
           tabindex="0"
           class="client-card"
         >
-          <div class="client-card-h"><h2>To'lov</h2></div>
+          <div class="client-card-h">
+            <h2>{{ $t('client.orderDetail.tabPayment') }}</h2>
+          </div>
           <div class="client-card-b">
             <template v-if="financeOpen && order.settlement">
               <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
                 <div class="flex justify-between py-1 text-ink-soft">
-                  <span>Jami</span
+                  <span>{{ $t('client.common.total') }}</span
                   ><span class="font-mono text-ink">{{
                     formatTiyin(order.settlement.total_tiyin)
                   }}</span>
                 </div>
                 <div class="flex justify-between py-1 text-ink-soft">
-                  <span>To'langan</span
+                  <span>{{ $t('client.orderDetail.paid') }}</span
                   ><span class="font-mono text-success"
                     >- {{ formatTiyin(order.settlement.recorded_tiyin) }}</span
                   >
                 </div>
                 <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
-                  <span>Qoldiq</span
+                  <span>{{ $t('client.orderDetail.balance') }}</span
                   ><span class="font-serif text-2xl">{{
                     formatTiyin(order.settlement.balance_tiyin)
                   }}</span>
                 </div>
               </div>
               <p class="mt-3 text-sm text-ink-muted">
-                To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa — to'lov
-                bo'yicha ustaxonaga murojaat qiling.
+                {{ $t('client.orderDetail.paymentNote') }}
               </p>
             </template>
             <div v-else class="client-empty border-0 !p-8">
               <div class="client-empty-icon"><Icon name="layers" /></div>
-              <h3>To'lov ma'lumotlari hali yopiq</h3>
-              <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
+              <h3>{{ $t('client.orderDetail.paymentLockedTitle') }}</h3>
+              <p>{{ $t('client.orderDetail.paymentLockedBody') }}</p>
             </div>
           </div>
         </section>
@@ -673,18 +720,20 @@ onMounted(() => {
           tabindex="0"
           class="client-card"
         >
-          <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
+          <div class="client-card-h">
+            <h2>{{ $t('client.orderDetail.history') }}</h2>
+          </div>
           <div class="client-card-b">
             <ol v-if="order.status === 'cancelled'" class="tl">
               <li class="step done">
                 <span class="when">{{ formatRelativeDate(order.created_at) }}</span>
-                Yuborildi
+                {{ $t('client.status.new') }}
               </li>
               <li class="step bad">
                 <span v-if="order.cancelled_at" class="when">{{
                   formatRelativeDate(order.cancelled_at)
                 }}</span>
-                Bekor qilingan
+                {{ $t('client.status.cancelled') }}
                 <p v-if="cancelledReason" class="mt-1 text-sm text-ink-soft">
                   {{ cancelledReason }}
                 </p>
@@ -692,7 +741,7 @@ onMounted(() => {
             </ol>
             <ol v-else class="tl">
               <li
-                v-for="(label, index) in clientPhaseLabels"
+                v-for="(label, index) in clientPhaseLabels()"
                 :key="label"
                 class="step"
                 :class="phaseNodeClass(index)"
@@ -708,11 +757,11 @@ onMounted(() => {
 
     <ConfirmDialog
       :open="cancelDialogOpen"
-      title="Buyurtmani bekor qilish"
-      message="Buyurtma bekor qilinadi. Bu amal qaytarilmaydi."
-      confirm-label="Bekor qilish"
-      cancel-label="Orqaga"
-      busy-label="Bajarilmoqda"
+      :title="$t('client.orders.cancelTitle')"
+      :message="$t('client.orders.cancelMessage')"
+      :confirm-label="$t('client.common.cancel')"
+      :cancel-label="$t('client.common.back')"
+      :busy-label="$t('client.common.busy')"
       danger
       :busy="orders.actionLoading"
       :confirm-disabled="cancelReason.trim().length === 0"
@@ -720,7 +769,7 @@ onMounted(() => {
       @confirm="cancelOrder"
     >
       <label class="grid gap-1 text-sm font-bold text-ink">
-        Sabab
+        {{ $t('client.common.reason') }}
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
     </ConfirmDialog>

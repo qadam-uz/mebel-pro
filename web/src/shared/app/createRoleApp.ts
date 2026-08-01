@@ -1,7 +1,7 @@
 import '@/assets/main.css'
 
 import { createPinia } from 'pinia'
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import {
   createRouter,
   createWebHistory,
@@ -12,8 +12,14 @@ import {
 } from 'vue-router'
 
 import { configureSession } from '@/shared/api/client'
+import { i18n, initialLocale, setLocale } from '@/shared/i18n'
 import RoleApp from '@/shared/components/RoleApp.vue'
-import { roleConfigKey, type RoleConfig, type RoleKey } from '@/shared/app/roleConfig'
+import {
+  roleConfigKey,
+  roleMessageKey,
+  type RoleConfig,
+  type RoleKey,
+} from '@/shared/app/roleConfig'
 import {
   canAccessWorkshopRoute,
   type WorkshopRouteRequirement,
@@ -148,10 +154,19 @@ export function normalizeRoleConfig(
   }
 }
 
-export function roleDocumentTitle(pageTitle: unknown, config: RoleConfig): string {
-  const title =
-    typeof pageTitle === 'string' && pageTitle.trim() ? pageTitle.trim() : config.dashboardTitle
-  return `${title} — ${config.productLabel} · ${config.roleLabel}`
+/** A route declares `meta.titleKey`; the tab title is resolved here so it
+ *  follows the active locale rather than freezing at whatever was loaded when
+ *  the route module was first evaluated. */
+export function roleDocumentTitle(
+  titleKey: unknown,
+  config: RoleConfig,
+  translate: (key: string) => string = (key) => i18n.global.t(key),
+): string {
+  const key =
+    typeof titleKey === 'string' && titleKey.trim()
+      ? titleKey.trim()
+      : roleMessageKey(config.role, 'dashboardTitle')
+  return `${translate(key)} — ${config.productLabel} · ${translate(roleMessageKey(config.role, 'label'))}`
 }
 
 export function roleRoutePermissionAllowed(
@@ -175,7 +190,15 @@ function focusAdminContent(toMeta: Record<string, unknown>) {
   })
 }
 
-export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], localBase: string) {
+export async function mountRoleApp(
+  config: RoleConfig,
+  routes: RouteRecordRaw[],
+  localBase: string,
+) {
+  // Before anything renders: a locale switched in a previous session must be in
+  // place for the first paint, not applied over an Uzbek flash.
+  await setLocale(initialLocale())
+
   const historyBase = resolveHistoryBase(localBase)
   const roleConfig = normalizeRoleConfig(config, localBase, historyBase)
   const pinia = createPinia()
@@ -256,13 +279,21 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
   })
 
   router.afterEach((to) => {
-    document.title = roleDocumentTitle(to.meta.title, roleConfig)
+    document.title = roleDocumentTitle(to.meta.titleKey, roleConfig)
     if (roleConfig.role === 'admin') focusAdminContent(to.meta)
+  })
+
+  // Switching language mid-session must retitle the tab too — `afterEach` only
+  // fires on navigation, and a user who stays put would keep the old language
+  // in their tab strip and browser history.
+  watch(i18n.global.locale, () => {
+    document.title = roleDocumentTitle(router.currentRoute.value.meta.titleKey, roleConfig)
   })
 
   const app = createApp(RoleApp)
   app.provide(roleConfigKey, roleConfig)
   app.use(pinia)
   app.use(router)
+  app.use(i18n)
   app.mount('#app')
 }

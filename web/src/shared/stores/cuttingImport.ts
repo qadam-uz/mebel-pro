@@ -1,5 +1,6 @@
 import { ApiError, api, apiErrorCode } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { translate, translatePlural } from '@/shared/i18n'
 import type { CuttingPart, CuttingScope } from '@/shared/stores/cutting'
 
 export const MAX_IMPORT_FILE_BYTES = 1_048_576
@@ -188,37 +189,18 @@ export const IMPORT_ROLES: ImportRole[] = [
   'edge_right',
 ]
 
-export const IMPORT_ROLE_LABELS: Record<ImportRole, string> = {
-  length_mm: 'Uzunlik (mm)',
-  width_mm: 'Kenglik (mm)',
-  quantity: 'Soni',
-  material: 'Material',
-  thickness_mm: 'Qalinlik (mm)',
-  follow_grain: 'Tekstura',
-  edge_top: 'Kromka: yuqori',
-  edge_bottom: 'Kromka: past',
-  edge_left: 'Kromka: chap',
-  edge_right: "Kromka: o'ng",
+// Functions, not const maps: a frozen record would keep whichever locale was
+// active when this module first evaluated.
+export function importRoleLabel(role: ImportRole): string {
+  return translate(`cutting.import.role.${role}`)
 }
 
-export const IMPORT_SKIP_REASON_LABELS: Record<ImportSkipReason, string> = {
-  non_numeric_length: 'uzunlik raqam emas',
-  non_numeric_width: 'kenglik raqam emas',
-  non_numeric_quantity: 'soni raqam emas',
-  quantity_not_integer: 'soni butun son emas',
-  quantity_not_positive: 'soni 1 dan kichik',
-  dimension_not_positive: "o'lcham noto'g'ri",
-  dimension_too_large: "o'lcham 10 m dan katta",
+export function importSkipReasonLabel(reason: ImportSkipReason): string {
+  return translate(`cutting.import.skipReason.${reason}`)
 }
 
-export const IMPORT_WARNING_LABELS: Record<ImportWarningCode, string> = {
-  dimension_rounded: "O'lcham mm gacha yaxlitlandi",
-  quantity_defaulted: "Soni ko'rsatilmagan - 1 deb olindi",
-  grain_token_unknown: 'Tekstura belgisi tushunarsiz - "bo\'ylab" deb olindi',
-  non_rectangular: "To'g'ri to'rtburchak bo'lmagan list import qilindi",
-  ignored_holes: 'Teshiklar importda hisobga olinmadi',
-  ignored_grooves: 'Pazlar importda hisobga olinmadi',
-  edge_see_drawing: "Chizmada ko'rsatilgan kromka avtomatik tanlanmadi",
+export function importWarningLabel(code: ImportWarningCode): string {
+  return translate(`cutting.import.warning.${code}`)
 }
 
 function cleanOptions(options: ImportParseOptions | undefined): ImportParseOptions | undefined {
@@ -353,29 +335,32 @@ export function applyImportedParts(
   return mode === 'replace' ? [...imported] : [...existing, ...imported]
 }
 
+const IMPORT_ERROR_CODES = [
+  'unsupported_format',
+  'file_too_large',
+  'empty_file',
+  'invalid_mapping',
+  // The parser names the file it could not read; without these the operator gets
+  // the generic "import qilib bo'lmadi" and no idea which file to fix (QAD-163).
+  'invalid_file',
+  'invalid_map_file',
+] as const
+
 export function cuttingImportErrorLabel(error: unknown): string {
-  const fallback = "Faylni import qilib bo'lmadi. Qayta urinib ko'ring."
-  if (!(error instanceof ApiError)) return fallback
+  if (!(error instanceof ApiError)) return translate('cutting.error.importFallback')
   const code = apiErrorCode(error)
   const details =
     typeof error.body === 'object' && error.body !== null
       ? (error.body as { details?: { total_pieces?: unknown } }).details
       : undefined
-  if (code === 'unsupported_format') {
-    return "Bu fayl turi qo'llab-quvvatlanmaydi — faqat CSV, XML yoki MAP. БАЗИС-Мебельщик'da «Спецификация в CSV/XML», 2D-Place'da esa MAP orqali saqlang."
+  if (code !== null && (IMPORT_ERROR_CODES as readonly string[]).includes(code)) {
+    return translate(`cutting.error.${code}`)
   }
-  if (code === 'file_too_large') return "Fayl 1 MB dan katta — faylni bo'lib yuklang."
-  if (code === 'empty_file') return "Faylda qator yo'q — to'ldirilgan faylni tanlang."
-  if (code === 'invalid_mapping') return "Ustunlar mosligi noto'g'ri — ustunlarni qayta belgilang."
-  // The parser names the file it could not read; without these the operator gets
-  // the generic "import qilib bo'lmadi" and no idea which file to fix (QAD-163).
-  if (code === 'invalid_file') return "Faylni o'qib bo'lmadi — XML buzilgan yoki to'liq emas."
-  if (code === 'invalid_map_file') return "2D-Place MAP faylni o'qib bo'lmadi."
   if (code === 'too_many_parts') {
     const total = typeof details?.total_pieces === 'number' ? details.total_pieces : null
     return total
-      ? `Faylda ${total} dona detal — bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang.`
-      : "Faylda detal ko'p — bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang."
+      ? translatePlural('cutting.error.too_many_parts', total)
+      : translate('cutting.error.too_many_parts_unknown')
   }
-  return fallback
+  return translate('cutting.error.importFallback')
 }

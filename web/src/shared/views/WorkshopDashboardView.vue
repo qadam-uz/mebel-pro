@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { captureApiError } from '@/shared/api/client'
@@ -18,7 +19,7 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import {
   formatDate,
   formatDateInputValue,
-  formatRelativeUz,
+  formatRelative,
   formatTiyin,
   formatTiyinRow,
   formatStockQuantity,
@@ -32,6 +33,7 @@ import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const rolePath = useRolePath()
 const router = useRouter()
+const { t } = useI18n()
 const permissions = useWorkshopPermissions()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
@@ -179,13 +181,27 @@ const chartPeak = computed(() =>
   }, null),
 )
 const chartSummary = computed(() => {
-  if (chartRows.value.length === 0) return `So'nggi ${chartDays.value} kun uchun tushum yo'q.`
+  const days = chartDays.value
+  if (chartRows.value.length === 0) {
+    return t('workshopAdmin.dashboard.chartSummaryEmpty', { n: days }, days)
+  }
   const today = chartToday.value
   const peak = chartPeak.value
   return [
-    `So'nggi ${chartDays.value} kun tushumi: ${formatTiyin(finance.summary?.income_tiyin ?? 0)}.`,
-    today ? `Bugun: ${formatTiyin(today.income_tiyin)}.` : '',
-    peak ? `Eng yuqori kun: ${formatDate(peak.day)} · ${formatTiyin(peak.income_tiyin)}.` : '',
+    t(
+      'workshopAdmin.dashboard.chartSummaryTotal',
+      { n: days, amount: formatTiyin(finance.summary?.income_tiyin ?? 0) },
+      days,
+    ),
+    today
+      ? t('workshopAdmin.dashboard.chartSummaryToday', { amount: formatTiyin(today.income_tiyin) })
+      : '',
+    peak
+      ? t('workshopAdmin.dashboard.chartSummaryPeak', {
+          date: formatDate(peak.day),
+          amount: formatTiyin(peak.income_tiyin),
+        })
+      : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -201,12 +217,15 @@ function chartRange() {
   }
 }
 
-// Uzbek section labels for the partial-load banner (also its dedupe keys).
-const dashboardSections = {
-  branches: 'Filiallar',
-  orders: 'Buyurtmalar',
-  finance: 'Moliya',
-  inventory: 'Ombor',
+// Section labels for the partial-load banner (also its dedupe keys). Resolved
+// per call, never captured, so a language switch cannot leave a stale label.
+function dashboardSections() {
+  return {
+    branches: t('workshopAdmin.dashboard.sectionBranches'),
+    orders: t('workshopAdmin.dashboard.sectionOrders'),
+    finance: t('workshopAdmin.dashboard.sectionFinance'),
+    inventory: t('workshopAdmin.dashboard.sectionInventory'),
+  }
 }
 
 function recordDashboardError(section: string, code: string, traceId: string | null) {
@@ -239,7 +258,7 @@ async function loadFinanceSummary() {
   // Period/branch filter changes re-fetch finance alone — drop its previous
   // verdict so the banner reflects the latest attempt.
   dashboardFailures.value = dashboardFailures.value.filter(
-    (failure) => failure.section !== dashboardSections.finance,
+    (failure) => failure.section !== dashboardSections().finance,
   )
   await finance.loadSummary({
     ...chartRange(),
@@ -247,7 +266,9 @@ async function loadFinanceSummary() {
       contextBranchFor(financeBranches.value) ??
       (permissions.isOwner.value ? null : (financeBranches.value[0]?.id ?? null)),
   })
-  if (finance.error) recordDashboardError(dashboardSections.finance, finance.error, finance.traceId)
+  if (finance.error) {
+    recordDashboardError(dashboardSections().finance, finance.error, finance.traceId)
+  }
 }
 
 async function loadDashboard() {
@@ -255,7 +276,7 @@ async function loadDashboard() {
   dashboardFailures.value = []
   await workshop.loadBranchContext().catch((errorValue) => {
     const captured = captureApiError(errorValue, 'branch_context_load_failed')
-    recordDashboardError(dashboardSections.branches, captured.code, captured.traceId)
+    recordDashboardError(dashboardSections().branches, captured.code, captured.traceId)
   })
   if (canOrders.value || canProduction.value) {
     const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
@@ -265,13 +286,15 @@ async function loadDashboard() {
       limit: 100,
       branch_id: orderBranchId,
     })
-    if (orders.error) recordDashboardError(dashboardSections.orders, orders.error, orders.traceId)
+    if (orders.error) recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
     if (canOrders.value) {
       await orders.loadRecentWorkshopOrders({
         branch_id: orderBranchId,
         limit: 8,
       })
-      if (orders.error) recordDashboardError(dashboardSections.orders, orders.error, orders.traceId)
+      if (orders.error) {
+        recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
+      }
     }
   }
   await loadFinanceSummary()
@@ -297,7 +320,7 @@ async function loadDashboard() {
       const captured = captureApiError(errorValue, 'inventory_load_failed')
       workshop.inventoryError = captured.code
       workshop.inventoryTraceId = captured.traceId
-      recordDashboardError(dashboardSections.inventory, captured.code, captured.traceId)
+      recordDashboardError(dashboardSections().inventory, captured.code, captured.traceId)
     } finally {
       workshop.inventoryLoading = false
     }
@@ -320,12 +343,12 @@ watch(
   <section class="workshop-dashboard">
     <div class="page-head">
       <div>
-        <h1>Asosiy</h1>
+        <h1>{{ $t('workshopAdmin.dashboard.title') }}</h1>
         <div class="sub">
           {{
             selectedBranchName
-              ? `${selectedBranchName} ko'rsatkichlari`
-              : "Ustaxona ko'rsatkichlari"
+              ? $t('workshopAdmin.dashboard.branchMetrics', { branch: selectedBranchName })
+              : $t('workshopAdmin.dashboard.workshopMetrics')
           }}
         </div>
       </div>
@@ -340,7 +363,7 @@ watch(
 
     <div v-if="dashboardFailures.length > 0" class="banner danger mb-4" role="alert">
       <div class="grow">
-        <p class="font-bold">Dashboard ma'lumotlarini to'liq yuklab bo'lmadi</p>
+        <p class="font-bold">{{ $t('workshopAdmin.dashboard.partialTitle') }}</p>
         <ul class="mt-1 grid gap-0.5">
           <li v-for="failure in dashboardFailures" :key="failure.section">
             {{ dashboardFailureLine(failure) }}
@@ -352,24 +375,21 @@ watch(
         type="button"
         @click="loadDashboard"
       >
-        Qayta urinish
+        {{ $t('workshopAdmin.action.retry') }}
       </button>
     </div>
 
     <div v-if="!hasAnyGrant" class="st-empty">
-      <h3>Sizga hali hech qanday ruxsat berilmagan</h3>
-      <p>Filial va vazifa biriktirilgach, ishingiz shu yerda ko'rinadi.</p>
+      <h3>{{ $t('workshopAdmin.dashboard.noGrantsTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.dashboard.noGrantsBody') }}</p>
     </div>
 
     <div v-else-if="dashboardReady && !hasVisibleSection" class="st-empty">
-      <h3>Bu yerda ko'rsatiladigan ma'lumot yo'q</h3>
-      <p>
-        Sizdagi ruxsatlar asosiy panelda ko'rsatkich chiqarmaydi — ishingiz alohida bo'limlarda
-        turadi.
-      </p>
+      <h3>{{ $t('workshopAdmin.dashboard.noSectionTitle') }}</h3>
+      <p>{{ $t('workshopAdmin.dashboard.noSectionBody') }}</p>
       <div v-if="canCatalog" class="mt-4">
         <RouterLink :to="rolePath('/workshop/catalog')" class="mp-button mp-button-primary">
-          Material katalogi
+          {{ $t('workshopAdmin.dashboard.catalogLink') }}
         </RouterLink>
       </div>
     </div>
@@ -383,12 +403,14 @@ watch(
           class="kpi"
           :class="ordersHref ? 'no-underline' : ''"
         >
-          <div class="lbl">Ishlab chiqarishda</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiActive') }}</div>
           <div class="v num">
             <span v-if="dashboardReady">{{ activeOrders.length }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
-          <div class="d"><span>faol buyurtmalar</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiActiveMeta') }}</span>
+          </div>
         </component>
 
         <component
@@ -398,7 +420,7 @@ watch(
           class="kpi"
           :class="incomeHref ? 'no-underline' : ''"
         >
-          <div class="lbl">Tushum</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiIncome') }}</div>
           <div class="v num">
             <span v-if="dashboardReady" :title="incomeParts.full"
               >{{ incomeParts.amount }} <small>{{ incomeParts.unit }}</small></span
@@ -406,7 +428,7 @@ watch(
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d">
-            <span>so'nggi {{ chartDays }} kun</span>
+            <span>{{ $t('workshopAdmin.dashboard.periodMeta', { n: chartDays }, chartDays) }}</span>
           </div>
         </component>
 
@@ -417,7 +439,7 @@ watch(
           class="kpi"
           :class="expensesHref ? 'no-underline' : ''"
         >
-          <div class="lbl">Xarajatlar</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiExpense') }}</div>
           <div class="v num">
             <span v-if="dashboardReady" :title="expenseParts.full"
               >{{ expenseParts.amount }} <small>{{ expenseParts.unit }}</small></span
@@ -425,19 +447,23 @@ watch(
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d">
-            <span>so'nggi {{ chartDays }} kun</span>
+            <span>{{ $t('workshopAdmin.dashboard.periodMeta', { n: chartDays }, chartDays) }}</span>
           </div>
         </component>
 
         <div v-if="canFinance" class="kpi" :class="netPositive ? '' : 'bad'">
-          <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">Foyda</div>
+          <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">
+            {{ $t('workshopAdmin.dashboard.kpiProfit') }}
+          </div>
           <div class="v num" :class="netPositive ? 'success-text' : 'danger-text'">
             <span v-if="dashboardReady" :title="netParts.full"
               >{{ netParts.amount }} <small>{{ netParts.unit }}</small></span
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
-          <div class="d"><span>tushum − xarajat</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiProfitMeta') }}</span>
+          </div>
         </div>
 
         <RouterLink
@@ -446,7 +472,7 @@ watch(
           class="kpi no-underline"
           :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn' : ''"
         >
-          <div class="lbl">Ta'minotchilarga qarzimiz</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiSupplierDebt') }}</div>
           <div
             class="v num"
             :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn-text' : ''"
@@ -456,18 +482,22 @@ watch(
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
-          <div class="d"><span>yetkazmalar − to'lovlar</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiSupplierDebtMeta') }}</span>
+          </div>
         </RouterLink>
 
         <RouterLink v-if="debtsHref" :to="debtsHref" class="kpi no-underline">
-          <div class="lbl">Mijozlar qarzi</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiClientDebt') }}</div>
           <div class="v num">
             <span v-if="dashboardReady" :title="clientDebtParts.full"
               >{{ clientDebtParts.amount }} <small>{{ clientDebtParts.unit }}</small></span
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
-          <div class="d"><span>buyurtmalar − to'lovlar</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiClientDebtMeta') }}</span>
+          </div>
         </RouterLink>
 
         <RouterLink
@@ -476,12 +506,14 @@ watch(
           class="kpi no-underline"
           :class="lowStock.length > 0 ? 'warn' : ''"
         >
-          <div class="lbl">Kam qolgan materiallar</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiLowStock') }}</div>
           <div class="v num" :class="lowStock.length > 0 ? 'warn-text' : ''">
             <span v-if="dashboardReady">{{ lowStock.length }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
-          <div class="d"><span>me'yordan kam</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiLowStockMeta') }}</span>
+          </div>
         </RouterLink>
 
         <RouterLink
@@ -489,22 +521,24 @@ watch(
           :to="inventoryHref"
           class="kpi no-underline"
         >
-          <div class="lbl">Ombor qiymati</div>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiStockValue') }}</div>
           <div class="v num">
             <span v-if="dashboardReady" :title="stockValueParts.full"
               >{{ stockValueParts.amount }} <small>{{ stockValueParts.unit }}</small></span
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
-          <div class="d"><span>oxirgi kirim narxida</span></div>
+          <div class="d">
+            <span>{{ $t('workshopAdmin.dashboard.kpiStockValueMeta') }}</span>
+          </div>
         </RouterLink>
       </div>
 
       <div v-if="showProductionQueue" class="card mb-[18px]">
         <div class="card-h">
           <div>
-            <h2>Mening ishlab chiqarish navbatim</h2>
-            <div class="sub">Rahbar tayinlagan kesish va kromka ishlari.</div>
+            <h2>{{ $t('workshopAdmin.dashboard.queueTitle') }}</h2>
+            <div class="sub">{{ $t('workshopAdmin.dashboard.queueSubtitle') }}</div>
           </div>
         </div>
         <div class="card-b">
@@ -517,14 +551,16 @@ watch(
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                Kesish
+                {{ $t('workshopAdmin.dashboard.queueCutting') }}
               </div>
               <div class="mt-2 font-serif text-3xl font-semibold text-ink">
                 {{ productionQueueCounts.cutting }}
-                <small class="font-sans text-sm text-ink-muted">ish</small>
+                <small class="font-sans text-sm text-ink-muted">
+                  {{ $t('workshopAdmin.dashboard.jobUnit', productionQueueCounts.cutting) }}
+                </small>
               </div>
               <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
-                Tasdiqlangan yoki kesilayotgan, sizga tayinlangan buyurtmalar.
+                {{ $t('workshopAdmin.dashboard.queueCuttingBody') }}
               </p>
             </RouterLink>
             <RouterLink
@@ -532,20 +568,21 @@ watch(
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                Kromka
+                {{ $t('workshopAdmin.dashboard.queueBanding') }}
               </div>
               <div class="mt-2 font-serif text-3xl font-semibold text-ink">
                 {{ productionQueueCounts.banding }}
-                <small class="font-sans text-sm text-ink-muted">ish</small>
+                <small class="font-sans text-sm text-ink-muted">
+                  {{ $t('workshopAdmin.dashboard.jobUnit', productionQueueCounts.banding) }}
+                </small>
               </div>
               <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
-                Kromka bosqichida sizga biriktirilgan buyurtmalar.
+                {{ $t('workshopAdmin.dashboard.queueBandingBody') }}
               </p>
             </RouterLink>
           </div>
           <p v-else class="text-[13px] text-ink-soft">
-            Hozir sizga ish tayinlanmagan — rahbar buyurtmani tayinlagach, u kesish yoki kromka
-            navbatida shu yerda ko'rinadi.
+            {{ $t('workshopAdmin.dashboard.queueEmpty') }}
           </p>
         </div>
       </div>
@@ -554,12 +591,17 @@ watch(
         <div v-if="canFinance" class="card">
           <div class="card-h">
             <div>
-              <h2>Savdo · so'nggi {{ chartDays }} kun</h2>
+              <h2>{{ $t('workshopAdmin.dashboard.chartTitle', chartDays) }}</h2>
               <div class="sub">
-                Jami · <b>{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</b>
+                {{ $t('workshopAdmin.dashboard.chartTotal') }} ·
+                <b>{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</b>
               </div>
             </div>
-            <div class="flex gap-1" role="group" aria-label="Davr (kun)">
+            <div
+              class="flex gap-1"
+              role="group"
+              :aria-label="$t('workshopAdmin.dashboard.periodGroup')"
+            >
               <button
                 v-for="days in chartPeriodOptions"
                 :key="days"
@@ -570,15 +612,15 @@ watch(
                 :aria-pressed="days === chartDays"
                 @click="setChartPeriod(days)"
               >
-                {{ days }} kun
+                {{ $t('workshopAdmin.dashboard.periodOption', { n: days }, days) }}
               </button>
             </div>
           </div>
           <div class="card-b">
             <div v-if="!dashboardReady" class="sk block h-[150px] w-full"></div>
             <div v-else-if="chartRows.length === 0 || !hasIncome" class="st-empty !py-8">
-              <h3>Savdo yozuvi yo'q</h3>
-              <p>Tanlangan davrda hali tushum yozilmagan.</p>
+              <h3>{{ $t('workshopAdmin.dashboard.chartEmptyTitle') }}</h3>
+              <p>{{ $t('workshopAdmin.dashboard.chartEmptyBody') }}</p>
             </div>
             <div v-else>
               <p class="sr-only">{{ chartSummary }}</p>
@@ -628,9 +670,15 @@ watch(
                 <span v-for="label in chartLabels" :key="label">{{ label }}</span>
               </div>
               <div class="chart-legend">
-                <span v-if="todayHasIncome"><i class="chart-key today"></i>Bugun</span>
-                <span><i class="chart-key peak"></i>Eng yuqori</span>
-                <span><i class="chart-key other"></i>Boshqalar</span>
+                <span v-if="todayHasIncome">
+                  <i class="chart-key today"></i>{{ $t('workshopAdmin.dashboard.legendToday') }}
+                </span>
+                <span>
+                  <i class="chart-key peak"></i>{{ $t('workshopAdmin.dashboard.legendPeak') }}
+                </span>
+                <span>
+                  <i class="chart-key other"></i>{{ $t('workshopAdmin.dashboard.legendOther') }}
+                </span>
               </div>
             </div>
           </div>
@@ -638,8 +686,10 @@ watch(
 
         <div v-if="canOrders" class="card">
           <div class="card-h">
-            <h2>Ishlab chiqarish · filiallar bo'yicha</h2>
-            <RouterLink v-if="branchesHref" :to="branchesHref" class="more">filiallar</RouterLink>
+            <h2>{{ $t('workshopAdmin.dashboard.branchesTitle') }}</h2>
+            <RouterLink v-if="branchesHref" :to="branchesHref" class="more">
+              {{ $t('workshopAdmin.dashboard.branchesLink') }}
+            </RouterLink>
           </div>
           <div class="card-b">
             <div
@@ -666,10 +716,21 @@ watch(
                 </div>
                 <div class="mt-2 font-serif text-3xl font-semibold text-ink">
                   {{ activeOrders.filter((order) => order.branch_id === branch.id).length }}
-                  <small class="font-sans text-sm text-ink-muted">buyurtma</small>
+                  <small class="font-sans text-sm text-ink-muted">
+                    {{
+                      $t(
+                        'workshopAdmin.dashboard.orderUnit',
+                        activeOrders.filter((order) => order.branch_id === branch.id).length,
+                      )
+                    }}
+                  </small>
                 </div>
                 <p class="mt-2 font-mono text-[11px] text-ink-muted">
-                  {{ branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address }}
+                  {{
+                    branch.status === 'temporarily_closed'
+                      ? $t('workshopAdmin.dashboard.branchClosed')
+                      : branch.address
+                  }}
                 </p>
               </component>
             </div>
@@ -678,8 +739,10 @@ watch(
 
         <div v-if="canInventory" class="card">
           <div class="card-h">
-            <h2>Kam qolgan materiallar</h2>
-            <RouterLink v-if="inventoryHref" :to="inventoryHref" class="more">ombor</RouterLink>
+            <h2>{{ $t('workshopAdmin.dashboard.kpiLowStock') }}</h2>
+            <RouterLink v-if="inventoryHref" :to="inventoryHref" class="more">
+              {{ $t('workshopAdmin.dashboard.inventoryLink') }}
+            </RouterLink>
           </div>
           <div class="card-b">
             <div v-if="workshop.inventoryLoading" class="grid gap-3">
@@ -688,12 +751,12 @@ watch(
               <span class="sk-line"></span>
             </div>
             <div v-else-if="workshop.inventoryError" class="st-error !py-8">
-              <h3>Zaxira ma'lumotini yuklab bo'lmadi</h3>
+              <h3>{{ $t('workshopAdmin.dashboard.stockErrorTitle') }}</h3>
               <p>{{ traceLine(workshop.inventoryTraceId) }}</p>
             </div>
             <div v-else-if="lowStock.length === 0" class="st-empty !py-8">
-              <h3>Kam qolgan material yo'q</h3>
-              <p>Tanlangan filial materiallari me'yorda.</p>
+              <h3>{{ $t('workshopAdmin.dashboard.lowStockEmptyTitle') }}</h3>
+              <p>{{ $t('workshopAdmin.dashboard.lowStockEmptyBody') }}</p>
             </div>
             <div v-else class="grid gap-x-8 md:grid-cols-2">
               <div v-for="item in lowStock" :key="item.id" class="row-item">
@@ -711,9 +774,13 @@ watch(
                   </div>
                   <div class="min-w-0">
                     <div class="nm truncate">{{ item.material.name }}</div>
-                    <small class="text-ink-muted"
-                      >min {{ formatStockQuantity(item.min_stock, item.display_unit) }}</small
-                    >
+                    <small class="text-ink-muted">
+                      {{
+                        $t('workshopAdmin.dashboard.lowStockMin', {
+                          value: formatStockQuantity(item.min_stock, item.display_unit),
+                        })
+                      }}
+                    </small>
                   </div>
                 </div>
                 <!-- A negative balance is an unrecorded arrival, not a low
@@ -729,24 +796,26 @@ watch(
         <div v-if="canOrders" class="card">
           <div class="card-h">
             <div>
-              <h2>So'nggi buyurtmalar</h2>
-              <div class="sub">Oxirgi yozuvlar · {{ recentOrders.length }} ta</div>
+              <h2>{{ $t('workshopAdmin.dashboard.recentTitle') }}</h2>
+              <div class="sub">
+                {{ $t('workshopAdmin.dashboard.recentMeta', { n: recentOrders.length }) }}
+              </div>
             </div>
-            <RouterLink v-if="ordersHref" :to="ordersHref" class="more"
-              >barchasini ko'rish</RouterLink
-            >
+            <RouterLink v-if="ordersHref" :to="ordersHref" class="more">
+              {{ $t('workshopAdmin.dashboard.recentAll') }}
+            </RouterLink>
           </div>
           <div class="card-b !p-0">
             <div class="table-wrap">
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th>Buyurtma</th>
-                    <th>Mijoz</th>
-                    <th>Filial</th>
-                    <th>Holat</th>
-                    <th>Qachon</th>
-                    <th class="right">Summa</th>
+                    <th>{{ $t('workshopAdmin.dashboard.colOrder') }}</th>
+                    <th>{{ $t('workshopAdmin.dashboard.colClient') }}</th>
+                    <th>{{ $t('workshopAdmin.dashboard.colBranch') }}</th>
+                    <th>{{ $t('workshopAdmin.dashboard.colStatus') }}</th>
+                    <th>{{ $t('workshopAdmin.dashboard.colWhen') }}</th>
+                    <th class="right">{{ $t('workshopAdmin.dashboard.colTotal') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -774,19 +843,19 @@ watch(
                       <td>{{ order.branch_name }}</td>
                       <td>
                         <span :class="orderPillClass(order.status)">
-                          <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+                          <span class="pd"></span>{{ workshopStatusUz(order.status) }}
                         </span>
                       </td>
                       <td class="text-ink-soft" :title="formatDate(order.created_at)">
-                        {{ formatRelativeUz(order.created_at) }}
+                        {{ formatRelative(order.created_at) }}
                       </td>
                       <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
                     </tr>
                     <tr v-if="recentOrders.length === 0">
                       <td colspan="6">
                         <div class="st-empty !border-0 !py-8">
-                          <h3>Buyurtma yo'q</h3>
-                          <p>Mijozlar buyurtma bergach shu yerda chiqadi.</p>
+                          <h3>{{ $t('workshopAdmin.dashboard.recentEmptyTitle') }}</h3>
+                          <p>{{ $t('workshopAdmin.dashboard.recentEmptyBody') }}</p>
                         </div>
                       </td>
                     </tr>

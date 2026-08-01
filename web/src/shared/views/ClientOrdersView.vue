@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import {
@@ -18,21 +19,36 @@ import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatTiyin } from '@/shared/formatters'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
+const { t } = useI18n()
 const orders = useOrdersStore()
 const rolePath = useRolePath()
 const router = useRouter()
 const status = ref('all')
 const search = ref('')
 const orderPendingCancel = ref<OrderSummary | null>(null)
-const cancelReason = ref('Mijoz buyurtmani tasdiqlashdan oldin bekor qildi')
+const cancelReason = ref(t('client.orders.cancelReasonDefault'))
 const actionError = ref<string | null>(null)
 
-const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha buyurtmalar' },
-  { value: 'active', label: 'Faol', meta: 'ish jarayonida' },
-  { value: 'completed', label: 'Tugatilgan', meta: 'topshirilgan' },
-  { value: 'cancelled', label: 'Bekor qilingan', meta: "to'xtatilgan" },
-]
+// Computed, not a plain array: the option labels are copy and must follow a
+// language switch made while the page is open.
+const statusOptions = computed(() => [
+  { value: 'all', label: t('client.orders.statusAll'), meta: t('client.orders.statusAllMeta') },
+  {
+    value: 'active',
+    label: t('client.orders.statusActive'),
+    meta: t('client.orders.statusActiveMeta'),
+  },
+  {
+    value: 'completed',
+    label: t('client.orders.statusCompleted'),
+    meta: t('client.orders.statusCompletedMeta'),
+  },
+  {
+    value: 'cancelled',
+    label: t('client.orders.statusCancelled'),
+    meta: t('client.orders.statusCancelledMeta'),
+  },
+])
 
 const visibleOrders = computed(() => orders.clientOrders)
 
@@ -68,10 +84,10 @@ watch([status, search], () => {
 })
 
 function nextAction(order: OrderSummary) {
-  if (order.status === 'new') return 'Bekor qilish'
-  if (order.status === 'ready') return 'Olishga tayyor'
-  if (order.status === 'completed') return 'Tafsilot'
-  return 'Kuzatish'
+  if (order.status === 'new') return t('client.common.cancel')
+  if (order.status === 'ready') return t('client.common.readyForPickup')
+  if (order.status === 'completed') return t('client.common.detail')
+  return t('client.common.track')
 }
 
 function openOrder(order: OrderSummary) {
@@ -79,7 +95,7 @@ function openOrder(order: OrderSummary) {
 }
 
 function requestCancel(order: OrderSummary) {
-  cancelReason.value = 'Mijoz buyurtmani tasdiqlashdan oldin bekor qildi'
+  cancelReason.value = t('client.orders.cancelReasonDefault')
   actionError.value = null
   orderPendingCancel.value = order
 }
@@ -107,7 +123,7 @@ onMounted(() => {
   <section>
     <div class="client-page-head">
       <div>
-        <h1>Mening buyurtmalarim</h1>
+        <h1>{{ $t('client.orders.title') }}</h1>
       </div>
       <!-- The onboarding empty state carries a centred CTA, so this would be
            redundant there; it shows once the user has orders (or has merely
@@ -117,18 +133,22 @@ onMounted(() => {
         :to="rolePath('/c/cutting/drafts')"
         class="mp-button mp-button-primary"
       >
-        + Yangi buyurtma
+        {{ $t('client.common.newOrder') }}
       </RouterLink>
     </div>
 
     <div class="mb-5 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
-      <FormSelect v-model="status" label="Holat" :options="statusOptions" />
+      <FormSelect v-model="status" :label="$t('client.common.status')" :options="statusOptions" />
       <label class="grid gap-1 text-sm font-bold text-ink">
-        Qidirish
+        {{ $t('client.common.search') }}
         <!-- Names both fields the search reaches rather than showing one sample
              number: the drawing name is the card's headline, and an example of
              only one of the two accepted inputs hides the other. -->
-        <input v-model="search" class="mp-input" placeholder="Buyurtma raqami yoki chizma nomi" />
+        <input
+          v-model="search"
+          class="mp-input"
+          :placeholder="$t('client.orders.searchPlaceholder')"
+        />
       </label>
     </div>
 
@@ -142,24 +162,24 @@ onMounted(() => {
 
     <ClientErrorState
       v-else-if="orders.error"
-      title="Buyurtmalarni yuklab bo'lmadi"
+      :title="$t('client.orders.loadFailed')"
       :trace-id="orders.traceId"
       @retry="reloadOrders"
     />
 
     <div v-else-if="visibleOrders.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="box" /></div>
-      <h3>Buyurtma yo'q</h3>
+      <h3>{{ $t('client.orders.emptyTitle') }}</h3>
       <template v-if="noFilter">
-        <p>Hali buyurtma bermagansiz — chizmadan boshlang.</p>
+        <p>{{ $t('client.orders.emptyBody') }}</p>
         <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
-          + Yangi buyurtma
+          {{ $t('client.common.newOrder') }}
         </RouterLink>
       </template>
       <template v-else>
-        <p>Bu so'rovga mos buyurtma topilmadi.</p>
+        <p>{{ $t('client.orders.emptyFilteredBody') }}</p>
         <button type="button" class="mp-button mp-button-outline mt-4" @click="clearFilters">
-          Filtrlarni tozalash
+          {{ $t('client.orders.clearFilters') }}
         </button>
       </template>
     </div>
@@ -193,22 +213,24 @@ onMounted(() => {
                 class="font-serif text-lg font-semibold"
                 :class="order.draft_name ? 'text-ink' : 'text-ink-muted'"
               >
-                {{ order.draft_name || 'Nomsiz chizma' }}
+                {{ order.draft_name || $t('client.draft.untitled') }}
               </h2>
               <!-- Staff-minted drawings stay hidden from the client's own list
                    until the order exists, so this is the first time they see it. -->
               <span v-if="order.created_via_workshop" class="client-pill client-pill-info">
-                Ustaxona tuzgan
+                {{ $t('client.orders.createdByWorkshop') }}
               </span>
             </div>
             <p class="mt-1 text-sm text-ink-soft">
-              <b class="font-mono font-semibold text-ink">{{ order.item_count }}</b> detal ·
-              <b class="font-mono font-semibold text-ink">{{ order.planned_panels || '—' }}</b> list
-              · <span class="font-mono">{{ formatFullDate(order.created_at) }}</span>
+              <b class="font-mono font-semibold text-ink">{{ order.item_count }}</b>
+              {{ $t('client.unit.part', order.item_count) }} ·
+              <b class="font-mono font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
+              {{ $t('client.unit.sheet', order.planned_panels) }} ·
+              <span class="font-mono">{{ formatFullDate(order.created_at) }}</span>
             </p>
           </div>
           <span :class="clientStatusPillClass(order.status)">
-            {{ clientStatusLabel[order.status] }}
+            {{ clientStatusLabel(order.status) }}
           </span>
         </div>
 
@@ -245,17 +267,17 @@ onMounted(() => {
         :disabled="orders.loading"
         @click="loadMoreOrders"
       >
-        Yana ko'rsatish
+        {{ $t('client.orders.loadMore') }}
       </button>
     </div>
 
     <ConfirmDialog
       :open="Boolean(orderPendingCancel)"
-      title="Buyurtmani bekor qilish"
-      message="Buyurtma bekor qilinadi. Bu amal qaytarilmaydi."
-      confirm-label="Bekor qilish"
-      cancel-label="Orqaga"
-      busy-label="Bajarilmoqda"
+      :title="$t('client.orders.cancelTitle')"
+      :message="$t('client.orders.cancelMessage')"
+      :confirm-label="$t('client.common.cancel')"
+      :cancel-label="$t('client.common.back')"
+      :busy-label="$t('client.common.busy')"
       danger
       :busy="orders.actionLoading"
       :confirm-disabled="cancelReason.trim().length === 0"
@@ -263,7 +285,7 @@ onMounted(() => {
       @confirm="confirmCancel"
     >
       <label class="grid gap-1 text-sm font-bold text-ink">
-        Sabab
+        {{ $t('client.common.reason') }}
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
       <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">

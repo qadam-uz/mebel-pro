@@ -226,7 +226,7 @@ function offcutTransform(offcut: CuttingOffcut) {
     :viewBox="viewBox"
     style="touch-action: pinch-zoom"
     role="img"
-    :aria-label="`List ${panel.panel_index} joylashuvi`"
+    :aria-label="$t('cutting.result.panelAria', { n: panel.panel_index })"
   >
     <rect
       x="0"

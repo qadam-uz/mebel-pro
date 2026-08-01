@@ -80,6 +80,19 @@
     }
   }
 
+  /* Hanken Grotesk has no Cyrillic — Google does not serve a `cyrillic` subset
+     for it at all, only `cyrillic-ext`, which is the archaic block and none of
+     the letters Russian or Uzbek Cyrillic are written with. Left alone, every
+     ru / uz-Cyrl string would drop to system-ui mid-sentence. Manrope is the
+     nearest geometric grotesk that carries both scripts at the weights this
+     design uses (400-800), so Cyrillic locales swap the whole sans family
+     rather than letting the browser mix two fonts inside one word. The Latin UI
+     is untouched: `data-locale` is only ever `ru` or `uz-Cyrl` here. */
+  html[data-locale='ru'],
+  html[data-locale='uz-Cyrl'] {
+    --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
   html,
   body,
   #app {
@@ -3215,6 +3228,70 @@
     border-color: var(--color-accent);
     background: var(--color-accent-soft);
     color: var(--color-accent);
+  }
+
+  /* Sits in a topbar beside the bell, so it wears the bell's transparent-until-
+     hovered treatment rather than the bordered table-row button. Globe plus the
+     language's own two letters: the glyph says "language" to someone who cannot
+     read the row, the letters say which one without opening the menu. */
+  .mp-locale-trigger {
+    position: relative;
+    display: inline-grid;
+    height: 36px;
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--color-ink-strong);
+    font-size: 0.75rem;
+    font-weight: 800;
+    transition:
+      border-color 140ms ease,
+      background 140ms ease,
+      color 140ms ease;
+  }
+
+  /* Same trick as the row `⋯`: the box keeps the topbar's 36px rhythm while the
+     hittable area under it is the 44×44 the UX bar asks for. */
+  .mp-locale-trigger::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    min-width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  .mp-locale-trigger:hover,
+  .mp-locale-trigger[aria-expanded='true'] {
+    border-color: var(--color-hairline-strong);
+    background: var(--color-elevated);
+  }
+
+  .mp-locale-trigger[aria-expanded='true'] {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+
+  .mp-locale-glyph {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .mp-locale-code {
+    letter-spacing: 0.02em;
   }
 
   /* Fixed, and teleported to `<body>` — a row's panel must escape `.table-wrap`,

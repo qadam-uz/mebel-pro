@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { edgeTooNarrow, rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
 import {
@@ -7,6 +8,7 @@ import {
   edgeFields,
   edgeSearchText,
   edgeShortLabel,
+  sideLabels,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
 import {
@@ -49,6 +51,7 @@ const emit = defineEmits<{
 }>()
 
 const cutting = useCuttingStore()
+const { t } = useI18n()
 
 const edgePickerState = ref<Record<EdgeField, CuttingEdgeBand | null>>(blankEdgeState())
 const edgePickerSearch = ref('')
@@ -62,17 +65,13 @@ const addedCatalogEdgeIds = ref<string[]>([])
 const lastPickedEdgeId = ref<string | null>(null)
 const activeEdgeId = ref<string | null>(null)
 
-const sideNames: Record<EdgeField, string> = {
-  edge_top: 'Yuqori',
-  edge_bottom: 'Pastki',
-  edge_left: 'Chap',
-  edge_right: "O'ng",
-}
+// One vocabulary for the four sides, shared with the read-only parts list.
+const sideNames = sideLabels
 
-const edgePatterns: Array<{ key: string; label: string; hint: string; sides: EdgeField[] }> = [
-  { key: 'all', label: '4 tomon', hint: '— joriy kromka bilan', sides: [...edgeFields] },
-  { key: 'none', label: 'Kromkasiz', hint: '— joriy kromka bilan', sides: [] },
-]
+const edgePatterns = computed<Array<{ key: string; label: string; sides: EdgeField[] }>>(() => [
+  { key: 'all', label: t('cutting.edge.patternAll'), sides: [...edgeFields] },
+  { key: 'none', label: t('cutting.edge.patternNone'), sides: [] },
+])
 
 function blankEdgeState(): Record<EdgeField, CuttingEdgeBand | null> {
   return { edge_top: null, edge_bottom: null, edge_left: null, edge_right: null }
@@ -148,7 +147,10 @@ function panelThicknessForPart() {
 function narrowWarning(material: { edge_width_mm: number | null } | null | undefined) {
   const panelThickness = panelThicknessForPart()
   if (!material || panelThickness == null || !edgeTooNarrow(panelThickness, material)) return null
-  return `Lenta kengligi (${material.edge_width_mm} mm) list qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
+  return t('cutting.edge.narrowWarning', {
+    width: material.edge_width_mm,
+    thickness: panelThickness,
+  })
 }
 
 function sideClass(side: EdgeField) {
@@ -207,10 +209,10 @@ function orderedTapeIds() {
 }
 
 function originMeta(materialId: string, count: number) {
-  if (count > 0) return `Shu detalda ${count} tomonga`
-  if (props.groupEdgeIds.includes(materialId)) return 'Shu guruhda ishlatilgan'
-  if (props.otherGroupEdgeIds.includes(materialId)) return 'Chizmaning boshqa guruhida'
-  return 'Yangi'
+  if (count > 0) return t('cutting.edge.usedOnSides', { n: count }, count)
+  if (props.groupEdgeIds.includes(materialId)) return t('cutting.edge.usedInGroup')
+  if (props.otherGroupEdgeIds.includes(materialId)) return t('cutting.edge.usedInOtherGroup')
+  return t('cutting.edge.new')
 }
 
 const tapeEntries = computed(() => {
@@ -224,8 +226,9 @@ const tapeEntries = computed(() => {
     const number = preview.get(key) ?? registryAssignments.value.get(key) ?? 1
     const count = counts.get(materialId) ?? 0
     const tentative = !visibleRegistryAssignments.value.has(key)
+    const isNew = t('cutting.edge.new')
     const meta = [originMeta(materialId, count)]
-    if (tentative && meta[0] !== 'Yangi') meta.push('Yangi')
+    if (tentative && meta[0] !== isNew) meta.push(isNew)
     return {
       key,
       materialId,
@@ -262,19 +265,17 @@ function badgeStyle(entry: { color: EdgeRegistryColorStyle }) {
 }
 
 function tentativeTitle(entry: { tentative: boolean } | null | undefined) {
-  return entry?.tentative
-    ? "Bu kromka chizmada hali ishlatilmagan — qo'llangach shu raqam va rangni oladi."
-    : undefined
+  return entry?.tentative ? t('cutting.edge.tentativeTitle') : undefined
 }
 
 function sideAria(side: EdgeField) {
   const edge = edgePickerState.value[side]
   const active = activeEdgeId.value
+  const named = { side: sideNames[side] }
   if (edge?.material_id && edge.material_id === active)
-    return `${sideNames[side]} tomon — joriy kromka bor, bosib olib tashlang`
-  if (edge?.material_id)
-    return `${sideNames[side]} tomon — boshqa kromka bor, bosib joriy kromkaga almashtiring`
-  return `${sideNames[side]} tomon — joriy kromkani qo'shing`
+    return t('cutting.edge.sideAriaCurrent', named)
+  if (edge?.material_id) return t('cutting.edge.sideAriaOther', named)
+  return t('cutting.edge.sideAriaEmpty', named)
 }
 
 const edgeThicknesses = computed(() =>
@@ -320,13 +321,13 @@ const catalogOnlyAddedHint = computed(
     catalogFilteredEdges.value.length > 0,
 )
 const catalogPanelName = computed(
-  () => materialById(props.part?.material_id)?.name ?? "Material yo'q",
+  () => materialById(props.part?.material_id)?.name ?? t('cutting.material.none'),
 )
 const edgePickerActiveSides = computed(() => bandedEdgeFields(edgePickerState.value))
 const edgePickerPatternKey = computed(() => {
   const active = edgePickerActiveSides.value
   return (
-    edgePatterns.find(
+    edgePatterns.value.find(
       (pattern) =>
         pattern.sides.length === active.length &&
         pattern.sides.every((side) => active.includes(side)),
@@ -352,12 +353,15 @@ const edgePickerBranchNote = computed(() => {
     }
   }
   if (!missing.size) return null
-  return `${props.preferredBranchName} filialida ${[...missing.values()].join(' · ')} hozir mavjud emas. Boshqa kromka tanlang.`
+  return t('cutting.edge.branchNote', {
+    branch: props.preferredBranchName,
+    materials: [...missing.values()].join(' · '),
+  })
 })
 
 function applyEdgePattern(key: string) {
   if (!props.part) return
-  const pattern = edgePatterns.find((item) => item.key === key)
+  const pattern = edgePatterns.value.find((item) => item.key === key)
   if (!pattern) return
   if (pattern.sides.length === 0) {
     edgePickerState.value = blankEdgeState()
@@ -528,18 +532,18 @@ onBeforeUnmount(() => {
         <h3
           id="edge-picker-title"
           class="min-w-0 truncate"
-          :title="showTapeList ? 'Yana kromka qo\'shish' : (titleSuffix ?? partDisplayName)"
+          :title="showTapeList ? $t('cutting.edge.addMoreTitle') : (titleSuffix ?? partDisplayName)"
         >
           {{
             showTapeList
-              ? "Yana kromka qo'shish"
-              : `Kromka yopishtirish — ${titleSuffix ?? partDisplayName}`
+              ? $t('cutting.edge.addMoreTitle')
+              : $t('cutting.edge.applyTitle', { target: titleSuffix ?? partDisplayName })
           }}
         </h3>
         <button
           type="button"
           class="client-edge-close"
-          aria-label="Kromka oynasini yopish"
+          :aria-label="$t('cutting.edge.closeAria')"
           @click="emit('close')"
         >
           ×
@@ -551,7 +555,7 @@ onBeforeUnmount(() => {
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
             <div
               class="mx-auto grid w-full max-w-[314px] flex-1 grid-cols-[62px_minmax(0,1fr)_62px] grid-rows-[44px_92px_44px] items-stretch gap-1.5 sm:grid-rows-[38px_92px_38px]"
-              aria-label="Kromka tomonlari"
+              :aria-label="$t('cutting.edge.sidesAria')"
             >
               <span></span>
               <button
@@ -707,11 +711,11 @@ onBeforeUnmount(() => {
 
             <div
               class="grid shrink-0 grid-cols-2 gap-2 sm:w-28 sm:grid-cols-1"
-              aria-label="Kromka tomoni shablonlari"
+              :aria-label="$t('cutting.edge.patternsAria')"
             >
-              <span class="col-span-2 text-xs font-medium text-ink-muted sm:col-span-1"
-                >Shablonlar</span
-              >
+              <span class="col-span-2 text-xs font-medium text-ink-muted sm:col-span-1">{{
+                $t('cutting.edge.patterns')
+              }}</span>
               <button
                 v-for="pattern in edgePatterns"
                 :key="pattern.key"
@@ -748,13 +752,13 @@ onBeforeUnmount(() => {
           </div>
 
           <p v-if="!activeEdgeId" class="text-xs text-ink-muted">
-            Avval kromka tanlang — keyin tomonlarni bosing.
+            {{ $t('cutting.edge.pickFirst') }}
           </p>
 
-          <div class="grid gap-2" aria-label="Kromkalar">
-            <h4 class="text-xs font-semibold text-ink-soft">Chizmadagi kromkalar</h4>
+          <div class="grid gap-2" :aria-label="$t('cutting.edge.listAria')">
+            <h4 class="text-xs font-semibold text-ink-soft">{{ $t('cutting.edge.inDrawing') }}</h4>
             <p v-if="tapeEntries.length === 0" class="text-xs text-ink-muted">
-              Chizmada hali kromka yo'q.
+              {{ $t('cutting.edge.noneInDrawing') }}
             </p>
             <!-- The tape list scrolls on its own (~3 rows) so the part diagram,
                  `Shablonlar` and the footer never scroll away (QAD-152). The
@@ -790,14 +794,14 @@ onBeforeUnmount(() => {
                       v-if="activeEdgeId === entry.materialId"
                       class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
                     >
-                      Joriy
+                      {{ $t('cutting.edge.current') }}
                     </span>
                     <span
                       v-if="narrowWarning(entry.material)"
                       class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
                       :title="narrowWarning(entry.material) ?? undefined"
                     >
-                      Qirradan tor
+                      {{ $t('cutting.edge.tooNarrow') }}
                     </span>
                   </span>
                   <span class="font-mono text-[11.5px] text-ink-muted">
@@ -818,11 +822,15 @@ onBeforeUnmount(() => {
             v-model="edgePickerSearch"
             class="mp-input"
             type="search"
-            placeholder="Kromka nomi yoki dekor kodi"
-            aria-label="Kromka qidirish"
+            :placeholder="$t('cutting.edge.searchPlaceholder')"
+            :aria-label="$t('cutting.edge.searchAria')"
           />
 
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Qalinlik filtri">
+          <div
+            class="flex flex-wrap gap-2"
+            role="group"
+            :aria-label="$t('cutting.edge.thicknessFilterAria')"
+          >
             <button
               type="button"
               class="rounded-full border px-3 py-1.5 text-xs font-bold transition"
@@ -833,7 +841,7 @@ onBeforeUnmount(() => {
               "
               @click="edgePickerThickness = 'all'"
             >
-              Hammasi
+              {{ $t('cutting.edge.allThickness') }}
             </button>
             <button
               v-for="thickness in edgeThicknesses"
@@ -853,8 +861,10 @@ onBeforeUnmount(() => {
 
           <section v-if="catalogMatchedEdges.length" class="grid gap-2">
             <h4 class="text-xs font-semibold text-ink-soft">
-              Shu listga mos
-              <span class="font-normal text-ink-muted">· {{ catalogPanelName }} bo'yicha</span>
+              {{ $t('cutting.edge.matchedTitle') }}
+              <span class="font-normal text-ink-muted"
+                >· {{ $t('cutting.edge.matchedBy', { panel: catalogPanelName }) }}</span
+              >
             </h4>
             <button
               v-for="{ material, rank } in catalogMatchedEdges"
@@ -881,13 +891,13 @@ onBeforeUnmount(() => {
               <span
                 class="shrink-0 rounded-full border border-hairline bg-sunk px-2 py-0.5 text-[10.5px] font-bold text-accent"
               >
-                {{ rank === 0 ? 'dekor mos' : 'rang mos' }}
+                {{ rank === 0 ? $t('cutting.edge.matchDecor') : $t('cutting.edge.matchColor') }}
               </span>
             </button>
           </section>
 
           <section v-if="catalogOtherEdges.length" class="grid gap-2">
-            <h4 class="text-xs font-semibold text-ink-soft">Boshqa kromkalar</h4>
+            <h4 class="text-xs font-semibold text-ink-soft">{{ $t('cutting.edge.others') }}</h4>
             <button
               v-for="{ material } in catalogOtherEdges"
               :key="material.id"
@@ -914,10 +924,10 @@ onBeforeUnmount(() => {
           </section>
 
           <p v-if="catalogOnlyAddedHint" class="text-xs text-ink-muted">
-            Bu kromka allaqachon chizmada — 1-ro'yxatdan tanlang.
+            {{ $t('cutting.edge.alreadyInDrawing') }}
           </p>
           <p v-else-if="edgePickerMaterials.length === 0" class="text-xs text-ink-muted">
-            Mos kromka topilmadi. Qidiruv yoki qalinlikni o'zgartiring.
+            {{ $t('cutting.edge.noMatches') }}
           </p>
         </template>
       </div>
@@ -932,7 +942,7 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-outline mr-auto"
           @click="openCatalogForAdd"
         >
-          + Yana kromka
+          + {{ $t('cutting.edge.addMore') }}
         </button>
         <button
           v-else
@@ -940,10 +950,10 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-outline mr-auto"
           @click="showTapeList = false"
         >
-          ← Orqaga
+          ← {{ $t('cutting.action.back') }}
         </button>
         <button type="button" class="mp-button mp-button-primary" @click="emit('close')">
-          Tayyor
+          {{ $t('cutting.action.done') }}
         </button>
       </div>
     </section>

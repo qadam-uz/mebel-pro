@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import {
@@ -21,6 +22,7 @@ import { useAuthStore } from '@/shared/stores/auth'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
+const { t } = useI18n()
 const router = useRouter()
 const rolePath = useRolePath()
 const auth = useAuthStore()
@@ -52,7 +54,9 @@ const hiddenDraftCount = computed(() =>
 )
 
 const greetName = computed(() => clientGreetingName(auth.me))
-const heading = computed(() => (greetName.value ? `Salom, ${greetName.value}` : 'Bosh sahifa'))
+const heading = computed(() =>
+  greetName.value ? t('client.home.greeting', { name: greetName.value }) : t('client.home.title'),
+)
 const subtitle = computed(() =>
   clientHomeSubtitle({
     ready: readyOrders.value.length,
@@ -106,9 +110,9 @@ function draftPanels(draft: CuttingDraft) {
 const draftTitle = draftDisplayName
 
 function currentAction(order: OrderSummary) {
-  if (order.status === 'new') return 'Tafsilot'
-  if (order.status === 'ready') return 'Olib ketish'
-  return 'Kuzatish'
+  if (order.status === 'new') return t('client.common.detail')
+  if (order.status === 'ready') return t('client.common.pickUp')
+  return t('client.common.track')
 }
 
 onMounted(() => {
@@ -134,7 +138,7 @@ onMounted(() => {
         class="mp-button mp-button-primary"
         @click="newCutting"
       >
-        <Icon name="plus" class="size-[18px]" /> Yangi kesim chizmasi
+        <Icon name="plus" class="size-[18px]" /> {{ $t('client.home.newCutting') }}
       </button>
     </div>
 
@@ -143,7 +147,7 @@ onMounted(() => {
       class="grid grid-cols-3 gap-px overflow-hidden rounded-[14px] bg-hairline"
       aria-live="polite"
     >
-      <span class="sr-only">Yuklanmoqda…</span>
+      <span class="sr-only">{{ $t('client.common.loading') }}</span>
       <div
         v-for="item in 3"
         :key="item"
@@ -159,20 +163,17 @@ onMounted(() => {
 
     <ClientErrorState
       v-else-if="pageError"
-      title="Bosh sahifani yuklab bo'lmadi"
+      :title="$t('client.home.loadFailed')"
       :trace-id="traceId"
       @retry="reloadHome"
     />
 
     <div v-else-if="isFirstRun" class="client-empty">
       <div class="client-empty-icon"><Icon name="scissors" /></div>
-      <h3>Birinchi chizmangizdan boshlang</h3>
-      <p>
-        Detal o'lchamlarini kiriting — tizim panellarga optimal joylashtiradi va ustaxona narxini
-        hisoblaydi.
-      </p>
+      <h3>{{ $t('client.home.firstRunTitle') }}</h3>
+      <p>{{ $t('client.home.firstRunBody') }}</p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-        + Yangi chizma
+        {{ $t('client.common.newDraft') }}
       </button>
     </div>
 
@@ -188,7 +189,7 @@ onMounted(() => {
         </span>
         <div class="min-w-0 flex-1">
           <div class="text-[11px] font-extrabold uppercase tracking-wider text-accent">
-            Olishga tayyor
+            {{ $t('client.home.readyTitle') }}
           </div>
           <div class="mt-0.5 font-mono text-lg font-bold text-ink">
             {{ primaryReady.order_number }}
@@ -196,13 +197,15 @@ onMounted(() => {
           <div class="mt-0.5 text-sm text-ink-muted">
             {{ primaryReady.branch_name }}
             <template v-if="readyOrders.length > 1">
-              · yana {{ readyOrders.length - 1 }} ta tayyor</template
+              · {{ $t('client.home.readyMore', readyOrders.length - 1) }}</template
             >
           </div>
         </div>
         <div class="hidden self-stretch border-l border-accent-tint sm:block"></div>
         <div class="sm:text-right">
-          <div class="text-[11px] font-bold text-ink-muted">Jami narx</div>
+          <div class="text-[11px] font-bold text-ink-muted">
+            {{ $t('client.home.totalPrice') }}
+          </div>
           <div class="mt-0.5 font-mono text-base font-bold text-ink">
             {{ formatTiyin(primaryReady.total_tiyin) }}
           </div>
@@ -212,7 +215,7 @@ onMounted(() => {
           class="mp-button mp-button-primary"
           @click="openOrder(primaryReady.id)"
         >
-          <Icon name="box" class="size-[18px]" /> Olib ketish
+          <Icon name="box" class="size-[18px]" /> {{ $t('client.common.pickUp') }}
         </button>
       </div>
 
@@ -232,7 +235,9 @@ onMounted(() => {
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               activeOrders.length
             }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">Faol buyurtma</span>
+            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
+              $t('client.home.statActiveOrders')
+            }}</span>
           </span>
         </RouterLink>
         <RouterLink
@@ -248,7 +253,9 @@ onMounted(() => {
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               productionCount
             }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">Ishlab chiqarishda</span>
+            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
+              $t('client.home.statProduction')
+            }}</span>
           </span>
         </RouterLink>
         <RouterLink
@@ -264,28 +271,30 @@ onMounted(() => {
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               cutting.drafts.length
             }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">Saqlangan chizma</span>
+            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
+              $t('client.home.statDrafts')
+            }}</span>
           </span>
         </RouterLink>
       </div>
 
       <section class="mb-6">
         <div class="client-section-title">
-          <h2>Faol buyurtmalar</h2>
+          <h2>{{ $t('client.home.activeOrders') }}</h2>
           <RouterLink
             :to="rolePath('/c/orders')"
             class="text-sm font-bold text-ink-soft no-underline hover:text-ink"
           >
-            Barchasi →
+            {{ $t('client.common.viewAll') }} →
           </RouterLink>
         </div>
 
         <div v-if="activeOrders.length === 0" class="client-empty">
           <div class="client-empty-icon"><Icon name="box" /></div>
-          <h3>Faol buyurtma yo'q</h3>
-          <p>Saqlangan chizmangizdan buyurtma bering yoki yangisidan boshlang.</p>
+          <h3>{{ $t('client.home.emptyOrdersTitle') }}</h3>
+          <p>{{ $t('client.home.emptyOrdersBody') }}</p>
           <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            + Yangi chizma
+            {{ $t('client.common.newDraft') }}
           </button>
         </div>
 
@@ -318,18 +327,19 @@ onMounted(() => {
               </div>
               <div class="mt-1.5 text-xs text-ink-muted">
                 <template v-if="clientNextPhaseLabel(order.status)"
-                  >Keyingi:
+                  >{{ $t('client.home.nextPhase') }}
                   <b class="text-ink">{{ clientNextPhaseLabel(order.status) }}</b></template
                 >
                 <template v-else
-                  >Joriy: <b class="text-ink">{{ clientStatusLabel[order.status] }}</b></template
+                  >{{ $t('client.home.currentPhase') }}
+                  <b class="text-ink">{{ clientStatusLabel(order.status) }}</b></template
                 >
               </div>
             </div>
 
             <div class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4">
               <span :class="clientStatusPillClass(order.status)">
-                {{ clientStatusLabel[order.status] }}
+                {{ clientStatusLabel(order.status) }}
               </span>
               <span class="font-mono text-sm font-bold text-ink">{{
                 formatTiyin(order.total_tiyin)
@@ -348,24 +358,23 @@ onMounted(() => {
 
       <section>
         <div class="client-section-title">
-          <h2>Chizmalar</h2>
+          <h2>{{ $t('client.home.drafts') }}</h2>
           <RouterLink
             :to="rolePath('/c/cutting/drafts')"
             class="text-sm font-bold text-ink-soft no-underline hover:text-ink"
           >
-            Barcha chizmalar<template v-if="cutting.drafts.length">
-              ({{ cutting.drafts.length }})</template
-            >
+            {{ $t('client.home.allDrafts')
+            }}<template v-if="cutting.drafts.length"> ({{ cutting.drafts.length }})</template>
             →
           </RouterLink>
         </div>
 
         <div v-if="recentDrafts.length === 0" class="client-empty">
           <div class="client-empty-icon"><Icon name="scissors" /></div>
-          <h3>Saqlangan chizma yo'q</h3>
-          <p>Yangisini boshlang.</p>
+          <h3>{{ $t('client.home.emptyDraftsTitle') }}</h3>
+          <p>{{ $t('client.home.emptyDraftsBody') }}</p>
           <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            + Yangi chizma
+            {{ $t('client.common.newDraft') }}
           </button>
         </div>
 
@@ -391,10 +400,12 @@ onMounted(() => {
               </div>
               <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
                 <span
-                  ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
+                  ><b class="font-mono text-ink">{{ draftParts(draft) }}</b>
+                  {{ $t('client.unit.part', draftParts(draft)) }}</span
                 >
                 <span
-                  ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> list</span
+                  ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b>
+                  {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
                 >
                 <span>{{ formatRelativeDate(draft.updated_at) }}</span>
               </div>
@@ -404,7 +415,7 @@ onMounted(() => {
               class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
               @click.stop
             >
-              Davom etish →
+              {{ $t('client.common.continue') }} →
             </RouterLink>
             <span class="shrink-0 font-bold text-accent sm:hidden" aria-hidden="true">→</span>
           </article>
@@ -416,7 +427,7 @@ onMounted(() => {
             :to="rolePath('/c/cutting/drafts')"
             class="flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-dashed border-hairline-strong p-3 text-sm font-bold text-ink-soft no-underline transition hover:border-accent hover:bg-accent-soft hover:text-accent focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
           >
-            Yana {{ hiddenDraftCount }} ta saqlangan chizma
+            {{ $t('client.home.moreDrafts', hiddenDraftCount) }}
             <span aria-hidden="true">→</span>
           </RouterLink>
         </div>

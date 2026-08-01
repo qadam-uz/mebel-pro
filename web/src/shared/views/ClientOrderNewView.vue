@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -8,7 +9,6 @@ import {
   formatPhone,
   isUzPhone,
   normalizeUzPhone,
-  pluralUz,
 } from '@/shared/app/clientUi'
 import {
   buildBillRows,
@@ -27,6 +27,7 @@ import { useAuthStore } from '@/shared/stores/auth'
 import { metres, useCuttingStore } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
@@ -121,10 +122,7 @@ async function loadQuote() {
     quote.value = await orders.quoteForDraft(draftId.value, branchId.value)
   } catch {
     quote.value = null
-    localError.value = clientErrorLabel(
-      orders.error,
-      "Tanlangan filial uchun narxni hisoblab bo'lmadi.",
-    )
+    localError.value = clientErrorLabel(orders.error, t('client.orderNew.quoteError'))
   } finally {
     quoteLoading.value = false
   }
@@ -143,10 +141,10 @@ async function placeOrder() {
       contact_name: contactName.value.trim(),
       contact_phone: normalizeUzPhone(contactPhone.value),
     })
-    toast.success('Buyurtma joylandi.')
+    toast.success(t('client.orderNew.placedToast'))
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
-    localError.value = clientErrorLabel(orders.error, 'Buyurtma yuborilmadi.')
+    localError.value = clientErrorLabel(orders.error, t('client.orderNew.placeFailed'))
   } finally {
     placing.value = false
   }
@@ -159,17 +157,17 @@ onMounted(async () => {
 
   const boundOrderId = cutting.currentDraft?.results.find((result) => result.order_id)?.order_id
   if (boundOrderId) {
-    toast.warn('Bu chizma allaqachon buyurtma qilingan.')
+    toast.warn(t('client.orderNew.alreadyOrdered'))
     await router.replace(rolePath(`/c/orders/${boundOrderId}`))
     return
   }
   if (cutting.currentDraft && !chosenResult.value) {
-    toast.warn('Avval chizmani optimallashtiring va natijani tanlang.')
+    toast.warn(t('client.orderNew.optimizeFirst'))
     await router.replace(rolePath(`/c/cutting/${draftId.value}`))
     return
   }
   if (!branchId.value) {
-    toast.warn('Avval chizma uchun filialni tanlang.')
+    toast.warn(t('client.orderNew.branchFirst'))
     await router.replace(rolePath(`/c/cutting/${draftId.value}`))
     return
   }
@@ -181,13 +179,13 @@ onMounted(async () => {
   <section>
     <RouterLink :to="rolePath(`/c/cutting/${draftId}/result`)" class="client-back">
       <span aria-hidden="true">←</span>
-      Natijaga qaytish
+      {{ $t('client.orderNew.back') }}
     </RouterLink>
 
     <div class="client-page-head">
       <div>
-        <h1>Buyurtmani tasdiqlash</h1>
-        <p class="sub">Filial, aloqa ma'lumotlari va yakuniy narxni tekshiring.</p>
+        <h1>{{ $t('client.orderNew.title') }}</h1>
+        <p class="sub">{{ $t('client.orderNew.subtitle') }}</p>
       </div>
     </div>
 
@@ -198,8 +196,8 @@ onMounted(async () => {
 
     <section v-else-if="cutting.error" class="client-error">
       <div class="client-error-icon">!</div>
-      <h3>Chizma yuklanmadi</h3>
-      <p>Buyurtma berish uchun chizma ma'lumotlarini qayta yuklash kerak.</p>
+      <h3>{{ $t('client.orderNew.draftFailedTitle') }}</h3>
+      <p>{{ $t('client.orderNew.draftFailedBody') }}</p>
       <p class="client-trace">{{ traceLine(cutting.traceId) }}</p>
     </section>
 
@@ -215,9 +213,9 @@ onMounted(async () => {
         <!-- Pickup: read-only static context, not worth a full card (CB: was
              198px of a card for four lines of text). -->
         <div class="grid gap-1.5">
-          <span class="text-xs font-bold uppercase tracking-wide text-ink-muted"
-            >Olib ketish joyi</span
-          >
+          <span class="text-xs font-bold uppercase tracking-wide text-ink-muted">{{
+            $t('client.orderNew.pickupPlace')
+          }}</span>
           <div v-if="quote" class="grid gap-1">
             <div class="font-serif text-lg font-semibold text-ink">{{ quote.branch_name }}</div>
             <div class="font-mono text-xs text-ink-muted">
@@ -225,28 +223,37 @@ onMounted(async () => {
             </div>
           </div>
           <div v-else-if="quoteLoading" class="client-skeleton h-20"></div>
-          <p v-else class="text-sm font-bold text-danger">Filial narxi yuklanmadi.</p>
-          <p class="text-xs text-ink-muted">
-            Bu filial chizma yaratishda tanlangan. Almashtirish uchun
-            <RouterLink
-              :to="rolePath(`/c/cutting/${draftId}`)"
-              class="font-bold text-accent underline"
-              >detallar sahifasiga</RouterLink
-            >
-            qayting.
+          <p v-else class="text-sm font-bold text-danger">
+            {{ $t('client.orderNew.quoteFailed') }}
           </p>
+          <i18n-t
+            keypath="client.orderNew.branchLocked"
+            tag="p"
+            class="text-xs text-ink-muted"
+            scope="global"
+          >
+            <template #link>
+              <RouterLink
+                :to="rolePath(`/c/cutting/${draftId}`)"
+                class="font-bold text-accent underline"
+                >{{ $t('client.orderNew.branchLockedLink') }}</RouterLink
+              >
+            </template>
+          </i18n-t>
         </div>
 
         <section class="client-card">
-          <div class="client-card-h"><h2>Aloqa ma'lumotlari</h2></div>
+          <div class="client-card-h">
+            <h2>{{ $t('client.orderNew.contactTitle') }}</h2>
+          </div>
           <div class="client-card-b">
             <div class="client-banner success">
               <span class="font-mono font-black">i</span>
-              <span>Bu ma'lumot ustaxona siz bilan bog'lanishi uchun ulashiladi.</span>
+              <span>{{ $t('client.orderNew.contactNote') }}</span>
             </div>
             <div class="grid gap-3 md:grid-cols-2">
               <label class="grid gap-1 text-sm font-bold text-ink">
-                Ism
+                {{ $t('client.common.name') }}
                 <input v-model="contactName" class="mp-input" autocomplete="name" />
                 <button
                   v-if="nameDiffers"
@@ -254,22 +261,22 @@ onMounted(async () => {
                   class="w-fit text-xs font-bold text-accent underline"
                   @click="resetField('name')"
                 >
-                  Profildan tiklash
+                  {{ $t('client.orderNew.resetFromProfile') }}
                 </button>
               </label>
               <label class="grid gap-1 text-sm font-bold text-ink">
-                Telefon
+                {{ $t('client.common.phone') }}
                 <PhoneInput v-model="contactPhone" required />
-                <span v-if="contactPhone && !isUzPhone(contactPhone)" class="text-xs text-danger"
-                  >Telefon +998XXXXXXXXX shaklida bo'lishi kerak</span
-                >
+                <span v-if="contactPhone && !isUzPhone(contactPhone)" class="text-xs text-danger">{{
+                  $t('client.orderNew.phoneInvalid')
+                }}</span>
                 <button
                   v-if="phoneDiffers"
                   type="button"
                   class="w-fit text-xs font-bold text-accent underline"
                   @click="resetField('phone')"
                 >
-                  Profildan tiklash
+                  {{ $t('client.orderNew.resetFromProfile') }}
                 </button>
               </label>
             </div>
@@ -280,26 +287,36 @@ onMounted(async () => {
              ever seeing this today. Parts list stays collapsed by default so
              it never competes with step 1's above-the-fold acceptance. -->
         <section class="client-card">
-          <div class="client-card-h"><h2>To'liq xulosa</h2></div>
+          <div class="client-card-h">
+            <h2>{{ $t('client.orderNew.summaryTitle') }}</h2>
+          </div>
           <div class="client-card-b grid gap-3">
             <p class="font-mono text-xs text-ink-muted">
-              Arra kesigi {{ chosenResult.kerf_mm }} mm · Chetki qirqim
-              {{ chosenResult.edge_trim_mm }} mm
+              {{
+                $t('client.orderNew.cuttingParams', {
+                  kerf: chosenResult.kerf_mm,
+                  trim: chosenResult.edge_trim_mm,
+                })
+              }}
             </p>
 
             <details>
               <summary class="cursor-pointer text-sm font-bold text-accent select-none">
-                {{ pluralUz(partRows.length, 'ta detal') }} · ko'rish
+                {{ $t('client.orderNew.partsToggle', partRows.length) }}
               </summary>
               <div class="mt-3 overflow-x-auto rounded-md border border-hairline">
                 <table class="w-full min-w-[560px] border-collapse text-xs">
                   <thead>
                     <tr class="bg-sunk text-left text-ink-muted">
-                      <th class="px-3 py-2 font-bold">Nomi</th>
-                      <th class="px-3 py-2 font-bold">Material</th>
-                      <th class="px-3 py-2 text-right font-bold">O'lcham</th>
-                      <th class="px-3 py-2 text-right font-bold">Soni</th>
-                      <th class="px-3 py-2 font-bold">Kromka</th>
+                      <th class="px-3 py-2 font-bold">{{ $t('client.orderNew.colName') }}</th>
+                      <th class="px-3 py-2 font-bold">{{ $t('client.common.material') }}</th>
+                      <th class="px-3 py-2 text-right font-bold">
+                        {{ $t('client.orderNew.colSize') }}
+                      </th>
+                      <th class="px-3 py-2 text-right font-bold">
+                        {{ $t('client.orderNew.colQuantity') }}
+                      </th>
+                      <th class="px-3 py-2 font-bold">{{ $t('client.orderDetail.edge') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -312,8 +329,8 @@ onMounted(async () => {
                         <span
                           v-if="!row.followGrain"
                           class="ml-1 text-[10px] font-bold text-ink-muted"
-                          title="Burilishi mumkin — tekstura yo'nalishi erkin"
-                          >· burilish</span
+                          :title="$t('client.orderNew.rotationTitle')"
+                          >· {{ $t('client.orderNew.rotation') }}</span
                         >
                       </td>
                       <td class="px-3 py-2 text-ink-soft">{{ row.materialLabel }}</td>
@@ -326,10 +343,7 @@ onMounted(async () => {
               </div>
             </details>
 
-            <p class="text-xs text-ink-soft">
-              Onlayn to'lov yo'q — buyurtmani ustaxona ko'rib chiqib tasdiqlaydi, to'lov filialda
-              amalga oshiriladi; "Yuborildi" bosqichida ekanida uni bekor qilish mumkin.
-            </p>
+            <p class="text-xs text-ink-soft">{{ $t('client.orderNew.paymentNote') }}</p>
           </div>
         </section>
       </div>
@@ -338,25 +352,27 @@ onMounted(async () => {
            the primary CTA -> error/retry, in that order, so the decision and
            the action to make it sit next to each other above the fold. -->
       <aside class="client-card h-fit xl:sticky xl:top-24">
-        <div class="client-card-h"><h2>Xulosa</h2></div>
+        <div class="client-card-h">
+          <h2>{{ $t('client.orderNew.railTitle') }}</h2>
+        </div>
         <div class="client-card-b grid gap-4">
           <div class="grid gap-2 text-sm">
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Detallar</span
+              <span class="text-ink-soft">{{ $t('client.common.parts') }}</span
               ><span class="font-mono font-bold text-ink">{{ totalQuantity }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Listlar</span
+              <span class="text-ink-soft">{{ $t('client.orderNew.sheets') }}</span
               ><span class="font-mono font-bold text-ink">{{ totalPanels }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <!-- "Kromka" length here, "Kromka: <material>" money below — never
                    the same bare word for two different units (CB collision). -->
-              <span class="text-ink-soft">Kromka uzunligi</span
+              <span class="text-ink-soft">{{ $t('client.orderNew.edgeLength') }}</span
               ><span class="font-mono font-bold text-ink">{{ metres(totalEdge) }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Chiqim</span
+              <span class="text-ink-soft">{{ $t('client.orderNew.waste') }}</span
               ><span class="font-mono font-bold text-ink">{{
                 formatPercent(chosenResult.waste_percentage)
               }}</span>
@@ -374,7 +390,8 @@ onMounted(async () => {
             <div
               class="mt-1 flex justify-between gap-3 border-t border-hairline pt-2 text-sm font-extrabold text-accent"
             >
-              <span>Jami</span><span>{{ formatTiyin(quote?.total_tiyin ?? 0) }}</span>
+              <span>{{ $t('client.common.total') }}</span
+              ><span>{{ formatTiyin(quote?.total_tiyin ?? 0) }}</span>
             </div>
           </div>
 
@@ -385,7 +402,7 @@ onMounted(async () => {
               :disabled="placing || !canPlace"
               @click="placeOrder"
             >
-              {{ placing ? 'Yuborilmoqda' : 'Buyurtmani tasdiqlash' }}
+              {{ placing ? $t('client.orderNew.submitting') : $t('client.orderNew.submit') }}
             </button>
 
             <p v-if="reasonLine" class="text-xs font-semibold text-ink-muted">{{ reasonLine }}</p>
@@ -399,7 +416,7 @@ onMounted(async () => {
               class="mp-button mp-button-outline w-full"
               @click="loadQuote"
             >
-              Qayta urinish
+              {{ $t('client.common.retry') }}
             </button>
           </div>
         </div>

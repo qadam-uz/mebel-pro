@@ -76,16 +76,16 @@ onBeforeUnmount(() => {
     :class="props.class"
     class="sk block"
     role="img"
-    :aria-label="alt ? `${alt} — yuklanmoqda` : 'Rasm yuklanmoqda'"
+    :aria-label="alt ? $t('catalog.image.loadingNamed', { alt }) : $t('catalog.image.loading')"
     aria-busy="true"
   />
   <span
     v-else-if="failed"
     :class="props.class"
     role="img"
-    :aria-label="alt ? `${alt} — rasmni yuklab bo'lmadi` : 'Rasmni yuklab bo\'lmadi'"
+    :aria-label="alt ? $t('catalog.image.failedNamed', { alt }) : $t('catalog.image.failed')"
     class="grid place-items-center bg-sunk text-xs text-ink-muted"
   >
-    Rasm yo'q
+    {{ $t('catalog.image.none') }}
   </span>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
@@ -39,6 +40,7 @@ const route = useRoute()
 const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const toast = useToast()
+const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
 // Order numbers read `#<2-digit year>-<branch_no>-<per-year sequence>`
@@ -146,11 +148,23 @@ const statusFieldOrder: StatusField[] = ['reason']
 const statusFieldIds: Record<StatusField, string> = {
   reason: 'branch-status-reason',
 }
-const statusOptions = [
-  { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
-  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: "sabab bilan ko'rinadi" },
-  { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
-]
+const statusOptions = computed(() => [
+  {
+    value: 'active',
+    label: branchStatusUz('active'),
+    meta: t('workshopAdmin.branchDetail.statusActiveMeta'),
+  },
+  {
+    value: 'temporarily_closed',
+    label: branchStatusUz('temporarily_closed'),
+    meta: t('workshopAdmin.branchDetail.statusClosedMeta'),
+  },
+  {
+    value: 'inactive',
+    label: branchStatusUz('inactive'),
+    meta: t('workshopAdmin.branchDetail.statusInactiveMeta'),
+  },
+])
 
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
@@ -160,21 +174,24 @@ function validateBranchForm() {
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
   branchFieldErrors.cuttingRate =
     pricingForm.cuttingRateSom.trim() && cuttingRateTiyin.value === null
-      ? "Kesish narxini to'g'ri kiriting — masalan: 25 000."
+      ? t('workshopAdmin.branchDetail.cuttingRateError')
       : undefined
   branchFieldErrors.edgeBandingRate =
     pricingForm.edgeBandingRateSom.trim() && edgeBandingRateTiyin.value === null
-      ? "Kromka narxini to'g'ri kiriting — masalan: 5 000."
+      ? t('workshopAdmin.branchDetail.edgeRateError')
       : undefined
   branchFieldErrors.kerfMm =
     kerfMmValue.value === null || kerfMmValue.value < KERF_MM_MIN || kerfMmValue.value > KERF_MM_MAX
-      ? `Arra kesigini ${KERF_MM_MIN}–${KERF_MM_MAX} mm oralig'ida kiriting.`
+      ? t('workshopAdmin.branchDetail.kerfError', { min: KERF_MM_MIN, max: KERF_MM_MAX })
       : undefined
   branchFieldErrors.edgeTrimMm =
     edgeTrimMmValue.value === null ||
     edgeTrimMmValue.value < EDGE_TRIM_MM_MIN ||
     edgeTrimMmValue.value > EDGE_TRIM_MM_MAX
-      ? `Chetki qirqimni ${EDGE_TRIM_MM_MIN}–${EDGE_TRIM_MM_MAX} mm oralig'ida kiriting.`
+      ? t('workshopAdmin.branchDetail.edgeTrimError', {
+          min: EDGE_TRIM_MM_MIN,
+          max: EDGE_TRIM_MM_MAX,
+        })
       : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
@@ -254,7 +271,7 @@ async function saveBranch() {
       edge_banding_rate_tiyin: edgeBandingRateTiyin.value,
     })
     saved.value = true
-    if (!(await notifyProgress())) toast.success('Filial saqlandi.')
+    if (!(await notifyProgress())) toast.success(t('workshopAdmin.branchDetail.saved'))
   } catch (caught) {
     Object.assign(
       branchFieldErrors,
@@ -300,7 +317,7 @@ async function changeBranchStatus() {
     })
     syncForms()
     statusSaved.value = true
-    toast.success("Filial holati o'zgartirildi.")
+    toast.success(t('workshopAdmin.branchDetail.statusChanged'))
   } catch (caught) {
     Object.assign(
       statusFieldErrors,
@@ -329,26 +346,37 @@ onMounted(refreshBranch)
 
 <template>
   <section>
-    <RouterLink :to="rolePath('/workshop/branches')" class="back">← Filiallar</RouterLink>
+    <RouterLink :to="rolePath('/workshop/branches')" class="back">
+      {{ $t('workshopAdmin.branchDetail.back') }}
+    </RouterLink>
     <div class="page-head">
       <div>
-        <h1>{{ workshop.selectedBranch?.name ?? 'Filial' }}</h1>
+        <h1>
+          {{ workshop.selectedBranch?.name ?? $t('workshopAdmin.branchDetail.fallbackName') }}
+        </h1>
         <!-- The branch number is printed on every order and cutting map that
              leaves the building; this is the only place it can be looked up. -->
-        <p v-if="workshop.selectedBranch" class="sub">
-          Filial raqami
-          <span class="id">{{ workshop.selectedBranch.branch_no }}</span>
-          — bu filial buyurtmalari
-          <span class="id">{{ orderNumberPrefix }}</span>
-          bilan boshlanadi.
-        </p>
+        <i18n-t
+          v-if="workshop.selectedBranch"
+          keypath="workshopAdmin.branchDetail.numberHint"
+          tag="p"
+          scope="global"
+          class="sub"
+        >
+          <template #no>
+            <span class="id">{{ workshop.selectedBranch.branch_no }}</span>
+          </template>
+          <template #prefix>
+            <span class="id">{{ orderNumberPrefix }}</span>
+          </template>
+        </i18n-t>
       </div>
       <span
         v-if="workshop.selectedBranch"
         class="mp-chip"
         :class="branchPillClass(workshop.selectedBranch.status)"
       >
-        <span class="pd"></span>{{ branchStatusUz[workshop.selectedBranch.status] }}
+        <span class="pd"></span>{{ branchStatusUz(workshop.selectedBranch.status) }}
       </span>
     </div>
 
@@ -361,15 +389,15 @@ onMounted(refreshBranch)
     </section>
 
     <section v-else-if="pageError" class="st-error" role="alert">
-      <h3>Filialni yuklab bo'lmadi</h3>
-      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <h3>{{ $t('workshopAdmin.branchDetail.loadFailed') }}</h3>
+      <p>{{ $t('workshopAdmin.action.connectionRetry') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="loading"
         @click="refreshBranch"
       >
-        Qayta urinish
+        {{ $t('workshopAdmin.action.retry') }}
       </button>
       <p v-if="pageTraceId" class="mt-3 text-xs text-ink-muted">trace_id: {{ pageTraceId }}</p>
     </section>
@@ -381,24 +409,27 @@ onMounted(refreshBranch)
         role="status"
       >
         <div class="grow">
-          <b>Vaqtincha yopiq</b>
+          <b>{{ $t('workshopAdmin.branchStatus.temporarily_closed') }}</b>
           <span v-if="workshop.selectedBranch.closed_reason">
             · {{ workshop.selectedBranch.closed_reason }}
           </span>
         </div>
       </div>
       <div v-else-if="workshop.selectedBranch.status === 'inactive'" class="banner danger mb-5">
-        <div class="grow"><b>Faol emas</b> · bu filial yangi buyurtma qabul qilmaydi.</div>
+        <div class="grow">
+          <b>{{ $t('workshopAdmin.branchStatus.inactive') }}</b> ·
+          {{ $t('workshopAdmin.branchDetail.inactiveBody') }}
+        </div>
       </div>
 
       <form class="card max-w-[1120px]" novalidate @submit.prevent="saveBranch">
         <div class="card-h">
-          <h2>Filial ma'lumotlari</h2>
+          <h2>{{ $t('workshopAdmin.branchDetail.infoTitle') }}</h2>
         </div>
         <div class="card-b grid gap-3">
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="branch-detail-name">
-              <span>Nom</span>
+              <span>{{ $t('workshopAdmin.branches.name') }}</span>
               <input
                 id="branch-detail-name"
                 v-model="branchForm.name"
@@ -416,7 +447,7 @@ onMounted(refreshBranch)
               </span>
             </label>
             <label class="field" for="branch-detail-address">
-              <span>Manzil</span>
+              <span>{{ $t('workshopAdmin.branches.address') }}</span>
               <input
                 id="branch-detail-address"
                 v-model="branchForm.address"
@@ -437,7 +468,7 @@ onMounted(refreshBranch)
             </label>
           </div>
           <label class="field" for="branch-detail-phone">
-            <span>Asosiy telefon</span>
+            <span>{{ $t('workshopAdmin.branches.phone') }}</span>
             <PhoneInput
               id="branch-detail-phone"
               v-model="branchForm.phone"
@@ -448,7 +479,7 @@ onMounted(refreshBranch)
               "
             />
             <small id="branch-detail-phone-hint" class="text-ink-muted">
-              Mijozlar buyurtmalarida shu raqam ko'rinadi.
+              {{ $t('workshopAdmin.branches.phoneHint') }}
             </small>
             <span
               v-if="branchFieldErrors.phone"
@@ -471,7 +502,7 @@ onMounted(refreshBranch)
                  cutting_rate` and edge labour is `length_mm × rate ÷ 1000`, so
                  one is per panel and the other per metre (QAD-182). -->
             <label class="field" for="branch-detail-cutting-rate">
-              <span>Kesish narxi (so'm / list)</span>
+              <span>{{ $t('workshopAdmin.branchDetail.cuttingRate') }}</span>
               <input
                 id="branch-detail-cutting-rate"
                 v-model="pricingForm.cuttingRateSom"
@@ -491,7 +522,7 @@ onMounted(refreshBranch)
               </span>
             </label>
             <label class="field" for="branch-detail-edge-rate">
-              <span>Kromka yopishtirish narxi (so'm / m)</span>
+              <span>{{ $t('workshopAdmin.branchDetail.edgeRate') }}</span>
               <input
                 id="branch-detail-edge-rate"
                 v-model="pricingForm.edgeBandingRateSom"
@@ -512,10 +543,12 @@ onMounted(refreshBranch)
             </label>
           </div>
           <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">Kesish sozlamalari</legend>
+            <legend class="mb-2 text-sm font-extrabold text-ink">
+              {{ $t('workshopAdmin.branchDetail.cuttingSettings') }}
+            </legend>
             <div class="grid gap-3 md:grid-cols-2">
               <label class="field" for="branch-detail-kerf-mm">
-                <span>Arra kesigi (kerf), mm</span>
+                <span>{{ $t('workshopAdmin.branchDetail.kerf') }}</span>
                 <input
                   id="branch-detail-kerf-mm"
                   v-model="branchForm.kerfMm"
@@ -536,7 +569,7 @@ onMounted(refreshBranch)
                 </span>
               </label>
               <label class="field" for="branch-detail-edge-trim-mm">
-                <span>Chetki qirqim, mm</span>
+                <span>{{ $t('workshopAdmin.branchDetail.edgeTrim') }}</span>
                 <input
                   id="branch-detail-edge-trim-mm"
                   v-model="branchForm.edgeTrimMm"
@@ -558,16 +591,18 @@ onMounted(refreshBranch)
               </label>
             </div>
             <p class="mt-2 text-xs text-ink-muted">
-              Listning ishlatiladigan yuzasi = list − 2× chetki qirqim.
+              {{ $t('workshopAdmin.branchDetail.usableArea') }}
             </p>
           </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">
-            <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
+            <p v-if="saved" class="text-sm font-bold text-success">
+              {{ $t('workshopAdmin.action.saved') }}
+            </p>
             <p v-else-if="saveError" class="text-sm font-bold text-danger">
-              Saqlab bo'lmadi{{ traceSuffix(saveTraceId) }}
+              {{ $t('workshopAdmin.action.saveFailed') }}{{ traceSuffix(saveTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
-              {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+              {{ saving ? $t('workshopAdmin.action.saving') : $t('workshopAdmin.action.save') }}
             </button>
           </div>
         </div>
@@ -579,12 +614,17 @@ onMounted(refreshBranch)
         @submit.prevent="changeBranchStatus"
       >
         <div class="card-h">
-          <h2>Holat</h2>
+          <h2>{{ $t('workshopAdmin.branchDetail.statusTitle') }}</h2>
         </div>
         <div class="card-b grid gap-3">
-          <FormSelect v-model="statusForm.status" label="Holat" :options="statusOptions" required />
+          <FormSelect
+            v-model="statusForm.status"
+            :label="$t('workshopAdmin.branchDetail.statusTitle')"
+            :options="statusOptions"
+            required
+          />
           <label v-if="statusForm.status !== 'active'" class="field" for="branch-status-reason">
-            <span>Sabab</span>
+            <span>{{ $t('workshopAdmin.branchDetail.reason') }}</span>
             <input
               id="branch-status-reason"
               v-model="statusForm.reason"
@@ -604,12 +644,19 @@ onMounted(refreshBranch)
             </span>
           </label>
           <div class="flex flex-wrap items-center justify-end gap-3">
-            <p v-if="statusSaved" class="text-sm font-bold text-success">Holat saqlandi</p>
+            <p v-if="statusSaved" class="text-sm font-bold text-success">
+              {{ $t('workshopAdmin.branchDetail.statusSaved') }}
+            </p>
             <p v-else-if="statusError" class="text-sm font-bold text-danger">
-              Holat saqlanmadi{{ traceSuffix(statusTraceId) }}
+              {{ $t('workshopAdmin.branchDetail.statusSaveFailed')
+              }}{{ traceSuffix(statusTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="statusSaving">
-              {{ statusSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}
+              {{
+                statusSaving
+                  ? $t('workshopAdmin.branchDetail.statusSaving')
+                  : $t('workshopAdmin.branchDetail.statusSubmit')
+              }}
             </button>
           </div>
         </div>

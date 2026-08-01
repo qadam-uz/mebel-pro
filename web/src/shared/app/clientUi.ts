@@ -1,4 +1,5 @@
 import { DRAFT_LIMIT } from '@/shared/app/constants'
+import { translate, translatePlural } from '@/shared/i18n'
 import type { NotificationItem } from '@/shared/stores/notifications'
 import type { OrderStatus } from '@/shared/stores/orders'
 import type { CuttingDraft } from '@/shared/stores/cutting'
@@ -18,26 +19,31 @@ export function draftDisplayName(draft: CuttingDraft): string {
   ]
   if (materials.length)
     return `${materials.slice(0, 2).join(' + ')}${materials.length > 2 ? ` +${materials.length - 2}` : ''}`
-  return 'Nomsiz chizma'
+  return translate('client.draft.untitled')
 }
 
-export const clientStatusLabel: Record<OrderStatus, string> = {
-  new: 'Yuborildi',
-  confirmed: 'Tasdiqlandi',
-  cutting: 'Ishlab chiqarishda',
-  edge_banding: 'Ishlab chiqarishda',
-  ready: 'Tayyor',
-  completed: 'Topshirildi',
-  cancelled: 'Bekor qilingan',
+// Status → catalog key, not status → copy: the label itself must be resolved on
+// every call so a language switch reaches labels already on screen.
+const STATUS_KEYS: Readonly<Record<OrderStatus, string>> = {
+  new: 'new',
+  confirmed: 'confirmed',
+  cutting: 'production',
+  edge_banding: 'production',
+  ready: 'ready',
+  completed: 'completed',
+  cancelled: 'cancelled',
 }
 
-export const clientPhaseLabels = [
-  'Yuborildi',
-  'Tasdiqlandi',
-  'Ishlab chiqarishda',
-  'Tayyor',
-  'Topshirildi',
-] as const
+/** The five phases of the client-facing order track, in order. */
+const PHASE_KEYS = ['new', 'confirmed', 'production', 'ready', 'completed'] as const
+
+export function clientStatusLabel(status: OrderStatus): string {
+  return translate(`client.status.${STATUS_KEYS[status]}`)
+}
+
+export function clientPhaseLabels(): string[] {
+  return PHASE_KEYS.map((key) => translate(`client.status.${key}`))
+}
 
 export const activeClientStatuses: OrderStatus[] = [
   'new',
@@ -76,8 +82,8 @@ export function clientPhaseProgress(status: OrderStatus): number {
 /** The next phase label after `status`, or null when already at the final phase / off-track. */
 export function clientNextPhaseLabel(status: OrderStatus): string | null {
   const index = clientPhaseIndex(status)
-  if (index < 0 || index >= clientPhaseLabels.length - 1) return null
-  return clientPhaseLabels[index + 1]
+  if (index < 0 || index >= PHASE_KEYS.length - 1) return null
+  return translate(`client.status.${PHASE_KEYS[index + 1]}`)
 }
 
 /** First given name for the dashboard greeting, or null when no real name is set
@@ -101,12 +107,12 @@ export function clientHomeSubtitle(counts: {
   const { ready, active, drafts } = counts
   if (ready > 0) {
     return active > ready
-      ? `${ready} buyurtmangiz olishga tayyor — qolgani yo'lda.`
-      : `${ready} buyurtmangiz olishga tayyor.`
+      ? translatePlural('client.home.subtitleReadyMore', ready)
+      : translatePlural('client.home.subtitleReady', ready)
   }
-  if (active > 0) return `${active} ta faol buyurtmangiz bor.`
-  if (drafts > 0) return 'Saqlangan chizmalaringizdan davom eting.'
-  return 'Birinchi kesim chizmangizdan boshlang.'
+  if (active > 0) return translatePlural('client.home.subtitleActive', active)
+  if (drafts > 0) return translate('client.home.subtitleDrafts')
+  return translate('client.home.subtitleFirstRun')
 }
 
 export function normalizeUzPhone(value: string): string {
@@ -158,49 +164,47 @@ export function formatPercent(value: string | number | null | undefined): string
   return `${(numeric * 100).toFixed(2)}%`
 }
 
-const CLIENT_ERROR_LABELS: Record<string, string> = {
-  permission_denied: "Bu amal uchun ruxsat yo'q.",
-  order_version_conflict: "Buyurtma holati o'zgardi — sahifani yangilab, qayta urinib ko'ring.",
-  order_not_found: 'Buyurtma topilmadi.',
-  order_cancel_not_allowed: "Bu buyurtmani hozir bekor qilib bo'lmaydi.",
-  order_cancel_failed: "Buyurtmani bekor qilib bo'lmadi.",
-  order_quote_failed: "Narxni hisoblab bo'lmadi. Qayta urinib ko'ring.",
-  order_action_failed: "Amalni bajarib bo'lmadi. Qayta urinib ko'ring.",
-  client_orders_load_failed: "Buyurtmalar ro'yxatini yuklab bo'lmadi.",
-  client_order_load_failed: "Buyurtmani yuklab bo'lmadi.",
-  branch_does_not_carry_panel: "Bu filialda kerakli list materiali yo'q.",
-  branch_does_not_carry_edge: "Bu filialda kerakli kromka materiali yo'q.",
-  missing_cutting_rate: 'Ustaxona kesish narxini hali kiritmagan.',
-  missing_edge_banding_rate: 'Ustaxona kromka yopishtirish narxini hali kiritmagan.',
-  cutting_result_not_usable: "Bu natijadan hozircha buyurtma berib bo'lmaydi.",
-  part_too_large: 'Detal list uchun juda katta.',
-  part_too_small: 'Detal juda kichik.',
-  draft_limit_exceeded: `Saqlangan chizmalar chegarasi (${DRAFT_LIMIT}) to'ldi — eskisini o'chiring.`,
-  invalid_name: 'Ismingizni kiriting.',
-  profile_update_failed: "Profilni saqlab bo'lmadi. Qayta urinib ko'ring.",
-  password_change_failed: "Parolni o'zgartirib bo'lmadi. Qayta urinib ko'ring.",
-}
-
-const CLIENT_ERROR_FALLBACK = "Amal bajarilmadi. Qayta urinib ko'ring."
+// The codes that carry their own client-facing message, each one an entry under
+// `client.error.<code>`. A set of codes rather than a map of copy: the sentence
+// lives in the catalog, so it follows the active locale instead of freezing at
+// module-evaluation time.
+const CLIENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  'permission_denied',
+  'order_version_conflict',
+  'order_not_found',
+  'order_cancel_not_allowed',
+  'order_cancel_failed',
+  'order_quote_failed',
+  'order_action_failed',
+  'client_orders_load_failed',
+  'client_order_load_failed',
+  'branch_does_not_carry_panel',
+  'branch_does_not_carry_edge',
+  'missing_cutting_rate',
+  'missing_edge_banding_rate',
+  'cutting_result_not_usable',
+  'part_too_large',
+  'part_too_small',
+  'draft_limit_exceeded',
+  'invalid_name',
+  'profile_update_failed',
+  'password_change_failed',
+])
 
 /**
- * Map a backend/store error code to Uzbek client copy. Unknown snake_case codes
- * fall back to a generic Uzbek message (a raw code is never shown to the user);
- * a value that is already a human sentence is returned unchanged.
+ * Map a backend/store error code to client copy. Unknown snake_case codes fall
+ * back to a generic message (a raw code is never shown to the user); a value
+ * that is already a human sentence is returned unchanged.
  */
 export function clientErrorLabel(
   code: string | null | undefined,
-  fallback: string = CLIENT_ERROR_FALLBACK,
+  fallback: string = translate('client.error.fallback'),
 ): string {
   if (!code) return fallback
-  const mapped = CLIENT_ERROR_LABELS[code]
-  if (mapped) return mapped
+  // `limit` is only read by `draft_limit_exceeded`; the rest ignore it.
+  if (CLIENT_ERROR_CODES.has(code)) return translate(`client.error.${code}`, { limit: DRAFT_LIMIT })
   if (/\s/.test(code)) return code
   return fallback
-}
-
-export function pluralUz(count: number, label: string): string {
-  return `${new Intl.NumberFormat('uz-UZ').format(count)} ${label}`
 }
 
 const CLIENT_ICON_PATHS: Record<string, string> = {
@@ -216,6 +220,8 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   store: '<path d="M4 10h16l-1-5H5l-1 5Z"/><path d="M6 10v10h12V10"/><path d="M9 20v-6h6v6"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  globe:
+    '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.3 3.4 5.3 3.4 8.5s-1.2 6.2-3.4 8.5c-2.2-2.3-3.4-5.3-3.4-8.5S9.8 5.8 12 3.5Z"/>',
   board:
     '<rect x="3.5" y="4" width="5" height="12" rx="1"/><rect x="9.5" y="4" width="5" height="16" rx="1"/><rect x="15.5" y="4" width="5" height="9" rx="1"/>',
   table:
@@ -249,15 +255,15 @@ export function clientIconPath(name: string): string {
 // Notification presentation (CB-126): a per-family icon + a localized one-line
 // title, so the bell never shows a raw snake/dotted event_code. Forward-compatible
 // with the order.* events the backend will add (CB-02).
-const NOTIFICATION_TITLES: Record<string, string> = {
-  'inventory.negative_stock': "Ombor qoldig'i manfiy",
-  'order.placed': 'Buyurtma joylandi',
-  'order.confirmed': 'Buyurtma tasdiqlandi',
-  'order.status_changed': "Buyurtma holati o'zgardi",
-  'order.updated': 'Buyurtma yangilandi',
-  'order.ready': 'Buyurtma tayyor',
-  'order.cancelled': 'Buyurtma bekor qilindi',
-  'order.completed': 'Buyurtma topshirildi',
+const NOTIFICATION_TITLE_KEYS: Readonly<Record<string, string>> = {
+  'inventory.negative_stock': 'inventoryNegativeStock',
+  'order.placed': 'orderPlaced',
+  'order.confirmed': 'orderConfirmed',
+  'order.status_changed': 'orderStatusChanged',
+  'order.updated': 'orderUpdated',
+  'order.ready': 'orderReady',
+  'order.cancelled': 'orderCancelled',
+  'order.completed': 'orderCompleted',
 }
 
 function payloadString(payload: Record<string, unknown>, keys: string[]): string | null {
@@ -269,11 +275,10 @@ function payloadString(payload: Record<string, unknown>, keys: string[]): string
 }
 
 export function clientNotificationTitle(item: NotificationItem): string {
-  return (
-    payloadString(item.payload, ['summary', 'title']) ??
-    NOTIFICATION_TITLES[item.event_code] ??
-    'Bildirishnoma'
-  )
+  const explicit = payloadString(item.payload, ['summary', 'title'])
+  if (explicit) return explicit
+  const key = NOTIFICATION_TITLE_KEYS[item.event_code]
+  return translate(key ? `client.notification.${key}` : 'client.notification.fallback')
 }
 
 export function clientNotificationBody(item: NotificationItem): string | null {
@@ -282,10 +287,10 @@ export function clientNotificationBody(item: NotificationItem): string | null {
   // Order events (CB-02) carry a denormalized order_number but no prose body —
   // surface it so the row identifies which order changed, not just that one did.
   const orderNumber = payloadString(item.payload, ['order_number'])
-  if (orderNumber) return `Buyurtma № ${orderNumber}`
+  if (orderNumber) return translate('client.notification.orderNumber', { number: orderNumber })
   // Inventory events carry the material the balance belongs to — same reason.
   const materialName = payloadString(item.payload, ['material_name'])
-  return materialName ? `Material: ${materialName}` : null
+  return materialName ? translate('client.notification.material', { name: materialName }) : null
 }
 
 export function clientNotificationIconName(item: NotificationItem): string {

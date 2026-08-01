@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { firstEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -25,6 +26,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]]
 }>()
 
+const { t } = useI18n()
+
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
@@ -37,9 +40,12 @@ const selectedOptions = computed(() =>
   props.options.filter((option) => props.modelValue.includes(option.value)),
 )
 const summary = computed(() => {
-  if (selectedOptions.value.length === 0) return props.emptyLabel ?? 'Barchasi'
-  if (selectedOptions.value.length === 1) return selectedOptions.value[0]?.label ?? '1 tanlandi'
-  return `${selectedOptions.value.length} ${props.selectedLabel ?? 'tanlandi'}`
+  const count = selectedOptions.value.length
+  if (count === 0) return props.emptyLabel ?? t('forms.multiSelect.all')
+  if (count === 1)
+    return selectedOptions.value[0]?.label ?? t('forms.multiSelect.selectedCount', { count })
+  if (props.selectedLabel) return `${count} ${props.selectedLabel}`
+  return t('forms.multiSelect.selectedCount', { count })
 })
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]

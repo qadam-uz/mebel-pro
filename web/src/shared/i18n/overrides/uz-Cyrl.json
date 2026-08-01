@@ -1,0 +1,3 @@
+{
+  "$comment": "Messages whose Cyrillic form the transliteration rules get wrong. Key paths mirror the uz catalog; anything absent here is derived. Add an entry only when the rule is right elsewhere — otherwise fix the rule in transliterate.ts."
+}

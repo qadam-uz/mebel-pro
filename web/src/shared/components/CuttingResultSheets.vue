@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import { panelDisplayIndex, panelFillPercent } from '@/shared/app/cuttingResultsDisplay'
@@ -28,6 +29,8 @@ const emit = defineEmits<{
   'clear-selection': []
 }>()
 
+const { t } = useI18n()
+
 const drawingCard = ref<HTMLElement | null>(null)
 
 const activePanel = computed(
@@ -39,7 +42,11 @@ function panelCaption(result: CuttingResult, panel: CuttingPanel) {
     result.material_snapshots[panel.material_id],
     panel.material_id.slice(0, 8),
   )
-  return `List ${panelDisplayIndex(result, panel)} · ${material} · KIM ${panelFillPercent(result, panel)}`
+  return t('cutting.result.sheetCaption', {
+    n: panelDisplayIndex(result, panel),
+    material,
+    fill: panelFillPercent(result, panel),
+  })
 }
 
 /** Bring the drawing into view — the caller decides when (e.g. after a
@@ -78,7 +85,7 @@ defineExpose({ revealDrawing })
         @clear-selection="emit('clear-selection')"
       />
       <p class="mt-2 text-right text-xs text-ink-muted">
-        Arra kesigi {{ result.kerf_mm }} mm · Chetki qirqim {{ result.edge_trim_mm }} mm
+        {{ $t('cutting.result.cutSettings', { kerf: result.kerf_mm, trim: result.edge_trim_mm }) }}
       </p>
     </section>
   </div>

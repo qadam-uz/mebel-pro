@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -21,6 +22,7 @@ const rolePath = useRolePath()
 const toast = useToast()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
+const { t } = useI18n()
 
 const draftId = computed(() => String(route.params.draft_id))
 const loading = ref(true)
@@ -79,7 +81,7 @@ async function apply() {
       version: current.version,
       reason: reason.value.trim() || null,
     })
-    toast.success('Buyurtma yangilandi.')
+    toast.success(t('orders.toast.updated'))
     void router.push(rolePath(`/workshop/orders/${updated.id}`))
   } catch {
     applyError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
@@ -99,7 +101,7 @@ async function discard() {
   discarding.value = true
   try {
     await cutting.deleteDraft(draftId.value)
-    toast.success('Tahrir bekor qilindi.')
+    toast.success(t('orders.toast.editDiscarded'))
     void router.push(rolePath(current ? `/workshop/orders/${current.id}` : '/workshop/orders'))
   } catch (caught) {
     discardOpen.value = false
@@ -114,15 +116,17 @@ async function discard() {
   <section>
     <div class="page-head">
       <div>
-        <h1>Tahrirni saqlash</h1>
-        <div class="sub">{{ order ? order.order_number : 'Buyurtma' }}</div>
+        <h1>{{ $t('orders.editReview.title') }}</h1>
+        <div class="sub">
+          {{ order ? order.order_number : $t('orders.editReview.orderFallback') }}
+        </div>
       </div>
       <div class="tools">
         <RouterLink
           :to="rolePath(`/workshop/orders/cutting/${draftId}`)"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
         >
-          Chizmaga qaytish
+          {{ $t('orders.action.backToDrawing') }}
         </RouterLink>
       </div>
     </div>
@@ -133,36 +137,33 @@ async function discard() {
     </section>
 
     <section v-else-if="loadError" class="st-error" role="alert">
-      <h3>Ma'lumotni yuklab bo'lmadi</h3>
+      <h3>{{ $t('orders.state.loadFailed') }}</h3>
       <p>{{ loadError }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         @click="router.go(0)"
       >
-        Qayta urinish
+        {{ $t('orders.state.retry') }}
       </button>
     </section>
 
     <section v-else-if="order && !editable" class="st-error" role="alert">
-      <h3>Tahrirni endi qo'llab bo'lmaydi</h3>
-      <p>
-        Buyurtma holati o'zgargan — ishlab chiqarish boshlangan yoki buyurtma yopilgan. Ochiq
-        tahrirni bekor qilishingiz mumkin.
-      </p>
+      <h3>{{ $t('orders.editReview.blockedTitle') }}</h3>
+      <p>{{ $t('orders.editReview.blockedBody') }}</p>
       <div class="mt-4 flex flex-wrap justify-center gap-2">
         <RouterLink
           :to="rolePath(`/workshop/orders/${order.id}`)"
           class="mp-button mp-button-outline min-h-11 px-4"
         >
-          Buyurtmaga qaytish
+          {{ $t('orders.editReview.backToOrder') }}
         </RouterLink>
         <button
           type="button"
           class="mp-button mp-button-outline min-h-11 px-4 text-danger"
           @click="discardOpen = true"
         >
-          Tahrirni bekor qilish
+          {{ $t('orders.editReview.discard') }}
         </button>
       </div>
     </section>
@@ -170,21 +171,23 @@ async function discard() {
     <div v-else-if="order && quote" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div class="grid content-start gap-4">
         <div class="card">
-          <div class="card-h"><h2>Narx taqqoslash</h2></div>
+          <div class="card-h">
+            <h2>{{ $t('orders.editReview.compare') }}</h2>
+          </div>
           <div class="card-b grid gap-2 text-sm">
             <div class="flex justify-between">
-              <span class="text-ink-soft">Hozirgi jami</span>
+              <span class="text-ink-soft">{{ $t('orders.editReview.currentTotal') }}</span>
               <span class="num">{{ formatTiyin(order.total_tiyin) }}</span>
             </div>
             <div class="flex justify-between font-bold">
-              <span>Yangi jami</span>
+              <span>{{ $t('orders.editReview.newTotal') }}</span>
               <span class="num">{{ formatTiyin(quote.total_tiyin) }}</span>
             </div>
             <div
               class="mt-1 flex justify-between border-t border-hairline pt-2"
               :class="totalDelta > 0 ? 'text-danger' : totalDelta < 0 ? 'text-success' : ''"
             >
-              <span>Farq</span>
+              <span>{{ $t('orders.editReview.delta') }}</span>
               <span class="num">
                 {{ totalDelta > 0 ? '+' : '' }}{{ formatTiyin(totalDelta) }}
               </span>
@@ -194,46 +197,53 @@ async function discard() {
 
         <div v-if="order.discount_tiyin > 0" class="banner warn" role="status">
           <div class="grow">
-            Buyurtmadagi {{ formatTiyin(order.discount_tiyin) }} chegirma saqlashda bekor bo'ladi —
-            kerak bo'lsa uni qaytadan kiriting.
+            {{
+              $t('orders.editReview.discountCleared', {
+                amount: formatTiyin(order.discount_tiyin),
+              })
+            }}
           </div>
         </div>
         <p class="rounded-md bg-sunk p-3 text-sm text-ink-soft">
-          Narx filialning joriy tariflari bo'yicha to'liq qayta hisoblanadi; mijozga buyurtma
-          yangilangani haqida xabar boradi.
+          {{ $t('orders.editReview.recalcNote') }}
         </p>
 
         <div class="card">
           <div class="card-h">
-            <h2>Sabab <small class="text-ink-muted">(ixtiyoriy)</small></h2>
+            <h2>
+              {{ $t('orders.editReview.reason') }}
+              <small class="text-ink-muted">{{ $t('orders.editReview.optional') }}</small>
+            </h2>
           </div>
           <div class="card-b">
             <input
               v-model="reason"
               class="mp-input"
-              placeholder="Masalan: mijoz o'lchamni o'zgartirdi"
+              :placeholder="$t('orders.editReview.reasonPlaceholder')"
             />
           </div>
         </div>
       </div>
 
       <div class="card content-start">
-        <div class="card-h"><h2>Yangi narx</h2></div>
+        <div class="card-h">
+          <h2>{{ $t('orders.editReview.newPrice') }}</h2>
+        </div>
         <div class="card-b grid gap-2 text-sm">
           <div class="flex justify-between">
-            <span class="text-ink-soft">Kesish</span>
+            <span class="text-ink-soft">{{ $t('orders.editReview.cutting') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_cutting_tiyin) }}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-ink-soft">Material</span>
+            <span class="text-ink-soft">{{ $t('orders.editReview.materials') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_materials_tiyin) }}</span>
           </div>
           <div v-if="quote.subtotal_edge_banding_tiyin > 0" class="flex justify-between">
-            <span class="text-ink-soft">Krom</span>
+            <span class="text-ink-soft">{{ $t('orders.editReview.edge') }}</span>
             <span class="num">{{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}</span>
           </div>
           <div class="mt-1 flex justify-between border-t border-hairline pt-2 font-bold">
-            <span>Jami</span>
+            <span>{{ $t('orders.editReview.total') }}</span>
             <span class="num">{{ formatTiyin(quote.total_tiyin) }}</span>
           </div>
           <p v-if="applyError" class="mp-field-error">{{ applyError }}</p>
@@ -243,7 +253,7 @@ async function discard() {
             :disabled="applying"
             @click="apply"
           >
-            {{ applying ? 'Saqlanmoqda…' : "O'zgarishlarni saqlash" }}
+            {{ applying ? $t('orders.busy.saving') : $t('orders.editReview.save') }}
           </button>
           <button
             type="button"
@@ -251,7 +261,7 @@ async function discard() {
             :disabled="applying || discarding"
             @click="discardOpen = true"
           >
-            Tahrirni bekor qilish
+            {{ $t('orders.editReview.discard') }}
           </button>
         </div>
       </div>
@@ -259,11 +269,11 @@ async function discard() {
 
     <ConfirmDialog
       :open="discardOpen"
-      title="Tahrirni bekor qilish"
-      message="Tahrirdagi barcha o'zgarishlar o'chiriladi; buyurtma avvalgi holida qoladi."
-      confirm-label="Ha, bekor qilinsin"
-      cancel-label="Orqaga"
-      busy-label="Bajarilmoqda"
+      :title="$t('orders.confirm.discardEditTitle')"
+      :message="$t('orders.confirm.discardEditMessage')"
+      :confirm-label="$t('orders.confirm.discardEditAction')"
+      :cancel-label="$t('orders.confirm.backLabel')"
+      :busy-label="$t('orders.confirm.busyLabel')"
       danger
       :busy="discarding"
       @cancel="discardOpen = false"

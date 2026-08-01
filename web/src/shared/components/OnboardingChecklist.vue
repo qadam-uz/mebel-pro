@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
@@ -25,6 +26,7 @@ interface ChecklistStep {
 const router = useRouter()
 const rolePath = useRolePath()
 const onboarding = useOnboardingStore()
+const { t } = useI18n()
 
 const steps = computed<ChecklistStep[]>(() => {
   const status = onboarding.status
@@ -35,8 +37,8 @@ const steps = computed<ChecklistStep[]>(() => {
   return [
     {
       key: 'password',
-      title: "Parolni o'zgartirish",
-      description: 'Vaqtinchalik parol yangi parolga almashtirildi.',
+      title: t('shell.onboarding.passwordTitle'),
+      description: t('shell.onboarding.passwordBody'),
       done: true,
       cta: null,
       hint: null,
@@ -44,20 +46,19 @@ const steps = computed<ChecklistStep[]>(() => {
     },
     {
       key: 'branch-pricing',
-      title: 'Filial narxlarini kiritish',
-      description:
-        'Kesish va kromka yopishtirish narxlari buyurtma summasini hisoblashda ishlatiladi.',
+      title: t('shell.onboarding.pricingTitle'),
+      description: t('shell.onboarding.pricingBody'),
       done: status.branch_configured,
-      cta: 'Narxlarni kiritish',
+      cta: t('shell.onboarding.pricingCta'),
       hint: 'branch-pricing',
       targetPath: branchTarget,
     },
     {
       key: 'materials',
-      title: "Materiallar katalogini to'ldirish",
-      description: "Mijozlar faqat filial katalogiga qo'shilgan materiallardan buyurtma beradi.",
+      title: t('shell.onboarding.materialsTitle'),
+      description: t('shell.onboarding.materialsBody'),
       done: status.materials_added,
-      cta: "Material qo'shish",
+      cta: t('shell.onboarding.materialsCta'),
       hint: 'catalog-add',
       targetPath: '/workshop/catalog',
     },
@@ -68,7 +69,7 @@ const doneCount = computed(() => steps.value.filter((step) => step.done).length)
 const firstPendingKey = computed(() => steps.value.find((step) => !step.done)?.key ?? null)
 const remainingText = computed(() => {
   const remaining = steps.value.length - doneCount.value
-  return `Buyurtma qabul qilishni boshlash uchun ${remaining} ta qadam qoldi.`
+  return t('shell.onboarding.remaining', { n: remaining }, remaining)
 })
 
 function openStep(step: ChecklistStep) {
@@ -87,11 +88,11 @@ function openStep(step: ChecklistStep) {
   >
     <div class="card-h">
       <div>
-        <h2 id="onboarding-checklist-title">Ishni boshlash</h2>
+        <h2 id="onboarding-checklist-title">{{ $t('shell.onboarding.title') }}</h2>
         <p class="sub">{{ remainingText }}</p>
       </div>
       <span class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-deep">
-        {{ doneCount }}/{{ steps.length }} bajarildi
+        {{ $t('shell.onboarding.progress', { done: doneCount, total: steps.length }) }}
       </span>
     </div>
     <ol class="card-b grid gap-2">
@@ -118,7 +119,7 @@ function openStep(step: ChecklistStep) {
         <span class="min-w-0 grow basis-52">
           <span class="block text-sm font-bold" :class="step.done ? 'text-ink-muted' : 'text-ink'">
             {{ step.title }}
-            <span v-if="step.done" class="sr-only">— bajarildi</span>
+            <span v-if="step.done" class="sr-only">{{ $t('shell.onboarding.doneSr') }}</span>
           </span>
           <span class="block text-xs text-ink-muted">{{ step.description }}</span>
         </span>

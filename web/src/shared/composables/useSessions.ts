@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useRoleConfig } from '@/shared/app/roleConfig'
+import { translate } from '@/shared/i18n'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 
@@ -29,11 +30,11 @@ export function useSessions() {
     const browser =
       typeof session.device_info.browser === 'string' && session.device_info.browser.trim()
         ? session.device_info.browser
-        : 'Brauzer'
+        : translate('shell.session.browserFallback')
     const os =
       typeof session.device_info.os === 'string' && session.device_info.os.trim()
         ? session.device_info.os
-        : 'Qurilma'
+        : translate('shell.session.deviceFallback')
     return `${browser} · ${os}`
   }
 
@@ -43,10 +44,10 @@ export function useSessions() {
     const [removed] = sessions.value.splice(index, 1)
     try {
       await auth.revokeSession(id)
-      toast.success('Sessiya yopildi.')
+      toast.success(translate('shell.session.revoked'))
     } catch {
       sessions.value.splice(index, 0, removed)
-      toast.danger("Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.")
+      toast.danger(translate('shell.session.revokeFailed'))
     }
   }
 
@@ -58,7 +59,7 @@ export function useSessions() {
       await auth.logoutCurrent()
       await router.replace(config.loginPath)
     } catch {
-      toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+      toast.danger(translate('shell.account.logoutFailed'))
     } finally {
       loggingOut.value = false
     }
@@ -70,7 +71,7 @@ export function useSessions() {
       await auth.logoutEverywhere()
       await router.replace(config.loginPath)
     } catch {
-      toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+      toast.danger(translate('shell.account.logoutFailed'))
     } finally {
       loggingOut.value = false
     }

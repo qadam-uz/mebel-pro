@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -17,7 +18,9 @@ const props = withDefaults(
     required?: boolean
   }>(),
   {
-    placeholder: 'Tanlang',
+    // No literal default: a prop default is evaluated once, at module load, so
+    // it would freeze at whatever locale happened to be active then.
+    placeholder: undefined,
     error: null,
     disabled: false,
     required: false,
@@ -27,6 +30,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:modelValue': [value: string | null]
 }>()
+
+const { t } = useI18n()
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
@@ -45,7 +50,9 @@ const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
   return option ? `${internalId}-${option.value}` : undefined
 })
-const buttonText = computed(() => selected.value?.label ?? props.placeholder)
+const buttonText = computed(
+  () => selected.value?.label ?? props.placeholder ?? t('forms.select.placeholder'),
+)
 const errorId = computed(() => (props.error ? `${controlId.value}-error` : undefined))
 
 function firstEnabledIndex(start = 0, direction = 1) {

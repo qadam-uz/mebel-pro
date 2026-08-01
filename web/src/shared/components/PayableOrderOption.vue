@@ -24,7 +24,7 @@ defineProps<{ order: PayableOrder | undefined }>()
       </span>
       <span class="mt-0.5 block text-[11px] leading-tight text-ink-muted">
         {{ order.contact_phone }} · {{ formatDate(order.created_at) }} ·
-        {{ workshopStatusUz[order.status] ?? order.status }}
+        {{ workshopStatusUz(order.status) }}
       </span>
     </span>
     <span class="text-right">

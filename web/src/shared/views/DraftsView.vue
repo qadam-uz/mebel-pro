@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
-import {
-  clientErrorLabel,
-  draftDisplayName,
-  formatRelativeDate,
-  pluralUz,
-} from '@/shared/app/clientUi'
+import { clientErrorLabel, draftDisplayName, formatRelativeDate } from '@/shared/app/clientUi'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -18,6 +14,7 @@ import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 
 const DRAFT_CAP = 50
 
+const { t } = useI18n()
 const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
@@ -87,7 +84,7 @@ async function confirmDeleteDraft() {
   } catch (errorValue) {
     // Keep the dialog open and surface the reason instead of leaking an
     // unhandled rejection (CB-24).
-    deleteError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizmani o'chirib bo'lmadi.")
+    deleteError.value = clientErrorLabel(apiErrorCode(errorValue), t('client.drafts.deleteFailed'))
     deleteTraceId.value = apiTraceId(errorValue)
   } finally {
     deletingId.value = null
@@ -103,21 +100,20 @@ onMounted(() => {
   <section>
     <div class="client-page-head">
       <div>
-        <h1>Saqlangan chizmalar</h1>
-        <p class="sub">
-          Saqlangan chizmani oching yoki yangi chizma boshlang. Chizmalar muddatsiz saqlanadi.
-        </p>
+        <h1>{{ $t('client.drafts.title') }}</h1>
+        <p class="sub">{{ $t('client.drafts.subtitle') }}</p>
       </div>
       <button type="button" class="mp-button mp-button-primary" @click="newCutting">
-        + Yangi chizma
+        {{ $t('client.common.newDraft') }}
       </button>
     </div>
 
     <div v-if="cutting.loading || sortedDrafts.length > 0" class="client-section-title">
-      <h2>Hammasi</h2>
+      <h2>{{ $t('client.drafts.all') }}</h2>
       <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
       <span v-else class="font-mono text-sm text-ink-muted">
-        <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }} chizma
+        <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }}
+        {{ $t('client.drafts.capacityUnit') }}
       </span>
     </div>
 
@@ -133,17 +129,17 @@ onMounted(() => {
 
     <ClientErrorState
       v-else-if="cutting.error"
-      title="Chizmalarni yuklab bo'lmadi"
+      :title="$t('client.drafts.loadFailed')"
       :trace-id="cutting.traceId"
       @retry="cutting.loadDrafts"
     />
 
     <div v-else-if="sortedDrafts.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="scissors" /></div>
-      <h3>Saqlangan chizma yo'q</h3>
-      <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
+      <h3>{{ $t('client.drafts.emptyTitle') }}</h3>
+      <p>{{ $t('client.drafts.emptyBody') }}</p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-        + Yangi chizma
+        {{ $t('client.common.newDraft') }}
       </button>
     </div>
 
@@ -169,10 +165,12 @@ onMounted(() => {
           </div>
           <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
             <span
-              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
+              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b>
+              {{ $t('client.unit.part', draftParts(draft)) }}</span
             >
             <span
-              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> list</span
+              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b>
+              {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
             >
             <span>{{ formatRelativeDate(draft.updated_at) }}</span>
           </div>
@@ -182,28 +180,28 @@ onMounted(() => {
           class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
           @click.stop
         >
-          Davom etish →
+          {{ $t('client.common.continue') }} →
         </RouterLink>
         <!-- `.stop` so deleting never doubles as opening the card behind it. -->
         <button
           type="button"
           class="grid size-9 shrink-0 place-items-center rounded-md border border-hairline text-lg text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
           :disabled="deletingId === draft.id"
-          aria-label="Chizmani o'chirish"
+          :aria-label="$t('client.drafts.deleteAction')"
           @click.stop="requestDeleteDraft(draft)"
         >
           ×
         </button>
       </article>
-      <p class="sr-only">{{ pluralUz(sortedDrafts.length, 'chizma') }}</p>
+      <p class="sr-only">{{ $t('client.unit.drafts', sortedDrafts.length) }}</p>
     </div>
 
     <ConfirmDialog
       :open="Boolean(draftPendingDelete)"
-      title="Chizmani o'chirish"
-      :message="`${pendingDeletePartCount} detalli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
-      confirm-label="O'chirish"
-      cancel-label="Bekor qilish"
+      :title="$t('client.drafts.deleteTitle')"
+      :message="$t('client.drafts.deleteMessage', pendingDeletePartCount)"
+      :confirm-label="$t('client.common.delete')"
+      :cancel-label="$t('client.common.cancel')"
       danger
       :busy="deletingId !== null"
       @cancel="closeDeleteDialog"

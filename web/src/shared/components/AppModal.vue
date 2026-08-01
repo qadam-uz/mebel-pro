@@ -49,7 +49,7 @@ const trap = useFocusTrap(panelRef, openRef, () => emit('close'))
           <button
             type="button"
             class="grid size-9 shrink-0 place-items-center rounded-md text-ink-muted transition hover:bg-sunk hover:text-ink [&_svg]:size-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2"
-            aria-label="Yopish"
+            :aria-label="$t('shell.action.close')"
             @click="emit('close')"
           >
             <AdminModalCloseIcon />

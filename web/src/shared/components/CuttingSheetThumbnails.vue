@@ -59,14 +59,14 @@ function panelGroups(result: CuttingResult) {
 </script>
 
 <template>
-  <div class="grid gap-3" aria-label="Listlar">
+  <div class="grid gap-3" :aria-label="$t('cutting.result.sheets')">
     <section v-for="group in panelGroups(result)" :key="group.materialId" class="grid gap-1.5">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h4 class="min-w-0 flex-1 text-sm font-extrabold leading-tight text-ink">
           {{ group.label }}
         </h4>
         <span class="font-mono text-xs font-bold text-ink-muted"
-          >{{ group.panels.length }} list</span
+          >{{ group.panels.length }} {{ $t('cutting.unit.sheet', group.panels.length) }}</span
         >
       </div>
       <div class="flex gap-2 overflow-x-auto pb-1">
@@ -117,7 +117,7 @@ function panelGroups(result: CuttingResult) {
             </span>
           </span>
           <span class="truncate text-[11px] font-extrabold text-ink">
-            List {{ panelDisplayIndex(result, panel) }}
+            {{ $t('cutting.result.sheetLabel', { n: panelDisplayIndex(result, panel) }) }}
           </span>
         </button>
       </div>

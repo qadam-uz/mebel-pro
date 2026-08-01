@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
@@ -49,6 +50,7 @@ import {
   type Supplier,
 } from '@/shared/stores/workshop'
 
+const { t } = useI18n()
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
@@ -58,12 +60,12 @@ const route = useRoute()
 const router = useRouter()
 const today = formatDateInputValue(new Date())
 const activeTab = ref<'stock' | 'invoices' | 'tx' | 'suppliers'>('stock')
-const inventoryTabs: ChoiceOption[] = [
-  { value: 'stock', label: 'Zaxira' },
-  { value: 'invoices', label: 'Kirimlar' },
-  { value: 'tx', label: 'Tranzaksiyalar' },
-  { value: 'suppliers', label: "Ta'minotchilar" },
-]
+const inventoryTabs = computed<ChoiceOption[]>(() => [
+  { value: 'stock', label: t('inventory.tab.stock') },
+  { value: 'invoices', label: t('inventory.tab.invoices') },
+  { value: 'tx', label: t('inventory.tab.tx') },
+  { value: 'suppliers', label: t('inventory.tab.suppliers') },
+])
 const search = ref('')
 const lowOnly = ref(false)
 
@@ -161,8 +163,18 @@ const supplierBalanceById = computed(
 
 function supplierBalanceChip(supplierId: string) {
   const balance = supplierBalanceById.value.get(supplierId) ?? 0
-  if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
-  if (balance < 0) return { cls: 'pill p-bad', text: `Qarzimiz: ${formatTiyin(-balance)}` }
+  if (balance > 0) {
+    return {
+      cls: 'pill p-ok',
+      text: t('inventory.supplier.owesUs', { amount: formatTiyin(balance) }),
+    }
+  }
+  if (balance < 0) {
+    return {
+      cls: 'pill p-bad',
+      text: t('inventory.supplier.weOwe', { amount: formatTiyin(-balance) }),
+    }
+  }
   return { cls: '', text: '—' }
 }
 const accessibleBranches = computed(() =>
@@ -184,22 +196,30 @@ const stockOptions = computed(() =>
     label: item.material.name,
     meta:
       item.on_hand < 0
-        ? `${formatStockQuantity(-item.on_hand, item.display_unit)} yetishmaydi`
-        : `${formatStockQuantity(item.on_hand, item.display_unit)} mavjud`,
+        ? t('inventory.stock.optionShort', {
+            quantity: formatStockQuantity(-item.on_hand, item.display_unit),
+          })
+        : t('inventory.stock.optionOnHand', {
+            quantity: formatStockQuantity(item.on_hand, item.display_unit),
+          }),
   })),
 )
 const txMaterialOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: 'Hamma materiallar' },
+  { value: 'all', label: t('inventory.tx.materialFilterAll') },
   ...workshop.stockItems.map((item) => ({ value: item.material_id, label: item.material.name })),
 ])
 const activeSupplierOptions = computed(() => [
-  { value: 'inline', label: "Yangi ta'minotchi", meta: 'kirim bilan yaratiladi' },
+  {
+    value: 'inline',
+    label: t('inventory.supplier.inlineOption'),
+    meta: t('inventory.supplier.inlineOptionMeta'),
+  },
   ...workshop.suppliers
     .filter((supplier) => supplier.status === 'active')
     .map((supplier) => ({
       value: supplier.id,
       label: supplier.name,
-      meta: supplier.phone ?? 'faol',
+      meta: supplier.phone ?? t('inventory.supplier.activeMeta'),
     })),
 ])
 const selectedAdjustmentItem = computed(() => stockItemByMaterial(adjustmentForm.materialId))
@@ -250,8 +270,10 @@ watch(
 // cost base, and a hint that disappears when you type is not a label (QAD-182).
 function linePriceUnit(line: InvoiceLineDraft) {
   const item = stockItemByMaterial(line.materialId)
-  if (!item) return "so'm"
-  return isMetreUnit(item.display_unit) ? "so'm/m" : "so'm/list"
+  if (!item) return t('inventory.invoice.priceUnitSom')
+  return isMetreUnit(item.display_unit)
+    ? t('inventory.invoice.priceUnitMetre')
+    : t('inventory.invoice.priceUnitSheet')
 }
 
 function lineQuantityUnit(line: InvoiceLineDraft) {
@@ -262,8 +284,8 @@ function lineQuantityUnit(line: InvoiceLineDraft) {
 function lineLastPriceHint(line: InvoiceLineDraft) {
   if (!line.materialId || !line.lastPriceLoaded) return null
   const price = line.lastPrice
-  if (!price || price.unit_price_tiyin === null) return "Birinchi kirim — avvalgi narx yo'q"
-  const parts = [`Oxirgi narx: ${formatTiyin(price.unit_price_tiyin)}`]
+  if (!price || price.unit_price_tiyin === null) return t('inventory.invoice.firstArrival')
+  const parts = [t('inventory.invoice.lastPrice', { price: formatTiyin(price.unit_price_tiyin) })]
   if (price.recorded_at) parts.push(formatDate(price.recorded_at))
   if (price.supplier_name) parts.push(`«${price.supplier_name}»`)
   return parts.join(' · ')
@@ -360,17 +382,17 @@ watch(invoiceRealSupplierId, () => {
   }
 })
 
-const paymentStatusFilterOptions: DropdownOption[] = [
-  { value: 'all', label: 'Hamma holatlar' },
-  { value: 'unpaid', label: "To'lanmagan", dot: 'danger' },
-  { value: 'partial', label: 'Qisman', dot: 'warning' },
-  { value: 'paid', label: "To'langan", dot: 'success' },
-]
+const paymentStatusFilterOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('inventory.invoices.paymentAll') },
+  { value: 'unpaid', label: t('inventory.invoices.unpaid'), dot: 'danger' },
+  { value: 'partial', label: t('inventory.invoices.partial'), dot: 'warning' },
+  { value: 'paid', label: t('inventory.invoices.paid'), dot: 'success' },
+])
 
 function paymentStatusPill(status: InvoicePaymentStatus) {
-  if (status === 'paid') return { cls: 'pill p-ok', text: "To'langan" }
-  if (status === 'partial') return { cls: 'pill p-warn', text: 'Qisman' }
-  return { cls: 'pill p-bad', text: "To'lanmagan" }
+  if (status === 'paid') return { cls: 'pill p-ok', text: t('inventory.invoices.paid') }
+  if (status === 'partial') return { cls: 'pill p-warn', text: t('inventory.invoices.partial') }
+  return { cls: 'pill p-bad', text: t('inventory.invoices.unpaid') }
 }
 
 function isInvoiceExpanded(id: string) {
@@ -403,8 +425,14 @@ function isNegative(item: StockItem) {
 }
 
 function materialMeta(item: (typeof workshop.stockItems)[number]) {
-  if (item.kind === 'edge') return `${item.material.thickness_mm} mm · kromka (metr)`
-  return `${item.material.thickness_mm} mm · ${item.material.panel_length_mm}x${item.material.panel_width_mm}`
+  if (item.kind === 'edge') {
+    return t('inventory.stock.materialMetaEdge', { thickness: item.material.thickness_mm })
+  }
+  return t('inventory.stock.materialMetaPanel', {
+    thickness: item.material.thickness_mm,
+    length: item.material.panel_length_mm,
+    width: item.material.panel_width_mm,
+  })
 }
 
 function transactionDisplayUnit(materialId: string) {
@@ -416,6 +444,8 @@ function formatTransactionQuantity(quantity: number, materialId: string) {
   return `${prefix}${formatStockQuantity(quantity, transactionDisplayUnit(materialId))}`
 }
 
+// Not copy: `System` and `User <id>` are operator diagnostics for a row with no
+// human actor, and the transliterator would turn either into nonsense Cyrillic.
 function transactionActorName(tx: (typeof workshop.stockTransactions)[number]) {
   if (tx.actor_name) return tx.actor_name
   if (tx.actor_user_id) return `User ${tx.actor_user_id.slice(0, 8)}`
@@ -539,12 +569,12 @@ async function saveInvoice(withExpense = false) {
   invoiceDiscountError.value = null
 
   if (!invoiceForm.supplierId) {
-    invoiceSupplierError.value = "Ta'minotchini tanlang."
+    invoiceSupplierError.value = t('inventory.invoice.supplierRequired')
     movementSaving.value = false
     return
   }
   if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
-    invoiceSupplierError.value = "Yangi ta'minotchi nomini kiriting."
+    invoiceSupplierError.value = t('inventory.invoice.inlineSupplierRequired')
     movementSaving.value = false
     return
   }
@@ -554,7 +584,7 @@ async function saveInvoice(withExpense = false) {
     const quantity = validLineQuantity(line, item)
     const unitPriceTiyin = parseSomToTiyin(line.unitPrice)
     if (!item || quantity === null || unitPriceTiyin === null) {
-      invoiceLinesError.value = "Har bir qatorda material, musbat miqdor va narx bo'lishi kerak."
+      invoiceLinesError.value = t('inventory.invoice.linesInvalid')
       movementSaving.value = false
       return
     }
@@ -565,7 +595,7 @@ async function saveInvoice(withExpense = false) {
     })
   }
   if (invoiceDiscountTooBig.value) {
-    invoiceDiscountError.value = "Chegirma oraliq jamidan katta bo'la olmaydi."
+    invoiceDiscountError.value = t('inventory.invoice.discountTooBig')
     movementSaving.value = false
     return
   }
@@ -586,7 +616,7 @@ async function saveInvoice(withExpense = false) {
     resetInvoiceForm()
     invoiceOpen.value = false
     invoicesLoadedKey.value = null
-    toast.success(`Kirim ${invoice.invoice_no} yozildi.`)
+    toast.success(t('inventory.invoice.saved', { number: invoice.invoice_no }))
     if (withExpense) {
       await router.push(
         rolePath(`/workshop/finance/expenses?create=expense&invoice_id=${invoice.id}`),
@@ -616,7 +646,7 @@ async function recordAdjustment() {
   const item = selectedAdjustmentItem.value
   const quantity = validAdjustmentQuantity(item)
   if (!item || quantity === null) {
-    adjustmentMaterialError.value = 'Material va +/− prefiksli miqdorni kiriting.'
+    adjustmentMaterialError.value = t('inventory.adjustment.materialRequired')
     movementSaving.value = false
     return
   }
@@ -628,7 +658,7 @@ async function recordAdjustment() {
     })
     resetAdjustmentForm()
     adjustmentOpen.value = false
-    toast.success('Ombor tuzatishi yozildi.')
+    toast.success(t('inventory.adjustment.saved'))
   } catch {
     movementError.value = 'adjustment_failed'
   } finally {
@@ -654,7 +684,7 @@ async function saveSupplier() {
     }
     resetSupplierForm()
     supplierModalOpen.value = false
-    toast.success(wasEditing ? "Ta'minotchi saqlandi." : "Ta'minotchi qo'shildi.")
+    toast.success(wasEditing ? t('inventory.supplier.saved') : t('inventory.supplier.added'))
   } catch {
     supplierError.value = 'supplier_save_failed'
   } finally {
@@ -667,7 +697,10 @@ async function saveSupplier() {
 function supplierMenuItems(supplier: Supplier): ActionMenuItem[] {
   return [
     {
-      label: supplier.status === 'active' ? 'Bloklash' : 'Faollashtirish',
+      label:
+        supplier.status === 'active'
+          ? t('inventory.supplier.block')
+          : t('inventory.supplier.activate'),
       icon: supplier.status === 'active' ? 'ban' : 'check',
       disabled: supplierSaving.value,
     },
@@ -684,7 +717,7 @@ async function toggleSupplierStatus(supplier: Supplier) {
       supplier.id,
       supplier.status === 'active' ? 'inactive' : 'active',
     )
-    toast.success("Ta'minotchi holati o'zgartirildi.")
+    toast.success(t('inventory.supplier.statusChanged'))
   } catch {
     supplierError.value = 'supplier_status_failed'
   } finally {
@@ -827,32 +860,32 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Ombor</h1>
+        <h1>{{ $t('inventory.page.title') }}</h1>
       </div>
     </div>
 
     <div v-if="!canUseInventory" class="st-empty">
-      <h3>Ombor bo'limiga ruxsatingiz yo'q</h3>
-      <p>Ustaxona rahbariga murojaat qiling.</p>
+      <h3>{{ $t('inventory.page.noPermissionTitle') }}</h3>
+      <p>{{ $t('inventory.page.noPermissionBody') }}</p>
     </div>
 
     <div v-else-if="accessibleBranches.length === 0" class="st-empty">
-      <h3>Filial biriktirilmagan</h3>
-      <p>Filial biriktirilgach, ombor qoldiqlari shu yerda ko'rinadi.</p>
+      <h3>{{ $t('inventory.page.noBranchTitle') }}</h3>
+      <p>{{ $t('inventory.page.noBranchBody') }}</p>
     </div>
 
     <template v-else>
       <AppTabs
         v-model="activeTab"
         id-prefix="workshop-inventory"
-        label="Ombor bo'limlari"
+        :label="$t('inventory.page.tabsLabel')"
         :tabs="inventoryTabs"
       />
 
       <div v-if="activeTab !== 'suppliers'" class="mp-filters">
         <label v-if="activeTab === 'stock'" class="mp-filter-input">
-          <span>Qidirish</span>
-          <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
+          <span>{{ $t('inventory.stock.searchLabel') }}</span>
+          <input v-model="search" :placeholder="$t('inventory.stock.searchPlaceholder')" />
         </label>
         <button
           v-if="activeTab === 'stock'"
@@ -862,16 +895,19 @@ onBeforeUnmount(() => {
           @click="lowOnly = !lowOnly"
         >
           <span class="mp-filter-chip-dot" aria-hidden="true"></span>
-          Kam qolgan materiallar
+          {{ $t('inventory.stock.lowOnly') }}
         </button>
         <label v-if="activeTab === 'invoices'" class="mp-filter-input">
-          <span>Qidirish</span>
-          <input v-model="invoiceSearch" placeholder="K-0007 yoki ta'minotchi" />
+          <span>{{ $t('inventory.invoices.searchLabel') }}</span>
+          <input
+            v-model="invoiceSearch"
+            :placeholder="$t('inventory.invoices.searchPlaceholder')"
+          />
         </label>
         <ProjectDropdown
           v-if="activeTab === 'invoices'"
           v-model="invoicePaymentFilter"
-          label="To'lov holati"
+          :label="$t('inventory.invoices.paymentFilterLabel')"
           :options="paymentStatusFilterOptions"
           top-label
         />
@@ -881,7 +917,7 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-primary"
           @click="openInvoiceModal"
         >
-          + Kirim
+          {{ $t('inventory.invoice.createAction') }}
         </button>
         <DateRangePicker
           v-if="activeTab === 'tx'"
@@ -892,7 +928,7 @@ onBeforeUnmount(() => {
         <ProjectDropdown
           v-if="activeTab === 'tx'"
           v-model="txMaterialId"
-          label="Material"
+          :label="$t('inventory.tx.materialFilterLabel')"
           :options="txMaterialOptions"
           top-label
         />
@@ -916,16 +952,16 @@ onBeforeUnmount(() => {
 
       <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
         <button type="button" class="mp-button mp-button-primary" @click="openInvoiceModal">
-          Kirim
+          {{ $t('inventory.invoice.title') }}
         </button>
         <button type="button" class="mp-button mp-button-outline" @click="adjustmentOpen = true">
-          Tuzatish
+          {{ $t('inventory.stock.adjustAction') }}
         </button>
       </div>
 
       <AppModal
         :open="invoiceOpen"
-        title="Kirim"
+        :title="$t('inventory.invoice.title')"
         max-width="max-w-3xl"
         @close="invoiceOpen = false"
       >
@@ -934,29 +970,29 @@ onBeforeUnmount(() => {
           <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <FormSelect
               v-model="invoiceForm.supplierId"
-              label="Ta'minotchi"
+              :label="$t('inventory.invoice.supplier')"
               :options="activeSupplierOptions"
               :error="invoiceSupplierError"
               @focusin="ensureSuppliersLoaded"
             />
             <label class="field">
-              <span>Kirim sanasi</span>
+              <span>{{ $t('inventory.invoice.date') }}</span>
               <!-- The last native date input in the app (QAD-182). It rendered
                    in the browser's OS locale, so the same faktura read
                    28/07/2026 here and 07/28/2026 on an en-US machine. -->
               <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
             </label>
             <div class="field">
-              <span>Raqam</span>
+              <span>{{ $t('inventory.invoice.number') }}</span>
               <span
                 class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 font-mono text-sm font-bold text-ink-muted"
               >
-                K-… avtomatik
+                {{ $t('inventory.invoice.numberAuto') }}
               </span>
             </div>
           </div>
           <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
-            <span>Yangi ta'minotchi nomi</span>
+            <span>{{ $t('inventory.invoice.inlineSupplierName') }}</span>
             <input v-model="invoiceForm.inlineSupplierName" class="mp-input" required />
           </label>
 
@@ -965,10 +1001,10 @@ onBeforeUnmount(() => {
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th>Material</th>
-                    <th class="right">Miqdor</th>
-                    <th class="right">Narx</th>
-                    <th class="right">Summa</th>
+                    <th>{{ $t('inventory.invoice.columnMaterial') }}</th>
+                    <th class="right">{{ $t('inventory.invoice.columnQuantity') }}</th>
+                    <th class="right">{{ $t('inventory.invoice.columnPrice') }}</th>
+                    <th class="right">{{ $t('inventory.invoice.columnAmount') }}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -979,7 +1015,7 @@ onBeforeUnmount(() => {
                            bound one stays for screen readers. -->
                       <SearchCombobox
                         v-model="line.materialId"
-                        label="Material"
+                        :label="$t('inventory.invoice.columnMaterial')"
                         label-class="sr-only"
                         :options="stockOptions"
                         compact
@@ -992,7 +1028,9 @@ onBeforeUnmount(() => {
                           v-model="line.quantity"
                           class="mp-input text-right"
                           inputmode="decimal"
-                          :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
+                          :aria-label="
+                            $t('inventory.invoice.quantityAria', { unit: lineQuantityUnit(line) })
+                          "
                           placeholder="0"
                         />
                         <span class="mp-unit-suffix" aria-hidden="true">{{
@@ -1006,7 +1044,9 @@ onBeforeUnmount(() => {
                           v-model="line.unitPrice"
                           class="mp-input text-right"
                           inputmode="decimal"
-                          :aria-label="`Narx ${linePriceUnit(line)}`"
+                          :aria-label="
+                            $t('inventory.invoice.priceAria', { unit: linePriceUnit(line) })
+                          "
                           placeholder="0"
                           @input="line.priceEdited = true"
                         />
@@ -1030,7 +1070,7 @@ onBeforeUnmount(() => {
                       <button
                         type="button"
                         class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                        :aria-label="`Qatorni o'chirish`"
+                        :aria-label="$t('inventory.invoice.removeLineAria')"
                         @click="removeInvoiceLine(line.key)"
                       >
                         ✕
@@ -1046,7 +1086,7 @@ onBeforeUnmount(() => {
                 class="mp-button mp-button-outline min-h-9 px-3 text-sm"
                 @click="addInvoiceLine"
               >
-                + Material qo'shish
+                {{ $t('inventory.invoice.addLine') }}
               </button>
             </div>
             <small v-if="invoiceLinesError" class="mp-field-error">{{ invoiceLinesError }}</small>
@@ -1056,20 +1096,20 @@ onBeforeUnmount(() => {
             <!-- `self-start`: a one-line note must not stretch to the height of
                  the totals block sitting beside it. -->
             <label class="field !mb-0 self-start">
-              <span>Izoh</span>
+              <span>{{ $t('inventory.invoice.noteLabel') }}</span>
               <input
                 v-model="invoiceForm.note"
                 class="mp-input"
-                placeholder="Masalan: yuk mashinasi bilan keldi"
+                :placeholder="$t('inventory.invoice.notePlaceholder')"
               />
             </label>
             <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
               <div class="flex items-center justify-between">
-                <span class="text-ink-soft">Oraliq jami</span>
+                <span class="text-ink-soft">{{ $t('inventory.invoice.subtotal') }}</span>
                 <span class="num font-bold">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
               </div>
               <label class="flex items-center justify-between gap-3">
-                <span class="text-ink-soft">Chegirma</span>
+                <span class="text-ink-soft">{{ $t('inventory.invoice.discount') }}</span>
                 <input
                   v-model="invoiceForm.discount"
                   class="mp-input max-w-40 text-right"
@@ -1078,7 +1118,7 @@ onBeforeUnmount(() => {
                 />
               </label>
               <label class="flex items-center justify-between gap-3">
-                <span class="text-ink-soft">Ustama</span>
+                <span class="text-ink-soft">{{ $t('inventory.invoice.surcharge') }}</span>
                 <input
                   v-model="invoiceForm.surcharge"
                   class="mp-input max-w-40 text-right"
@@ -1092,7 +1132,7 @@ onBeforeUnmount(() => {
               <div
                 class="flex items-center justify-between border-t border-hairline-strong pt-2 font-bold"
               >
-                <span>Jami</span>
+                <span>{{ $t('inventory.invoice.total') }}</span>
                 <span class="num">{{ formatTiyin(invoiceTotalTiyin) }}</span>
               </div>
             </div>
@@ -1104,13 +1144,13 @@ onBeforeUnmount(() => {
           >
             {{
               movementError === 'branch_material_not_found'
-                ? "Qatorlardagi materiallardan biri filial katalogida yo'q. Avval katalogga qo'shing, keyin kirim yozing."
-                : "Kirim yozilmadi. Qatorlarni tekshirib qayta urinib ko'ring."
+                ? $t('inventory.error.branch_material_not_found')
+                : $t('inventory.error.invoice_save_failed')
             }}
           </p>
           <div class="flex flex-wrap items-center gap-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-              {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+              {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
             </button>
             <button
               v-if="canSeeDebts"
@@ -1119,55 +1159,59 @@ onBeforeUnmount(() => {
               :disabled="movementSaving"
               @click="saveInvoice(true)"
             >
-              Saqlash va xarajat yozish
+              {{ $t('inventory.invoice.saveWithExpense') }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="invoiceOpen = false">
-              Bekor
+              {{ $t('inventory.action.cancel') }}
             </button>
           </div>
         </form>
       </AppModal>
 
-      <AppModal :open="adjustmentOpen" title="Tuzatish" @close="adjustmentOpen = false">
+      <AppModal
+        :open="adjustmentOpen"
+        :title="$t('inventory.adjustment.title')"
+        @close="adjustmentOpen = false"
+      >
         <form class="grid gap-3" @submit.prevent="recordAdjustment">
           <SearchCombobox
             v-model="adjustmentForm.materialId"
-            label="Material"
+            :label="$t('inventory.adjustment.material')"
             :options="stockOptions"
             :error="adjustmentMaterialError"
           />
           <label class="field">
-            <span
-              >Tuzatish miqdori{{
-                selectedAdjustmentItem
-                  ? ` (${formatStockUnit(selectedAdjustmentItem.display_unit)})`
-                  : ''
-              }}</span
-            >
+            <span>{{
+              selectedAdjustmentItem
+                ? $t('inventory.adjustment.quantityWithUnit', {
+                    unit: formatStockUnit(selectedAdjustmentItem.display_unit),
+                  })
+                : $t('inventory.adjustment.quantity')
+            }}</span>
             <!-- Signed quantity: "-2" decreases, "+5" increases — the prefix is
                  required, so inputmode stays text (numeric keypads lack +/−). -->
             <input
               v-model="adjustmentForm.quantity"
               class="mp-input"
-              placeholder="-2 yoki +5"
+              :placeholder="$t('inventory.adjustment.quantityPlaceholder')"
               required
             />
             <small v-if="adjustmentNeedsSign" class="text-ink-muted">
-              + yoki − bilan boshlang
+              {{ $t('inventory.adjustment.signHint') }}
             </small>
           </label>
           <label class="field">
-            <span>Izoh</span>
+            <span>{{ $t('inventory.adjustment.noteLabel') }}</span>
             <input v-model="adjustmentForm.note" class="mp-input" required />
           </label>
           <p
             v-if="movementError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Ombor harakati yozilmadi.
+            {{ $t('inventory.error.adjustment_failed') }}
           </p>
           <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-            {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+            {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
           </button>
         </form>
       </AppModal>
@@ -1181,24 +1225,24 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else-if="workshop.inventoryError && activeListEmpty" class="st-error">
-        <h3>Ma'lumotni yuklab bo'lmadi</h3>
+        <h3>{{ $t('inventory.load.failedTitle') }}</h3>
         <p>{{ traceLine(workshop.inventoryTraceId) }}</p>
       </div>
 
       <section v-else-if="activeTab === 'stock'" class="card">
         <div v-if="workshop.inventoryError" class="banner danger m-4">
           <div class="grow">
-            Ma'lumotni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
+            {{ $t('inventory.load.stockBanner') }} · {{ traceLine(workshop.inventoryTraceId) }}
           </div>
         </div>
         <div class="table-wrap">
           <table class="tbl">
             <thead>
               <tr>
-                <th>Material</th>
-                <th class="right">Mavjud</th>
-                <th class="right">Min</th>
-                <th>Holat</th>
+                <th>{{ $t('inventory.stock.columnMaterial') }}</th>
+                <th class="right">{{ $t('inventory.stock.columnOnHand') }}</th>
+                <th class="right">{{ $t('inventory.stock.columnMin') }}</th>
+                <th>{{ $t('inventory.stock.columnStatus') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1223,7 +1267,11 @@ onBeforeUnmount(() => {
                     v-if="isNegative(item) || item.is_low_stock"
                     class="block text-[11px] font-extrabold"
                   >
-                    {{ isNegative(item) ? 'Kirim yozilmagan' : 'Kam qolgan' }}
+                    {{
+                      isNegative(item)
+                        ? $t('inventory.stock.noteNegative')
+                        : $t('inventory.stock.noteLow')
+                    }}
                   </small>
                 </td>
                 <td class="amt muted">
@@ -1240,7 +1288,13 @@ onBeforeUnmount(() => {
                     "
                   >
                     <span class="pd"></span
-                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'Yetarli' }}
+                    >{{
+                      isNegative(item)
+                        ? $t('inventory.stock.pillNegative')
+                        : item.is_low_stock
+                          ? $t('inventory.stock.pillLow')
+                          : $t('inventory.stock.pillEnough')
+                    }}
                   </span>
                 </td>
               </tr>
@@ -1248,12 +1302,12 @@ onBeforeUnmount(() => {
                 <td colspan="4">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="stockFiltered">
-                      <h3>Filtrga mos material topilmadi</h3>
-                      <p>Qidiruvni o'zgartiring yoki tozalang.</p>
+                      <h3>{{ $t('inventory.stock.emptyFilteredTitle') }}</h3>
+                      <p>{{ $t('inventory.stock.emptyFilteredBody') }}</p>
                     </template>
                     <template v-else>
-                      <h3>Bu filialga material qo'shilmagan</h3>
-                      <p>Katalogdan material qo'shing.</p>
+                      <h3>{{ $t('inventory.stock.emptyTitle') }}</h3>
+                      <p>{{ $t('inventory.stock.emptyBody') }}</p>
                     </template>
                   </div>
                 </td>
@@ -1273,19 +1327,19 @@ onBeforeUnmount(() => {
       >
         <div v-if="workshop.inventoryError" class="banner danger m-4">
           <div class="grow">
-            Kirimlarni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
+            {{ $t('inventory.load.invoicesBanner') }} · {{ traceLine(workshop.inventoryTraceId) }}
           </div>
         </div>
         <div class="table-wrap">
           <table class="tbl">
             <thead>
               <tr>
-                <th>Raqam</th>
-                <th>Ta'minotchi</th>
-                <th>Sana</th>
-                <th class="right">Pozitsiya</th>
-                <th class="right">Jami</th>
-                <th>To'lov</th>
+                <th>{{ $t('inventory.invoices.columnNumber') }}</th>
+                <th>{{ $t('inventory.invoices.columnSupplier') }}</th>
+                <th>{{ $t('inventory.invoices.columnDate') }}</th>
+                <th class="right">{{ $t('inventory.invoices.columnLines') }}</th>
+                <th class="right">{{ $t('inventory.invoices.columnTotal') }}</th>
+                <th>{{ $t('inventory.invoices.columnPayment') }}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1300,7 +1354,15 @@ onBeforeUnmount(() => {
                     </small>
                   </td>
                   <td class="num text-ink-muted">{{ formatDate(invoice.invoice_date) }}</td>
-                  <td class="num right">{{ invoice.line_count }} pozitsiya</td>
+                  <td class="num right">
+                    {{
+                      $t(
+                        'inventory.invoices.lineCount',
+                        { n: invoice.line_count },
+                        invoice.line_count,
+                      )
+                    }}
+                  </td>
                   <td class="amt">
                     {{ formatTiyin(invoice.total_tiyin) }}
                     <small
@@ -1308,10 +1370,18 @@ onBeforeUnmount(() => {
                       class="block text-[11px] text-ink-muted"
                     >
                       <template v-if="invoice.discount_tiyin > 0">
-                        chegirma {{ formatTiyin(invoice.discount_tiyin) }}
+                        {{
+                          $t('inventory.invoices.discountLine', {
+                            amount: formatTiyin(invoice.discount_tiyin),
+                          })
+                        }}
                       </template>
                       <template v-if="invoice.surcharge_tiyin > 0">
-                        ustama {{ formatTiyin(invoice.surcharge_tiyin) }}
+                        {{
+                          $t('inventory.invoices.surchargeLine', {
+                            amount: formatTiyin(invoice.surcharge_tiyin),
+                          })
+                        }}
                       </template>
                     </small>
                   </td>
@@ -1323,7 +1393,11 @@ onBeforeUnmount(() => {
                       v-if="invoice.outstanding_tiyin > 0 && invoice.paid_tiyin > 0"
                       class="block text-[11px] text-ink-muted"
                     >
-                      qoldiq {{ formatTiyin(invoice.outstanding_tiyin) }}
+                      {{
+                        $t('inventory.invoices.outstanding', {
+                          amount: formatTiyin(invoice.outstanding_tiyin),
+                        })
+                      }}
                     </small>
                   </td>
                   <td class="right">
@@ -1333,7 +1407,9 @@ onBeforeUnmount(() => {
                     <button
                       type="button"
                       class="mp-row-icon row-open"
-                      :aria-label="`${invoice.invoice_no} qatorlari`"
+                      :aria-label="
+                        $t('inventory.invoices.expandAria', { invoice: invoice.invoice_no })
+                      "
                       :aria-expanded="isInvoiceExpanded(invoice.id)"
                       :aria-controls="`invoice-lines-${invoice.id}`"
                       @click="toggleInvoice(invoice.id)"
@@ -1350,10 +1426,10 @@ onBeforeUnmount(() => {
                     <table class="tbl">
                       <thead>
                         <tr>
-                          <th>Material</th>
-                          <th class="right">Miqdor</th>
-                          <th class="right">Narx</th>
-                          <th class="right">Summa</th>
+                          <th>{{ $t('inventory.invoice.columnMaterial') }}</th>
+                          <th class="right">{{ $t('inventory.invoice.columnQuantity') }}</th>
+                          <th class="right">{{ $t('inventory.invoice.columnPrice') }}</th>
+                          <th class="right">{{ $t('inventory.invoice.columnAmount') }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1378,21 +1454,29 @@ onBeforeUnmount(() => {
                           </td>
                         </tr>
                         <tr>
-                          <td colspan="3" class="right text-ink-soft">Oraliq jami</td>
+                          <td colspan="3" class="right text-ink-soft">
+                            {{ $t('inventory.invoice.subtotal') }}
+                          </td>
                           <td class="amt">{{ formatTiyin(invoice.subtotal_tiyin) }}</td>
                         </tr>
                         <tr v-if="invoice.discount_tiyin > 0">
-                          <td colspan="3" class="right text-ink-soft">Chegirma</td>
+                          <td colspan="3" class="right text-ink-soft">
+                            {{ $t('inventory.invoice.discount') }}
+                          </td>
                           <td class="amt danger-text">
                             −{{ formatTiyin(invoice.discount_tiyin) }}
                           </td>
                         </tr>
                         <tr v-if="invoice.surcharge_tiyin > 0">
-                          <td colspan="3" class="right text-ink-soft">Ustama</td>
+                          <td colspan="3" class="right text-ink-soft">
+                            {{ $t('inventory.invoice.surcharge') }}
+                          </td>
                           <td class="amt">+{{ formatTiyin(invoice.surcharge_tiyin) }}</td>
                         </tr>
                         <tr>
-                          <td colspan="3" class="right font-bold">Jami</td>
+                          <td colspan="3" class="right font-bold">
+                            {{ $t('inventory.invoice.total') }}
+                          </td>
                           <td class="amt font-bold">{{ formatTiyin(invoice.total_tiyin) }}</td>
                         </tr>
                       </tbody>
@@ -1406,15 +1490,15 @@ onBeforeUnmount(() => {
                     <h3>
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
-                          ? 'Filtrga mos kirim topilmadi'
-                          : 'Hali kirim yozilmagan'
+                          ? $t('inventory.invoices.emptyFilteredTitle')
+                          : $t('inventory.invoices.emptyTitle')
                       }}
                     </h3>
                     <p>
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
-                          ? "Qidiruvni yoki to'lov holatini o'zgartiring."
-                          : "Ta'minotchidan kelgan fakturani «+ Kirim» orqali yozing."
+                          ? $t('inventory.invoices.emptyFilteredBody')
+                          : $t('inventory.invoices.emptyBody')
                       }}
                     </p>
                   </div>
@@ -1435,24 +1519,24 @@ onBeforeUnmount(() => {
       >
         <div v-if="workshop.inventoryError" class="banner danger m-4">
           <div class="grow">
-            Tranzaksiyalarni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
+            {{ $t('inventory.load.txBanner') }} · {{ traceLine(workshop.inventoryTraceId) }}
           </div>
         </div>
         <div class="table-wrap">
           <table class="tbl">
             <thead>
               <tr>
-                <th>Vaqt</th>
-                <th>Turi</th>
-                <th>Material</th>
-                <th class="right">Miqdor</th>
-                <th>Keyin</th>
-                <th class="right">Narx</th>
-                <th class="right">Summa</th>
-                <th>Buyurtma</th>
-                <th>Ta'minotchi</th>
-                <th>Kim qildi</th>
-                <th>Izoh</th>
+                <th>{{ $t('inventory.tx.columnTime') }}</th>
+                <th>{{ $t('inventory.tx.columnType') }}</th>
+                <th>{{ $t('inventory.tx.columnMaterial') }}</th>
+                <th class="right">{{ $t('inventory.tx.columnQuantity') }}</th>
+                <th>{{ $t('inventory.tx.columnBalance') }}</th>
+                <th class="right">{{ $t('inventory.tx.columnPrice') }}</th>
+                <th class="right">{{ $t('inventory.tx.columnAmount') }}</th>
+                <th>{{ $t('inventory.tx.columnOrder') }}</th>
+                <th>{{ $t('inventory.tx.columnSupplier') }}</th>
+                <th>{{ $t('inventory.tx.columnActor') }}</th>
+                <th>{{ $t('inventory.tx.columnNote') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1511,8 +1595,8 @@ onBeforeUnmount(() => {
               <tr v-if="workshop.stockTransactions.length === 0">
                 <td colspan="11">
                   <div class="st-empty !border-0 !py-8">
-                    <h3>Ombor harakati yo'q</h3>
-                    <p>Kirim, sarf va tuzatishlar shu yerda ro'yxatga tushadi.</p>
+                    <h3>{{ $t('inventory.tx.emptyTitle') }}</h3>
+                    <p>{{ $t('inventory.tx.emptyBody') }}</p>
                   </div>
                 </td>
               </tr>
@@ -1529,7 +1613,9 @@ onBeforeUnmount(() => {
             :disabled="workshop.inventoryLoading"
             @click="loadMoreTransactions"
           >
-            {{ workshop.inventoryLoading ? 'Yuklanmoqda' : "Yana ko'rsatish" }}
+            {{
+              workshop.inventoryLoading ? $t('inventory.tx.loading') : $t('inventory.tx.loadMore')
+            }}
           </button>
         </div>
       </section>
@@ -1543,40 +1629,50 @@ onBeforeUnmount(() => {
       >
         <div class="mp-filters">
           <button type="button" class="mp-button mp-button-primary" @click="openCreateSupplier">
-            + Yangi ta'minotchi
+            {{ $t('inventory.supplier.createAction') }}
           </button>
         </div>
 
         <AppModal
           :open="supplierModalOpen"
-          :title="editingSupplierId ? `Ta'minotchini tahrirlash` : `Yangi ta'minotchi`"
+          :title="
+            editingSupplierId
+              ? $t('inventory.supplier.editTitle')
+              : $t('inventory.supplier.createTitle')
+          "
           @close="closeSupplierModal"
         >
           <form class="grid gap-3" @submit.prevent="saveSupplier">
             <label class="field">
-              <span>Nom</span>
+              <span>{{ $t('inventory.supplier.nameLabel') }}</span>
               <input v-model="supplierForm.name" class="mp-input" required />
             </label>
             <label class="field">
-              <span>Telefon</span>
+              <span>{{ $t('inventory.supplier.phoneLabel') }}</span>
               <PhoneInput v-model="supplierForm.phone" />
             </label>
             <label class="field">
-              <span>Izoh</span>
+              <span>{{ $t('inventory.supplier.noteLabel') }}</span>
               <input v-model="supplierForm.note" class="mp-input" />
             </label>
             <p
               v-if="supplierError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Ta'minotchi saqlanmadi.
+              {{ $t('inventory.error.supplier_save_failed') }}
             </p>
             <div class="flex items-center gap-2">
               <button type="submit" class="mp-button mp-button-primary" :disabled="supplierSaving">
-                {{ supplierSaving ? 'Saqlanmoqda' : editingSupplierId ? 'Saqlash' : "Qo'shish" }}
+                {{
+                  supplierSaving
+                    ? $t('inventory.action.saving')
+                    : editingSupplierId
+                      ? $t('inventory.action.save')
+                      : $t('inventory.action.add')
+                }}
               </button>
               <button type="button" class="mp-button mp-button-outline" @click="closeSupplierModal">
-                Bekor
+                {{ $t('inventory.action.cancel') }}
               </button>
             </div>
           </form>
@@ -1587,11 +1683,13 @@ onBeforeUnmount(() => {
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Nomi</th>
-                  <th>Telefon</th>
-                  <th>Izoh</th>
-                  <th v-if="canSeeDebts" class="right">Qarz</th>
-                  <th>Holat</th>
+                  <th>{{ $t('inventory.supplier.columnName') }}</th>
+                  <th>{{ $t('inventory.supplier.columnPhone') }}</th>
+                  <th>{{ $t('inventory.supplier.columnNote') }}</th>
+                  <th v-if="canSeeDebts" class="right">
+                    {{ $t('inventory.supplier.columnDebt') }}
+                  </th>
+                  <th>{{ $t('inventory.supplier.columnStatus') }}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -1603,7 +1701,7 @@ onBeforeUnmount(() => {
                     <button
                       type="button"
                       class="row-open row-open-text"
-                      :aria-label="`${supplier.name} — tahrirlash`"
+                      :aria-label="$t('inventory.supplier.editAria', { name: supplier.name })"
                       :disabled="supplierSaving"
                       @click="editSupplier(supplier)"
                     >
@@ -1624,13 +1722,17 @@ onBeforeUnmount(() => {
                   <td>
                     <span :class="supplier.status === 'active' ? 'pill p-ok' : 'pill p-dn'">
                       <span class="pd"></span
-                      >{{ supplier.status === 'active' ? 'Faol' : 'Faol emas' }}
+                      >{{
+                        supplier.status === 'active'
+                          ? $t('inventory.supplier.statusActive')
+                          : $t('inventory.supplier.statusInactive')
+                      }}
                     </span>
                   </td>
                   <td class="right">
                     <ActionMenu
                       :items="supplierMenuItems(supplier)"
-                      :label="`${supplier.name} amallari`"
+                      :label="$t('inventory.supplier.menuAria', { name: supplier.name })"
                       @select="toggleSupplierStatus(supplier)"
                     />
                   </td>
@@ -1638,8 +1740,8 @@ onBeforeUnmount(() => {
                 <tr v-if="workshop.suppliers.length === 0">
                   <td :colspan="canSeeDebts ? 6 : 5">
                     <div class="st-empty !border-0 !py-8">
-                      <h3>Ta'minotchi yo'q</h3>
-                      <p>«+ Yangi ta'minotchi» orqali birinchisini qo'shing.</p>
+                      <h3>{{ $t('inventory.supplier.emptyTitle') }}</h3>
+                      <p>{{ $t('inventory.supplier.emptyBody') }}</p>
                     </div>
                   </td>
                 </tr>

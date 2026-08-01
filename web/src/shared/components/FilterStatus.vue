@@ -14,7 +14,7 @@
 withDefaults(
   defineProps<{
     /**
-     * Whether the list is narrowed. Drives the "Filtr bo'yicha N ta … topildi"
+     * Whether the list is narrowed. Drives the `forms.filterStatus.found`
      * sentence. With no `total` and no active filter the line is hidden — an
      * unfiltered list needs no receipt.
      */
@@ -23,7 +23,11 @@ withDefaults(
     count: number
     /** `true` when the page holds only the first slice, so the count reads `12+`. */
     hasMore?: boolean
-    /** Plural noun for what was counted: `buyurtma`, `xarajat`, `material`. */
+    /**
+     * Plural noun for what was counted, already in the active locale and in the
+     * form the sentence needs: `buyurtma` / `заказов`. It is the page's word,
+     * not this component's, so the page translates it.
+     */
     noun: string
     /**
      * Pre-formatted money for the same rows, or null to leave it off. When set,
@@ -51,29 +55,36 @@ withDefaults(
     role="status"
     aria-live="polite"
   >
-    <template v-if="loading">Yangilanmoqda…</template>
+    <template v-if="loading">{{ $t('forms.filterStatus.refreshing') }}</template>
     <template v-else>
-      <span v-if="active">
-        Filtr bo'yicha
-        <b class="font-mono text-ink">{{ count }}{{ hasMore ? '+' : '' }}</b>
-        ta {{ noun }} topildi
-      </span>
-      <span v-else-if="total">
-        <b class="font-mono text-ink">{{ count }}</b>
-        ta {{ noun }}
-      </span>
+      <!-- `i18n-t` rather than `$t`: the figure is mono and bold *inside* the
+           sentence, and Russian does not put it where Uzbek does — splitting the
+           message around the <b> would make the word order untranslatable. -->
+      <i18n-t v-if="active" keypath="forms.filterStatus.found" tag="span" scope="global">
+        <template #count>
+          <b class="font-mono text-ink">{{ count }}{{ hasMore ? '+' : '' }}</b>
+        </template>
+        <template #noun>{{ noun }}</template>
+      </i18n-t>
+      <i18n-t v-else-if="total" keypath="forms.filterStatus.count" tag="span" scope="global">
+        <template #count>
+          <b class="font-mono text-ink">{{ count }}</b>
+        </template>
+        <template #noun>{{ noun }}</template>
+      </i18n-t>
       <span v-if="active && total" class="text-ink-muted">·</span>
-      <span v-if="total">
-        jami
-        <b class="font-mono text-ink">{{ total }}</b>
-      </span>
+      <i18n-t v-if="total" keypath="forms.filterStatus.total" tag="span" scope="global">
+        <template #total>
+          <b class="font-mono text-ink">{{ total }}</b>
+        </template>
+      </i18n-t>
       <button
         v-if="onReset"
         type="button"
         class="text-accent underline underline-offset-2"
         @click="onReset()"
       >
-        Hammasini tozalash
+        {{ $t('forms.filterStatus.resetAll') }}
       </button>
     </template>
   </p>

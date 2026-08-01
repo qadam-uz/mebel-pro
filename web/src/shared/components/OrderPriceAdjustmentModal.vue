@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import {
@@ -36,6 +37,8 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { t } = useI18n()
+
 const kind = ref<WorkshopAdjustmentKind>('fixed')
 const value = ref('')
 const reason = ref('')
@@ -43,8 +46,12 @@ const error = ref<string | null>(null)
 const valueInput = ref<HTMLInputElement | null>(null)
 
 const options = computed<ChoiceOption[]>(() => [
-  { value: 'fixed', label: "So'm", meta: props.fixedHint },
-  { value: 'percent', label: 'Foiz', meta: '1-100 foiz' },
+  { value: 'fixed', label: t('orders.adjustment.som'), meta: props.fixedHint },
+  {
+    value: 'percent',
+    label: t('orders.adjustment.percent'),
+    meta: t('orders.adjustment.percentHint'),
+  },
 ])
 const valueErrorId = 'adjustment-value-error'
 
@@ -84,13 +91,12 @@ function submit() {
   <AppModal :open="open" :title="title" @close="emit('close')">
     <div class="grid gap-3">
       <p v-if="currentTiyin > 0" class="rounded-md bg-sunk p-3 text-sm text-ink-soft">
-        Hozirgi qiymat: {{ formatTiyin(currentTiyin) }}. O'zgartirish uchun tur va qiymatni qayta
-        kiriting.
+        {{ $t('orders.adjustment.current', { amount: formatTiyin(currentTiyin) }) }}
       </p>
-      <FormSelect v-model="kind" label="Turi" :options="options" />
+      <FormSelect v-model="kind" :label="$t('orders.adjustment.kind')" :options="options" />
       <div class="grid gap-1">
         <label class="field !mb-0"
-          ><span>Qiymat</span
+          ><span>{{ $t('orders.adjustment.value') }}</span
           ><input
             ref="valueInput"
             v-model="value"
@@ -105,7 +111,8 @@ function submit() {
         </p>
       </div>
       <label class="field !mb-0"
-        ><span>Sabab</span><input v-model="reason" class="mp-input"
+        ><span>{{ $t('orders.adjustment.reason') }}</span
+        ><input v-model="reason" class="mp-input"
       /></label>
       <p
         v-if="submitError"
@@ -121,7 +128,7 @@ function submit() {
           :disabled="busy"
           @click="submit"
         >
-          {{ pending === 'apply' ? 'Saqlanmoqda…' : applyLabel }}
+          {{ pending === 'apply' ? $t('orders.busy.saving') : applyLabel }}
         </button>
         <button
           v-if="currentTiyin > 0"
@@ -130,7 +137,7 @@ function submit() {
           :disabled="busy"
           @click="emit('remove')"
         >
-          {{ pending === 'remove' ? 'Saqlanmoqda…' : removeLabel }}
+          {{ pending === 'remove' ? $t('orders.busy.saving') : removeLabel }}
         </button>
       </div>
     </div>

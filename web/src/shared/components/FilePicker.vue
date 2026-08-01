@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-// A styled, Uzbek file picker that replaces the browser-native file input (whose
-// "Choose File / No file chosen" text is unstyled and English). It wraps a hidden
+// A styled, localised file picker that replaces the browser-native file input
+// (whose "Choose File / No file chosen" text is unstyled and English). It wraps a hidden
 // native input and re-emits its `change` event unchanged, so existing handlers
 // that read `event.target.files[0]` keep working as-is.
 //
@@ -22,8 +23,11 @@ const props = withDefaults(
     removable?: boolean
   }>(),
   {
-    buttonLabel: 'Fayl tanlang',
-    placeholder: 'Fayl tanlanmagan',
+    // Empty rather than the copy itself: a prop default is evaluated once, when
+    // the component is defined, so a literal would freeze at whichever locale
+    // loaded the module. The fallback lives in the computeds below.
+    buttonLabel: '',
+    placeholder: '',
     disabled: false,
     uploading: false,
     removable: false,
@@ -31,8 +35,12 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ change: [event: Event]; remove: [] }>()
 
+const { t } = useI18n()
 const inputRef = ref<HTMLInputElement | null>(null)
 const localName = ref('')
+
+const buttonText = computed(() => props.buttonLabel || t('catalog.file.choose'))
+const placeholderText = computed(() => props.placeholder || t('catalog.file.empty'))
 
 // `selectedName === undefined` ⇒ uncontrolled: fall back to the last picked name.
 const displayName = computed(() =>
@@ -70,13 +78,13 @@ function onRemove() {
       class="min-w-0 flex-1 truncate text-sm"
       :class="uploading || displayName ? 'text-ink' : 'text-ink-muted'"
     >
-      {{ uploading ? 'Yuklanmoqda…' : displayName || placeholder }}
+      {{ uploading ? $t('catalog.file.uploading') : displayName || placeholderText }}
     </span>
     <button
       v-if="removable && displayName && !uploading"
       type="button"
       class="shrink-0 rounded-md px-2 text-lg font-bold leading-none text-ink-muted transition hover:text-danger"
-      aria-label="Faylni olib tashlash"
+      :aria-label="$t('catalog.file.remove')"
       @click="onRemove"
     >
       ×
@@ -87,7 +95,7 @@ function onRemove() {
       :disabled="disabled || uploading"
       @click="inputRef?.click()"
     >
-      {{ uploading ? 'Yuklanmoqda' : buttonLabel }}
+      {{ uploading ? $t('catalog.file.busy') : buttonText }}
     </button>
   </div>
 </template>

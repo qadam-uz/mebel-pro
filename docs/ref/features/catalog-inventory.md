@@ -257,7 +257,7 @@ now-redundant branch column:
 
   The **arrival form** is a header — supplier, date, and the `K-…` badge the number will take
   — over a line table with **+ Material qo'shish**, closing on a totals block:
-  *Oraliq jami* → *Skidka* → *Ustama* → *Jami*. Each line's price field **prefills** with the
+  *Oraliq jami* → *Chegirma* → *Ustama* → *Jami*. Each line's price field **prefills** with the
   last price paid — supplier-specific when the picked supplier has priced history, otherwise
   the material's overall latest — with a provenance hint underneath (price · date · supplier;
   "birinchi kirim" when no history). A prefill never overwrites a price the user has typed —

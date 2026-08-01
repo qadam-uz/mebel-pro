@@ -1,0 +1,29 @@
+{
+  "action": {
+    "cancel": "Bekor qilish",
+    "close": "Yopish",
+    "save": "Saqlash",
+    "retry": "Qayta urinish",
+    "search": "Qidirish",
+    "back": "Orqaga",
+    "delete": "O'chirish",
+    "edit": "Tahrirlash",
+    "add": "Qo'shish",
+    "confirm": "Tasdiqlash"
+  },
+  "state": {
+    "loading": "Yuklanmoqda…",
+    "saving": "Saqlanmoqda…",
+    "empty": "Hech narsa topilmadi"
+  },
+  "field": {
+    "name": "Nomi",
+    "type": "Tur",
+    "status": "Holat",
+    "phone": "Telefon",
+    "comment": "Izoh",
+    "reason": "Sabab",
+    "total": "Jami",
+    "amount": "Summa"
+  }
+}

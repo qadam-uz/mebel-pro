@@ -1,4 +1,4 @@
-import type { DropdownOption, NavItem } from '@/shared/app/roleConfig'
+import type { DropdownOption, NavGroupId, NavItem } from '@/shared/app/roleConfig'
 import type {
   ActionLog,
   ErrorRecordStatus,
@@ -80,13 +80,16 @@ export function adminNavMetrics(input: {
   ])
 }
 
+/** Groups by the stable `NavGroupId`, not by the rendered label — grouping on
+ *  display text would split or merge sections the moment a locale changed. The
+ *  caller resolves `nav.group.<id>` for the heading. */
 export function groupedNav(items: NavItem[]) {
-  const groups: Array<{ label: string; items: NavItem[] }> = []
+  const groups: Array<{ id: NavGroupId; items: NavItem[] }> = []
   for (const item of items) {
-    const label = item.group ?? 'Platforma'
-    let group = groups.find((current) => current.label === label)
+    const id = item.group ?? 'platform'
+    let group = groups.find((current) => current.id === id)
     if (!group) {
-      group = { label, items: [] }
+      group = { id, items: [] }
       groups.push(group)
     }
     group.items.push(item)

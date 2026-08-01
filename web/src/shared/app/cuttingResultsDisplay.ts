@@ -6,6 +6,7 @@ import {
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
+import { translate } from '@/shared/i18n'
 import type {
   CuttingOffcut,
   CuttingPanel,
@@ -57,7 +58,9 @@ function textFits(text: string, lengthMm: number, widthMm: number, normScale: nu
 
 export function offcutLabelMode(offcut: CuttingOffcut, normScale: number): OffcutLabelMode | null {
   const dims = `${offcut.length_mm}×${offcut.width_mm}`
-  const labels = offcut.usable ? [`Qoldiq ${dims}`] : ['chiqit']
+  const labels = offcut.usable
+    ? [translate('cutting.result.offcutUsable', { dims })]
+    : [translate('cutting.result.offcutWaste')]
   for (const text of labels) {
     if (textFits(text, offcut.length_mm, offcut.width_mm, normScale)) {
       return { text, orientation: 'horizontal' }
@@ -164,7 +167,7 @@ export function resultSheetPartGroups(result: CuttingResult): ResultSheetPartGro
     snapshotOrder.get(partRef) ?? orphanOrder.get(partRef) ?? Number.MAX_SAFE_INTEGER
   return result.panels.map((panel) => ({
     panelId: panel.id,
-    sheetLabel: `List ${panelDisplayIndex(result, panel)}`,
+    sheetLabel: translate('cutting.result.sheetLabel', { n: panelDisplayIndex(result, panel) }),
     materialLabel: snapshotMaterialLabel(
       result.material_snapshots[panel.material_id],
       panel.material_id.slice(0, 8),

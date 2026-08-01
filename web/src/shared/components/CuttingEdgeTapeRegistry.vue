@@ -20,7 +20,10 @@ function badgeStyle(entry: EdgeRegistryEntry) {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-2" aria-label="Kromkalar">
+  <div
+    class="flex flex-wrap items-center gap-x-5 gap-y-2"
+    :aria-label="$t('cutting.edge.listAria')"
+  >
     <button
       v-for="entry in entries"
       :key="entry.key"
@@ -44,7 +47,7 @@ function badgeStyle(entry: EdgeRegistryEntry) {
         class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
         :title="narrowWarningForEntry?.(entry) ?? undefined"
       >
-        Qirradan tor
+        {{ $t('cutting.edge.tooNarrow') }}
       </span>
     </button>
   </div>

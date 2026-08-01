@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
@@ -8,13 +9,14 @@ import {
   isRevisionEvent,
   orderPhaseSteps,
   productionTimelineDetails,
+  revertTargetLabelForOrder,
   revisionTimelineDetails,
   type WorkshopAdjustmentKind,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
-  STOCK_SHORTFALL_MESSAGE,
   orderPillClass,
+  stockShortfallMessage,
   workshopErrorMessage,
   workshopStatusUz,
 } from '@/shared/app/workshopUi'
@@ -29,6 +31,7 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDate, formatTiyin } from '@/shared/formatters'
+import { translatePlural } from '@/shared/i18n'
 import { useAuthStore } from '@/shared/stores/auth'
 import {
   useOrdersStore,
@@ -53,6 +56,7 @@ const auth = useAuthStore()
 const permissions = useWorkshopPermissions()
 const toast = useToast()
 const orders = useOrdersStore()
+const { t } = useI18n()
 const orderId = computed(() => String(route.params.order_id))
 const cutterId = ref<string | null>(null)
 const edgerId = ref<string | null>(null)
@@ -104,8 +108,8 @@ const canProcessProduction = computed(() =>
 // of `order` so it doesn't change under the loading and error states.
 const backLink = computed(() =>
   permissions.can(p.manageOrders)
-    ? { to: rolePath('/workshop/orders'), label: '← Buyurtmalar' }
-    : { to: rolePath('/workshop'), label: '← Asosiy' },
+    ? { to: rolePath('/workshop/orders'), label: t('orders.detail.backOrders') }
+    : { to: rolePath('/workshop'), label: t('orders.detail.backHome') },
 )
 const canCompleteCutting = computed(() => {
   const current = order.value
@@ -150,12 +154,14 @@ const cutterSub = computed<SlotSub>(() => {
   if (!current) return null
   if (current.cut_completed_at) {
     const bits = [formatDate(current.cut_completed_at)]
-    if (current.cut_count_snapshot !== null) bits.push(`${current.cut_count_snapshot} kesim`)
-    if (current.panels_used_snapshot !== null) bits.push(`${current.panels_used_snapshot} panel`)
+    if (current.cut_count_snapshot !== null)
+      bits.push(translatePlural('orders.unit.cuts', current.cut_count_snapshot))
+    if (current.panels_used_snapshot !== null)
+      bits.push(translatePlural('orders.unit.panels', current.panels_used_snapshot))
     return { kind: 'done', text: bits.join(' · ') }
   }
   if (canManageOrders.value && current.status === 'cutting')
-    return { kind: 'hint', text: "Kesish boshlangan — kesuvchini o'zgartirib bo'lmaydi." }
+    return { kind: 'hint', text: t('orders.detail.cutterLocked') }
   return null
 })
 const edgerSub = computed<SlotSub>(() => {
@@ -164,14 +170,13 @@ const edgerSub = computed<SlotSub>(() => {
   if (current.edge_completed_at)
     return { kind: 'done', text: formatDate(current.edge_completed_at) }
   if (canManageOrders.value && current.status === 'edge_banding' && current.banding_started_at)
-    return { kind: 'hint', text: "Kromka boshlangan — ustani o'zgartirib bo'lmaydi." }
+    return { kind: 'hint', text: t('orders.detail.edgerLocked') }
   // The open slot doesn't block the saw, so from `cutting` on it carries the
   // nudge that used to live on the (blocked) start button.
   if (canManageOrders.value && !current.assigned_edger_user_id) {
-    if (current.status === 'cutting')
-      return { kind: 'hint', text: 'Hali tayinlanmagan — kromka boshlanishidan oldin tanlang.' }
+    if (current.status === 'cutting') return { kind: 'hint', text: t('orders.detail.edgerPending') }
     if (current.status === 'edge_banding')
-      return { kind: 'hint', text: 'Kromka ustasi tayinlanmaguncha ish boshlanmaydi.' }
+      return { kind: 'hint', text: t('orders.detail.edgerRequired') }
   }
   return null
 })
@@ -181,7 +186,7 @@ const edgerSub = computed<SlotSub>(() => {
 const startCuttingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'confirmed') return null
-  if (!current.assigned_cutter_user_id) return 'Kesuvchi tanlanmagan'
+  if (!current.assigned_cutter_user_id) return t('orders.detail.cutterNotChosen')
   return null
 })
 // Start is gated like completion: the assigned master, or the office on-behalf.
@@ -196,14 +201,14 @@ const canStartCutting = computed(() => {
 const startBandingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'edge_banding' || current.banding_started_at) return null
-  if (!current.assigned_edger_user_id) return 'Kromka yopishtiruvchi tanlanmagan'
+  if (!current.assigned_edger_user_id) return t('orders.detail.edgerNotChosen')
   return null
 })
 const workerOptions = computed<ChoiceOption[]>(() =>
   orders.workerOptions.map((worker) => ({
     value: worker.id,
     label: worker.full_name,
-    meta: worker.is_owner ? 'rahbar' : 'production',
+    meta: worker.is_owner ? t('orders.detail.roleOwner') : t('orders.detail.roleProduction'),
   })),
 )
 const activePanel = computed(() => {
@@ -222,16 +227,20 @@ const totalPieces = computed(
   () => order.value?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0,
 )
 const productionMeta = computed(() => {
-  const pieces = `${totalPieces.value} detal`
-  return result.value ? `${pieces} · ${totalPanels.value} panel` : pieces
+  const pieces = translatePlural('orders.unit.parts', totalPieces.value)
+  return result.value
+    ? `${pieces} · ${translatePlural('orders.unit.panels', totalPanels.value)}`
+    : pieces
 })
 const phaseSteps = computed(() => (order.value ? orderPhaseSteps(order.value) : []))
 const isCancelled = computed(() => order.value?.status === 'cancelled')
 const discountButtonLabel = computed(() =>
-  order.value?.discount_tiyin ? 'Chegirmani yangilash' : "Chegirma qo'shish",
+  order.value?.discount_tiyin ? t('orders.detail.discountUpdate') : t('orders.detail.discountAdd'),
 )
 const surchargeButtonLabel = computed(() =>
-  order.value?.surcharge_tiyin ? 'Ustamani yangilash' : "Ustama qo'shish",
+  order.value?.surcharge_tiyin
+    ? t('orders.detail.surchargeUpdate')
+    : t('orders.detail.surchargeAdd'),
 )
 const noteDirty = computed(() => noteDraft.value.trim() !== (order.value?.note_workshop ?? ''))
 // Cutting would oversell stock (projected balance below zero), not just dip low —
@@ -239,17 +248,12 @@ const noteDirty = computed(() => noteDraft.value.trim() !== (order.value?.note_w
 const hasShortfall = computed(
   () => order.value?.stock_warnings.some((warning) => warning.projected_after < 0) ?? false,
 )
-const revertTargetLabel = computed(() => {
-  const current = order.value
-  if (!current) return ''
-  if (current.status === 'cutting') return 'tasdiqlangan holatiga'
-  if (current.status === 'edge_banding') return 'kesishga'
-  if (current.status === 'ready') return current.has_banding ? 'kromkaga' : 'kesishga'
-  return ''
-})
+const revertTargetLabel = computed(() =>
+  order.value ? revertTargetLabelForOrder(order.value) : '',
+)
 const revertButtonLabel = computed(() => {
-  if (!revertTargetLabel.value) return 'Bir qadam orqaga'
-  const label = `${revertTargetLabel.value} qaytarish`
+  if (!revertTargetLabel.value) return t('orders.action.revertFallback')
+  const label = t('orders.action.revertTo', { target: revertTargetLabel.value })
   return label.charAt(0).toUpperCase() + label.slice(1)
 })
 
@@ -267,12 +271,17 @@ const primaryAction = computed<PrimaryAction | null>(() => {
   const current = order.value
   if (!current) return null
   if (current.status === 'new' && canManageOrders.value)
-    return { key: 'approve', label: 'Tasdiqlash', busyLabel: 'Tasdiqlanmoqda…', run: approve }
+    return {
+      key: 'approve',
+      label: t('orders.action.approve'),
+      busyLabel: t('orders.busy.approving'),
+      run: approve,
+    }
   if (current.status === 'confirmed' && (canManageOrders.value || canCompleteCutting.value))
     return {
       key: 'startCutting',
-      label: 'Kesishni boshlash',
-      busyLabel: 'Boshlanmoqda…',
+      label: t('orders.action.startCutting'),
+      busyLabel: t('orders.busy.starting'),
       disabled: !canStartCutting.value,
       hint: startCuttingMissing.value,
       run: startCutting,
@@ -280,8 +289,8 @@ const primaryAction = computed<PrimaryAction | null>(() => {
   if (current.status === 'cutting' && canCompleteCutting.value)
     return {
       key: 'completeCutting',
-      label: 'Kesish tugadi',
-      busyLabel: 'Bajarilmoqda…',
+      label: t('orders.action.completeCutting'),
+      busyLabel: t('orders.busy.running'),
       run: completeCutting,
     }
   if (current.status === 'edge_banding' && canCompleteBanding.value) {
@@ -290,14 +299,14 @@ const primaryAction = computed<PrimaryAction | null>(() => {
     return current.banding_started_at
       ? {
           key: 'completeBanding',
-          label: 'Kromka tugadi',
-          busyLabel: 'Bajarilmoqda…',
+          label: t('orders.action.completeBanding'),
+          busyLabel: t('orders.busy.running'),
           run: completeBanding,
         }
       : {
           key: 'startBanding',
-          label: 'Kromka boshlash',
-          busyLabel: 'Boshlanmoqda…',
+          label: t('orders.action.startBanding'),
+          busyLabel: t('orders.busy.starting'),
           disabled: startBandingMissing.value !== null,
           hint: startBandingMissing.value,
           run: startBanding,
@@ -306,8 +315,8 @@ const primaryAction = computed<PrimaryAction | null>(() => {
   if (current.status === 'ready' && canManageOrders.value)
     return {
       key: 'markCollected',
-      label: 'Mijoz olib ketdi',
-      busyLabel: 'Bajarilmoqda…',
+      label: t('orders.action.markCollected'),
+      busyLabel: t('orders.busy.running'),
       run: () => (markCollectedOpen.value = true),
     }
   return null
@@ -319,7 +328,7 @@ const menuItems = computed<OrderMenuItem[]>(() => {
   if (!current) return []
   const items: OrderMenuItem[] = []
   if (canEditOrder.value && !current.revision_draft_id)
-    items.push({ key: 'edit', label: 'Tahrirlash', run: startEdit })
+    items.push({ key: 'edit', label: t('orders.action.edit'), run: startEdit })
   if (canManageOrders.value && ['new', 'confirmed'].includes(current.status)) {
     items.push({
       key: 'discount',
@@ -348,7 +357,7 @@ const menuItems = computed<OrderMenuItem[]>(() => {
   if (canManageOrders.value && !['completed', 'cancelled'].includes(current.status))
     items.push({
       key: 'cancel',
-      label: 'Buyurtmani bekor qilish',
+      label: t('orders.action.cancelOrder'),
       danger: true,
       run: requestCancelOrder,
     })
@@ -386,8 +395,11 @@ function edgeConsumedTotal(current: OrderDetail) {
 }
 
 function workerName(id: string | null) {
-  if (!id) return 'Tayinlanmagan'
-  return orders.workerOptions.find((worker) => worker.id === id)?.full_name ?? "Noma'lum xodim"
+  if (!id) return t('orders.detail.unassigned')
+  return (
+    orders.workerOptions.find((worker) => worker.id === id)?.full_name ??
+    t('orders.detail.unknownWorker')
+  )
 }
 
 function timelineProductionDetails(event: OrderEvent) {
@@ -408,12 +420,12 @@ function warningQuantity(
   key: 'on_hand' | 'required' | 'projected_after',
 ) {
   const value = warning[key]
-  return warning.kind === 'edge' ? metres(value) : `${value} pcs`
+  return warning.kind === 'edge' ? metres(value) : t('orders.detail.pieces', { count: value })
 }
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'List')} · ${panel.panel_index}`
+  return `${String(snapshot?.name ?? t('orders.detail.sheetFallback'))} · ${panel.panel_index}`
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -462,7 +474,11 @@ function onDocumentClick(event: MouseEvent) {
 async function approve() {
   const current = order.value
   if (!current || !canManageOrders.value) return
-  await run(() => orders.approve(current.id, current.version), 'Buyurtma tasdiqlandi.', 'approve')
+  await run(
+    () => orders.approve(current.id, current.version),
+    t('orders.toast.approved'),
+    'approve',
+  )
 }
 
 // Auto-apply assignment: picking a worker saves immediately — null leaves the
@@ -480,7 +496,7 @@ async function applyCutter(value: string | null) {
         cutter_user_id: value,
         edger_user_id: null,
       }),
-    'Kesuvchi tayinlandi.',
+    t('orders.toast.cutterAssigned'),
     'assignCutter',
   )
   if (!ok) cutterId.value = current.assigned_cutter_user_id
@@ -497,7 +513,7 @@ async function applyEdger(value: string | null) {
         cutter_user_id: null,
         edger_user_id: value,
       }),
-    'Kromka ustasi tayinlandi.',
+    t('orders.toast.edgerAssigned'),
     'assignEdger',
   )
   if (!ok) edgerId.value = current.assigned_edger_user_id
@@ -508,7 +524,7 @@ async function startCutting() {
   if (!current || !canStartCutting.value) return
   await run(
     () => orders.startCutting(current.id, current.version),
-    'Kesish boshlandi.',
+    t('orders.toast.cuttingStarted'),
     'startCutting',
   )
 }
@@ -519,7 +535,7 @@ async function startBanding() {
   if (!current.assigned_edger_user_id) return
   await run(
     () => orders.startBanding(current.id, current.version),
-    'Kromka boshlandi.',
+    t('orders.toast.bandingStarted'),
     'startBanding',
   )
 }
@@ -531,7 +547,7 @@ async function completeCutting() {
   if (!current || !canCompleteCutting.value) return
   const completedBy = current.assigned_cutter_user_id
   if (!completedBy) {
-    actionError.value = 'Kesishni bajargan xodim topilmadi.'
+    actionError.value = t('orders.error.cuttingWorkerMissing')
     actionTraceId.value = null
     return
   }
@@ -541,7 +557,7 @@ async function completeCutting() {
         version: current.version,
         completed_by_user_id: completedBy,
       }),
-    'Kesish yakunlandi.',
+    t('orders.toast.cuttingDone'),
     'completeCutting',
   )
   if (ok) warnOnStockShortfall()
@@ -552,7 +568,7 @@ async function completeBanding() {
   if (!current || !canCompleteBanding.value) return
   const completedBy = current.assigned_edger_user_id
   if (!completedBy) {
-    actionError.value = 'Kromka ishini bajargan xodim topilmadi.'
+    actionError.value = t('orders.error.bandingWorkerMissing')
     actionTraceId.value = null
     return
   }
@@ -562,7 +578,7 @@ async function completeBanding() {
         version: current.version,
         completed_by_user_id: completedBy,
       }),
-    'Kromka yakunlandi.',
+    t('orders.toast.bandingDone'),
     'completeBanding',
   )
   if (ok) warnOnStockShortfall()
@@ -572,7 +588,7 @@ async function completeBanding() {
 // flag rides along with it — a warn toast next to the success one, never in
 // place of it (QAD-150).
 function warnOnStockShortfall() {
-  if (orders.currentOrder?.stock_shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
+  if (orders.currentOrder?.stock_shortfall) toast.warn(stockShortfallMessage())
 }
 
 async function markCollected() {
@@ -580,7 +596,7 @@ async function markCollected() {
   if (!current || !canManageOrders.value) return
   const ok = await run(
     () => orders.markCollected(current.id, current.version),
-    'Buyurtma topshirildi.',
+    t('orders.toast.collected'),
   )
   if (ok) markCollectedOpen.value = false
 }
@@ -607,10 +623,13 @@ async function confirmReasonedAction() {
   if (!action || !reason) return
   const ok =
     action === 'revert'
-      ? await run(() => orders.revert(current.id, current.version, reason), 'Buyurtma qaytarildi.')
+      ? await run(
+          () => orders.revert(current.id, current.version, reason),
+          t('orders.toast.reverted'),
+        )
       : await run(
           () => orders.cancelWorkshopOrder(current.id, current.version, reason),
-          'Buyurtma bekor qilindi.',
+          t('orders.toast.cancelled'),
         )
   if (ok) reasonDialogAction.value = null
 }
@@ -619,6 +638,9 @@ async function confirmReasonedAction() {
 // pre-production gate; each modal emits an already-parsed {kind, value, reason}
 // (value in tiyin for a fixed sum) and the store posts it to the matching
 // endpoint. Removal posts a zeroed adjustment, which clears the reason + actor.
+// The removal `reason` below is API payload, not copy: the server drops it with
+// the adjustment, so it never reaches a screen and stays out of the catalog —
+// translating it would write the operator's locale into the audit trail.
 type AdjustmentPayload = { kind: WorkshopAdjustmentKind; value: number; reason: string }
 
 async function applyDiscount(payload: AdjustmentPayload) {
@@ -627,7 +649,7 @@ async function applyDiscount(payload: AdjustmentPayload) {
   discountSubmitError.value = null
   const ok = await run(
     () => orders.discount(current.id, { version: current.version, ...payload }),
-    'Chegirma saqlandi.',
+    t('orders.toast.discountSaved'),
     'discount',
   )
   if (ok) discountOpen.value = false
@@ -646,7 +668,7 @@ async function removeDiscount() {
         value: 0,
         reason: 'Chegirma olib tashlandi',
       }),
-    'Chegirma olib tashlandi.',
+    t('orders.toast.discountRemoved'),
     'removeDiscount',
   )
   if (ok) discountOpen.value = false
@@ -659,7 +681,7 @@ async function applySurcharge(payload: AdjustmentPayload) {
   surchargeSubmitError.value = null
   const ok = await run(
     () => orders.surcharge(current.id, { version: current.version, ...payload }),
-    'Ustama saqlandi.',
+    t('orders.toast.surchargeSaved'),
     'surcharge',
   )
   if (ok) surchargeOpen.value = false
@@ -678,7 +700,7 @@ async function removeSurcharge() {
         value: 0,
         reason: 'Ustama olib tashlandi',
       }),
-    'Ustama olib tashlandi.',
+    t('orders.toast.surchargeRemoved'),
     'removeSurcharge',
   )
   if (ok) surchargeOpen.value = false
@@ -702,7 +724,7 @@ async function onNoteBlur() {
   }
   const ok = await run(
     () => orders.updateNote(current.id, noteDraft.value.trim() || null),
-    'Izoh saqlandi.',
+    t('orders.toast.noteSaved'),
     'note',
   )
   // On failure the editor stays open so the draft isn't lost; the error banner
@@ -741,7 +763,7 @@ async function discardEdit() {
       await cutting.deleteDraft(revisionId)
       await orders.loadWorkshopOrder(current.id)
     },
-    'Tahrir bekor qilindi.',
+    t('orders.toast.editDiscarded'),
     'discardEdit',
   )
   if (ok) discardEditOpen.value = false
@@ -814,28 +836,25 @@ onBeforeUnmount(() => {
       </div>
     </section>
     <section v-else-if="orderOutOfReach" class="st-empty">
-      <h3>Bu buyurtmaga ruxsatingiz yo'q</h3>
-      <p>
-        Buyurtma boshqa filialga tegishli, sizga biriktirilmagan yoki mavjud emas. Ro'yxatdan
-        o'zingizga tegishlisini oching.
-      </p>
+      <h3>{{ $t('orders.detail.notAllowedTitle') }}</h3>
+      <p>{{ $t('orders.detail.notAllowedBody') }}</p>
     </section>
     <section v-else-if="orders.error" class="st-error" role="alert">
-      <h3>Buyurtmani yuklab bo'lmadi</h3>
-      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <h3>{{ $t('orders.detail.loadFailedTitle') }}</h3>
+      <p>{{ $t('orders.state.connectionRetry') }}</p>
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
         :disabled="orders.loading"
         @click="loadDetail"
       >
-        Qayta urinish
+        {{ $t('orders.state.retry') }}
       </button>
       <p class="mt-3 text-xs text-ink-muted">{{ traceLine(orders.traceId) }}</p>
     </section>
     <section v-else-if="!order" class="st-empty">
-      <h3>Buyurtma topilmadi</h3>
-      <p>Buyurtmalar ro'yxatidan qayta ochib ko'ring.</p>
+      <h3>{{ $t('orders.detail.notFoundTitle') }}</h3>
+      <p>{{ $t('orders.detail.notFoundBody') }}</p>
     </section>
 
     <template v-else>
@@ -843,14 +862,14 @@ onBeforeUnmount(() => {
         <div class="od-top">
           <h1>{{ order.order_number }}</h1>
           <span :class="orderPillClass(order.status)">
-            <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+            <span class="pd"></span>{{ workshopStatusUz(order.status) }}
           </span>
           <div class="actions">
             <button
               type="button"
               class="mp-action-icon-button"
-              aria-label="Holat tarixi"
-              title="Holat tarixi"
+              :aria-label="$t('orders.detail.history')"
+              :title="$t('orders.detail.history')"
               @click="historyOpen = true"
             >
               <AppIcon name="clock" class="size-4" />
@@ -864,7 +883,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="mp-action-icon-button"
-                aria-label="Boshqa amallar"
+                :aria-label="$t('orders.detail.moreActions')"
                 :aria-expanded="menuOpen"
                 @click="menuOpen = !menuOpen"
               >
@@ -905,7 +924,7 @@ onBeforeUnmount(() => {
         <!-- The disabled-primary hint rides directly under the action row it
              explains — below the meta line it read as a stray caption. -->
         <p v-if="primaryAction?.hint" class="od-hint">
-          {{ primaryAction.hint }} — tayinlangach boshlash mumkin
+          {{ $t('orders.detail.startHint', { reason: primaryAction.hint }) }}
         </p>
         <div class="od-meta">
           <span
@@ -914,7 +933,7 @@ onBeforeUnmount(() => {
           <!-- &nbsp; in the label: the template compiler condenses away the
                bare newline between elements, which glued "Jami:" to the sum. -->
           <span
-            ><span class="lbl">Jami:&nbsp;</span
+            ><span class="lbl">{{ $t('orders.detail.totalLabel') }}&nbsp;</span
             ><b class="font-mono">{{ formatTiyin(order.total_tiyin) }}</b></span
           >
           <!-- The note rides the right end of the meta line. A long note
@@ -925,21 +944,21 @@ onBeforeUnmount(() => {
               v-if="order.note_workshop"
               class="ml-auto flex max-w-full min-w-0 items-center gap-1"
             >
-              <span class="lbl">Izoh:</span>
+              <span class="lbl">{{ $t('orders.detail.noteLabel') }}</span>
               <span class="txt min-w-0 truncate" :title="order.note_workshop">{{
                 order.note_workshop
               }}</span>
               <button
                 type="button"
                 class="od-note-edit"
-                aria-label="Izohni tahrirlash"
+                :aria-label="$t('orders.detail.noteEdit')"
                 @click="openNoteEditor"
               >
                 <AppIcon name="pencil" class="size-3.5" />
               </button>
             </span>
             <button v-else type="button" class="od-note-add ml-auto" @click="openNoteEditor">
-              + Izoh qo'shish
+              {{ $t('orders.detail.noteAdd') }}
             </button>
           </template>
         </div>
@@ -950,15 +969,22 @@ onBeforeUnmount(() => {
             ref="noteInput"
             v-model="noteDraft"
             class="mp-input min-h-20 w-full resize-y"
-            placeholder="Faqat ustaxona xodimlari ko'radi"
+            :placeholder="$t('orders.detail.notePlaceholder')"
             :disabled="orders.actionLoading && pendingAction === 'note'"
             @blur="onNoteBlur"
           ></textarea>
           <p class="mt-1 w-full text-xs text-ink-muted">
-            {{ pendingAction === 'note' ? 'Saqlanmoqda…' : 'Chetga bosilganda saqlanadi' }}
+            {{
+              pendingAction === 'note' ? $t('orders.busy.saving') : $t('orders.detail.noteBlurHint')
+            }}
           </p>
         </div>
-        <div v-if="!isCancelled" class="od-steps" role="list" aria-label="Buyurtma bosqichlari">
+        <div
+          v-if="!isCancelled"
+          class="od-steps"
+          role="list"
+          :aria-label="$t('orders.detail.phases')"
+        >
           <template v-for="(step, i) in phaseSteps" :key="step.status">
             <span
               class="od-step"
@@ -967,7 +993,7 @@ onBeforeUnmount(() => {
               :aria-current="step.state === 'current' ? 'step' : undefined"
             >
               <span class="od-dot" aria-hidden="true"></span>
-              <span class="od-lbl">{{ workshopStatusUz[step.status] }}</span>
+              <span class="od-lbl">{{ workshopStatusUz(step.status) }}</span>
             </span>
             <span
               v-if="i < phaseSteps.length - 1"
@@ -994,15 +1020,15 @@ onBeforeUnmount(() => {
            (orders.md "Revising a placed order"). -->
       <div v-if="canManageOrders && order.revision_draft_id" class="banner mb-4" role="status">
         <div class="grow">
-          <template v-if="canEditOrder">Bu buyurtmada ochiq tahrir bor.</template>
-          <template v-else>Ochiq tahrir eskirgan — buyurtma holati o'zgargan.</template>
+          <template v-if="canEditOrder">{{ $t('orders.detail.revisionOpen') }}</template>
+          <template v-else>{{ $t('orders.detail.revisionStale') }}</template>
         </div>
         <RouterLink
           v-if="canEditOrder"
           :to="rolePath(`/workshop/orders/cutting/${order.revision_draft_id}`)"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
         >
-          Davom ettirish
+          {{ $t('orders.detail.revisionResume') }}
         </RouterLink>
         <button
           type="button"
@@ -1010,7 +1036,7 @@ onBeforeUnmount(() => {
           :disabled="orders.actionLoading"
           @click="discardEditOpen = true"
         >
-          Tahrirni bekor qilish
+          {{ $t('orders.detail.revisionDiscard') }}
         </button>
       </div>
 
@@ -1021,7 +1047,7 @@ onBeforeUnmount(() => {
         role="status"
       >
         <div class="grow">
-          {{ hasShortfall ? 'Kesishdan keyin zaxira yetishmaydi:' : 'Kesishdan keyin kam qoladi:' }}
+          {{ hasShortfall ? $t('orders.detail.shortfall') : $t('orders.detail.lowStock') }}
           <b>
             {{
               order.stock_warnings
@@ -1038,7 +1064,7 @@ onBeforeUnmount(() => {
       <div class="od-grid">
         <section class="card">
           <div class="card-h">
-            <h2>Ishlab chiqarish</h2>
+            <h2>{{ $t('orders.detail.production') }}</h2>
             <span class="collapse-meta">{{ productionMeta }}</span>
           </div>
           <!-- The card stretches to match its sibling (equal-height second
@@ -1050,13 +1076,15 @@ onBeforeUnmount(() => {
               <FormSelect
                 v-if="canAssignCutter"
                 v-model="cutterId"
-                label="Kesuvchi"
+                :label="$t('orders.detail.cutter')"
                 :options="workerOptions"
                 :disabled="workerOptions.length === 0 || orders.actionLoading"
                 @update:model-value="applyCutter"
               />
               <template v-else>
-                <span class="form-select-label block text-sm font-bold text-ink">Kesuvchi</span>
+                <span class="form-select-label block text-sm font-bold text-ink">{{
+                  $t('orders.detail.cutter')
+                }}</span>
                 <div
                   class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
                 >
@@ -1069,7 +1097,8 @@ onBeforeUnmount(() => {
                 :class="cutterSub.kind === 'done' ? 'text-ink-soft' : 'text-ink-muted'"
               >
                 <template v-if="cutterSub.kind === 'done'"
-                  ><span class="font-bold text-success">✓ Bajardi</span> ·
+                  ><span class="font-bold text-success">{{ $t('orders.detail.completedBy') }}</span>
+                  ·
                 </template>
                 {{ cutterSub.text }}
               </p>
@@ -1078,27 +1107,27 @@ onBeforeUnmount(() => {
                  every order; without banding it is a quiet disabled box. -->
             <div class="flex flex-col gap-1 border-t border-hairline py-4">
               <template v-if="!order.has_banding">
-                <span class="form-select-label block text-sm font-bold text-ink"
-                  >Kromka yopishtiruvchi</span
-                >
+                <span class="form-select-label block text-sm font-bold text-ink">{{
+                  $t('orders.detail.edger')
+                }}</span>
                 <div
                   class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink-muted"
                 >
-                  Bu buyurtmada kromka yo'q
+                  {{ $t('orders.detail.noBanding') }}
                 </div>
               </template>
               <FormSelect
                 v-else-if="canAssignEdger"
                 v-model="edgerId"
-                label="Kromka yopishtiruvchi"
+                :label="$t('orders.detail.edger')"
                 :options="workerOptions"
                 :disabled="workerOptions.length === 0 || orders.actionLoading"
                 @update:model-value="applyEdger"
               />
               <template v-else>
-                <span class="form-select-label block text-sm font-bold text-ink"
-                  >Kromka yopishtiruvchi</span
-                >
+                <span class="form-select-label block text-sm font-bold text-ink">{{
+                  $t('orders.detail.edger')
+                }}</span>
                 <div
                   class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
                 >
@@ -1135,7 +1164,7 @@ onBeforeUnmount(() => {
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <path d="M3 12h9M12 3v9" />
                 </svg>
-                Chizma va tarkib
+                {{ $t('orders.detail.drawing') }}
               </button>
             </div>
           </div>
@@ -1148,7 +1177,7 @@ onBeforeUnmount(() => {
                  quantities stay muted sub-lines and prices nowrap + shrink-0
                  so "so'm" can never wrap onto its own line. -->
             <div class="text-sm">
-              <div class="font-bold text-ink">Materiallar</div>
+              <div class="font-bold text-ink">{{ $t('orders.detail.materials') }}</div>
               <div class="mt-2 grid gap-2.5">
                 <template v-if="order.price_lines.length > 0">
                   <div
@@ -1158,9 +1187,13 @@ onBeforeUnmount(() => {
                   >
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
-                      }}<small class="block text-xs text-ink-muted"
-                        >{{ line.panels_used }} list</small
-                      ></span
+                      }}<small class="block text-xs text-ink-muted">{{
+                        $t(
+                          'orders.unit.sheets',
+                          { n: line.panels_used ?? 0 },
+                          line.panels_used ?? 0,
+                        )
+                      }}</small></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
@@ -1185,7 +1218,7 @@ onBeforeUnmount(() => {
                 <template v-else>
                   <!-- Snapshot lines missing (no cutting result) — aggregate rows. -->
                   <div class="flex items-baseline justify-between gap-3">
-                    <span class="min-w-0 text-ink">Listlar</span>
+                    <span class="min-w-0 text-ink">{{ $t('orders.detail.sheets') }}</span>
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(order.subtotal_materials_tiyin)
                     }}</span>
@@ -1195,7 +1228,8 @@ onBeforeUnmount(() => {
                     class="flex items-baseline justify-between gap-3"
                   >
                     <span class="min-w-0 text-ink"
-                      >Kromka<small class="block text-xs text-ink-muted">{{
+                      >{{ $t('orders.detail.edge')
+                      }}<small class="block text-xs text-ink-muted">{{
                         metres(edgeConsumedTotal(order))
                       }}</small></span
                     >
@@ -1205,13 +1239,14 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
               </div>
-              <div class="mt-3 font-bold text-ink">Xizmatlar</div>
+              <div class="mt-3 font-bold text-ink">{{ $t('orders.detail.services') }}</div>
               <div class="mt-2 grid gap-2.5">
                 <div class="flex items-baseline justify-between gap-3">
                   <span class="min-w-0 text-ink"
-                    >Kesish<small v-if="totalPanels > 0" class="block text-xs text-ink-muted"
-                      >{{ totalPanels }} list</small
-                    ></span
+                    >{{ $t('orders.detail.cutting')
+                    }}<small v-if="totalPanels > 0" class="block text-xs text-ink-muted">{{
+                      $t('orders.unit.sheets', { n: totalPanels }, totalPanels)
+                    }}</small></span
                   >
                   <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                     formatTiyin(order.subtotal_cutting_tiyin)
@@ -1222,7 +1257,8 @@ onBeforeUnmount(() => {
                   class="flex items-baseline justify-between gap-3"
                 >
                   <span class="min-w-0 text-ink"
-                    >Kromka yopishtirish<small class="block text-xs text-ink-muted">{{
+                    >{{ $t('orders.detail.edgeService')
+                    }}<small class="block text-xs text-ink-muted">{{
                       metres(edgeConsumedTotal(order))
                     }}</small></span
                   >
@@ -1240,11 +1276,10 @@ onBeforeUnmount(() => {
                   class="flex items-baseline justify-between gap-3"
                 >
                   <span class="min-w-0 text-ink"
-                    >Ustama<small
-                      v-if="order.surcharge_reason"
-                      class="block text-xs text-ink-muted"
-                      >{{ order.surcharge_reason }}</small
-                    ></span
+                    >{{ $t('orders.detail.surcharge')
+                    }}<small v-if="order.surcharge_reason" class="block text-xs text-ink-muted">{{
+                      order.surcharge_reason
+                    }}</small></span
                   >
                   <span class="shrink-0 font-mono whitespace-nowrap text-ink"
                     >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
@@ -1255,11 +1290,10 @@ onBeforeUnmount(() => {
                   class="flex items-baseline justify-between gap-3"
                 >
                   <span class="min-w-0 text-ink"
-                    >Chegirma<small
-                      v-if="order.discount_reason"
-                      class="block text-xs text-ink-muted"
-                      >{{ order.discount_reason }}</small
-                    ></span
+                    >{{ $t('orders.detail.discount')
+                    }}<small v-if="order.discount_reason" class="block text-xs text-ink-muted">{{
+                      order.discount_reason
+                    }}</small></span
                   >
                   <span class="shrink-0 font-mono whitespace-nowrap text-ink"
                     >- {{ formatTiyin(order.discount_tiyin) }}</span
@@ -1271,12 +1305,12 @@ onBeforeUnmount(() => {
                  rows follow for those allowed to see them. -->
             <div class="mt-2 grid gap-2 border-t border-hairline pt-3">
               <div class="flex items-baseline justify-between font-bold text-ink">
-                <span>Jami</span>
+                <span>{{ $t('orders.detail.total') }}</span>
                 <span class="font-mono text-base">{{ formatTiyin(order.total_tiyin) }}</span>
               </div>
               <template v-if="order.settlement && canViewSettlement">
                 <div class="flex items-baseline justify-between text-sm text-ink-soft">
-                  <span>To'langan</span>
+                  <span>{{ $t('orders.detail.paid') }}</span>
                   <span
                     class="font-mono font-semibold"
                     :class="order.settlement.recorded_tiyin > 0 ? 'text-success' : ''"
@@ -1284,7 +1318,7 @@ onBeforeUnmount(() => {
                   >
                 </div>
                 <div class="flex items-baseline justify-between text-sm">
-                  <span class="text-ink-soft">Qoldiq</span>
+                  <span class="text-ink-soft">{{ $t('orders.detail.balance') }}</span>
                   <span
                     class="font-mono font-bold"
                     :class="order.settlement.balance_tiyin === 0 ? 'text-success' : 'text-ink'"
@@ -1298,10 +1332,10 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <AppModal :open="historyOpen" title="Holat tarixi" @close="historyOpen = false">
+    <AppModal :open="historyOpen" :title="$t('orders.detail.history')" @close="historyOpen = false">
       <template v-if="order">
         <div v-if="order.events.length === 0" class="st-empty !border-0 !py-8">
-          <h3>Holat tarixi hali yo'q</h3>
+          <h3>{{ $t('orders.detail.historyEmpty') }}</h3>
         </div>
         <ol v-else class="tl">
           <li
@@ -1311,11 +1345,15 @@ onBeforeUnmount(() => {
             :class="timelineStepClass(event, index)"
           >
             <span class="when">{{ formatDate(event.changed_at) }}</span>
-            <template v-if="isRevisionEvent(event)">Buyurtma tahrirlandi</template>
+            <template v-if="isRevisionEvent(event)">{{ $t('orders.detail.edited') }}</template>
             <template v-else>
-              {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
+              {{
+                event.from_status
+                  ? workshopStatusUz(event.from_status)
+                  : $t('orders.detail.created')
+              }}
               <span class="text-ink-muted">→</span>
-              {{ workshopStatusUz[event.to_status] }}
+              {{ workshopStatusUz(event.to_status) }}
             </template>
             <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
             <span
@@ -1339,15 +1377,23 @@ onBeforeUnmount(() => {
 
     <ConfirmDialog
       :open="reasonDialogAction !== null"
-      :title="reasonDialogAction === 'revert' ? 'Buyurtmani qaytarish' : 'Buyurtmani bekor qilish'"
+      :title="
+        reasonDialogAction === 'revert'
+          ? $t('orders.confirm.revertTitle')
+          : $t('orders.confirm.cancelTitle')
+      "
       :message="
         reasonDialogAction === 'revert'
-          ? `Buyurtma ${revertTargetLabel} qaytadi. Sababni yozing.`
-          : 'Buyurtma yopiladi. Bekor qilish sababini yozing.'
+          ? $t('orders.confirm.revertMessage', { target: revertTargetLabel })
+          : $t('orders.confirm.cancelMessage')
       "
-      :confirm-label="reasonDialogAction === 'revert' ? 'Ha, qaytarilsin' : 'Bekor qilish'"
-      cancel-label="Yopish"
-      busy-label="Bajarilmoqda"
+      :confirm-label="
+        reasonDialogAction === 'revert'
+          ? $t('orders.confirm.revertAction')
+          : $t('orders.action.cancel')
+      "
+      :cancel-label="$t('orders.confirm.closeLabel')"
+      :busy-label="$t('orders.confirm.busyLabel')"
       :danger="reasonDialogAction === 'cancel'"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"
@@ -1355,18 +1401,18 @@ onBeforeUnmount(() => {
       @confirm="confirmReasonedAction"
     >
       <label class="field !mb-0">
-        <span>Sabab</span>
+        <span>{{ $t('orders.confirm.reason') }}</span>
         <textarea v-model="reasonDraft" class="mp-input min-h-24 resize-y" />
       </label>
     </ConfirmDialog>
 
     <ConfirmDialog
       :open="markCollectedOpen"
-      title="Mijoz olib ketdimi?"
-      message="Buyurtma yakuniy «topshirildi» holatiga o'tadi va ortga qaytarib bo'lmaydi."
-      confirm-label="Ha, topshirildi"
-      cancel-label="Orqaga"
-      busy-label="Bajarilmoqda"
+      :title="$t('orders.confirm.collectedTitle')"
+      :message="$t('orders.confirm.collectedDetailMessage')"
+      :confirm-label="$t('orders.confirm.collectedAction')"
+      :cancel-label="$t('orders.confirm.backLabel')"
+      :busy-label="$t('orders.confirm.busyLabel')"
       :busy="orders.actionLoading"
       @cancel="markCollectedOpen = false"
       @confirm="markCollected"
@@ -1374,11 +1420,11 @@ onBeforeUnmount(() => {
 
     <ConfirmDialog
       :open="discardEditOpen"
-      title="Tahrirni bekor qilish"
-      message="Tahrirdagi barcha o'zgarishlar o'chiriladi; buyurtma avvalgi holida qoladi."
-      confirm-label="Ha, bekor qilinsin"
-      cancel-label="Orqaga"
-      busy-label="Bajarilmoqda"
+      :title="$t('orders.confirm.discardEditTitle')"
+      :message="$t('orders.confirm.discardEditMessage')"
+      :confirm-label="$t('orders.confirm.discardEditAction')"
+      :cancel-label="$t('orders.confirm.backLabel')"
+      :busy-label="$t('orders.confirm.busyLabel')"
       danger
       :busy="orders.actionLoading"
       @cancel="discardEditOpen = false"
@@ -1387,7 +1433,7 @@ onBeforeUnmount(() => {
 
     <AppModal
       :open="chizmaOpen"
-      title="Chizma va tarkib"
+      :title="$t('orders.detail.drawing')"
       max-width="max-w-3xl"
       @close="chizmaOpen = false"
     >
@@ -1395,29 +1441,29 @@ onBeforeUnmount(() => {
         <template v-if="result">
           <div class="grid gap-3 sm:grid-cols-4">
             <div class="rounded-md bg-sunk p-3">
-              <div class="filter-label">Panel</div>
+              <div class="filter-label">{{ $t('orders.detail.statPanels') }}</div>
               <div class="mt-1 text-xl font-extrabold">{{ totalPanels }}</div>
             </div>
             <div class="rounded-md bg-sunk p-3">
-              <div class="filter-label">Kesim</div>
+              <div class="filter-label">{{ $t('orders.detail.statCuts') }}</div>
               <div class="mt-1 text-xl font-extrabold">
                 {{ metres(result.total_cut_length_mm) }}
               </div>
             </div>
             <div class="rounded-md bg-sunk p-3">
-              <div class="filter-label">Kromka</div>
+              <div class="filter-label">{{ $t('orders.detail.edge') }}</div>
               <div class="mt-1 text-xl font-extrabold">
                 {{ metres(result.total_edge_length_mm) }}
               </div>
             </div>
             <div class="rounded-md bg-sunk p-3">
-              <div class="filter-label">Qoldiq</div>
+              <div class="filter-label">{{ $t('orders.detail.statWaste') }}</div>
               <div class="mt-1 text-xl font-extrabold">
                 {{ (Number(result.waste_percentage) * 100).toFixed(2) }}%
               </div>
             </div>
           </div>
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Listlar">
+          <div class="flex flex-wrap gap-2" role="group" :aria-label="$t('orders.detail.sheets')">
             <button
               v-for="panel in result.panels"
               :key="panel.id"
@@ -1443,27 +1489,35 @@ onBeforeUnmount(() => {
             :disabled="orders.downloadingId === order.id"
             @click="orders.openWorkshopPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizma (PDF)' }}
+            {{
+              orders.downloadingId === order.id
+                ? $t('orders.detail.pdfOpening')
+                : $t('orders.detail.pdf')
+            }}
           </button>
         </template>
         <div v-else class="st-empty !border-0 !py-6">
-          <h3>Chizma biriktirilmagan</h3>
+          <h3>{{ $t('orders.detail.noDrawing') }}</h3>
         </div>
 
         <div>
-          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Buyurtma tarkibi</div>
+          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">
+            {{ $t('orders.detail.contents') }}
+          </div>
           <!-- The same grouped, read-only list the client sees on their order
                and the operator fills in the editor: one layout across the three
                surfaces, so a cutter reading this against the drawing does not
                have to re-map it. -->
           <CuttingPartsByMaterial v-if="result" :result="result" />
           <div v-else class="st-empty !border-0 !py-6">
-            <h3>Chizmada detal yo'q</h3>
+            <h3>{{ $t('orders.detail.noParts') }}</h3>
           </div>
         </div>
 
         <div v-if="order.planned_edge_lines.length > 0">
-          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Kromka</div>
+          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">
+            {{ $t('orders.detail.edge') }}
+          </div>
           <div v-for="line in order.planned_edge_lines" :key="line.material_id" class="row-item">
             <div>
               <!-- material_label already carries thickness x width and color
@@ -1480,12 +1534,12 @@ onBeforeUnmount(() => {
     <OrderPriceAdjustmentModal
       v-if="order"
       :open="discountOpen"
-      title="Chegirma"
-      fixed-hint="aniq chegirma so'mda"
+      :title="$t('orders.detail.discount')"
+      :fixed-hint="$t('orders.detail.discountHint')"
       :current-tiyin="order.discount_tiyin"
       :current-reason="order.discount_reason"
       :apply-label="discountButtonLabel"
-      remove-label="Chegirmani olib tashlash"
+      :remove-label="$t('orders.detail.discountRemove')"
       :busy="orders.actionLoading"
       :pending="
         pendingAction === 'discount'
@@ -1503,12 +1557,12 @@ onBeforeUnmount(() => {
     <OrderPriceAdjustmentModal
       v-if="order"
       :open="surchargeOpen"
-      title="Ustama"
-      fixed-hint="aniq ustama so'mda"
+      :title="$t('orders.detail.surcharge')"
+      :fixed-hint="$t('orders.detail.surchargeHint')"
       :current-tiyin="order.surcharge_tiyin"
       :current-reason="order.surcharge_reason"
       :apply-label="surchargeButtonLabel"
-      remove-label="Ustamani olib tashlash"
+      :remove-label="$t('orders.detail.surchargeRemove')"
       :busy="orders.actionLoading"
       :pending="
         pendingAction === 'surcharge'

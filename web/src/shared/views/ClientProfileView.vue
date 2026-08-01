@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
@@ -12,6 +13,7 @@ import { useAuthStore } from '@/shared/stores/auth'
 import { useClientProfileStore, type ClientProfile } from '@/shared/stores/clientProfile'
 import { useOrdersStore } from '@/shared/stores/orders'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const orders = useOrdersStore()
 const profileStore = useClientProfileStore()
@@ -61,7 +63,7 @@ async function saveClientName() {
     error.value = 'invalid_name'
     return
   }
-  const ok = await patchProfile({ name: clientName.value }, 'Profil yangilandi.')
+  const ok = await patchProfile({ name: clientName.value }, t('client.profile.updated'))
   if (ok) editingClientName.value = false
 }
 
@@ -100,33 +102,31 @@ onMounted(reloadProfile)
 
     <div v-else-if="profileError" class="client-error">
       <div class="client-error-icon"><Icon name="alert" /></div>
-      <h3>Profilni yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <h3>{{ $t('client.profile.loadFailedTitle') }}</h3>
+      <p>{{ $t('client.profile.loadFailedBody') }}</p>
       <p class="client-trace">{{ traceLine(profileTraceId) }}</p>
       <button type="button" class="mp-button mp-button-outline mt-4" @click="reloadProfile">
-        Qayta urinish
+        {{ $t('client.common.retry') }}
       </button>
     </div>
 
     <div v-else class="grid max-w-[760px] gap-5">
       <section class="client-card">
         <div class="client-card-h">
-          <h2>Profil</h2>
+          <h2>{{ $t('client.profile.title') }}</h2>
           <button
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             @click="logoutCurrentOpen = true"
           >
-            Chiqib ketish
+            {{ $t('client.profile.logout') }}
           </button>
         </div>
         <div class="client-card-b">
           <div class="client-row-item">
             <div>
-              <div class="client-row-name">Ism</div>
-              <div class="text-sm text-ink-muted">
-                Ustaxona buyurtmangiz bo'yicha sizga shunday murojaat qiladi
-              </div>
+              <div class="client-row-name">{{ $t('client.common.name') }}</div>
+              <div class="text-sm text-ink-muted">{{ $t('client.profile.nameHint') }}</div>
             </div>
             <div class="flex items-center gap-2">
               <form
@@ -145,7 +145,7 @@ onMounted(reloadProfile)
                   class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                   :disabled="isSaving"
                 >
-                  Saqlash
+                  {{ $t('client.common.save') }}
                 </button>
               </form>
               <template v-else>
@@ -153,8 +153,8 @@ onMounted(reloadProfile)
                 <button
                   type="button"
                   class="mp-action-icon-button"
-                  aria-label="Ismni o'zgartirish"
-                  title="Ismni o'zgartirish"
+                  :aria-label="$t('client.profile.editName')"
+                  :title="$t('client.profile.editName')"
                   @click="editingClientName = true"
                 >
                   <Icon name="pencil" class="size-[18px]" />
@@ -165,19 +165,19 @@ onMounted(reloadProfile)
 
           <div class="client-row-item">
             <div>
-              <div class="client-row-name">Telefon</div>
-              <div class="text-sm text-ink-muted">
-                Kirish uchun ishlatiladi · o'zgartirib bo'lmaydi
-              </div>
+              <div class="client-row-name">{{ $t('client.common.phone') }}</div>
+              <div class="text-sm text-ink-muted">{{ $t('client.profile.phoneHint') }}</div>
             </div>
             <div class="font-mono text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
           </div>
 
           <div class="client-row-item">
             <div>
-              <div class="client-row-name">Buyurtmalar soni</div>
+              <div class="client-row-name">{{ $t('client.profile.orderCount') }}</div>
             </div>
-            <div class="font-mono text-sm text-ink">{{ orders.clientOrders.length }} ta</div>
+            <div class="font-mono text-sm text-ink">
+              {{ $t('client.unit.count', orders.clientOrders.length) }}
+            </div>
           </div>
 
           <p v-if="message" class="mt-3 text-sm font-bold text-success">{{ message }}</p>
@@ -189,18 +189,18 @@ onMounted(reloadProfile)
 
       <section class="client-card">
         <div class="client-card-h">
-          <h2>Faol sessiyalar</h2>
+          <h2>{{ $t('client.profile.sessions') }}</h2>
           <button
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
             @click="logoutEverywhereOpen = true"
           >
-            Hammasini chiqarish
+            {{ $t('client.profile.logoutEverywhere') }}
           </button>
         </div>
         <div class="client-card-b">
           <div v-if="sessions.length === 0" class="text-sm text-ink-muted">
-            Faol sessiya yo'q — joriy sessiya keyingi yangilashda ko'rinadi.
+            {{ $t('client.profile.sessionsEmpty') }}
           </div>
           <template v-else>
             <div v-for="session in sessions" :key="session.id" class="client-row-item">
@@ -215,9 +215,9 @@ onMounted(reloadProfile)
                 <div class="min-w-0">
                   <div class="client-row-name">
                     {{ deviceLabel(session) }}
-                    <span v-if="session.is_current" class="client-pill client-pill-ready ml-2"
-                      >Joriy</span
-                    >
+                    <span v-if="session.is_current" class="client-pill client-pill-ready ml-2">{{
+                      $t('client.profile.currentSession')
+                    }}</span>
                   </div>
                   <div class="text-sm text-ink-muted">
                     {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
@@ -230,7 +230,7 @@ onMounted(reloadProfile)
                 class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
                 @click="revokeRow(session.id)"
               >
-                Yopish
+                {{ $t('client.profile.revokeSession') }}
               </button>
               <span v-else class="font-mono text-xs text-ink-muted">—</span>
             </div>
@@ -241,20 +241,20 @@ onMounted(reloadProfile)
 
     <ConfirmDialog
       :open="logoutCurrentOpen"
-      title="Chiqib ketish"
-      message="Mijoz kabinetidan chiqasiz."
-      confirm-label="Chiqish"
-      cancel-label="Bekor qilish"
+      :title="$t('client.profile.logout')"
+      :message="$t('client.profile.logoutMessage')"
+      :confirm-label="$t('client.profile.logoutConfirm')"
+      :cancel-label="$t('client.common.cancel')"
       danger
       @cancel="logoutCurrentOpen = false"
       @confirm="logoutCurrent"
     />
     <ConfirmDialog
       :open="logoutEverywhereOpen"
-      title="Hammasi chiqsin"
-      message="Barcha qurilmalardan chiqasiz."
-      confirm-label="Hammasini chiqarish"
-      cancel-label="Bekor qilish"
+      :title="$t('client.profile.logoutEverywhereTitle')"
+      :message="$t('client.profile.logoutEverywhereMessage')"
+      :confirm-label="$t('client.profile.logoutEverywhere')"
+      :cancel-label="$t('client.common.cancel')"
       danger
       @cancel="logoutEverywhereOpen = false"
       @confirm="logoutEverywhere"

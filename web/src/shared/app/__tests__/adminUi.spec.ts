@@ -92,16 +92,16 @@ describe('admin UI helpers', () => {
 
   it('keeps prototype navigation grouped in display order', () => {
     const items: NavItem[] = [
-      { label: 'Asosiy', to: '/admin', group: 'Platforma' },
-      { label: 'Ustaxonalar', to: '/admin/workshops', group: 'Platforma' },
-      { label: 'Materiallar', to: '/admin/catalog/materials', group: 'Katalog' },
-      { label: 'Audit log', to: '/admin/audit', group: 'Admin' },
+      { labelKey: 'nav.item.dashboard', to: '/admin', group: 'platform' },
+      { labelKey: 'nav.item.workshops', to: '/admin/workshops', group: 'platform' },
+      { labelKey: 'nav.item.materials', to: '/admin/catalog/materials', group: 'catalog' },
+      { labelKey: 'nav.item.audit', to: '/admin/audit', group: 'admin' },
     ]
 
     expect(groupedNav(items)).toEqual([
-      { label: 'Platforma', items: items.slice(0, 2) },
-      { label: 'Katalog', items: [items[2]] },
-      { label: 'Admin', items: [items[3]] },
+      { id: 'platform', items: items.slice(0, 2) },
+      { id: 'catalog', items: [items[2]] },
+      { id: 'admin', items: [items[3]] },
     ])
   })
 

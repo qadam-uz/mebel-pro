@@ -36,17 +36,19 @@ onMounted(refreshBranches)
   <section>
     <div class="client-page-head mb-2">
       <div>
-        <h1>Ustaxonalar</h1>
-        <p class="sub">Faol ustaxonalar — manzil va aloqa ma'lumotlari.</p>
+        <h1>{{ $t('client.branches.title') }}</h1>
+        <p class="sub">{{ $t('client.branches.subtitle') }}</p>
       </div>
     </div>
 
     <div class="client-banner info !mb-5">
       <span class="font-bold text-accent">i</span>
-      <span>Bu ro'yxat shunchaki ma'lumot uchun. Buyurtma uchun chizmadan boshlang.</span>
+      <span>{{ $t('client.branches.note') }}</span>
     </div>
 
-    <label class="mb-2 block text-sm font-bold text-ink" for="branch-search">Qidirish</label>
+    <label class="mb-2 block text-sm font-bold text-ink" for="branch-search">{{
+      $t('client.common.search')
+    }}</label>
     <div class="relative mb-5 max-w-[380px]">
       <span
         class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
@@ -58,8 +60,8 @@ onMounted(refreshBranches)
         id="branch-search"
         v-model="search"
         class="mp-input pl-10"
-        aria-label="Ustaxona yoki shahar nomi"
-        placeholder="Ustaxona yoki shahar nomi"
+        :aria-label="$t('client.branches.searchPlaceholder')"
+        :placeholder="$t('client.branches.searchPlaceholder')"
       />
     </div>
 
@@ -81,15 +83,15 @@ onMounted(refreshBranches)
 
     <ClientErrorState
       v-else-if="catalog.error"
-      title="Ustaxonalarni yuklab bo'lmadi"
+      :title="$t('client.branches.loadFailed')"
       :trace-id="catalog.traceId"
       @retry="refreshBranches"
     />
 
     <div v-else-if="visibleBranches.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="store" /></div>
-      <h3>Ustaxona topilmadi</h3>
-      <p>Qidiruv bo'yicha faol yoki vaqtincha yopiq ustaxona yo'q.</p>
+      <h3>{{ $t('client.branches.emptyTitle') }}</h3>
+      <p>{{ $t('client.branches.emptyBody') }}</p>
     </div>
 
     <div v-else class="grid gap-3">
@@ -128,12 +130,12 @@ onMounted(refreshBranches)
                 v-if="index === 0 && phones(branch).length > 1"
                 class="ml-1 font-sans text-[11px] text-ink-muted"
               >
-                (asosiy)
+                {{ $t('client.branches.primaryPhone') }}
               </span>
             </a>
           </p>
           <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
-            {{ branch.closed_reason ?? 'Vaqtincha yopiq' }}
+            {{ branch.closed_reason ?? $t('client.branches.closed') }}
           </p>
         </div>
 
@@ -141,7 +143,9 @@ onMounted(refreshBranches)
           class="client-pill max-[480px]:col-span-2 max-[480px]:mt-1 max-[480px]:justify-self-start"
           :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
         >
-          {{ branch.status === 'active' ? 'Faol' : 'Vaqtincha yopiq' }}
+          {{
+            branch.status === 'active' ? $t('client.branches.active') : $t('client.branches.closed')
+          }}
         </span>
       </article>
     </div>

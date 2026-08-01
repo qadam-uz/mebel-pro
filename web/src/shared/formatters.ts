@@ -1,8 +1,10 @@
+import { intlLocale, translate, translatePlural } from '@/shared/i18n'
+
 // The bare grouped figure, no unit. For columns of money where the unit is
 // stated once in the header — repeating "so'm" on every cell of a statement
 // costs the width that pushed the akt sverka sideways on a laptop.
 export function formatSom(value: number): string {
-  return new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(
+  return new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 0 }).format(
     Math.round(value / 100),
   )
 }
@@ -12,7 +14,7 @@ export function formatTiyin(value: number): string {
   // formatter, whose ICU tables can render the English-looking code "UZS" on
   // trimmed/older builds. This keeps currency identical on every runtime and
   // matches the Uzbek SPA's own labels (Narx (so'm), Summa (so'm)).
-  return `${formatSom(value)} so'm`
+  return `${formatSom(value)} ${translate('formats.currency.som')}`
 }
 
 // Parse a human-entered so'm amount into integer tiyin. Accepts the formats the
@@ -43,14 +45,26 @@ export function formatTiyinParts(value: number): { amount: string; unit: string;
   const som = Math.round(value / 100)
   const abs = Math.abs(som)
   const format = (amount: number, maximumFractionDigits: number) =>
-    new Intl.NumberFormat('uz-UZ', { maximumFractionDigits }).format(amount)
+    new Intl.NumberFormat(intlLocale(), { maximumFractionDigits }).format(amount)
   if (abs >= 1_000_000_000) {
-    return { amount: format(som / 1_000_000_000, 2), unit: "mlrd so'm", full: formatTiyin(value) }
+    return {
+      amount: format(som / 1_000_000_000, 2),
+      unit: translate('formats.currency.billion'),
+      full: formatTiyin(value),
+    }
   }
   if (abs >= 1_000_000) {
-    return { amount: format(som / 1_000_000, 2), unit: "mln so'm", full: formatTiyin(value) }
+    return {
+      amount: format(som / 1_000_000, 2),
+      unit: translate('formats.currency.million'),
+      full: formatTiyin(value),
+    }
   }
-  return { amount: format(som, 0), unit: "so'm", full: formatTiyin(value) }
+  return {
+    amount: format(som, 0),
+    unit: translate('formats.currency.som'),
+    full: formatTiyin(value),
+  }
 }
 
 // One unit for a whole row of figures. `formatTiyinParts` decides per figure, so
@@ -65,12 +79,17 @@ export function formatTiyinRow(values: number[]): Array<{
 }> {
   const peak = Math.max(0, ...values.map((value) => Math.abs(Math.round(value / 100))))
   const divisor = peak >= 1_000_000_000 ? 1_000_000_000 : peak >= 1_000_000 ? 1_000_000 : 1
-  const unit = divisor === 1_000_000_000 ? "mlrd so'm" : divisor === 1_000_000 ? "mln so'm" : "so'm"
+  const unit =
+    divisor === 1_000_000_000
+      ? translate('formats.currency.billion')
+      : divisor === 1_000_000
+        ? translate('formats.currency.million')
+        : translate('formats.currency.som')
   // Two decimals once scaled, none at so'm: "0,54 mln" keeps a small figure
   // legible next to a large one instead of collapsing it to "1 mln".
   const maximumFractionDigits = divisor === 1 ? 0 : 2
   return values.map((value) => ({
-    amount: new Intl.NumberFormat('uz-UZ', { maximumFractionDigits }).format(
+    amount: new Intl.NumberFormat(intlLocale(), { maximumFractionDigits }).format(
       Math.round(value / 100) / divisor,
     ),
     unit,
@@ -105,19 +124,21 @@ export function formatDateTime(value: string | Date): string {
   return `${formatDate(date)} ${hours}:${minutes}`
 }
 
-// Calendar-relative age in Uzbek ("bugun", "kecha", "5 kun oldin", …) for
-// at-a-glance freshness; pair with the absolute date in a title attribute.
-export function formatRelativeUz(value: string | Date): string {
+// Calendar-relative age ("bugun", "kecha", "5 kun oldin", …) for at-a-glance
+// freshness; pair with the absolute date in a title attribute. Russian agrees
+// the noun with the number, so the counted forms go through the plural rule
+// rather than being concatenated.
+export function formatRelative(value: string | Date): string {
   const date = parseDateValue(value)
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const days = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000)
-  if (days <= 0) return 'bugun'
-  if (days === 1) return 'kecha'
-  if (days < 7) return `${days} kun oldin`
-  if (days < 30) return `${Math.floor(days / 7)} hafta oldin`
-  return `${Math.floor(days / 30)} oy oldin`
+  if (days <= 0) return translate('formats.relative.today')
+  if (days === 1) return translate('formats.relative.yesterday')
+  if (days < 7) return translatePlural('formats.relative.days', days)
+  if (days < 30) return translatePlural('formats.relative.weeks', Math.floor(days / 7))
+  return translatePlural('formats.relative.months', Math.floor(days / 30))
 }
 
 export function formatDateInputValue(value: Date): string {
@@ -128,24 +149,25 @@ export function formatDateInputValue(value: Date): string {
 }
 
 // Localize a backend stock-unit enum for display. The API emits "metre" (edges)
-// and "panel" (panels); map those (and any legacy piece/pcs) to short Uzbek
-// labels so a raw English enum never surfaces in the UI.
+// and "panel" (panels); map those (and any legacy piece/pcs) to short labels so
+// a raw English enum never surfaces in the UI.
 export function formatStockUnit(unit: string): string {
-  if (unit === 'metre' || unit === 'm') return 'm'
-  if (unit === 'panel') return 'list'
-  if (unit === 'pcs' || unit === 'piece') return 'dona'
+  if (unit === 'metre' || unit === 'm') return translate('formats.unit.metre')
+  if (unit === 'panel') return translate('formats.unit.panel')
+  if (unit === 'pcs' || unit === 'piece') return translate('formats.unit.piece')
   return unit
 }
 
 export function formatStockQuantity(value: number, displayUnit: string): string {
   if (displayUnit === 'm' || displayUnit === 'metre') {
-    // metres use a dot decimal so 2.5 m is not misread as 2,500 m (uz-UZ uses a comma decimal)
-    const metres = new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 3 })
+    // metres use a dot decimal so 2.5 m is not misread as 2,500 m (every locale
+    // we ship groups with a space and marks decimals with a comma)
+    const metres = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 3 })
       .format(value / 1000)
       .replace(',', '.')
-    return `${metres} m`
+    return `${metres} ${translate('formats.unit.metre')}`
   }
-  return `${new Intl.NumberFormat('uz-UZ').format(value)} ${formatStockUnit(displayUnit)}`
+  return `${new Intl.NumberFormat(intlLocale()).format(value)} ${formatStockUnit(displayUnit)}`
 }
 
 export function parseDisplayQuantity(value: string, displayUnit: string): number {

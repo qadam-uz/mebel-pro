@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 
@@ -24,10 +25,14 @@ const props = withDefaults(
     error: null,
     helper: '',
     id: undefined,
-    label: 'Rasm',
+    // `label` and `title` default to '' rather than to their copy: a prop
+    // default is evaluated once, when the component is defined, so a literal
+    // here would freeze at whichever locale loaded the module. The fallback
+    // lives in a computed below, where it re-reads on every language switch.
+    label: '',
     meta: '',
     resetKey: 0,
-    title: 'Material rasmi',
+    title: '',
     uploading: false,
   },
 )
@@ -37,17 +42,22 @@ const emit = defineEmits<{
   select: [file: File]
 }>()
 
+const { t } = useI18n()
 const inputRef = ref<HTMLInputElement | null>(null)
 const localPreviewUrl = ref<string | null>(null)
 const localFileName = ref('')
 
+const fieldLabel = computed(() => props.label || t('catalog.image.label'))
+const fieldTitle = computed(() => props.title || t('catalog.image.title'))
 const hasImage = computed(() => Boolean(localPreviewUrl.value || props.fileId))
-const chooseLabel = computed(() => (hasImage.value ? 'Rasmni almashtirish' : 'Rasm tanlash'))
+const chooseLabel = computed(() =>
+  hasImage.value ? t('catalog.image.replace') : t('catalog.image.choose'),
+)
 const statusText = computed(() => {
-  if (props.uploading) return 'Rasm yuklanmoqda…'
+  if (props.uploading) return t('catalog.image.uploading')
   if (localFileName.value) return localFileName.value
-  if (props.fileId) return 'Saqlangan rasm'
-  return props.helper || 'PNG, JPG yoki WEBP rasm tanlang.'
+  if (props.fileId) return t('catalog.image.saved')
+  return props.helper || t('catalog.image.hint')
 })
 
 function clearLocalPreview() {
@@ -88,7 +98,7 @@ onBeforeUnmount(clearLocalPreview)
 
 <template>
   <div class="admin-field admin-full">
-    <span class="admin-field-label">{{ label }}</span>
+    <span class="admin-field-label">{{ fieldLabel }}</span>
     <div class="admin-image-upload" :class="{ 'has-error': error }">
       <div class="admin-image-upload-preview">
         <img
@@ -104,13 +114,15 @@ onBeforeUnmount(clearLocalPreview)
           class="admin-image-upload-img"
         />
         <div v-else class="admin-image-upload-empty" aria-hidden="true">
-          <span>Rasm yo'q</span>
+          <span>{{ $t('catalog.image.none') }}</span>
         </div>
-        <div v-if="uploading" class="admin-image-upload-busy" aria-live="polite">Yuklanmoqda</div>
+        <div v-if="uploading" class="admin-image-upload-busy" aria-live="polite">
+          {{ $t('catalog.image.busy') }}
+        </div>
       </div>
 
       <div class="admin-image-upload-copy">
-        <strong>{{ title }}</strong>
+        <strong>{{ fieldTitle }}</strong>
         <span>{{ meta || statusText }}</span>
         <small v-if="meta">{{ statusText }}</small>
         <input
@@ -138,7 +150,7 @@ onBeforeUnmount(clearLocalPreview)
             :disabled="disabled || uploading"
             @click="removeImage"
           >
-            Olib tashlash
+            {{ $t('catalog.image.remove') }}
           </button>
         </div>
         <p v-if="error" class="admin-image-upload-error" role="alert">{{ error }}</p>

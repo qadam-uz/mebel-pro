@@ -1,3 +1,5 @@
+import { translate } from '@/shared/i18n'
+
 export interface AssignmentChipOrder {
   branch_id: string
   assigned_cutter_user_id: string | null
@@ -40,14 +42,19 @@ function chipForWorker(
 ) {
   if (!userId) return null
   const worker = resolveWorker(branchId, userId)
-  const roleLabel = key === 'cutter' ? 'Kesuvchi' : 'Kromka ustasi'
-  const fallback = `ID ${userId.slice(0, 8)}`
+  const role = translate(
+    key === 'cutter' ? 'workshopAdmin.assignment.cutter' : 'workshopAdmin.assignment.edger',
+  )
+  const fallback = translate('workshopAdmin.assignment.unknownWorker', { id: userId.slice(0, 8) })
   return {
     key,
     userId,
     className: key === 'cutter' ? 'p-cut' : 'p-eb',
     icon: key === 'cutter' ? 'scissors' : 'layers',
-    label: `${roleLabel}: ${worker?.full_name ?? fallback}`,
+    label: translate('workshopAdmin.assignment.chip', {
+      role,
+      name: worker?.full_name ?? fallback,
+    }),
     initials: worker ? workerInitials(worker.full_name) : fallbackInitials(userId),
   } satisfies AssignmentChip
 }

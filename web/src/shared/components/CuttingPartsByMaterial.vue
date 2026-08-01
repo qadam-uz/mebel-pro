@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import {
   sideLabels,
@@ -28,12 +29,14 @@ import { type CuttingPart, type CuttingResult } from '@/shared/stores/cutting'
 // an order.
 const props = defineProps<{ result: CuttingResult }>()
 
+const { t } = useI18n()
+
 const edgeSides: EdgeField[] = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right']
 
 const edgeRegistry = computed(() => deriveSnapshotEdgeRegistry(props.result.parts_snapshot ?? []))
 const groups = computed(() =>
   groupCuttingParts(props.result.parts_snapshot ?? [], (materialId) =>
-    materialId ? materialLabelFor(materialId) : 'Material tanlanmagan',
+    materialId ? materialLabelFor(materialId) : t('cutting.material.unassigned'),
   ),
 )
 
@@ -92,12 +95,16 @@ function edgeBadgeStyle(entry: EdgeRegistryEntry) {
  *  system does not accept as the sole signal. */
 function edgeSidesLabel(part: CuttingPart) {
   const banded = edgeSides.filter((side) => part[side]?.material_id).map((side) => sideLabels[side])
-  return banded.length ? `Kromka: ${banded.join(' · ')}` : 'Kromkasiz'
+  return banded.length
+    ? t('cutting.parts.edgeSides', { sides: banded.join(' · ') })
+    : t('cutting.parts.noEdge')
 }
 </script>
 
 <template>
-  <div v-if="!groups.length" class="text-sm text-ink-muted">Detal yo'q.</div>
+  <div v-if="!groups.length" class="text-sm text-ink-muted">
+    {{ $t('cutting.parts.emptyResult') }}
+  </div>
   <!-- Read-only twin of the drawing editor's list: same grouping by
                material, same columns and glyphs, so a client comparing the
                order against what they entered reads one layout, not two. -->
@@ -112,7 +119,8 @@ function edgeSidesLabel(part: CuttingPart) {
       >
         <span class="text-sm font-bold text-ink">{{ group.label }}</span>
         <span class="shrink-0 font-mono text-xs text-ink-muted">
-          {{ group.quantity }} detal · {{ group.areaM2.toFixed(2) }} m²
+          {{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+          {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
         </span>
       </div>
 
@@ -143,12 +151,12 @@ function edgeSidesLabel(part: CuttingPart) {
         class="hidden grid-cols-[34px_minmax(0,1fr)_repeat(5,minmax(44px,1fr))] gap-2 border-b border-hairline px-3 py-2 text-[11px] font-extrabold text-ink-muted sm:grid"
       >
         <span aria-hidden="true" class="text-center">#</span>
-        <span aria-hidden="true">Nomi</span>
-        <span aria-hidden="true" class="text-center">Uzunlik</span>
-        <span aria-hidden="true" class="text-center">Kenglik</span>
-        <span aria-hidden="true" class="text-center">Soni</span>
-        <span aria-hidden="true" class="text-center">Burilish</span>
-        <span aria-hidden="true" class="text-center">Kromka</span>
+        <span aria-hidden="true">{{ $t('cutting.column.name') }}</span>
+        <span aria-hidden="true" class="text-center">{{ $t('cutting.column.length') }}</span>
+        <span aria-hidden="true" class="text-center">{{ $t('cutting.column.width') }}</span>
+        <span aria-hidden="true" class="text-center">{{ $t('cutting.column.quantity') }}</span>
+        <span aria-hidden="true" class="text-center">{{ $t('cutting.column.rotation') }}</span>
+        <span aria-hidden="true" class="text-center">{{ $t('cutting.column.edge') }}</span>
       </div>
 
       <div

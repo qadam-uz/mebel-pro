@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { isoDate } from '@/shared/app/dateRange'
 import { nextStableId } from '@/shared/app/listboxNav'
@@ -30,7 +31,9 @@ const props = withDefaults(
     max: '',
     required: false,
     disabled: false,
-    placeholder: 'kk.oo.yyyy',
+    // No literal default: a prop default is evaluated once, at module load, so
+    // it would freeze at whatever locale happened to be active then.
+    placeholder: undefined,
     ariaLabel: undefined,
   },
 )
@@ -38,6 +41,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+
+const { t } = useI18n()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const wrapRef = ref<HTMLDivElement | null>(null)
@@ -50,6 +55,7 @@ const text = ref('')
 const GUTTER = 8
 
 const today = computed(() => isoDate(new Date()))
+const placeholderText = computed(() => props.placeholder ?? t('forms.date.placeholder'))
 
 function toDotted(iso: string): string {
   const [year, month, day] = iso.split('-')
@@ -77,9 +83,11 @@ const iso = computed(() => toIso(text.value))
 
 const error = computed(() => {
   if (!text.value) return ''
-  if (!iso.value) return "Sana kk.oo.yyyy ko'rinishida"
-  if (props.min && iso.value < props.min) return `${toDotted(props.min)} dan oldin bo'lmasin`
-  if (props.max && iso.value > props.max) return `${toDotted(props.max)} dan keyin bo'lmasin`
+  if (!iso.value) return t('forms.date.errorFormat')
+  if (props.min && iso.value < props.min)
+    return t('forms.date.errorBefore', { date: toDotted(props.min) })
+  if (props.max && iso.value > props.max)
+    return t('forms.date.errorAfter', { date: toDotted(props.max) })
   return ''
 })
 
@@ -278,7 +286,7 @@ onBeforeUnmount(() => {
         inputmode="numeric"
         autocomplete="off"
         maxlength="10"
-        :placeholder="placeholder"
+        :placeholder="placeholderText"
         :required="required"
         :disabled="disabled"
         :aria-label="ariaLabel"
@@ -295,7 +303,7 @@ onBeforeUnmount(() => {
         :aria-expanded="open"
         :aria-controls="panelId"
         aria-haspopup="dialog"
-        aria-label="Kalendarni ochish"
+        :aria-label="$t('forms.date.openCalendar')"
         @click="open ? closePanel({ returnFocus: true }) : openPanel()"
       >
         <svg class="size-[18px]" viewBox="0 0 20 20" aria-hidden="true">
@@ -325,7 +333,7 @@ onBeforeUnmount(() => {
         :id="panelId"
         ref="panelRef"
         role="dialog"
-        aria-label="Sanani tanlang"
+        :aria-label="$t('forms.date.pickDay')"
         tabindex="-1"
         class="fixed z-[84] max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)] outline-none"
         :style="panelStyle"

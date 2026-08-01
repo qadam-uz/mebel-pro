@@ -1,4 +1,5 @@
 import { formatStockQuantity } from '@/shared/formatters'
+import { translate, translatePlural } from '@/shared/i18n'
 
 export interface WorkshopQueuePanelSummary {
   item_count: number
@@ -21,7 +22,8 @@ export interface WorkshopProductionQueueOrder {
 
 export function workshopQueuePartsLine(order: WorkshopQueuePanelSummary) {
   const panels = order.planned_panels || order.panels_used_snapshot
-  return `${order.item_count} detal${panels ? ` · ${panels} list` : ''}`
+  const parts = translatePlural('finance.unit.parts', order.item_count)
+  return panels ? `${parts} · ${translatePlural('finance.unit.panels', panels)}` : parts
 }
 
 export function workshopProductionQueueCounts(
@@ -118,5 +120,6 @@ export function productionJobMetaLine(job: ProductionStationJob, station: Produc
   if (station !== 'banding') return counts
   const totalMm = job.planned_edge_lines.reduce((sum, line) => sum + line.consumed_mm, 0)
   if (totalMm <= 0) return counts
-  return `${formatStockQuantity(totalMm, 'm')} krom · ${job.item_count} detal`
+  const edge = translate('finance.unit.edgeMetres', { length: formatStockQuantity(totalMm, 'm') })
+  return `${edge} · ${translatePlural('finance.unit.parts', job.item_count)}`
 }

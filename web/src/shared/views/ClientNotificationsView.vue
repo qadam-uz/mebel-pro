@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
@@ -21,6 +22,7 @@ const notifications = useNotificationsStore()
 const router = useRouter()
 const rolePath = useRolePath()
 const toast = useToast()
+const { t } = useI18n()
 const readFilter = ref<'all' | 'unread' | 'read'>('all')
 
 function goBack() {
@@ -29,11 +31,23 @@ function goBack() {
   else router.push(rolePath('/c'))
 }
 
-const filterOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha xabarlar' },
-  { value: 'unread', label: "O'qilmagan", meta: 'hali ochilmagan' },
-  { value: 'read', label: "O'qilgan", meta: "ko'rilgan xabarlar" },
-]
+const filterOptions = computed(() => [
+  {
+    value: 'all',
+    label: t('shell.notifications.clientFilterAll'),
+    meta: t('shell.notifications.clientFilterAllMeta'),
+  },
+  {
+    value: 'unread',
+    label: t('shell.notifications.clientFilterUnread'),
+    meta: t('shell.notifications.clientFilterUnreadMeta'),
+  },
+  {
+    value: 'read',
+    label: t('shell.notifications.clientFilterRead'),
+    meta: t('shell.notifications.clientFilterReadMeta'),
+  },
+])
 
 const visibleItems = computed(() =>
   notifications.items.filter((item) => {
@@ -72,7 +86,7 @@ async function openItem(item: NotificationItem) {
   const to = destination(item)
   if (!to) {
     // No viewable target — keep it unread and tell the user rather than a dead tap (CB-125).
-    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    toast.warn(t('shell.notifications.notOpenable'))
     return
   }
   // markRead is best-effort: opening the order is the intent, so navigate
@@ -89,11 +103,11 @@ const unreadOnly = () => readFilter.value === 'unread'
 async function markAllRead() {
   await notifications.markAllRead()
   if (notifications.actionError) {
-    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    toast.danger(t('shell.notifications.markAllFailed'))
     return
   }
   await notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
-  toast.success("Hammasi o'qilgan deb belgilandi.")
+  toast.success(t('shell.notifications.markAllDone'))
 }
 
 function loadMore() {
@@ -113,20 +127,24 @@ onMounted(() => {
 
 <template>
   <section>
-    <button type="button" class="client-back" @click="goBack">← Orqaga</button>
+    <button type="button" class="client-back" @click="goBack">{{ $t('shell.action.back') }}</button>
 
     <div class="client-page-head">
       <div>
-        <h1>Bildirishnomalar</h1>
-        <p class="sub">Buyurtma o'zgarishlari va ustaxonadan xabarlar.</p>
+        <h1>{{ $t('shell.notifications.title') }}</h1>
+        <p class="sub">{{ $t('shell.notifications.clientSubtitle') }}</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="markAllRead">
-        Hammasini o'qilgan deb belgilash
+        {{ $t('shell.notifications.markAll') }}
       </button>
     </div>
 
     <div class="mb-4 max-w-60">
-      <FormSelect v-model="readFilter" label="Holat" :options="filterOptions" />
+      <FormSelect
+        v-model="readFilter"
+        :label="$t('shell.notifications.readFilterLabel')"
+        :options="filterOptions"
+      />
     </div>
 
     <div class="max-w-[760px]">
@@ -147,20 +165,18 @@ onMounted(() => {
 
       <ClientErrorState
         v-else-if="notifications.error"
-        title="Bildirishnomalarni yuklab bo'lmadi"
-        message="Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring."
+        :title="$t('shell.notifications.loadFailedTitle')"
+        :message="$t('shell.notifications.loadFailedClientBody')"
         :trace-id="notifications.traceId"
         @retry="notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())"
       />
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">
         <div class="client-empty-icon"><Icon name="inbox" /></div>
-        <h3>Bildirishnoma yo'q</h3>
-        <p v-if="readFilter === 'unread'">
-          O'qilmagan bildirishnoma yo'q — hammasini ko'rib chiqdingiz.
-        </p>
-        <p v-else-if="readFilter === 'read'">O'qilgan bildirishnoma yo'q.</p>
-        <p v-else>Hozircha bildirishnoma yo'q — buyurtma holati o'zgarsa shu yerda ko'rinadi.</p>
+        <h3>{{ $t('shell.notifications.emptyTitle') }}</h3>
+        <p v-if="readFilter === 'unread'">{{ $t('shell.notifications.emptyUnreadBody') }}</p>
+        <p v-else-if="readFilter === 'read'">{{ $t('shell.notifications.emptyReadBody') }}</p>
+        <p v-else>{{ $t('shell.notifications.emptyClientBody') }}</p>
       </div>
 
       <div v-else class="grid gap-2">
@@ -196,7 +212,7 @@ onMounted(() => {
         :disabled="notifications.loading"
         @click="loadMore"
       >
-        Yana ko'rsatish
+        {{ $t('shell.action.loadMore') }}
       </button>
     </div>
   </section>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
 
@@ -19,9 +20,14 @@ const props = withDefaults(
     label?: string
     triggerClass?: string
   }>(),
-  { label: 'Amallar', triggerClass: 'mp-action-icon-button' },
+  // `label` carries no literal default: a prop default is evaluated once, at
+  // module load, so it would freeze at whatever locale was active then.
+  { label: undefined, triggerClass: 'mp-action-icon-button' },
 )
 const emit = defineEmits<{ select: [index: number] }>()
+
+const { t } = useI18n()
+const triggerLabel = computed(() => props.label ?? t('forms.actionMenu.trigger'))
 
 const GUTTER = 8
 const MAX_PANEL_PX = 320 // matches the max-height in `.mp-action-menu`
@@ -128,7 +134,7 @@ onBeforeUnmount(stopListening)
       :class="triggerClass"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :aria-label="label"
+      :aria-label="triggerLabel"
       @click="toggle"
     >
       <slot name="trigger"><span aria-hidden="true">⋯</span></slot>

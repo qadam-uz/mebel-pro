@@ -1,0 +1,52 @@
+{
+  "select": {
+    "placeholder": "Tanlang"
+  },
+  "combobox": {
+    "placeholder": "Qidiring",
+    "noResults": "Mos variant yo'q",
+    "loading": "Qidirilmoqda…",
+    "clearSelection": "{label} tanlovini tozalash"
+  },
+  "multiSelect": {
+    "all": "Barchasi",
+    "selectedCount": "{count} tanlandi"
+  },
+  "dropdown": {
+    "unselected": "Tanlanmagan"
+  },
+  "actionMenu": {
+    "trigger": "Amallar"
+  },
+  "date": {
+    "placeholder": "kk.oo.yyyy",
+    "openCalendar": "Kalendarni ochish",
+    "pickDay": "Sanani tanlang",
+    "errorFormat": "Sana kk.oo.yyyy ko'rinishida",
+    "errorBefore": "{date} dan oldin bo'lmasin",
+    "errorAfter": "{date} dan keyin bo'lmasin"
+  },
+  "dateRange": {
+    "label": "Sana",
+    "range": "Sana oralig'i"
+  },
+  "calendar": {
+    "previousMonth": "Oldingi oy",
+    "nextMonth": "Keyingi oy"
+  },
+  "filterStatus": {
+    "refreshing": "Yangilanmoqda…",
+    "found": "Filtr bo'yicha {count} ta {noun} topildi",
+    "count": "{count} ta {noun}",
+    "total": "jami {total}",
+    "resetAll": "Hammasini tozalash"
+  },
+  "phone": {
+    "errorEmptyRow": "Raqamni kiriting yoki qatorni o'chiring.",
+    "errorSameAsPrimary": "Bu asosiy raqam bilan bir xil.",
+    "errorDuplicate": "Bu raqam ro'yxatda bor."
+  },
+  "autosave": {
+    "saveFailed": "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring."
+  }
+}
