@@ -285,23 +285,23 @@ def test_branch_trim_changes_usable_area_and_panel_count() -> None:
 def test_algorithm_stamp_native_only() -> None:
     solvers = [
         SolverMetadata(
-            engine_version="0.3.0", provider=SolverProvider.NATIVE, provider_version="0.3.0"
+            engine_version="0.3.2", provider=SolverProvider.NATIVE, provider_version="0.3.2"
         ),
         SolverMetadata(
-            engine_version="0.3.0", provider=SolverProvider.NATIVE, provider_version="0.3.0"
+            engine_version="0.3.2", provider=SolverProvider.NATIVE, provider_version="0.3.2"
         ),
     ]
 
     name, version = optimizer_module._algorithm_stamp(solvers)
 
     assert name == "cutting-engine/native"
-    assert version == "0.3.0"
+    assert version == "0.3.2"
 
 
 def test_algorithm_stamp_packingsolver_only() -> None:
     solvers = [
         SolverMetadata(
-            engine_version="0.3.0",
+            engine_version="0.3.2",
             provider=SolverProvider.PACKINGSOLVER,
             provider_version="6915ff627a70ee0d71f5adca81f0ecbb0d0579e4",
         ),
@@ -310,16 +310,16 @@ def test_algorithm_stamp_packingsolver_only() -> None:
     name, version = optimizer_module._algorithm_stamp(solvers)
 
     assert name == "cutting-engine/packingsolver"
-    assert version == "0.3.0+packingsolver.6915ff627a70"
+    assert version == "0.3.2+packingsolver.6915ff627a70"
 
 
 def test_algorithm_stamp_hybrid_when_providers_disagree() -> None:
     solvers = [
         SolverMetadata(
-            engine_version="0.3.0", provider=SolverProvider.NATIVE, provider_version="0.3.0"
+            engine_version="0.3.2", provider=SolverProvider.NATIVE, provider_version="0.3.2"
         ),
         SolverMetadata(
-            engine_version="0.3.0",
+            engine_version="0.3.2",
             provider=SolverProvider.PACKINGSOLVER,
             provider_version="6915ff627a70ee0d71f5adca81f0ecbb0d0579e4",
         ),
@@ -328,7 +328,7 @@ def test_algorithm_stamp_hybrid_when_providers_disagree() -> None:
     name, version = optimizer_module._algorithm_stamp(solvers)
 
     assert name == "cutting-engine/hybrid"
-    assert version == "0.3.0+packingsolver.6915ff627a70"
+    assert version == "0.3.2+packingsolver.6915ff627a70"
 
 
 def test_multi_material_mixed_providers_persists_one_hybrid_result(
@@ -376,7 +376,7 @@ def test_multi_material_mixed_providers_persists_one_hybrid_result(
     result = run_optimizer(parts, materials, params=DEFAULT_CUT_PARAMS)
 
     assert result.algorithm_name == "cutting-engine/hybrid"
-    assert result.algorithm_version == "0.3.0+packingsolver.6915ff627a70"
+    assert result.algorithm_version == "0.3.2+packingsolver.6915ff627a70"
     assert set(result.panels_used_by_material) == {
         str(native_panel.material_id),
         str(packingsolver_panel.material_id),
@@ -394,7 +394,7 @@ def test_solver_absence_yields_native_result() -> None:
     result = run_optimizer([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert result.algorithm_name == "cutting-engine/native"
-    assert result.algorithm_version == "0.3.0"
+    assert result.algorithm_version == "0.3.2"
 
 
 def test_both_providers_failing_maps_to_existing_engine_error_contract(
