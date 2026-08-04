@@ -76,6 +76,14 @@ services:
   # system interpreter (see ../backend/Dockerfile), outside /app, so the
   # source bind-mount can't shadow them. A pyproject/uv.lock change reaches
   # the container via `up --build` — no volume to go stale.
+  #
+  # `cutting-engine` is the one deliberate exception: dev mounts the sibling
+  # checkout (`CUTTING_ENGINE_SRC`, default `../../cutting-engine`) at
+  # /opt/cutting-engine and puts its `src/` first on PYTHONPATH, so local engine
+  # work is exercised by the running API without cutting a PyPI release. The
+  # image's pinned wheel stays installed and takes over automatically whenever
+  # no checkout is mounted. Prod (compose.prod.yaml) never mounts it — there the
+  # pinned wheel from uv.lock is the only engine.
   backend:
     build:
       context: ../backend
@@ -116,11 +124,28 @@ services:
       TELEGRAM_GATEWAY_API_BASE_URL: ${TELEGRAM_GATEWAY_API_BASE_URL:-https://gatewayapi.telegram.org}
       TELEGRAM_GATEWAY_TIMEOUT_SECONDS: ${TELEGRAM_GATEWAY_TIMEOUT_SECONDS:-5}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-["127.0.0.1/32","::1/128"]}
-    # `fastapi dev` = uvicorn with autoreload.
-    command: ["sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]
+      # Ahead of site-packages, so a mounted cutting-engine checkout wins over
+      # the image's pinned wheel. A missing directory is ignored by Python.
+      PYTHONPATH: /opt/cutting-engine/src
+    # `fastapi dev` is uvicorn with autoreload, but it watches only the working
+    # directory — an edit under the mounted engine would need a manual restart.
+    # Call uvicorn directly instead so the engine checkout is watched too, and
+    # leave that reload dir out when nothing is mounted there.
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        alembic upgrade head
+        reload_dirs="--reload-dir /app"
+        if [ -d /opt/cutting-engine/src ]; then
+          reload_dirs="$$reload_dirs --reload-dir /opt/cutting-engine/src"
+        fi
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload $$reload_dirs
     volumes:
       - ../backend:/app
       - ../docs:/docs:ro
+      - ${CUTTING_ENGINE_SRC:-../../cutting-engine}:/opt/cutting-engine:ro
     ports:
       - "8000:8000"
     healthcheck:

@@ -8,6 +8,9 @@
 # only fetched, checksummed, and built here.
 FROM python:3.12-slim AS packingsolver-builder
 
+# Provided by BuildKit; drives the arm64-only CoinOR workaround below.
+ARG TARGETARCH
+
 # Pin the exact upstream commit and archive checksum — never `latest`, never
 # an unpinned revision (PACKINGSOLVER_PROVIDER_SPEC.md, "Fixed decisions").
 ARG PACKINGSOLVER_COMMIT=6915ff627a70ee0d71f5adca81f0ecbb0d0579e4
@@ -17,6 +20,32 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
          build-essential git curl ca-certificates liblapack-dev libbz2-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# --- arm64: supply CoinOR CLP ourselves --------------------------------------
+# On Linux, packingsolver → mathoptsolverscmake FetchContents *prebuilt x86_64*
+# CoinUtils/Clp release archives; upstream publishes no arm64 Linux build, so an
+# arm64 host links x86_64 objects and dies with
+#   libClp.a: error adding symbols: file in wrong format  (Relocations in generic ELF, EM: 62)
+# Dropping CLP is not an option: rectangleguillotine hard-codes it as the
+# column-generation LP solver (`column_generation_strips.hpp`,
+# `linear_programming_solver_name = SolverName::CLP`), and column generation is
+# auto-enabled for exactly the repetitive bin-packing instances this product
+# sends. So install Debian's arm64 CoinOR static libraries and lay them out the
+# way mathoptsolverscmake expects the release tarballs — `<dir>/include` holding
+# `coin/`, `<dir>/lib/lib{CoinUtils,Clp,OsiClp}.a` — for the
+# FETCHCONTENT_SOURCE_DIR_* overrides passed at configure time. amd64 (CI, prod)
+# is untouched and keeps using the pinned upstream archives.
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends \
+             coinor-libcoinutils-dev coinor-libosi-dev coinor-libclp-dev \
+        && rm -rf /var/lib/apt/lists/* \
+        && mkdir -p /opt/coinor/lib \
+        && ln -s /usr/include /opt/coinor/include \
+        && for lib in CoinUtils Clp OsiClp; do \
+               ln -s "/usr/lib/$(gcc -dumpmachine)/lib${lib}.a" "/opt/coinor/lib/lib${lib}.a"; \
+           done; \
+    fi
 
 # cmake via pip rather than apt — apt's cmake on python:3.12-slim (Debian
 # bookworm) is older than PackingSolver's CMakeLists.txt requires.
@@ -36,9 +65,15 @@ RUN curl -fsSL -o packingsolver.tar.gz \
 # main target — the other packing types (rectangle, boxstacks, irregular, ...)
 # are never compiled. CMake's FetchContent pulls Boost/HiGHS/treesearchsolver
 # etc. at configure/build time, hence `git`/`curl`/`ca-certificates` above.
-RUN cmake -S . -B build \
+RUN set -eu; \
+    coinor_override=""; \
+    if [ -d /opt/coinor ]; then \
+        coinor_override="-DFETCHCONTENT_SOURCE_DIR_COINUTILS=/opt/coinor -DFETCHCONTENT_SOURCE_DIR_CLP=/opt/coinor"; \
+    fi; \
+    cmake -S . -B build \
       -DCMAKE_BUILD_TYPE=Release \
       -DPACKINGSOLVER_BUILD_TEST=OFF \
+      $coinor_override \
     && cmake --build build --target PackingSolver_rectangleguillotine_main --parallel "$(nproc)"
 
 # Install manually rather than `cmake --install` — only one target was built,
