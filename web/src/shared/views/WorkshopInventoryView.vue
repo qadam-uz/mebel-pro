@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -376,6 +376,20 @@ function onLineMaterialChange(line: InvoiceLineDraft) {
   line.unitPrice = ''
   line.lastPriceLoaded = false
   void refreshLineLastPrice(line)
+  focusLineQuantity(line)
+}
+
+/**
+ * Picking a material replaces the combobox with the resolved label, so the input
+ * the combobox hands focus back to is unmounted in the same tick and focus falls
+ * to <body> — outside the modal, where its Escape handler never sees a keypress.
+ * Quantity is where the operator is going next anyway.
+ */
+function focusLineQuantity(line: InvoiceLineDraft) {
+  if (!line.materialId) return
+  void nextTick(() => {
+    document.querySelector<HTMLInputElement>(`[data-qty-for="${line.key}"]`)?.focus()
+  })
 }
 
 /** The picked material's full label, for the resolved (non-input) cell. */
@@ -1098,6 +1112,7 @@ onBeforeUnmount(() => {
                              header and the unit suffix already say what goes here. -->
                           <input
                             v-model="line.quantity"
+                            :data-qty-for="line.key"
                             class="mp-input text-right"
                             inputmode="decimal"
                             :aria-label="
