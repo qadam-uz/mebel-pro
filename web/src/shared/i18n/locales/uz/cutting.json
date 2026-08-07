@@ -167,6 +167,11 @@
     "alreadyInDrawing": "Bu kromka allaqachon chizmada — 1-ro'yxatdan tanlang.",
     "noMatches": "Mos kromka topilmadi. Qidiruv yoki qalinlikni o'zgartiring."
   },
+  "thickening": {
+    "mark": "УТ",
+    "label": "Uta (obmanka)",
+    "hint": "Tagiga chip yopishtiriladi — qirra ikki barobar qalin bo'ladi, kromka shunga qarab tanlanadi."
+  },
   "import": {
     "title": "Fayldan import",
     "dropzone": "CSV, XML yoki MAP (*.csv, *.xml, *.map)",
@@ -288,6 +293,11 @@
     "lineCutting": "Kesish",
     "materialsTitle": "Materiallar",
     "edgeTitle": "Kromka",
+    "sectionSheets": "Listlar",
+    "sectionEdges": "Kromkalar",
+    "sectionServices": "Xizmatlar",
+    "serviceCutting": "Kesish xizmati",
+    "serviceEdgeBanding": "Kromka yopishtirish",
     "total": "Jami",
     "pdfOpening": "Ochilmoqda…",
     "pdfOpen": "PDF ochish",
@@ -351,6 +361,19 @@
     "fileTooLargeShort": "Fayl 1 MB dan katta",
     "unsupportedFormatShort": "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV, XML yoki MAP.",
     "parseFailed": "Faylni o'qib bo'lmadi.",
-    "materialPicksIncomplete": "Material tanlovlari to'liq emas."
+    "materialPicksIncomplete": "Material tanlovlari to'liq emas.",
+    "saveFailed": "Saqlab bo'lmadi. Qayta urinib ko'ring."
+  },
+  "own": {
+    "title": "O'zim olib kelaman",
+    "decrease": "Bir list kam",
+    "increase": "Bir list ko'p",
+    "needed": "{metres} kerak",
+    "terms": "Olib kelgan materialingiz narxga kirmaydi. Kesish va kromka yopishtirish xizmati baribir hisoblanadi. Material yetib kelmaguncha kesish boshlanmaydi.",
+    "saves": "{amount} tejaladi",
+    "open": "O'zim olib kelaman",
+    "sheetsSplit": "{own} sizniki · {shop} ustaxonadan",
+    "tapeFree": "o'z lentangiz — hisoblanmaydi",
+    "saved": "O'z materialingiz bilan {amount} tejaldi"
   }
 }

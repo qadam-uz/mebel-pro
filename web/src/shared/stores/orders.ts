@@ -31,12 +31,18 @@ export interface OrderQuote {
   branch_name: string
   branch_address: string
   branch_phone: string
+  /** Who does the work — the branch alone reads as an address with no owner. */
+  workshop_name: string
+  branch_additional_phones: string[]
+  branch_latitude: string | null
+  branch_longitude: string | null
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
   total_tiyin: number
   panels_used: number
   cutting_rate_tiyin: number
+  edge_banding_rate_tiyin: number
   material_lines: MaterialPriceLine[]
   edge_lines: EdgePriceLine[]
 }
@@ -44,7 +50,10 @@ export interface OrderQuote {
 export interface MaterialPriceLine {
   material_id: string
   material_name: string
+  /** What the layout needs. `own_panels` of these come from the client, so the
+   *  workshop charges the difference — which is what `line_total_tiyin` holds. */
   panels_used: number
+  own_panels: number
   unit_price_tiyin: number
   line_total_tiyin: number
 }
@@ -52,7 +61,12 @@ export interface MaterialPriceLine {
 export interface EdgePriceLine {
   material_id: string
   material_name: string
+  /** Every banded millimetre. When `own`, the client brought the roll: the tape
+   *  is free but the gluing is still charged. */
   consumed_mm: number
+  own: boolean
+  /** The branch's price per metre, so the receipt can show the multiplication. */
+  metre_price_tiyin: number
   material_cost_tiyin: number
   service_cost_tiyin: number
   line_total_tiyin: number
@@ -170,6 +184,9 @@ export interface OrderSummary {
   branch_name: string
   branch_address: string
   branch_phone: string
+  branch_additional_phones: string[]
+  branch_latitude: string | null
+  branch_longitude: string | null
   cutting_result_id: string
   status: OrderStatus
   version: number

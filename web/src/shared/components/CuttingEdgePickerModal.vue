@@ -45,7 +45,11 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   'edges-change': [
-    { edges: Record<EdgeField, CuttingEdgeBand | null>; rememberedMaterialId: string | null },
+    {
+      edges: Record<EdgeField, CuttingEdgeBand | null>
+      rememberedMaterialId: string | null
+      thickened: boolean
+    },
   ]
   close: []
 }>()
@@ -64,6 +68,10 @@ const addedCatalogEdgeIds = ref<string[]>([])
 // auto-bands a side; side cards paint with this active tape.
 const lastPickedEdgeId = ref<string | null>(null)
 const activeEdgeId = ref<string | null>(null)
+// Thickening ("УТ"): a strip glued under the part, so the edge the tape has to
+// cover is twice the panel. Held here like the side selection — the dialog owns
+// its working copy and only the editor writes it back on apply.
+const thickenedState = ref(false)
 
 // One vocabulary for the four sides, shared with the read-only parts list.
 const sideNames = sideLabels
@@ -128,7 +136,7 @@ function recommendedEdgeForPart() {
   const part = props.part
   if (!part) return null
   return recommendedEdge(
-    materialById(part.material_id),
+    panelForEdgeRanking(),
     carriedEdgeOptions.value,
     lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
@@ -141,7 +149,19 @@ function panelThicknessForPart() {
   if (!props.part) return null
   const panel = materialById(props.part.material_id)
   const thickness = Number(panel?.thickness_mm)
-  return Number.isFinite(thickness) ? thickness : null
+  if (!Number.isFinite(thickness)) return null
+  return thickenedState.value ? thickness * 2 : thickness
+}
+
+// The panel as the tape ranking should see it. A thickened part presents a
+// doubled edge, so a tape that covers 18 mm no longer covers this one — the
+// ranking and the "too narrow" warning both have to reason about the edge the
+// operator will actually band, not the raw board.
+function panelForEdgeRanking() {
+  const panel = props.part ? materialById(props.part.material_id) : null
+  if (!panel || !thickenedState.value) return panel
+  const doubled = panelThicknessForPart()
+  return doubled == null ? panel : { ...panel, thickness_mm: String(doubled) }
 }
 
 function narrowWarning(material: { edge_width_mm: number | null } | null | undefined) {
@@ -295,7 +315,7 @@ const catalogFilteredEdges = computed(() => {
   const part = props.part
   if (!part) return []
   const query = edgePickerSearch.value.trim().toLowerCase()
-  return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
+  return rankedEdges(panelForEdgeRanking(), cutting.edgeOptions)
     .filter(({ material }) => material.branch_carried)
     .filter(({ material }) =>
       edgePickerThickness.value !== 'all'
@@ -425,7 +445,19 @@ function edgePayload() {
     edge_left: edgePickerState.value.edge_left ? { ...edgePickerState.value.edge_left } : null,
     edge_right: edgePickerState.value.edge_right ? { ...edgePickerState.value.edge_right } : null,
   }
-  return { edges, rememberedMaterialId: activeEdgeId.value ?? firstEdgeId(edges) }
+  return {
+    edges,
+    rememberedMaterialId: activeEdgeId.value ?? firstEdgeId(edges),
+    thickened: thickenedState.value,
+  }
+}
+
+function toggleThickened() {
+  thickenedState.value = !thickenedState.value
+  // Applied live like every other control in this dialog. Doing it here also
+  // re-runs the tape ranking against the doubled edge, so the recommendation
+  // and the "too narrow" warning update while the dialog is still open.
+  emitEdgeChange()
 }
 
 function emitEdgeChange() {
@@ -479,6 +511,7 @@ watch(
   (part, previous) => {
     if (part && !previous) {
       edgePickerState.value = cloneEdgeStateFromPart(part)
+      thickenedState.value = part.thickened === true
       const clickedEdgeId = props.initialSide
         ? edgePickerState.value[props.initialSide]?.material_id
         : null
@@ -502,6 +535,7 @@ watch(
       unlockBodyScroll()
       document.removeEventListener('keydown', onDocumentKeydown)
       edgePickerState.value = blankEdgeState()
+      thickenedState.value = false
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
       lastPickedEdgeId.value = null
@@ -751,6 +785,40 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- Thickening belongs to the whole part, not to one side — the strip
+               goes under the panel. It lives in this dialog because the tape it
+               forces is the dialog's own subject: a doubled edge needs a wider
+               tape, and the ranking below reacts the moment this flips. -->
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="thickenedState"
+            class="flex min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition"
+            :class="
+              thickenedState
+                ? 'border-accent bg-accent-soft'
+                : 'border-hairline-strong bg-elevated hover:border-ink-soft'
+            "
+            @click="toggleThickened()"
+          >
+            <span
+              class="grid size-7 shrink-0 place-items-center rounded-md border text-[11px] font-black"
+              :class="
+                thickenedState
+                  ? 'border-accent bg-elevated text-accent'
+                  : 'border-hairline-strong text-ink-muted'
+              "
+              aria-hidden="true"
+              >{{ $t('cutting.thickening.mark') }}</span
+            >
+            <span class="min-w-0">
+              <span class="block text-sm font-bold text-ink">{{
+                $t('cutting.thickening.label')
+              }}</span>
+              <span class="block text-xs text-ink-muted">{{ $t('cutting.thickening.hint') }}</span>
+            </span>
+          </button>
+
           <p v-if="!activeEdgeId" class="text-xs text-ink-muted">
             {{ $t('cutting.edge.pickFirst') }}
           </p>
@@ -764,12 +832,20 @@ onBeforeUnmount(() => {
                  `Shablonlar` and the footer never scroll away (QAD-152). The
                  outer `.client-edge-modal-b` stays the fallback scroller for
                  very short viewports. -->
-            <div v-else class="grid max-h-[200px] gap-2 overflow-y-auto overscroll-contain p-0.5">
+            <!-- `minmax(0,1fr)`, not the implicit `1fr`: a grid track defaults to
+                 `min-width:auto`, so a row whose badges push its min-content wide
+                 (a tape carrying both "JORIY" and "Qirradan tor") would widen the
+                 track and overflow the dialog instead of letting the name
+                 truncate. Same rule as web/CLAUDE.md's grid-overflow note. -->
+            <div
+              v-else
+              class="grid max-h-[200px] grid-cols-[minmax(0,1fr)] gap-2 overflow-y-auto overscroll-contain p-0.5"
+            >
               <button
                 v-for="entry in tapeEntries"
                 :key="entry.materialId"
                 type="button"
-                class="flex items-center gap-3 rounded-xl border bg-elevated p-3 text-left transition hover:border-ink-soft"
+                class="flex min-w-0 items-center gap-3 rounded-xl border bg-elevated p-3 text-left transition hover:border-ink-soft"
                 :class="
                   activeEdgeId === entry.materialId
                     ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
@@ -786,19 +862,26 @@ onBeforeUnmount(() => {
                   {{ entry.number }}
                 </span>
                 <span class="min-w-0 flex-1">
+                  <!-- The tape name is the only part that may shrink: it needs
+                       its own `min-w-0` for `truncate` to engage (a flex item
+                       defaults to `min-width:auto` and would otherwise refuse to
+                       shrink below its text), and the badges need `shrink-0` so
+                       they keep their size instead of pushing the row past the
+                       dialog. Thickening made this reachable — a doubled edge
+                       puts the "too narrow" badge on ordinary tapes. -->
                   <span class="flex min-w-0 items-center gap-2">
-                    <span class="truncate text-sm font-bold text-ink">{{
+                    <span class="min-w-0 truncate text-sm font-bold text-ink">{{
                       edgeShortLabel(entry.material)
                     }}</span>
                     <span
                       v-if="activeEdgeId === entry.materialId"
-                      class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
+                      class="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
                     >
                       {{ $t('cutting.edge.current') }}
                     </span>
                     <span
                       v-if="narrowWarning(entry.material)"
-                      class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
+                      class="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
                       :title="narrowWarning(entry.material) ?? undefined"
                     >
                       {{ $t('cutting.edge.tooNarrow') }}

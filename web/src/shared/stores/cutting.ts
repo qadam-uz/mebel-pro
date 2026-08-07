@@ -36,6 +36,11 @@ export interface CuttingPart {
   material_id: string
   material_source: MaterialSource
   follow_grain: boolean
+  // Thickening (utolshenie / obmanka, stamped "УТ"): a strip of the same panel
+  // is glued under the part so its banded edge reads twice as thick. A workshop
+  // instruction only — it never enters the layout, so nothing is cut, counted
+  // or priced for it. It does double the thickness the edge tape must cover.
+  thickened: boolean
   length_mm: number
   width_mm: number
   quantity: number
@@ -111,6 +116,11 @@ export interface CuttingDraft {
   kerf_mm: number
   edge_trim_mm: number
   parts_snapshot: CuttingPart[]
+  /** Client-supplied material: sheets claimed per catalog material, and the
+   *  tapes the client brings on their own roll. The sheet number is a claim,
+   *  not a cap — a result applies `min(claim, panels_used)`. */
+  own_panel_counts: Record<string, number>
+  own_edge_material_ids: string[]
   chosen_result_id: string | null
   // Set only on an order's revision draft — the editor switches to revision
   // mode (orders.md "Revising a placed order") when present.
@@ -409,6 +419,8 @@ export const useCuttingStore = defineStore('cutting', () => {
       name?: string | null
       preferred_branch_id?: string | null
       parts_snapshot?: CuttingPart[]
+      own_panel_counts?: Record<string, number>
+      own_edge_material_ids?: string[]
     },
   ) {
     saving.value = true

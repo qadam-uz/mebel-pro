@@ -143,6 +143,8 @@ async def client_cutting_drafts_update(
         preferred_branch_id_set="preferred_branch_id" in payload.model_fields_set,
         preferred_branch_id=payload.preferred_branch_id,
         parts_snapshot=payload.parts_snapshot,
+        own_panel_counts=payload.own_panel_counts,
+        own_edge_material_ids=payload.own_edge_material_ids,
     )
 
 
@@ -291,6 +293,8 @@ async def workshop_cutting_drafts_update(
         preferred_branch_id_set="preferred_branch_id" in payload.model_fields_set,
         preferred_branch_id=payload.preferred_branch_id,
         parts_snapshot=payload.parts_snapshot,
+        own_panel_counts=payload.own_panel_counts,
+        own_edge_material_ids=payload.own_edge_material_ids,
     )
 
 

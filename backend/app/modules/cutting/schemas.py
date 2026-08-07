@@ -38,6 +38,12 @@ class CuttingPart(BaseModel):
     material_id: uuid.UUID
     material_source: MaterialSource = MaterialSource.SHOP
     follow_grain: bool = True
+    # Thickening (utolshenie / obmanka, stamped "UT" on the drawing): a second
+    # strip of the same panel is glued under this part so its banded edge reads
+    # twice as thick. Purely an instruction to the workshop — it never enters
+    # the layout, so the strip is not planned, priced, or counted. It does
+    # raise the edge tape the part needs: the visible edge is 2x the panel.
+    thickened: bool = False
     length_mm: int
     width_mm: int
     quantity: int
@@ -65,6 +71,7 @@ class CuttingDraftPart(BaseModel):
     material_id: uuid.UUID | None = None
     material_source: MaterialSource = MaterialSource.SHOP
     follow_grain: bool = True
+    thickened: bool = False
     length_mm: int = 0
     width_mm: int = 0
     quantity: int = 0
@@ -88,6 +95,20 @@ class CuttingDraftPatchRequest(BaseModel):
     name: str | None = Field(default=None, max_length=64)
     preferred_branch_id: uuid.UUID | None = None
     parts_snapshot: list[CuttingDraftPart] | None = None
+    # Client-supplied material (cutting.md, "Own material"). Sheets are claimed
+    # per catalog material; the claim is not capped to the current layout, since
+    # the next edit may need the sheets this one does not.
+    own_panel_counts: dict[uuid.UUID, int] | None = None
+    own_edge_material_ids: list[uuid.UUID] | None = None
+
+    @field_validator("own_panel_counts")
+    @classmethod
+    def reject_negative_counts(
+        cls, value: dict[uuid.UUID, int] | None
+    ) -> dict[uuid.UUID, int] | None:
+        if value and any(count < 0 for count in value.values()):
+            raise ValueError("own panel count cannot be negative")
+        return value
 
     @field_validator("name", mode="before")
     @classmethod
@@ -199,6 +220,8 @@ class CuttingDraftResponse(APIModel):
     kerf_mm: int
     edge_trim_mm: int
     parts_snapshot: list[dict[str, Any]]
+    own_panel_counts: dict[str, int] = Field(default_factory=dict)
+    own_edge_material_ids: list[str] = Field(default_factory=list)
     chosen_result_id: uuid.UUID | None
     # Set only on an order's revision draft (orders.md: "Revising a placed
     # order") — the editor switches to revision mode when present.

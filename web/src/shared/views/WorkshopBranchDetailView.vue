@@ -17,6 +17,7 @@ import { traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import BranchMap from '@/shared/components/BranchMap.vue'
 import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -466,6 +467,14 @@ onMounted(refreshBranch)
                 {{ branchFieldErrors.address }}
               </span>
             </label>
+          </div>
+          <div class="field">
+            <span>{{ $t('workshopAdmin.branches.map.label') }}</span>
+            <BranchMap
+              :latitude="mapPoint?.latitude ?? null"
+              :longitude="mapPoint?.longitude ?? null"
+              @update:point="mapPoint = $event"
+            />
           </div>
           <label class="field" for="branch-detail-phone">
             <span>{{ $t('workshopAdmin.branches.phone') }}</span>

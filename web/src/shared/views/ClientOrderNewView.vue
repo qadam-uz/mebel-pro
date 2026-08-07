@@ -3,23 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import {
-  clientErrorLabel,
-  formatPercent,
-  formatPhone,
-  isUzPhone,
-  normalizeUzPhone,
-} from '@/shared/app/clientUi'
+import { clientErrorLabel, formatPercent, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import {
   buildBillRows,
-  buildPartRows,
   canPlaceBlocker,
   canPlaceBlockerLabel,
   fieldDiffersFromProfile,
 } from '@/shared/app/clientOrderReview'
-import { snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import { traceLine } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
+import BranchContact from '@/shared/components/BranchContact.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin } from '@/shared/formatters'
@@ -74,22 +67,6 @@ const totalEdge = computed(() =>
     : 0,
 )
 
-// Resolves a part/line material id to its full canonical display label from
-// the chosen result's snapshot — the only place that identity is carried on
-// the wire. Same shape everywhere a material/edge is shown (see
-// snapshotMaterialLabel's own doc): `{type} {manufacturer} {decor or name}` ·
-// `{color}` · `{L}×{W}×{T} mm`.
-function resolveMaterialName(materialId: string): string {
-  const snapshot = chosenResult.value?.material_snapshots[materialId]
-  if (!snapshot) return materialId
-  return snapshotMaterialLabel(snapshot, materialId)
-}
-
-// "To'liq xulosa" (step 4): the full parts list and itemized bill, derived via
-// the pure helpers in clientOrderReview.ts so they stay unit-testable.
-const partRows = computed(() =>
-  draft.value ? buildPartRows(draft.value.parts_snapshot, resolveMaterialName) : [],
-)
 const billRows = computed(() => (quote.value ? buildBillRows(quote.value) : []))
 
 const blocker = computed(() =>
@@ -185,7 +162,6 @@ onMounted(async () => {
     <div class="client-page-head">
       <div>
         <h1>{{ $t('client.orderNew.title') }}</h1>
-        <p class="sub">{{ $t('client.orderNew.subtitle') }}</p>
       </div>
     </div>
 
@@ -204,43 +180,41 @@ onMounted(async () => {
     <!-- Two columns swapped by importance: left is read-only context + the one
          form (contact); the right rail carries the decision (money + CTA) and
          is the last thing in the DOM so it's also the last thing on the page
-         at every breakpoint below xl. -->
+         at every breakpoint below xl.
+         The left column is capped rather than flexible: its cards hold short
+         text and two inputs, so extra width only stretches them. The receipt
+         gets the wider share because its itemised lines are what actually needs
+         the room — but capped too, so neither column sprawls on a wide screen. -->
     <section
       v-else-if="draft && chosenResult"
-      class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start"
+      class="grid gap-6 xl:grid-cols-[minmax(0,480px)_minmax(360px,560px)] xl:items-start"
     >
       <div class="grid min-w-0 gap-4">
-        <!-- Pickup: read-only static context, not worth a full card (CB: was
-             198px of a card for four lines of text). -->
-        <div class="grid gap-1.5">
-          <span class="text-xs font-bold uppercase tracking-wide text-ink-muted">{{
-            $t('client.orderNew.pickupPlace')
-          }}</span>
-          <div v-if="quote" class="grid gap-1">
-            <div class="font-serif text-lg font-semibold text-ink">{{ quote.branch_name }}</div>
-            <div class="font-mono text-xs text-ink-muted">
-              {{ quote.branch_address }} · {{ formatPhone(quote.branch_phone) }}
+        <!-- Who does the work and where it is collected. The branch alone read
+             as an address with no owner, so the workshop names itself first. -->
+        <section class="client-card">
+          <div class="client-card-h">
+            <h2>{{ $t('client.orderNew.workshopTitle') }}</h2>
+          </div>
+          <div class="client-card-b">
+            <div v-if="quoteLoading" class="client-skeleton h-24"></div>
+            <p v-else-if="!quote" class="text-sm font-bold text-danger">
+              {{ $t('client.orderNew.quoteFailed') }}
+            </p>
+            <!-- Workshop and branch read as one name — "Mebel Master · Yunusobod
+                 filiali" — because that is how the client says it out loud. -->
+            <div v-else class="grid gap-2">
+              <div class="client-row-name">{{ quote.workshop_name }} · {{ quote.branch_name }}</div>
+              <BranchContact
+                :address="quote.branch_address"
+                :phone="quote.branch_phone"
+                :additional-phones="quote.branch_additional_phones"
+                :latitude="quote.branch_latitude"
+                :longitude="quote.branch_longitude"
+              />
             </div>
           </div>
-          <div v-else-if="quoteLoading" class="client-skeleton h-20"></div>
-          <p v-else class="text-sm font-bold text-danger">
-            {{ $t('client.orderNew.quoteFailed') }}
-          </p>
-          <i18n-t
-            keypath="client.orderNew.branchLocked"
-            tag="p"
-            class="text-xs text-ink-muted"
-            scope="global"
-          >
-            <template #link>
-              <RouterLink
-                :to="rolePath(`/c/cutting/${draftId}`)"
-                class="font-bold text-accent underline"
-                >{{ $t('client.orderNew.branchLockedLink') }}</RouterLink
-              >
-            </template>
-          </i18n-t>
-        </div>
+        </section>
 
         <section class="client-card">
           <div class="client-card-h">
@@ -280,70 +254,6 @@ onMounted(async () => {
                 </button>
               </label>
             </div>
-          </div>
-        </section>
-
-        <!-- To'liq xulosa: the full order review — the client confirms without
-             ever seeing this today. Parts list stays collapsed by default so
-             it never competes with step 1's above-the-fold acceptance. -->
-        <section class="client-card">
-          <div class="client-card-h">
-            <h2>{{ $t('client.orderNew.summaryTitle') }}</h2>
-          </div>
-          <div class="client-card-b grid gap-3">
-            <p class="font-mono text-xs text-ink-muted">
-              {{
-                $t('client.orderNew.cuttingParams', {
-                  kerf: chosenResult.kerf_mm,
-                  trim: chosenResult.edge_trim_mm,
-                })
-              }}
-            </p>
-
-            <details>
-              <summary class="cursor-pointer text-sm font-bold text-accent select-none">
-                {{ $t('client.orderNew.partsToggle', partRows.length) }}
-              </summary>
-              <div class="mt-3 overflow-x-auto rounded-md border border-hairline">
-                <table class="w-full min-w-[560px] border-collapse text-xs">
-                  <thead>
-                    <tr class="bg-sunk text-left text-ink-muted">
-                      <th class="px-3 py-2 font-bold">{{ $t('client.orderNew.colName') }}</th>
-                      <th class="px-3 py-2 font-bold">{{ $t('client.common.material') }}</th>
-                      <th class="px-3 py-2 text-right font-bold">
-                        {{ $t('client.orderNew.colSize') }}
-                      </th>
-                      <th class="px-3 py-2 text-right font-bold">
-                        {{ $t('client.orderNew.colQuantity') }}
-                      </th>
-                      <th class="px-3 py-2 font-bold">{{ $t('client.orderDetail.edge') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in partRows" :key="row.key" class="border-t border-hairline">
-                      <td class="px-3 py-2 font-bold text-ink">
-                        {{ row.name }}
-                        <!-- `follow_grain` defaults to true, so marking it would
-                             tag nearly every row. Mark the deliberate exception
-                             instead — the row where rotation was allowed. -->
-                        <span
-                          v-if="!row.followGrain"
-                          class="ml-1 text-[10px] font-bold text-ink-muted"
-                          :title="$t('client.orderNew.rotationTitle')"
-                          >· {{ $t('client.orderNew.rotation') }}</span
-                        >
-                      </td>
-                      <td class="px-3 py-2 text-ink-soft">{{ row.materialLabel }}</td>
-                      <td class="px-3 py-2 text-right font-mono text-ink">{{ row.sizeLabel }}</td>
-                      <td class="px-3 py-2 text-right font-mono text-ink">{{ row.quantity }}</td>
-                      <td class="px-3 py-2 text-ink-soft">{{ row.edgeLabel }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </details>
-
-            <p class="text-xs text-ink-soft">{{ $t('client.orderNew.paymentNote') }}</p>
           </div>
         </section>
       </div>
@@ -406,6 +316,10 @@ onMounted(async () => {
             </button>
 
             <p v-if="reasonLine" class="text-xs font-semibold text-ink-muted">{{ reasonLine }}</p>
+
+            <!-- What happens after the tap — it belongs beside the CTA, not in a
+                 review section the client scrolls past. -->
+            <p class="text-xs text-ink-soft">{{ $t('client.orderNew.paymentNote') }}</p>
 
             <div v-if="localError" class="client-banner danger mb-0">
               <span class="font-mono font-black">!</span><span>{{ localError }}</span>

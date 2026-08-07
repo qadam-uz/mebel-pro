@@ -15,6 +15,7 @@ import { additionalPhoneErrors } from '@/shared/app/branchPhones'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
+import BranchMap from '@/shared/components/BranchMap.vue'
 import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -44,6 +45,9 @@ const phonesValidated = ref(false)
 const phoneRowErrors = computed(() =>
   phonesValidated.value ? additionalPhoneErrors(additionalPhones.value, branchForm.phone) : [],
 )
+// The map picker owns the pin; the form only carries what it reports back.
+const mapPoint = ref<{ latitude: number; longitude: number } | null>(null)
+
 const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
 const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'phones']
 const branchFieldIds: Record<BranchField, string> = {
@@ -77,11 +81,14 @@ async function createBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       additional_phones: additionalPhones.value,
+      latitude: mapPoint.value ? String(mapPoint.value.latitude) : null,
+      longitude: mapPoint.value ? String(mapPoint.value.longitude) : null,
     })
     branchForm.name = ''
     branchForm.address = ''
     branchForm.phone = ''
     additionalPhones.value = []
+    mapPoint.value = null
     phonesValidated.value = false
     showCreate.value = false
     // The branch is live for client orders the moment it exists, but with no
@@ -215,6 +222,14 @@ onMounted(() => {
           <p v-if="branchFieldErrors.phones" class="mp-field-error">
             {{ branchFieldErrors.phones }}
           </p>
+          <div class="mp-field">
+            <span>{{ $t('workshopAdmin.branches.map.label') }}</span>
+            <BranchMap
+              :latitude="mapPoint?.latitude ?? null"
+              :longitude="mapPoint?.longitude ?? null"
+              @update:point="mapPoint = $event"
+            />
+          </div>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="branchError" class="text-sm font-bold text-danger">
               {{ $t('workshopAdmin.branches.createFailed') }}

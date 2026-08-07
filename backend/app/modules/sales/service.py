@@ -128,6 +128,7 @@ class PricingSnapshot:
     # Itemized quote breakdown (CB-117) — only consumed by the quote response.
     panels_used: int
     cutting_rate_tiyin: int
+    edge_banding_rate_tiyin: int
     material_lines: list[MaterialPriceLine]
     edge_lines: list[EdgePriceLine]
 
@@ -334,14 +335,14 @@ async def quote_client_order(
     branch_id: uuid.UUID,
 ) -> OrderQuoteResponse:
     client = await _client(db, principal)
-    branch, _ = await _active_branch_for_order(db, branch_id)
+    branch, workshop = await _active_branch_for_order(db, branch_id)
     _, result = await _client_orderable_draft_result(
         db,
         client_id=client.id,
         draft_id=draft_id,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
-    return _build_quote_response(draft_id, branch, pricing)
+    return _build_quote_response(draft_id, branch, pricing, workshop)
 
 
 async def _workshop_order_branch(
@@ -408,7 +409,7 @@ async def quote_workshop_order(
         allow_revision=True,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
-    return _build_quote_response(draft_id, branch, pricing)
+    return _build_quote_response(draft_id, branch, pricing, workshop)
 
 
 async def place_workshop_order(
@@ -688,6 +689,7 @@ def _build_quote_response(
     draft_id: uuid.UUID,
     branch: Branch,
     pricing: PricingSnapshot,
+    workshop: Workshop | None = None,
 ) -> OrderQuoteResponse:
     return OrderQuoteResponse(
         draft_id=draft_id,
@@ -695,12 +697,17 @@ def _build_quote_response(
         branch_name=branch.name,
         branch_address=branch.address,
         branch_phone=branch.phone,
+        workshop_name=workshop.name if workshop is not None else "",
+        branch_additional_phones=list(branch.additional_phones or []),
+        branch_latitude=branch.latitude,
+        branch_longitude=branch.longitude,
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         total_tiyin=pricing.total_tiyin,
         panels_used=pricing.panels_used,
         cutting_rate_tiyin=pricing.cutting_rate_tiyin,
+        edge_banding_rate_tiyin=pricing.edge_banding_rate_tiyin,
         material_lines=pricing.material_lines,
         edge_lines=pricing.edge_lines,
     )
@@ -2267,6 +2274,9 @@ def _order_summary_base(
         "branch_name": branch.name,
         "branch_address": branch.address,
         "branch_phone": branch.phone,
+        "branch_additional_phones": list(branch.additional_phones or []),
+        "branch_latitude": branch.latitude,
+        "branch_longitude": branch.longitude,
         "cutting_result_id": order.cutting_result_id,
         "status": order.status,
         "version": order.version,
@@ -2629,12 +2639,16 @@ async def _price_result(
         _millimetre_price(edge_demands[material_id], branch_materials[material_id].price_tiyin)
         for material_id in edge_demands
     )
+    # Labour is charged on every banded millimetre, the client's own tape
+    # included: gluing someone else's tape is still the workshop's work. Only
+    # the tape *material* is free, which is what `edge_demands` already scopes.
     # Sum per-material labor (not _millimetre_price of the global sum): integer
     # floor-division isn't distributive, so per-material must be summed for the
     # itemized edge_lines (CB-117) to reconcile exactly with this subtotal.
+    edge_labour_mm = _edge_banded_millimetres(result)
     edge_labor_total = sum(
-        _millimetre_price(edge_demands[material_id], int(pricing.edge_banding_rate_tiyin or 0))
-        for material_id in edge_demands
+        _millimetre_price(mm, int(pricing.edge_banding_rate_tiyin or 0))
+        for mm in edge_labour_mm.values()
     )
     priced_parts = _priced_parts(result, branch_materials)
     subtotal_edge = edge_material_total + edge_labor_total
@@ -2647,26 +2661,37 @@ async def _price_result(
         name = str(snapshot.get("name", "")).strip()
         return f"{manufacturer} {name}".strip() or "Material"
 
+    own_panels = _own_panels_used(result)
     material_lines = [
         MaterialPriceLine(
             material_id=material_id,
             material_name=_line_name(material_id),
-            panels_used=quantity,
+            # `panels_used` is what the layout needs; `own_panels` is how many of
+            # those the client brings. The charged count is the difference, which
+            # is exactly `quantity` — the demand this line was built from.
+            panels_used=quantity + own_panels.get(material_id, 0),
+            own_panels=own_panels.get(material_id, 0),
             unit_price_tiyin=branch_materials[material_id].price_tiyin,
             line_total_tiyin=branch_materials[material_id].price_tiyin * quantity,
         )
         for material_id, quantity in panel_demands.items()
     ]
     edge_lines = []
-    for material_id in edge_demands:
-        mm = edge_demands[material_id]
-        material_cost = _millimetre_price(mm, branch_materials[material_id].price_tiyin)
+    for material_id, mm in edge_labour_mm.items():
+        shop_mm = edge_demands.get(material_id, 0)
+        material_cost = (
+            _millimetre_price(shop_mm, branch_materials[material_id].price_tiyin)
+            if shop_mm > 0
+            else 0
+        )
         service_cost = _millimetre_price(mm, edge_rate)
         edge_lines.append(
             EdgePriceLine(
                 material_id=material_id,
                 material_name=_line_name(material_id),
                 consumed_mm=mm,
+                own=shop_mm == 0,
+                metre_price_tiyin=branch_materials[material_id].price_tiyin,
                 material_cost_tiyin=material_cost,
                 service_cost_tiyin=service_cost,
                 line_total_tiyin=material_cost + service_cost,
@@ -2680,6 +2705,7 @@ async def _price_result(
         priced_parts=priced_parts,
         panels_used=sum(int(value) for value in result.panels_used_by_material.values()),
         cutting_rate_tiyin=int(pricing.cutting_rate_tiyin),
+        edge_banding_rate_tiyin=edge_rate,
         material_lines=material_lines,
         edge_lines=edge_lines,
     )
@@ -2779,6 +2805,22 @@ def _panel_line_prices(
     return allocations
 
 
+def _own_panels_used(result: CuttingResult) -> dict[uuid.UUID, int]:
+    """Sheets this layout actually draws from the client's own stack.
+
+    The stored number is a claim, so it is clamped to what the layout uses: a
+    client who owns seven sheets and needs five brings five, and the other two
+    stay a claim for the edit that needs them.
+    """
+    own: dict[uuid.UUID, int] = {}
+    for material_id_text, claimed in (result.own_panel_counts or {}).items():
+        used = int(result.panels_used_by_material.get(material_id_text, 0))
+        capped = min(int(claimed), used)
+        if capped > 0:
+            own[uuid.UUID(material_id_text)] = capped
+    return own
+
+
 def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
     area_by_material: dict[uuid.UUID, int] = {}
     shop_area_by_material: dict[uuid.UUID, int] = {}
@@ -2796,7 +2838,30 @@ def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
             continue
         total_area = area_by_material.get(material_id, shop_area)
         demands[material_id] = max(1, math.ceil(int(panels_used) * shop_area / total_area))
+    # Client-supplied sheets come off the top of the demand: the workshop buys
+    # only what the client did not bring. The key survives at zero so the branch
+    # still has to carry the material — the client picked it from that catalog,
+    # and the cutting plan names it either way.
+    for material_id, own in _own_panels_used(result).items():
+        if material_id in demands:
+            demands[material_id] = max(0, demands[material_id] - own)
     return demands
+
+
+def _edge_banded_millimetres(result: CuttingResult) -> dict[uuid.UUID, int]:
+    """Every banded millimetre per tape, whoever supplied the roll.
+
+    Material cost follows `_edge_stock_demands` (shop only); labour follows this,
+    because the gluing is the workshop's work either way.
+    """
+    totals: dict[uuid.UUID, int] = {}
+    for source in (result.edge_consumed_shop_by_material, result.edge_consumed_own_by_material):
+        for material_id, quantity in (source or {}).items():
+            if int(quantity) <= 0:
+                continue
+            key = uuid.UUID(material_id)
+            totals[key] = totals.get(key, 0) + int(quantity)
+    return totals
 
 
 def _edge_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:

@@ -18,6 +18,7 @@ import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
+import BranchContact from '@/shared/components/BranchContact.vue'
 import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { metres } from '@/shared/stores/cutting'
@@ -581,9 +582,16 @@ onMounted(() => {
                 <div class="client-row-meta">{{ order.branch_phone }}</div>
               </div>
               <div class="client-row-item">
-                <div>
+                <div class="min-w-0">
                   <div class="client-row-name">{{ order.branch_name }}</div>
-                  <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
+                  <BranchContact
+                    class="mt-1"
+                    :address="order.branch_address"
+                    :phone="order.branch_phone"
+                    :additional-phones="order.branch_additional_phones"
+                    :latitude="order.branch_latitude"
+                    :longitude="order.branch_longitude"
+                  />
                 </div>
               </div>
             </div>

@@ -107,6 +107,18 @@ function placementLabel(placement: CuttingPlacement) {
   return `${name}${placement.rotated ? ' ↻' : ''}`
 }
 
+function isThickened(placement: CuttingPlacement) {
+  return partRowsByRef.value.get(placement.part_ref)?.part.thickened === true
+}
+
+// The stamp is an instruction, not a label: it prints even on a part too small
+// for its name. When there IS a name it drops a line below so the two never
+// overprint — the same rule the PDF map follows.
+function thickeningY(placement: CuttingPlacement) {
+  const centre = svgY(placement) + placement.width_mm / 2
+  return labelFits(placement) ? centre + labelFontSize.value * 1.15 : centre
+}
+
 // Per-dimension fit: each number renders independently of the name label, so a
 // thin strip still shows the dimension that has room.
 function lengthDimFits(placement: CuttingPlacement) {
@@ -344,6 +356,20 @@ function offcutTransform(offcut: CuttingOffcut) {
           {{ placementLabel(placement) }}
         </text>
       </template>
+      <text
+        v-if="isThickened(placement)"
+        :x="placement.x_mm + placement.length_mm / 2"
+        :y="thickeningY(placement)"
+        fill="var(--color-ink)"
+        :font-size="labelFontSize"
+        font-family="sans-serif"
+        font-weight="700"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        aria-hidden="true"
+      >
+        {{ $t('cutting.thickening.mark') }}
+      </text>
     </g>
   </svg>
 </template>

@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-31
+updated: 2026-08-05
 order: 80
 ---
 
@@ -114,6 +114,17 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   material list, then prefers tape widths that cover the selected panel thickness with the
   closest fit. Narrow tapes sink to the bottom and show a warning, but stay selectable
   (see _UX_).
+- **Thickening (`УТ`) is an instruction, not geometry.** A part may be flagged `thickened`
+  (utolshenie / obmanka): the workshop glues a strip of the same panel underneath so the
+  visible edge reads twice as thick. The strip is **never planned** — it is not placed, not
+  counted in panels used, not priced, and flipping the flag does not invalidate a result.
+  What it does change is the tape: the banded edge is now 2× the panel thickness, so the
+  picker ranks and warns against the doubled figure. The flag is **per part**, not per side,
+  so every banded side of a thickened part is judged against that doubled edge — a
+  deliberate simplification, since a part thickened on one side only is the rarer case and
+  the drawing shows which sides carry tape. It is set in the edge dialog (the tape it forces
+  is that dialog's subject) and stamped `УТ` in the parts list glyph, at the centre of the
+  part on the drawing, and at the centre of the part on the PDF map.
 
 ### The optimiser
 

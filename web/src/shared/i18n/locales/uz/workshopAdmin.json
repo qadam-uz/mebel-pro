@@ -168,7 +168,13 @@
     "colBranch": "Filial",
     "colAddress": "Manzil",
     "colPhone": "Telefon",
-    "colStatus": "Holat"
+    "colStatus": "Holat",
+    "map": {
+      "aria": "Filial joylashuvi xaritasi",
+      "hint": "Filial joyini xaritada bosib belgilang. Nishonni sudrab aniqlashtirish mumkin.",
+      "clear": "Joyni olib tashlash",
+      "label": "Joylashuv"
+    }
   },
   "branchDetail": {
     "back": "← Filiallar",

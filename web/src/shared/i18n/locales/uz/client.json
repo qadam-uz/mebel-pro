@@ -153,25 +153,14 @@
   "orderNew": {
     "back": "Natijaga qaytish",
     "title": "Buyurtmani tasdiqlash",
-    "subtitle": "Filial, aloqa ma'lumotlari va yakuniy narxni tekshiring.",
     "draftFailedTitle": "Chizma yuklanmadi",
     "draftFailedBody": "Buyurtma berish uchun chizma ma'lumotlarini qayta yuklash kerak.",
-    "pickupPlace": "Olib ketish joyi",
+    "workshopTitle": "Ustaxona",
     "quoteFailed": "Filial narxi yuklanmadi.",
-    "branchLocked": "Bu filial chizma yaratishda tanlangan. Almashtirish uchun {link} qayting.",
-    "branchLockedLink": "detallar sahifasiga",
-    "contactTitle": "Aloqa ma'lumotlari",
+    "contactTitle": "Mijoz",
     "contactNote": "Bu ma'lumot ustaxona siz bilan bog'lanishi uchun ulashiladi.",
     "phoneInvalid": "Telefon +998XXXXXXXXX shaklida bo'lishi kerak",
     "resetFromProfile": "Profildan tiklash",
-    "summaryTitle": "To'liq xulosa",
-    "cuttingParams": "Arra kesigi {kerf} mm · Chetki qirqim {trim} mm",
-    "partsToggle": "{n} ta detal · ko'rish",
-    "colName": "Nomi",
-    "colSize": "O'lcham",
-    "colQuantity": "Soni",
-    "rotation": "burilish",
-    "rotationTitle": "Burilishi mumkin — tekstura yo'nalishi erkin",
     "paymentNote": "Onlayn to'lov yo'q — buyurtmani ustaxona ko'rib chiqib tasdiqlaydi, to'lov filialda amalga oshiriladi; \"Yuborildi\" bosqichida ekanida uni bekor qilish mumkin.",
     "railTitle": "Xulosa",
     "sheets": "Listlar",
@@ -189,9 +178,7 @@
     "blockerName": "Ismingizni kiriting.",
     "blockerPhone": "Telefon +998XXXXXXXXX shaklida bo'lishi kerak.",
     "billCuttingDetail": "{panels} × {price}",
-    "billEdge": "Kromka: {material}",
-    "partOwnMaterial": "{material} · o'z materiali",
-    "partEdgeNone": "yo'q"
+    "billEdge": "Kromka: {material}"
   },
   "branches": {
     "title": "Ustaxonalar",
@@ -203,7 +190,8 @@
     "emptyBody": "Qidiruv bo'yicha faol yoki vaqtincha yopiq ustaxona yo'q.",
     "primaryPhone": "(asosiy)",
     "active": "Faol",
-    "closed": "Vaqtincha yopiq"
+    "closed": "Vaqtincha yopiq",
+    "openMap": "Xaritada ochish"
   },
   "profile": {
     "loadFailedTitle": "Profilni yuklab bo'lmadi",

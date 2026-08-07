@@ -405,6 +405,7 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
     material_id: previous?.material_id ?? '',
     material_source: 'shop',
     follow_grain: false,
+    thickened: false,
     length_mm: 0,
     width_mm: 0,
     quantity: 0,
@@ -1033,6 +1034,7 @@ function closeEdgePicker() {
 type EdgePickerPayload = {
   edges: Record<EdgeField, CuttingEdgeBand | null>
   rememberedMaterialId: string | null
+  thickened: boolean
 }
 
 function applyEdgesToRefs(refs: Set<string>, payload: EdgePickerPayload) {
@@ -1043,6 +1045,7 @@ function applyEdgesToRefs(refs: Set<string>, payload: EdgePickerPayload) {
     else delete preferred[part.part_ref]
     return {
       ...part,
+      thickened: payload.thickened,
       edge_top: payload.edges.edge_top ? { ...payload.edges.edge_top } : null,
       edge_bottom: payload.edges.edge_bottom ? { ...payload.edges.edge_bottom } : null,
       edge_left: payload.edges.edge_left ? { ...payload.edges.edge_left } : null,
@@ -1060,6 +1063,7 @@ function onEdgePickerChange(payload: EdgePickerPayload) {
     applyEdgesToRefs(targets, payload)
   } else if (edgePickerPart.value) {
     const part = edgePickerPart.value
+    part.thickened = payload.thickened
     part.edge_top = payload.edges.edge_top
     part.edge_bottom = payload.edges.edge_bottom
     part.edge_left = payload.edges.edge_left
@@ -1075,7 +1079,14 @@ function onEdgePickerChange(payload: EdgePickerPayload) {
 // price the persisted snapshot, and a display-only rewrite would invisibly
 // bill legacy parts as client-supplied (no material charge).
 function normalizeSources(part: CuttingPart): CuttingPart {
-  const next: CuttingPart = { ...part, material_source: 'shop' }
+  // `thickened` post-dates existing drafts, so a hydrated snapshot can arrive
+  // without it — coerce to a real boolean here rather than letting `undefined`
+  // reach the row toggle and the saved snapshot.
+  const next: CuttingPart = {
+    ...part,
+    material_source: 'shop',
+    thickened: part.thickened === true,
+  }
   for (const side of edgeFields) {
     const band = next[side]
     if (band && band.source !== 'shop') next[side] = { ...band, source: 'shop' }

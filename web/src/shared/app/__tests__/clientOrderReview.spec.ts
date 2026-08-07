@@ -2,32 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildBillRows,
-  buildPartRows,
   billRowsTotal,
   canPlaceBlocker,
   canPlaceBlockerLabel,
   fieldDiffersFromProfile,
 } from '@/shared/app/clientOrderReview'
-import type { CuttingPart } from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
-
-function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
-  return {
-    part_ref: 'part-a',
-    name: null,
-    material_id: 'panel-a',
-    material_source: 'shop',
-    follow_grain: true,
-    length_mm: 600,
-    width_mm: 400,
-    quantity: 2,
-    edge_top: null,
-    edge_bottom: null,
-    edge_left: null,
-    edge_right: null,
-    ...overrides,
-  }
-}
 
 // A realistic quote fixture: two panel materials, one edge material — the
 // shape the backend actually returns (sales/service.py:_price_result), where
@@ -40,16 +20,22 @@ function quote(overrides: Partial<OrderQuote> = {}): OrderQuote {
     branch_name: 'Chilonzor filiali',
     branch_address: 'Bunyodkor 12',
     branch_phone: '+998901112233',
+    workshop_name: 'Mebel Master',
+    branch_additional_phones: [],
+    branch_latitude: null,
+    branch_longitude: null,
     subtotal_cutting_tiyin: 5 * 45_000_00,
     subtotal_materials_tiyin: 3 * 250_000_00 + 2 * 180_000_00,
     subtotal_edge_banding_tiyin: 12_500_00,
     total_tiyin: 5 * 45_000_00 + (3 * 250_000_00 + 2 * 180_000_00) + 12_500_00,
     panels_used: 5,
+    edge_banding_rate_tiyin: 100_000,
     cutting_rate_tiyin: 45_000_00,
     material_lines: [
       {
         material_id: 'panel-a',
         material_name: 'LDSP Egger 18mm oq',
+        own_panels: 0,
         panels_used: 3,
         unit_price_tiyin: 250_000_00,
         line_total_tiyin: 3 * 250_000_00,
@@ -57,6 +43,7 @@ function quote(overrides: Partial<OrderQuote> = {}): OrderQuote {
       {
         material_id: 'panel-b',
         material_name: "LDSP Egger 18mm yong'oq",
+        own_panels: 0,
         panels_used: 2,
         unit_price_tiyin: 180_000_00,
         line_total_tiyin: 2 * 180_000_00,
@@ -66,6 +53,8 @@ function quote(overrides: Partial<OrderQuote> = {}): OrderQuote {
       {
         material_id: 'edge-a',
         material_name: 'ABS kromka 2mm oq',
+        own: false,
+        metre_price_tiyin: 500_000,
         consumed_mm: 5150,
         material_cost_tiyin: 8_000_00,
         service_cost_tiyin: 4_500_00,
@@ -155,57 +144,5 @@ describe('buildBillRows', () => {
     const edgeRow = rows.find((row) => row.key.startsWith('edge:'))
     expect(edgeRow?.label).not.toBe('Kromka')
     expect(edgeRow?.label).toContain('Kromka')
-  })
-})
-
-describe('buildPartRows', () => {
-  const resolveMaterialName = (materialId: string) =>
-    materialId === 'panel-a' ? 'LDSP oq' : materialId
-
-  it('renders one row per part with its display name, size, and quantity', () => {
-    const parts = [
-      part({ part_ref: 'p1', name: 'Yon devor', length_mm: 600, width_mm: 400, quantity: 2 }),
-      part({ part_ref: 'p2', name: null, length_mm: 300, width_mm: 250, quantity: 1 }),
-    ]
-    const rows = buildPartRows(parts, resolveMaterialName)
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({
-      name: 'Yon devor',
-      sizeLabel: '600×400 mm',
-      quantity: 2,
-    })
-    // Falls back to the D-number convention when the part has no custom name.
-    expect(rows[1].name).toBe('D2')
-    expect(rows[1].sizeLabel).toBe('300×250 mm')
-  })
-
-  it('marks a client-supplied material with the "own material" note', () => {
-    const rows = buildPartRows([part({ material_source: 'own' })], resolveMaterialName)
-    expect(rows[0].materialLabel).toContain("o'z materiali")
-  })
-
-  it('lists only the sides that are actually banded', () => {
-    const banded = part({
-      edge_top: { material_id: 'edge-a', source: 'shop' },
-      edge_left: { material_id: 'edge-a', source: 'shop' },
-    })
-    const rows = buildPartRows([banded], resolveMaterialName)
-    expect(rows[0].edgeLabel).toContain('Yuqori')
-    expect(rows[0].edgeLabel).toContain('Chap')
-    expect(rows[0].edgeLabel).not.toContain('Pastki')
-  })
-
-  it('reports no banding distinctly from a banded part', () => {
-    const rows = buildPartRows([part()], resolveMaterialName)
-    expect(rows[0].edgeLabel).toBe("yo'q")
-  })
-
-  it('surfaces follow_grain so a grain-locked part is flagged to the client', () => {
-    const rows = buildPartRows(
-      [part({ follow_grain: true }), part({ part_ref: 'p2', follow_grain: false })],
-      resolveMaterialName,
-    )
-    expect(rows[0].followGrain).toBe(true)
-    expect(rows[1].followGrain).toBe(false)
   })
 })

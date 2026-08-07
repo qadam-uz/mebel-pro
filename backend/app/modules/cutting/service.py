@@ -250,6 +250,8 @@ async def update_draft(
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
     parts_snapshot: list[CuttingDraftPart] | None,
+    own_panel_counts: dict[uuid.UUID, int] | None = None,
+    own_edge_material_ids: list[uuid.UUID] | None = None,
 ) -> CuttingDraftResponse:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
     resolved_branch_id = preferred_branch_id
@@ -266,6 +268,8 @@ async def update_draft(
         preferred_branch_id_set=preferred_branch_id_set,
         preferred_branch_id=resolved_branch_id,
         parts_snapshot=parts_snapshot,
+        own_panel_counts=own_panel_counts,
+        own_edge_material_ids=own_edge_material_ids,
     )
 
 
@@ -279,6 +283,8 @@ async def _apply_update(
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
     parts_snapshot: list[CuttingDraftPart] | None,
+    own_panel_counts: dict[uuid.UUID, int] | None = None,
+    own_edge_material_ids: list[uuid.UUID] | None = None,
 ) -> CuttingDraftResponse:
     """Shared update body: branch id is already resolved/authorized by the caller."""
     parts_changed = parts_snapshot is not None
@@ -302,6 +308,18 @@ async def _apply_update(
             await _delete_candidate_results(db, draft.id)
         else:
             await _refresh_candidate_results_for_neutral_parts(db, draft=draft, parts=next_snapshot)
+    if own_panel_counts is not None:
+        draft.own_panel_counts = {
+            str(material_id): count for material_id, count in own_panel_counts.items() if count > 0
+        }
+    if own_edge_material_ids is not None:
+        draft.own_edge_material_ids = [str(material_id) for material_id in own_edge_material_ids]
+    # Ownership never moves a part, so the chosen layout stands
+    # (SPEC_CUTTING_GEOMETRY_NEUTRAL_EDITS). What changes is what that layout
+    # charges, which is why the claim is projected onto every live result here
+    # rather than recomputed at price time from a draft that may have moved on.
+    if own_panel_counts is not None or parts_changed:
+        await _project_own_panels_onto_results(db, draft=draft)
     draft.updated_at = datetime.now(UTC)
     await db.flush()
     await record_action(
@@ -1327,6 +1345,42 @@ def _material_snapshot(material: Material, manufacturer: Manufacturer) -> dict[s
         "edge_width_mm": material.edge_width_mm,
         "image_file_id": str(material.image_file_id) if material.image_file_id else None,
     }
+
+
+def clamp_own_claim(claim: dict[str, int], panels_used: dict[str, int]) -> dict[str, int]:
+    """What a layout actually draws from the client's own stack.
+
+    The stored claim is what the client says they own, which is deliberately not
+    capped on save — a layout that grows later may need the sheets this one does
+    not. Applying it is therefore always a clamp, never a read.
+    """
+    applied: dict[str, int] = {}
+    for material_id, count in claim.items():
+        capped = min(int(count), int(panels_used.get(material_id, 0)))
+        if capped > 0:
+            applied[material_id] = capped
+    return applied
+
+
+async def _project_own_panels_onto_results(db: AsyncSession, *, draft: CuttingDraft) -> None:
+    """Copy the draft's own-material claim onto each of its live results.
+
+    The draft holds the claim so it survives a re-optimise; a result holds what
+    *its* layout actually draws from the client's stack, clamped to the sheets
+    that layout uses. Freezing it per result is what lets a confirmed order
+    reprice identically years later without reaching back to a draft that has
+    since been edited.
+    """
+    claim = draft.own_panel_counts or {}
+    results = (
+        await db.scalars(select(CuttingResult).where(CuttingResult.draft_id == draft.id))
+    ).all()
+    for result in results:
+        # A confirmed result is the historical record an order points at; its
+        # frozen split must never move under it.
+        if result.confirmed_at is not None:
+            continue
+        result.own_panel_counts = clamp_own_claim(claim, result.panels_used_by_material)
 
 
 async def _delete_candidate_results(

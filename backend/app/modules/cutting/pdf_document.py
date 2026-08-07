@@ -75,6 +75,10 @@ _REGISTER_HEADER_H = 13.0
 # the bold 7pt header — "Kenglik" is 25.3pt in a 41.6pt column (0.40 x 104) —
 # ahead of a 4-digit mm value (17.8pt) over a 22pt band tick, and the narrow
 # "Soni" column still clears its own header.
+#
+# This is also why the thickening stamp has no column here: it would need
+# ~18pt, and the map's >70% page-width floor leaves under 2pt of headroom. The
+# stamp lives on the map instead, centred in the part it applies to.
 _PORTRAIT_REGISTER_W = 104.0
 # Vertical space a work card spends above its map: the four header lines plus
 # the padding under them. The planner needs it to size a slot's register.
@@ -606,9 +610,13 @@ def _panel_part_rows(
     """Register rows: `[length, width, quantity, length_band_count,
     width_band_count]`. A part is identified by size + band pattern alone —
     no name, no row number — so rows that end up identical on both counts
-    merge their quantity. `registry` is unused: edge materials no longer
-    print per row, only ①②③-numbered in the summary spec; kept so this
-    signature still matches the other row-builders callers thread together.
+    merge their quantity. Thickening is deliberately NOT part of the key: it
+    has no column here (the map's >70% page-width floor leaves no room, see
+    `_PORTRAIT_REGISTER_W`), so keying on it would only split one size into
+    two rows that print identically. The map carries the stamp instead.
+    `registry` is unused: edge materials no longer print per row, only
+    ①②③-numbered in the summary spec; kept so this signature still matches
+    the other row-builders callers thread together.
     """
     del registry
     grouped: dict[str, int] = {}

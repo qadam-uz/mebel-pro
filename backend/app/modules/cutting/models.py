@@ -53,6 +53,27 @@ class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
             initially="DEFERRED",
         )
     )
+    # Client-supplied material (cutting.md, "Own material"). Sheets are counted
+    # per catalog material rather than flagged per part: a part cannot say which
+    # physical sheet carried it, because parts of one material share one layout
+    # that does not exist until the optimiser has run. The stored number is the
+    # client's claim, not a cap — `min(claim, panels_used)` decides what a given
+    # result actually charges, so a claim that outruns today's layout survives
+    # for the edit that needs it.
+    own_panel_counts: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default="{}",
+    )
+    # Edge tape is brought by the roll, so ownership is per tape material and the
+    # per-side `source` on each part is stamped from this list on every write.
+    own_edge_material_ids: Mapped[list[str]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
 
 
 class CuttingResult(UUIDPrimaryKey, Base):
@@ -86,6 +107,17 @@ class CuttingResult(UUIDPrimaryKey, Base):
         JSON().with_variant(JSONB, "postgresql"),
         nullable=False,
         default=dict,
+    )
+    # The draft's own-material claim projected onto *this* layout —
+    # `min(claim, panels_used)` per material. The claim itself stays on the draft
+    # so it survives a re-optimise; what a result charges is frozen here, which
+    # is what lets a confirmed order reprice identically years later without
+    # reaching back to a draft that has since moved on.
+    own_panel_counts: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default="{}",
     )
     waste_percentage: Mapped[Decimal] = mapped_column(nullable=False)
     total_cut_length_mm: Mapped[int] = mapped_column(nullable=False)

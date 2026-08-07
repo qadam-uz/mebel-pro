@@ -92,6 +92,7 @@ function makePart(overrides: Partial<CuttingPart> = {}): CuttingPart {
     material_id: 'mat-1',
     material_source: 'shop',
     follow_grain: true,
+    thickened: false,
     length_mm: 300,
     width_mm: 200,
     quantity: 1,

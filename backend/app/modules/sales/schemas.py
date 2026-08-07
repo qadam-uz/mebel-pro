@@ -33,17 +33,36 @@ class WorkshopOrderCreateRequest(BaseModel):
 
 
 class MaterialPriceLine(APIModel):
+    """One panel material's share of the quote.
+
+    `panels_used` is what the layout needs; `own_panels` is how many of those the
+    client supplies. The workshop charges the difference, which is what
+    `line_total_tiyin` already holds — the receipt renders the subtraction rather
+    than recomputing it.
+    """
+
     material_id: uuid.UUID
     material_name: str
     panels_used: int
+    own_panels: int = 0
     unit_price_tiyin: int
     line_total_tiyin: int
 
 
 class EdgePriceLine(APIModel):
+    """One tape's share of the quote.
+
+    `consumed_mm` counts every banded millimetre; `own` says the client brought
+    the roll, so the tape itself is free while the gluing is still charged.
+    """
+
     material_id: uuid.UUID
     material_name: str
     consumed_mm: int
+    own: bool = False
+    # The branch's price per metre for this tape, so the receipt can print the
+    # multiplication it charges rather than a total the reader has to trust.
+    metre_price_tiyin: int = 0
     material_cost_tiyin: int
     service_cost_tiyin: int
     line_total_tiyin: int
@@ -55,6 +74,15 @@ class OrderQuoteResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
+    # The checkout screen names who is doing the work, not just where to collect
+    # it — the branch alone reads as an address without an owner.
+    workshop_name: str = ""
+    # Everything a client needs to actually reach the branch: every published
+    # number, and the pin when the branch has one (an address alone does not
+    # find a door on a street that repeats across the city).
+    branch_additional_phones: list[str] = Field(default_factory=list)
+    branch_latitude: Decimal | None = None
+    branch_longitude: Decimal | None = None
     subtotal_cutting_tiyin: int
     subtotal_materials_tiyin: int
     subtotal_edge_banding_tiyin: int
@@ -63,6 +91,9 @@ class OrderQuoteResponse(APIModel):
     # (CB-117): cutting = panels_used * cutting_rate, plus per-material/per-edge lines.
     panels_used: int
     cutting_rate_tiyin: int
+    # Per-metre banding labour, so the receipt prints the same multiplication for
+    # the edge service that it does for cutting.
+    edge_banding_rate_tiyin: int = 0
     material_lines: list[MaterialPriceLine]
     edge_lines: list[EdgePriceLine]
 
@@ -222,6 +253,9 @@ class OrderSummaryResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
+    branch_additional_phones: list[str] = Field(default_factory=list)
+    branch_latitude: Decimal | None = None
+    branch_longitude: Decimal | None = None
     cutting_result_id: uuid.UUID
     status: OrderStatus
     version: int

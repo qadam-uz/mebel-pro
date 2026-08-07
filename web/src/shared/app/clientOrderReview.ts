@@ -1,14 +1,12 @@
 // Pure derivations for the client order-confirmation page (ClientOrderNewView).
 // Extracted so the "why is the CTA disabled", "does the itemized bill reconcile",
-// and "what goes in the parts table" logic is testable without mounting the SFC —
+// logic is testable without mounting the SFC —
 // follows the cuttingResultsDisplay.ts pattern (CB-93).
 
 import { isUzPhone } from '@/shared/app/clientUi'
-import { sideLabels } from '@/shared/app/cuttingDisplay'
-import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
 import { formatTiyin } from '@/shared/formatters'
 import { translate, translatePlural } from '@/shared/i18n'
-import { EDGE_SIDES, metres, type CuttingPart } from '@/shared/stores/cutting'
+import { metres } from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
 
 // ---- why the primary CTA is disabled --------------------------------------
@@ -103,40 +101,3 @@ export function billRowsTotal(rows: OrderBillRow[]): number {
 }
 
 // ---- parts table ("Detallar") -----------------------------------------------
-
-export interface PartReviewRow {
-  key: string
-  name: string
-  materialLabel: string
-  sizeLabel: string
-  quantity: number
-  edgeLabel: string
-  followGrain: boolean
-}
-
-/** One row per snapshot part for the collapsed "Detallar" disclosure.
- *  `resolveMaterialName` is injected (rather than reading the cutting store)
- *  so this stays a pure function the caller can unit test. */
-export function buildPartRows(
-  parts: CuttingPart[],
-  resolveMaterialName: (materialId: string) => string,
-): PartReviewRow[] {
-  return parts.map((part, index) => {
-    const bandedSides = EDGE_SIDES.filter((side) => Boolean(part[side]))
-    const material = resolveMaterialName(part.material_id)
-    return {
-      key: part.part_ref || `part-${index}`,
-      name: partDisplayName(part, index),
-      materialLabel:
-        part.material_source === 'own'
-          ? translate('client.orderNew.partOwnMaterial', { material })
-          : material,
-      sizeLabel: `${part.length_mm}×${part.width_mm} mm`,
-      quantity: part.quantity,
-      edgeLabel: bandedSides.length
-        ? bandedSides.map((side) => sideLabels[side]).join(' · ')
-        : translate('client.orderNew.partEdgeNone'),
-      followGrain: part.follow_grain,
-    }
-  })
-}

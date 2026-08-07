@@ -542,6 +542,66 @@ async def test_neutral_parts_edit_keeps_candidate_result_and_refreshes_edges(
     assert refreshed["panels"] == before_panels
 
 
+async def test_thickening_round_trips_and_never_invalidates_the_layout(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Thickening is an instruction to the workshop, not geometry: the
+    strip is glued under the part and never cut, so flipping the flag must not
+    touch the layout. If it ever joined the geometry-affecting set, marking a
+    finished drawing would silently throw away its optimised result."""
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    parts = _parts(panel.id, edge.id)
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": parts},
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize", headers=_auth(access)
+    )
+    result = optimized.json()["results"][0]
+
+    thickened = deepcopy(parts)
+    thickened[0]["thickened"] = True
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": thickened},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["parts_snapshot"][0]["thickened"] is True
+    assert patched.json()["chosen_result_id"] == result["id"]
+    assert patched.json()["results"][0]["panels"] == result["panels"]
+
+
+async def test_parts_default_to_not_thickened(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Every draft saved before the flag existed omits the key entirely — it has
+    to read back as off rather than absent, or the UI toggle has no state."""
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": _parts(panel.id, edge.id)},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["parts_snapshot"][0]["thickened"] is False
+
+
 @pytest.mark.parametrize(
     "change",
     ["quantity", "length_mm", "width_mm", "material_id", "follow_grain", "add_ref", "remove_ref"],

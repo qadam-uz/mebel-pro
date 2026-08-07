@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { formatPhone } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
+import { yandexMapUrl } from '@/shared/app/yandexMapLink'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useClientCatalogStore, type ClientBranch } from '@/shared/stores/clientCatalog'
@@ -17,6 +18,10 @@ async function refreshBranches() {
   // One request now — the branch payload carries an inline material preview
   // (CB-13), so the old per-branch materials N+1 is gone.
   await catalog.loadBranches(search.value)
+}
+
+function mapUrl(branch: ClientBranch) {
+  return yandexMapUrl(branch.latitude, branch.longitude)
 }
 
 /** Every published number, primary first — all of them tap-to-call (QAD-158). */
@@ -118,6 +123,22 @@ onMounted(refreshBranches)
             {{ branch.workshop_name }} · {{ branch.branch_name }}
           </h2>
           <p class="mt-1 font-mono text-xs text-ink-muted">{{ branch.address }}</p>
+          <!-- Only when the branch has a pin — an address alone does not get a
+               client to the door in a city where the same street repeats. -->
+          <!-- A pin icon that opens Yandex Maps, not an embedded map: this is a
+               list, and a map per card would mount a Leaflet instance and a
+               tile round-trip for every branch on screen. -->
+          <a
+            v-if="mapUrl(branch)"
+            :href="mapUrl(branch) ?? undefined"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mt-1 grid size-11 place-items-center rounded-md border border-hairline text-accent transition hover:border-accent hover:bg-accent-soft"
+            :title="$t('client.branches.openMap')"
+            :aria-label="$t('client.branches.openMap')"
+          >
+            <Icon name="map-pin" class="size-[18px]" />
+          </a>
           <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <a
               v-for="(phone, index) in phones(branch)"
