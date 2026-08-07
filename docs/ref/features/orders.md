@@ -273,7 +273,10 @@ Driven entirely by this state machine; the mechanics live in
   carries with shop millimetres — these are **consumed** metres when displayed/priced, see *Pricing*). A
   revert re-increments exactly what its step decremented.
 - **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
-  and no `shop` edge sides skips this seam entirely.
+  and no `shop` edge sides skips this seam entirely. A material the client supplies **every**
+  sheet of nets to a zero demand rather than disappearing — pricing still has to check the
+  branch carries it — and a zero demand is skipped at the seam rather than written as a
+  no-op movement.
 - **After decrement, material is spent.** Cancelling an order whose panels/edges were
   already decremented does **not** restore them (they were physically cut); the loss is
   the workshop's, recorded offline.

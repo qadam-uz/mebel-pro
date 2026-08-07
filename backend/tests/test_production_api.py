@@ -11,6 +11,7 @@ import uuid
 
 from app.models.enums import AuthenticatedPrincipalType
 from app.modules.access.api import create_session
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -468,3 +469,91 @@ async def test_production_job_sheet_is_sanitized_and_assignment_gated(
         f"/api/v1/workshop/production/jobs/{order_id}", headers=_auth(bystander_token)
     )
     assert denied.status_code == 404
+
+
+
+async def test_cutting_done_survives_an_order_the_client_fully_supplied(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A material the client brings every sheet of leaves a zero panel demand.
+
+    The demand key survives at zero on purpose — pricing still has to check the
+    branch carries the material — but a zero-quantity consume is not a movement,
+    and inventory rejects one. Cutting done used to 400 on `invalid_quantity`
+    here, and revert used to fail the same way, stranding the order.
+    """
+
+    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db_session)
+    branch = await db_session.get(Branch, branch_id)
+    assert branch is not None
+    branch.own_material_allowed = True
+    await db_session.flush()
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    client_access, _ = await _client_access(
+        db_session, phone=f"+99890{uuid.uuid4().int % 10**7:07d}"
+    )
+    draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=branch_id,
+        panel=panel,
+        edge=edge,
+    )
+    # A claim is not a cap: an oversized one clamps to whatever the layout uses,
+    # which is the point — every sheet of this panel is the client's.
+    claimed = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft['id']}",
+        headers=_auth(client_access),
+        json={"own_panel_counts": {str(panel.id): 99}},
+    )
+    assert claimed.status_code == 200
+
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": draft["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Own Everything",
+            "contact_phone": "+998901112244",
+        },
+    )
+    assert placed.status_code == 201
+    order_id = placed.json()["id"]
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": placed.json()["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": approved.json()["version"], "cutter_user_id": str(worker.id)},
+    )
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+
+    assert cut_done.status_code == 200, cut_done.text
+    assert cut_done.json()["status"] in {"edge_banding", "ready"}
+
+    # And back again — the revert path shares the guard, so it stranded the
+    # order at the same step.
+    reverted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/revert",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "reason": "recut"},
+    )
+
+    assert reverted.status_code == 200, reverted.text
+    assert reverted.json()["status"] == "cutting"

@@ -1653,7 +1653,7 @@ async def complete_cutting(
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
     shortfall = False
-    for branch_material_id, quantity in panel_demands.items():
+    for branch_material_id, quantity in _stock_movements(panel_demands):
         transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
@@ -2005,7 +2005,7 @@ async def _cancel_order(
 async def _restore_cutting_step(db: AsyncSession, order: Order) -> dict[uuid.UUID, int]:
     result = await _order_result(db, order)
     demands = _panel_stock_demands(result)
-    for branch_material_id, quantity in demands.items():
+    for branch_material_id, quantity in _stock_movements(demands):
         await restore_order_stock(
             db,
             branch_id=order.branch_id,
@@ -2918,6 +2918,21 @@ def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
         if material_id in demands:
             demands[material_id] = max(0, demands[material_id] - own)
     return demands
+
+
+def _stock_movements(demands: dict[uuid.UUID, int]) -> list[tuple[uuid.UUID, int]]:
+    """The subset of a demand map that is an actual stock movement.
+
+    A demand of zero is a real entry, not an absent one: `_panel_stock_demands`
+    keeps the key so pricing still checks the branch carries the material, which
+    is exactly what happens when the client brings every sheet of it. But a
+    zero-quantity consume/restore is not a movement, and `inventory` rejects one
+    outright (`invalid_quantity`) — so an order fully supplied by the client
+    used to fail at **Cutting done**, and again on revert. Filter here rather
+    than loosening that guard: zero is meaningless for every other caller of it.
+    """
+
+    return [(material_id, quantity) for material_id, quantity in demands.items() if quantity > 0]
 
 
 def _edge_banded_millimetres(result: CuttingResult) -> dict[uuid.UUID, int]:
