@@ -57,34 +57,47 @@ async def _carried_material(
     *,
     color: str = "Sonoma oak",
 ) -> str:
+    """Create a dekor and have the branch carry it in one format.
+
+    Returns the BRANCH material id — the id an invoice line, a stock row and an
+    order item all point at since the reshape.
+    """
     manufacturer = await client.post(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(platform_access),
         json={"name": f"Egger {uuid.uuid4().hex[:6]}", "country": "AT"},
     )
-    material = await client.post(
-        "/api/v1/platform/catalog/materials",
+    dekor = await client.post(
+        "/api/v1/platform/catalog/dekorlar",
         headers=_auth(platform_access),
         json={
-            "kind": "panel",
             "manufacturer_id": manufacturer.json()["id"],
-            "type": "dsp",
-            "thickness_mm": "18",
-            "color": color,
-            "decor_code": f"H{uuid.uuid4().hex[:4]}",
-            "panel_length_mm": 2750,
-            "panel_width_mm": 1830,
-            "grain_direction": True,
+            "tur": "ldsp",
+            "kod": f"H{uuid.uuid4().hex[:4]}",
+            "nomi": color,
+            "tolali": True,
         },
     )
-    material_id: str = material.json()["id"]
+    assert dekor.status_code == 201, dekor.text
     added = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
-        json={"material_id": material_id, "price_tiyin": 60_000_000, "min_stock": 0},
+        json={
+            "dekor_id": dekor.json()["id"],
+            "formats": [
+                {
+                    "qalinlik_mm": "18",
+                    "uzunlik_mm": 2750,
+                    "eni_mm": 1830,
+                    "price_tiyin": 60_000_000,
+                    "min_stock": 0,
+                }
+            ],
+        },
     )
-    assert added.status_code == 201
-    return material_id
+    assert added.status_code == 201, added.text
+    branch_material_id: str = added.json()["created"][0]["id"]
+    return branch_material_id
 
 
 async def _supplier(client: AsyncClient, owner_access: str, branch_id: uuid.UUID) -> str:
@@ -133,10 +146,10 @@ async def test_four_line_invoice_books_its_discount_into_the_supplier_debt(
             "discount_tiyin": 500_000,
             "note": "Iyul yetkazishi",
             "lines": [
-                {"material_id": materials[0], "quantity": 10, "unit_price_tiyin": 300_000},
-                {"material_id": materials[1], "quantity": 7, "unit_price_tiyin": 450_000},
-                {"material_id": materials[2], "quantity": 4, "unit_price_tiyin": 390_000},
-                {"material_id": materials[3], "quantity": 5, "unit_price_tiyin": 360_000},
+                {"branch_material_id": materials[0], "quantity": 10, "unit_price_tiyin": 300_000},
+                {"branch_material_id": materials[1], "quantity": 7, "unit_price_tiyin": 450_000},
+                {"branch_material_id": materials[2], "quantity": 4, "unit_price_tiyin": 390_000},
+                {"branch_material_id": materials[3], "quantity": 5, "unit_price_tiyin": 360_000},
             ],
         },
     )
@@ -155,7 +168,7 @@ async def test_four_line_invoice_books_its_discount_into_the_supplier_debt(
         f"/api/v1/workshop/branches/{branch_id}/stock",
         headers=_auth(owner_access),
     )
-    on_hand = {row["material_id"]: row["on_hand"] for row in stock.json()}
+    on_hand = {row["branch_material_id"]: row["on_hand"] for row in stock.json()}
     assert [on_hand[material] for material in materials] == [10, 7, 4, 5]
 
     transactions = await client.get(
@@ -185,7 +198,9 @@ async def test_surcharge_raises_the_total_and_the_debt_symmetrically(
             "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "surcharge_tiyin": 120_000,
-            "lines": [{"material_id": material_id, "quantity": 3, "unit_price_tiyin": 500_000}],
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 3, "unit_price_tiyin": 500_000}
+            ],
         },
     )
     assert created.status_code == 201
@@ -202,7 +217,7 @@ async def test_invoice_adjustments_stay_inside_their_bounds(
     owner_access, _, branch_id = await _owner_fixture(db_session)
     material_id = await _carried_material(client, platform_access, owner_access, branch_id)
     supplier_id = await _supplier(client, owner_access, branch_id)
-    line = {"material_id": material_id, "quantity": 2, "unit_price_tiyin": 500_000}
+    line = {"branch_material_id": material_id, "quantity": 2, "unit_price_tiyin": 500_000}
 
     too_big = await client.post(
         "/api/v1/workshop/inventory/invoices",
@@ -255,10 +270,14 @@ async def test_a_bad_line_leaves_no_invoice_and_no_stock_movement(
             "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "lines": [
-                {"material_id": good, "quantity": 5, "unit_price_tiyin": 300_000},
-                {"material_id": good, "quantity": 2, "unit_price_tiyin": 300_000},
+                {"branch_material_id": good, "quantity": 5, "unit_price_tiyin": 300_000},
+                {"branch_material_id": good, "quantity": 2, "unit_price_tiyin": 300_000},
                 # Third line names a material this branch does not carry.
-                {"material_id": str(uuid.uuid4()), "quantity": 1, "unit_price_tiyin": 100_000},
+                {
+                    "branch_material_id": str(uuid.uuid4()),
+                    "quantity": 1,
+                    "unit_price_tiyin": 100_000,
+                },
             ],
         },
     )
@@ -312,7 +331,9 @@ async def test_invoice_numbers_run_per_workshop_not_per_branch(
         json={
             "branch_id": str(first_branch),
             "supplier_id": supplier_id,
-            "lines": [{"material_id": first_material, "quantity": 1, "unit_price_tiyin": 100_000}],
+            "lines": [
+                {"branch_material_id": first_material, "quantity": 1, "unit_price_tiyin": 100_000}
+            ],
         },
     )
     second_invoice = await client.post(
@@ -321,7 +342,9 @@ async def test_invoice_numbers_run_per_workshop_not_per_branch(
         json={
             "branch_id": second_branch,
             "supplier_id": supplier_id,
-            "lines": [{"material_id": second_material, "quantity": 1, "unit_price_tiyin": 100_000}],
+            "lines": [
+                {"branch_material_id": second_material, "quantity": 1, "unit_price_tiyin": 100_000}
+            ],
         },
     )
     assert first_invoice.json()["invoice_no"] == "K-0001"
@@ -343,7 +366,9 @@ async def test_payment_status_walks_unpaid_to_paid_and_lets_an_advance_through(
         json={
             "branch_id": str(branch_id),
             "supplier_id": supplier_id,
-            "lines": [{"material_id": material_id, "quantity": 4, "unit_price_tiyin": 500_000}],
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 4, "unit_price_tiyin": 500_000}
+            ],
         },
     )
     invoice_id = invoice.json()["id"]
@@ -428,7 +453,9 @@ async def test_a_supplier_expense_without_an_invoice_still_pays_the_supplier(
         json={
             "branch_id": str(branch_id),
             "supplier_id": supplier_id,
-            "lines": [{"material_id": material_id, "quantity": 2, "unit_price_tiyin": 500_000}],
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 2, "unit_price_tiyin": 500_000}
+            ],
         },
     )
     today = invoice.json()["invoice_date"]
@@ -485,7 +512,9 @@ async def test_invoices_are_invisible_to_another_workshop(
         json={
             "branch_id": str(branch_id),
             "supplier_id": supplier_id,
-            "lines": [{"material_id": material_id, "quantity": 1, "unit_price_tiyin": 100_000}],
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 1, "unit_price_tiyin": 100_000}
+            ],
         },
     )
     invoice_id = invoice.json()["id"]

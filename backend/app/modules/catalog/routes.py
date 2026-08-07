@@ -1,55 +1,57 @@
-"""Catalog routes for platform and workshop branch selection."""
+"""Catalog routes for platform dekorlar and workshop branch materials."""
 
 import uuid
-from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import AccountReadyPrincipal, Session
-from app.models.enums import MaterialKind, MaterialStatus, PanelMaterialType
+from app.models.enums import DekorType, MaterialStatus
 from app.modules.catalog.api import (
     BranchCatalogOption,
     BranchMaterialRecord,
-    MaterialRecord,
-    add_branch_material,
-    add_branch_materials_bulk,
+    DekorRecord,
+    attach_branch_materials,
+    branch_material_response_from_models,
+    create_dekor,
     create_manufacturer,
-    create_material,
+    dekor_response_from_models,
+    get_dekor,
     get_manufacturer,
-    get_material,
     list_branch_catalog_facets,
     list_branch_catalog_options,
     list_branch_materials,
+    list_dekorlar,
     list_manufacturers,
-    list_materials,
-    material_response_from_models,
     set_branch_material_status,
+    set_dekor_status,
     set_manufacturer_status,
-    set_material_status,
     update_branch_material,
+    update_dekor,
     update_manufacturer,
-    update_material,
 )
 from app.modules.catalog.schemas import (
+    BranchCatalogDekorOption,
     BranchCatalogFiltersResponse,
     BranchCatalogManufacturerOption,
-    BranchCatalogMaterialOption,
     BranchCatalogOptionsPage,
-    BranchMaterialBulkCreateRequest,
-    BranchMaterialBulkResponse,
-    BranchMaterialCreateRequest,
+    BranchMaterialAttachRequest,
+    BranchMaterialAttachResponse,
+    BranchMaterialFormatKey,
     BranchMaterialPatchRequest,
     BranchMaterialResponse,
+    DekorCreateRequest,
+    DekorPatchRequest,
+    DekorResponse,
     ManufacturerCreateRequest,
     ManufacturerPatchRequest,
     ManufacturerResponse,
-    MaterialCreateRequest,
-    MaterialPatchRequest,
-    MaterialResponse,
 )
 
 router = APIRouter(tags=["catalog"])
-MATERIAL_STATUS_QUERY = Query(default=None, alias="status")
+# The wire name stays `status` even though the dekor column is `holat`: the
+# reshape already changes every payload, and renaming the query param too would
+# break clients twice for no gain.
+STATUS_QUERY = Query(default=None, alias="status")
 # Opt-in limit/offset paging (house convention: bare-list response, client infers
 # "has more" from a full page). Omitting limit returns the full list unchanged.
 LIMIT_QUERY = Query(default=None, ge=1, le=200)
@@ -57,7 +59,7 @@ OFFSET_QUERY = Query(default=0, ge=0)
 # Repeated query params (?manufacturer_ids=a&manufacturer_ids=b) → multi-select
 # filters. Module-level singletons so the defaults aren't Query() calls (ruff B008).
 MANUFACTURER_IDS_QUERY = Query(default=None)
-MATERIAL_TYPES_QUERY = Query(default=None)
+TURLAR_QUERY = Query(default=None)
 
 
 @router.get("/platform/catalog/manufacturers", response_model=list[ManufacturerResponse])
@@ -65,7 +67,7 @@ async def platform_manufacturers_index(
     principal: AccountReadyPrincipal,
     db: Session,
     search: str | None = None,
-    status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
+    status_filter: MaterialStatus | None = STATUS_QUERY,
 ) -> list[ManufacturerResponse]:
     rows = await list_manufacturers(
         db,
@@ -158,107 +160,107 @@ async def platform_manufacturers_deactivate(
     return ManufacturerResponse.model_validate(row)
 
 
-@router.get("/platform/catalog/materials", response_model=list[MaterialResponse])
-async def platform_materials_index(
+@router.get("/platform/catalog/dekorlar", response_model=list[DekorResponse])
+async def platform_dekorlar_index(
     principal: AccountReadyPrincipal,
     db: Session,
     search: str | None = None,
-    kind: MaterialKind | None = None,
+    tur: DekorType | None = None,
+    turlar: list[DekorType] | None = TURLAR_QUERY,
     manufacturer_id: uuid.UUID | None = None,
     manufacturer_ids: list[uuid.UUID] | None = MANUFACTURER_IDS_QUERY,
-    material_types: list[PanelMaterialType] | None = MATERIAL_TYPES_QUERY,
-    status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
+    status_filter: MaterialStatus | None = STATUS_QUERY,
     limit: int | None = LIMIT_QUERY,
     offset: int = OFFSET_QUERY,
-) -> list[MaterialResponse]:
-    rows = await list_materials(
+) -> list[DekorResponse]:
+    rows = await list_dekorlar(
         db,
         principal=principal,
         search=search,
-        kind=kind,
+        tur=tur,
+        turlar=turlar,
         manufacturer_id=manufacturer_id,
         manufacturer_ids=manufacturer_ids,
-        material_types=material_types,
         status_filter=status_filter,
         limit=limit,
         offset=offset,
     )
-    return [_material_response(row) for row in rows]
+    return [_dekor_response(row) for row in rows]
 
 
 @router.post(
-    "/platform/catalog/materials",
-    response_model=MaterialResponse,
+    "/platform/catalog/dekorlar",
+    response_model=DekorResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def platform_materials_create(
-    payload: MaterialCreateRequest,
+async def platform_dekorlar_create(
+    payload: DekorCreateRequest,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> MaterialResponse:
-    row = await create_material(db, principal=principal, payload=payload)
-    return _material_response(row)
+) -> DekorResponse:
+    row = await create_dekor(db, principal=principal, payload=payload)
+    return _dekor_response(row)
 
 
-@router.get("/platform/catalog/materials/{material_id}", response_model=MaterialResponse)
-async def platform_materials_show(
-    material_id: uuid.UUID,
+@router.get("/platform/catalog/dekorlar/{dekor_id}", response_model=DekorResponse)
+async def platform_dekorlar_show(
+    dekor_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> MaterialResponse:
-    row = await get_material(db, principal=principal, material_id=material_id)
-    return _material_response(row)
+) -> DekorResponse:
+    row = await get_dekor(db, principal=principal, dekor_id=dekor_id)
+    return _dekor_response(row)
 
 
-@router.patch("/platform/catalog/materials/{material_id}", response_model=MaterialResponse)
-async def platform_materials_update(
-    material_id: uuid.UUID,
-    payload: MaterialPatchRequest,
+@router.patch("/platform/catalog/dekorlar/{dekor_id}", response_model=DekorResponse)
+async def platform_dekorlar_update(
+    dekor_id: uuid.UUID,
+    payload: DekorPatchRequest,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> MaterialResponse:
-    row = await update_material(db, principal=principal, material_id=material_id, payload=payload)
-    return _material_response(row)
+) -> DekorResponse:
+    row = await update_dekor(db, principal=principal, dekor_id=dekor_id, payload=payload)
+    return _dekor_response(row)
 
 
 @router.post(
-    "/platform/catalog/materials/{material_id}/activate",
-    response_model=MaterialResponse,
+    "/platform/catalog/dekorlar/{dekor_id}/activate",
+    response_model=DekorResponse,
 )
-async def platform_materials_activate(
-    material_id: uuid.UUID,
+async def platform_dekorlar_activate(
+    dekor_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> MaterialResponse:
-    row = await set_material_status(
+) -> DekorResponse:
+    row = await set_dekor_status(
         db,
         principal=principal,
-        material_id=material_id,
+        dekor_id=dekor_id,
         to_status=MaterialStatus.ACTIVE,
     )
-    return _material_response(row)
+    return _dekor_response(row)
 
 
 @router.post(
-    "/platform/catalog/materials/{material_id}/deactivate",
-    response_model=MaterialResponse,
+    "/platform/catalog/dekorlar/{dekor_id}/deactivate",
+    response_model=DekorResponse,
 )
-async def platform_materials_deactivate(
-    material_id: uuid.UUID,
+async def platform_dekorlar_deactivate(
+    dekor_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> MaterialResponse:
-    row = await set_material_status(
+) -> DekorResponse:
+    row = await set_dekor_status(
         db,
         principal=principal,
-        material_id=material_id,
+        dekor_id=dekor_id,
         to_status=MaterialStatus.INACTIVE,
     )
-    return _material_response(row)
+    return _dekor_response(row)
 
 
 @router.get(
-    "/workshop/branches/{branch_id}/catalog/materials",
+    "/workshop/branches/{branch_id}/catalog/dekorlar",
     response_model=BranchCatalogOptionsPage,
 )
 async def workshop_catalog_options_index(
@@ -266,10 +268,8 @@ async def workshop_catalog_options_index(
     principal: AccountReadyPrincipal,
     db: Session,
     search: str | None = None,
-    kind: MaterialKind | None = None,
+    tur: DekorType | None = None,
     manufacturer_id: uuid.UUID | None = None,
-    material_type: PanelMaterialType | None = None,
-    thickness_mm: Decimal | None = None,
     limit: int | None = LIMIT_QUERY,
     offset: int = OFFSET_QUERY,
 ) -> BranchCatalogOptionsPage:
@@ -278,10 +278,8 @@ async def workshop_catalog_options_index(
         principal=principal,
         branch_id=branch_id,
         search=search,
-        kind=kind,
+        tur=tur,
         manufacturer_id=manufacturer_id,
-        material_type=material_type,
-        thickness_mm=thickness_mm,
         limit=limit,
         offset=offset,
     )
@@ -306,7 +304,6 @@ async def workshop_catalog_filters_show(
             BranchCatalogManufacturerOption(id=row.id, name=row.name)
             for row in facets.manufacturers
         ],
-        thicknesses=facets.thicknesses,
     )
 
 
@@ -319,10 +316,10 @@ async def workshop_branch_materials_index(
     principal: AccountReadyPrincipal,
     db: Session,
     search: str | None = None,
-    kind: MaterialKind | None = None,
+    tur: DekorType | None = None,
     manufacturer_id: uuid.UUID | None = None,
-    material_type: PanelMaterialType | None = None,
-    status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
+    dekor_id: uuid.UUID | None = None,
+    status_filter: MaterialStatus | None = STATUS_QUERY,
     limit: int | None = LIMIT_QUERY,
     offset: int = OFFSET_QUERY,
 ) -> list[BranchMaterialResponse]:
@@ -331,9 +328,9 @@ async def workshop_branch_materials_index(
         principal=principal,
         branch_id=branch_id,
         search=search,
-        kind=kind,
+        tur=tur,
         manufacturer_id=manufacturer_id,
-        material_type=material_type,
+        dekor_id=dekor_id,
         status_filter=status_filter,
         limit=limit,
         offset=offset,
@@ -343,36 +340,31 @@ async def workshop_branch_materials_index(
 
 @router.post(
     "/workshop/branches/{branch_id}/materials",
-    response_model=BranchMaterialResponse,
+    response_model=BranchMaterialAttachResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def workshop_branch_materials_create(
     branch_id: uuid.UUID,
-    payload: BranchMaterialCreateRequest,
+    payload: BranchMaterialAttachRequest,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> BranchMaterialResponse:
-    row = await add_branch_material(db, principal=principal, branch_id=branch_id, payload=payload)
-    return _branch_material_response(row)
+) -> BranchMaterialAttachResponse:
+    """Attach one dekor in one or more formats. All-or-nothing."""
 
-
-@router.post(
-    "/workshop/branches/{branch_id}/materials/bulk",
-    response_model=BranchMaterialBulkResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def workshop_branch_materials_bulk_create(
-    branch_id: uuid.UUID,
-    payload: BranchMaterialBulkCreateRequest,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> BranchMaterialBulkResponse:
-    result = await add_branch_materials_bulk(
+    result = await attach_branch_materials(
         db, principal=principal, branch_id=branch_id, payload=payload
     )
-    return BranchMaterialBulkResponse(
+    return BranchMaterialAttachResponse(
         created=[_branch_material_response(row) for row in result.created],
-        skipped_material_ids=result.skipped_material_ids,
+        skipped=[
+            BranchMaterialFormatKey(
+                qalinlik_mm=fmt.qalinlik_mm,
+                uzunlik_mm=fmt.uzunlik_mm,
+                eni_mm=fmt.eni_mm,
+                kromka_eni_mm=fmt.kromka_eni_mm,
+            )
+            for fmt in result.skipped
+        ],
     )
 
 
@@ -437,28 +429,16 @@ async def workshop_branch_materials_deactivate(
     return _branch_material_response(row)
 
 
-def _material_response(record: MaterialRecord) -> MaterialResponse:
-    return material_response_from_models(
-        record.material, record.manufacturer, record.branch_usage_count
-    )
+def _dekor_response(record: DekorRecord) -> DekorResponse:
+    return dekor_response_from_models(record.dekor, record.manufacturer, record.branch_usage_count)
 
 
-def _branch_catalog_option_response(row: BranchCatalogOption) -> BranchCatalogMaterialOption:
-    return BranchCatalogMaterialOption(
-        material=material_response_from_models(row.material, row.manufacturer),
+def _branch_catalog_option_response(row: BranchCatalogOption) -> BranchCatalogDekorOption:
+    return BranchCatalogDekorOption(
+        dekor=dekor_response_from_models(row.dekor, row.manufacturer),
+        carried_format_count=row.carried_format_count,
     )
 
 
 def _branch_material_response(row: BranchMaterialRecord) -> BranchMaterialResponse:
-    branch_material = row.branch_material
-    return BranchMaterialResponse(
-        id=branch_material.id,
-        branch_id=branch_material.branch_id,
-        material_id=branch_material.material_id,
-        material=material_response_from_models(row.material, row.manufacturer),
-        price_tiyin=branch_material.price_tiyin,
-        min_stock=branch_material.min_stock,
-        status=branch_material.status,
-        created_at=branch_material.created_at,
-        updated_at=branch_material.updated_at,
-    )
+    return branch_material_response_from_models(row.branch_material, row.dekor, row.manufacturer)

@@ -28,11 +28,11 @@
     "settings": "Sozlamalar",
     "workshops": "Ustaxonalar",
     "manufacturers": "Ishlab chiqaruvchilar",
-    "materials": "Materiallar",
     "jobs": "Fon vazifalar",
     "errors": "Xatolik monitor",
     "audit": "Audit log",
-    "admins": "Adminlar"
+    "admins": "Adminlar",
+    "dekorlar": "Dekorlar"
   },
   "role": {
     "client": {

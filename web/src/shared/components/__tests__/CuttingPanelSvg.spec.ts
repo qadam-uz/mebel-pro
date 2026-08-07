@@ -12,7 +12,7 @@ import type {
 
 const panel: CuttingPanel = {
   id: 'panel-1',
-  material_id: 'mat-1',
+  branch_material_id: 'mat-1',
   panel_index: 1,
   waste_area_mm2: 0,
   offcuts: [],
@@ -202,6 +202,26 @@ describe('CuttingPanelSvg edge banding', () => {
     expect(wrapper.text()).toContain('Qoldiq 400×120')
     expect(wrapper.text()).not.toContain('sizda qoladi')
     expect(wrapper.find('.offcut rect').attributes('stroke-dasharray')).toBe('12 8')
+  })
+
+  // Pre-reshape snapshots are frozen history: they carry `panel_length_mm` /
+  // `panel_width_mm` and no `tur`. The fixtures above are that legacy vocabulary;
+  // this one is its post-reshape twin, and both must drive the same geometry.
+  it('reads panel size from a post-reshape snapshot', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          material_snapshots: {
+            'mat-1': { tur: 'ldsp', nomi: 'Panel', uzunlik_mm: 1000, eni_mm: 700 },
+          },
+        } as unknown as CuttingResult,
+        panel,
+        activePlacementId: null,
+      },
+    })
+
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 1000 700')
   })
 
   it('rotates labels for tall narrow offcuts', () => {

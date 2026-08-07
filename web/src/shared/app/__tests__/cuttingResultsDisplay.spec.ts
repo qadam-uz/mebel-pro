@@ -5,6 +5,7 @@ import {
   groupPanelPlacements,
   offcutLabelMode,
   panelDisplayIndex,
+  panelFillPercent,
   resultSheetPartGroups,
   snapshotShortLabel,
 } from '@/shared/app/cuttingResultsDisplay'
@@ -70,6 +71,31 @@ describe('cutting results display helpers', () => {
     )
   })
 
+  // panelFillPercent returns '-' when a size is missing, so a legacy snapshot read
+  // through the new keys alone would silently show '-' on every historical result
+  // — no error, no failing test. Both vocabularies are pinned.
+  it('computes the fill percentage from either snapshot vocabulary', () => {
+    const panel = (id: string): CuttingPanel => ({
+      id,
+      branch_material_id: id,
+      panel_index: 1,
+      waste_area_mm2: 1_000_000,
+      offcuts: [],
+      placements: [],
+    })
+    const cuttingResult = result({
+      panels: [panel('legacy'), panel('modern'), panel('unknown')],
+      material_snapshots: {
+        legacy: { panel_length_mm: 2000, panel_width_mm: 1000 },
+        modern: { uzunlik_mm: 2000, eni_mm: 1000 },
+      },
+    })
+
+    expect(panelFillPercent(cuttingResult, cuttingResult.panels[0])).toBe('50.0%')
+    expect(panelFillPercent(cuttingResult, cuttingResult.panels[1])).toBe('50.0%')
+    expect(panelFillPercent(cuttingResult, cuttingResult.panels[2])).toBe('-')
+  })
+
   it('chooses offcut label modes without clipping narrow remnants', () => {
     expect(
       offcutLabelMode({ x_mm: 0, y_mm: 0, length_mm: 700, width_mm: 120, usable: true }, 0.4),
@@ -98,7 +124,7 @@ describe('cutting results display helpers', () => {
   it('groups active sheet placements by part with counts and rotation', () => {
     const panel: CuttingPanel = {
       id: 'panel-a',
-      material_id: 'panel-a',
+      branch_material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -161,7 +187,7 @@ describe('cutting results display helpers', () => {
     })
     const sheetOne: CuttingPanel = {
       id: 'sheet-one',
-      material_id: 'panel-a',
+      branch_material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -170,7 +196,7 @@ describe('cutting results display helpers', () => {
     }
     const sheetTwo: CuttingPanel = {
       id: 'sheet-two',
-      material_id: 'panel-b',
+      branch_material_id: 'panel-b',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -183,8 +209,18 @@ describe('cutting results display helpers', () => {
         part({ part_ref: 'part-b', name: 'Door', material_id: 'panel-b' }),
       ],
       material_snapshots: {
+        // Legacy vocabulary on purpose — this is the frozen-history guard.
         'panel-a': { name: 'Aloqa', panel_length_mm: 2800, panel_width_mm: 2070 },
-        'panel-b': { name: 'Bemor', panel_length_mm: 2800, panel_width_mm: 2070 },
+        // New vocabulary beside it, so the dual read is proven in both directions.
+        'panel-b': {
+          manufacturer_name: 'Egger',
+          tur: 'ldsp',
+          kod: 'Bemor',
+          nomi: 'Oq',
+          qalinlik_mm: '18',
+          uzunlik_mm: 2800,
+          eni_mm: 2070,
+        },
       },
     })
 
@@ -192,18 +228,21 @@ describe('cutting results display helpers', () => {
       resultSheetPartGroups(cuttingResult).map((sheet) => [
         sheet.panelId,
         sheet.sheetLabel,
+        // materialLabel was previously unasserted, which left the snapshot-key
+        // rename with no coverage at all. Both vocabularies are pinned here.
+        sheet.materialLabel,
         sheet.groups.map((group) => `${group.name}×${group.count}`),
       ]),
     ).toEqual([
-      ['sheet-one', 'List 1', ['Shelf×2', 'Door×1']],
-      ['sheet-two', 'List 2', ['Door×1']],
+      ['sheet-one', 'List 1', 'Aloqa · 2800×2070 mm', ['Shelf×2', 'Door×1']],
+      ['sheet-two', 'List 2', 'LDSP Egger Bemor · Oq · 2800×2070×18 mm', ['Door×1']],
     ])
   })
 
   it('uses drawing-wide panel order for displayed list numbers', () => {
     const first: CuttingPanel = {
       id: 'first',
-      material_id: 'panel-a',
+      branch_material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -211,7 +250,7 @@ describe('cutting results display helpers', () => {
     }
     const secondMaterialFirstPanel: CuttingPanel = {
       id: 'second-material-first',
-      material_id: 'panel-b',
+      branch_material_id: 'panel-b',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],

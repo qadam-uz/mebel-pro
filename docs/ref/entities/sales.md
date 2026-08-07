@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-08-07
 order: 50
 ---
 
@@ -80,7 +80,7 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 | `panels_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |
 | `edger_user_id` | UUID? | `edge_banding → ready` | the user credited; null when the order had no banded parts |
 | `edge_completed_at` | timestamp? | `edge_banding → ready` | |
-| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — consumed banding length in integer millimetres by edge material (only `shop` source). UI/reports display metres. Thickness is derived from each material at report read time. |
+| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<kromka branch_material_id>": 12500, … }` — consumed banding length in integer millimetres per tape format (only `shop` source). UI/reports display metres. Thickness is part of the format itself. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
 Invariants: created by the client — or by workshop staff on behalf of a walk-in client
@@ -98,7 +98,7 @@ machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
 `edger_user_id` reference workshop users who hold `process_production` on `branch_id`;
 production stamps are set in the same atomic transaction as their transition and **cleared by
 a revert** of that step; stock is auto-decremented per `shop` source by the inventory module
-(panels at `cutting →` next, edges at `edge_banding → ready`, per edge material) — the order
+(panels at `cutting →` next, edges at `edge_banding → ready`, per tape format) — the order
 holds no stock balance; `completed` and `cancelled` are terminal; an order is never deleted
 (it goes `cancelled`).
 
@@ -113,22 +113,22 @@ into the cutting wizard for that order.
 |---|---|---|
 | `id` | UUID | PK |
 | `order_id` | UUID | required |
-| `material_id` | UUID | logical reference to the panel material (the snapshot is authoritative for the order) |
+| `branch_material_id` | UUID | logical reference to the panel **branch material** — one dekor in one format (the snapshot is authoritative for the order) |
 | `material_source` | enum | `shop` / `own` — for the panel; per-item; an order can mix |
-| `material_snapshot` | json | `{ name, type, thickness_mm, color, decor_code, manufacturer_name, panel_length_mm, panel_width_mm, price_tiyin }` as of order creation |
+| `material_snapshot` | json | `{ manufacturer_name, tur, kod, nomi, tolali, qalinlik_mm, uzunlik_mm, eni_mm, kromka_eni_mm, price_tiyin }` as of order creation. Pre-reshape rows keep the old vocabulary (`name`, `type`, `color`, `decor_code`, `thickness_mm`, `panel_length_mm`, `panel_width_mm`) — frozen history is never rewritten, and the label formatter reads both |
 | `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material / cutting bounds |
 | `quantity` | int | ≥ 1 |
-| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { name, manufacturer_name, thickness_mm, color, decor_code, price_tiyin } }` |
+| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { manufacturer_name, tur, kod, nomi, qalinlik_mm, kromka_eni_mm, price_tiyin } }`, where `material_id` is a `kromka` branch material (the JSON key kept its name; the values were rewritten) |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
 | `unit_material_price_tiyin` | bigint | snapshot; 0 when panel `material_source = own`; ≥ 0 |
 | `edge_cost_tiyin` | bigint | snapshot for this line — sum across the four sides of `shop` edge cost; 0 when every banded side is `own`; ≥ 0 |
 | `line_total_tiyin` | bigint | `(unit_cutting + unit_material) × quantity + edge_cost`; ≥ 0 |
 
 Invariants: snapshot fields are never updated to reflect later catalog changes; `part_ref`
-corresponds to a part in the order's cutting result; the panel `material_id` is a `panel`-kind
-material; each side's edge `material_id` (when set) is an `edge`-kind material; grain is a
-property of the panel's material (read from `material_snapshot`); parts on a grained material
+corresponds to a part in the order's cutting result; `branch_material_id` is a branch material
+of a panel-shaped dekor; each side's edge `material_id` (when set) is one of a `kromka` dekor;
+grain is a property of the panel's dekor (read from `material_snapshot`); parts on a grained material
 aren't rotated at cutting time; per-side `source` is independent and may differ across sides
 of the same item. There is no modify path — items are created with the order and never
 replaced.

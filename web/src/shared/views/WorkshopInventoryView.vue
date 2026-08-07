@@ -12,6 +12,7 @@ import {
   sanitizeQuantityInput,
   sanitizeSignedQuantityInput,
 } from '@/shared/app/inputSanitizers'
+import { formatMm, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -188,12 +189,12 @@ const selectedBranchId = computed(() => {
   return accessibleBranches.value[0]?.id ?? ''
 })
 const displayUnitByMaterialId = computed(
-  () => new Map(workshop.stockItems.map((item) => [item.material_id, item.display_unit])),
+  () => new Map(workshop.stockItems.map((item) => [item.branch_material_id, item.display_unit])),
 )
 const stockOptions = computed(() =>
   workshop.stockItems.map((item) => ({
-    value: item.material_id,
-    label: item.material.name,
+    value: item.branch_material_id,
+    label: item.material.label,
     meta:
       item.on_hand < 0
         ? t('inventory.stock.optionShort', {
@@ -206,7 +207,10 @@ const stockOptions = computed(() =>
 )
 const txMaterialOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('inventory.tx.materialFilterAll') },
-  ...workshop.stockItems.map((item) => ({ value: item.material_id, label: item.material.name })),
+  ...workshop.stockItems.map((item) => ({
+    value: item.branch_material_id,
+    label: item.material.label,
+  })),
 ])
 const activeSupplierOptions = computed(() => [
   {
@@ -413,7 +417,7 @@ const activeListEmpty = computed(() => {
 })
 
 function stockItemByMaterial(materialId: string | null): StockItem | null {
-  return workshop.stockItems.find((item) => item.material_id === materialId) ?? null
+  return workshop.stockItems.find((item) => item.branch_material_id === materialId) ?? null
 }
 
 // A negative balance means production consumed material whose arrival was never
@@ -424,14 +428,21 @@ function isNegative(item: StockItem) {
   return item.on_hand < 0
 }
 
+// The format line under the material's label: `2800×2070×18 mm` for a panel,
+// `0.4×19 mm · kromka (metr)` for a tape. Reads the branch material's own format
+// fields — there is no stored name, and `material.label` already carries identity.
 function materialMeta(item: (typeof workshop.stockItems)[number]) {
-  if (item.kind === 'edge') {
-    return t('inventory.stock.materialMetaEdge', { thickness: item.material.thickness_mm })
+  const thickness = formatMm(item.material.qalinlik_mm)
+  if (isTape(item.tur)) {
+    return t('inventory.stock.materialMetaTape', {
+      thickness,
+      width: item.material.kromka_eni_mm ?? 0,
+    })
   }
   return t('inventory.stock.materialMetaPanel', {
-    thickness: item.material.thickness_mm,
-    length: item.material.panel_length_mm,
-    width: item.material.panel_width_mm,
+    thickness,
+    length: item.material.uzunlik_mm ?? 0,
+    width: item.material.eni_mm ?? 0,
   })
 }
 
@@ -504,7 +515,7 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
     }
     if (activeTab.value === 'tx') {
       await workshop.loadStockTransactions(branchId, {
-        material_id: txMaterialId.value === 'all' ? null : txMaterialId.value,
+        branch_material_id: txMaterialId.value === 'all' ? null : txMaterialId.value,
         date_from: txDateFrom.value || null,
         date_to: txDateTo.value || null,
         limit: INVENTORY_TX_PAGE_LIMIT,
@@ -578,7 +589,11 @@ async function saveInvoice(withExpense = false) {
     movementSaving.value = false
     return
   }
-  const lines: Array<{ material_id: string; quantity: number; unit_price_tiyin: number }> = []
+  const lines: Array<{
+    branch_material_id: string
+    quantity: number
+    unit_price_tiyin: number
+  }> = []
   for (const line of invoiceLines.value) {
     const item = stockItemByMaterial(line.materialId)
     const quantity = validLineQuantity(line, item)
@@ -589,7 +604,7 @@ async function saveInvoice(withExpense = false) {
       return
     }
     lines.push({
-      material_id: item.material_id,
+      branch_material_id: item.branch_material_id,
       quantity,
       unit_price_tiyin: unitPriceTiyin,
     })
@@ -652,7 +667,7 @@ async function recordAdjustment() {
   }
   try {
     await workshop.recordAdjustment(selectedBranchId.value, {
-      material_id: item.material_id,
+      branch_material_id: item.branch_material_id,
       quantity,
       note: adjustmentForm.note,
     })
@@ -1249,9 +1264,9 @@ onBeforeUnmount(() => {
               <tr v-for="item in workshop.stockItems" :key="item.id">
                 <td>
                   <div class="flex min-w-0 items-center gap-3">
-                    <span class="sw" :class="materialSwatchClass(item.material)"></span>
+                    <span class="sw" :class="materialSwatchClass(item.material.dekor)"></span>
                     <span class="min-w-0">
-                      <span class="nm">{{ item.material.name }}</span>
+                      <span class="nm">{{ item.material.label }}</span>
                       <small class="block truncate text-ink-muted">{{ materialMeta(item) }}</small>
                     </span>
                   </div>
@@ -1559,11 +1574,14 @@ onBeforeUnmount(() => {
                 </td>
                 <td class="nm">{{ tx.material_name }}</td>
                 <td class="amt" :class="tx.quantity >= 0 ? 'success-text' : 'danger-text'">
-                  {{ formatTransactionQuantity(tx.quantity, tx.material_id) }}
+                  {{ formatTransactionQuantity(tx.quantity, tx.branch_material_id) }}
                 </td>
                 <td class="num muted">
                   {{
-                    formatStockQuantity(tx.balance_after, transactionDisplayUnit(tx.material_id))
+                    formatStockQuantity(
+                      tx.balance_after,
+                      transactionDisplayUnit(tx.branch_material_id),
+                    )
                   }}
                 </td>
                 <td class="amt">

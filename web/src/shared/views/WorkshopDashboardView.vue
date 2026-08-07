@@ -763,17 +763,17 @@ watch(
                 <div class="flex min-w-0 items-center gap-3">
                   <div
                     class="sw relative overflow-hidden"
-                    :class="materialSwatchClass(item.material)"
+                    :class="materialSwatchClass(item.material.dekor)"
                   >
                     <AuthFileImage
-                      v-if="item.material.image_file_id"
-                      :file-id="item.material.image_file_id"
+                      v-if="item.material.dekor.image_file_id"
+                      :file-id="item.material.dekor.image_file_id"
                       alt=""
                       class="absolute inset-0 h-full w-full object-cover"
                     />
                   </div>
                   <div class="min-w-0">
-                    <div class="nm truncate">{{ item.material.name }}</div>
+                    <div class="nm truncate">{{ item.material.label }}</div>
                     <small class="text-ink-muted">
                       {{
                         $t('workshopAdmin.dashboard.lowStockMin', {

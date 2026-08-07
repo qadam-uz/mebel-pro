@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-07-27
+updated: 2026-08-07
 order: 40
 ---
 
@@ -65,7 +65,7 @@ After platform provisioning creates the first branch, branch operations are **ow
   only on the client-facing branch page. Extras follow the primary's format rule and may not
   duplicate it or each other.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
-  branch's material selection is built up.
+  branch's material catalog is built up.
 - **Read the branch number** — creation assigns a permanent `branch_no` that becomes the middle
   segment of every order number and cutting map the branch prints
   ([`sales.md`](../entities/sales.md)). It is shown, never edited: an owner holding a printed

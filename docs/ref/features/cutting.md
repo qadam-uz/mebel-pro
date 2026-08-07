@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-31
+updated: 2026-08-07
 order: 80
 ---
 
@@ -44,13 +44,13 @@ A draft owns:
   branch, so the parts editor stays gated behind a "pick a workshop" prompt until one is set, and
   **Optimise** is disabled without it. The client can **change** the branch (there is no "clear to
   none" — the field is required once you're editing), and the order step defaults to it.
-  Switching branches is not a data operation: parts already in the list stay editable even when
-  their materials aren't carried at the new branch (see _Recovery affordances_). The column stays
-  nullable in storage for drafts that predate this rule and for an editor before its first saved
-  detail.
-- **Parts.** Each part picks its own **panel** material from the platform catalog,
+  Switching branches is not a data operation: parts already in the list stay editable, and a row
+  whose material belongs to the previous branch keeps it until the client picks a replacement.
+  The column stays nullable in storage for drafts that predate this rule and for an editor
+  before its first saved detail.
+- **Parts.** Each part picks its own **panel** material from the branch's carried formats,
   dimensions (length × width × quantity), and a per-side **edge** material (top, bottom,
-  left, right — each `null` for no banding, or a catalog edge material). Every material is
+  left, right — each `null` for no banding, or a `kromka` format the branch carries). Every material is
   **workshop-supplied**: the editor offers no "I'll bring it myself" choice (the snapshot's
   `material_source` / side `source` fields are always `shop`; see _Parts and materials_).
   Grain direction is a property of the chosen panel material, and each part stores
@@ -99,21 +99,25 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 
 ### Parts and materials
 
-- A part's panel material is a reference to the **platform catalog** (the shared list
-  curated by platform operators), but the client only ever picks from the **selected
-  branch's carried materials** — a branch is required before the parts editor opens
-  (see _Branch selector_), so the picker is always branch-scoped. The branch indicator
-  (below) flags any already-entered row whose material the current branch can't fulfil.
+- A part's panel material is a **branch material** — one dekor in one format, carried by the
+  selected branch ([`catalog-inventory.md`](catalog-inventory.md)). **Branch scoping is
+  structural**: the catalog reads require a branch, a branch is required before the parts
+  editor opens (see _Branch selector_), and every row the picker shows is carried by
+  construction. There is no browse-the-whole-catalog mode, no "carried only" toggle, and no
+  "this branch does not carry it" badge — the concept has no input left. Unpriced formats are
+  filtered out of the **client-facing** listing, so a client can only pick something the branch
+  can quote; the **workshop-facing** listing keeps them and the picker marks them with a
+  "Narx yo'q" pill, because staff can see the gap and fix it.
 - **All materials are workshop-supplied.** The data model keeps a per-part
   `material_source` and a per-side edge `source` (`shop` / `own` — the optimiser, pricing,
   and the workshop side still understand both, and historical orders may carry `own`), but
   the client flow no longer offers the choice: the editor always writes `shop`, and a
   legacy draft saved with `own` parts or sides is normalized back to `shop` when it loads.
-- **Edge tape is a catalog material too.** Each side of a part is either `null` (no banding)
-  or a catalog edge material. The picker UX pins decor-matching edges at the top of one
-  material list, then prefers tape widths that cover the selected panel thickness with the
-  closest fit. Narrow tapes sink to the bottom and show a warning, but stay selectable
-  (see _UX_).
+- **Edge tape is a branch material too** — a `kromka` dekor in one thickness × tape width.
+  Each side of a part is either `null` (no banding) or one of those formats. The picker UX
+  pins decor-matching edges at the top of one material list, then prefers tape widths that
+  cover the selected panel thickness with the closest fit. Narrow tapes sink to the bottom and
+  show a warning, but stay selectable (see _UX_).
 
 ### The optimiser
 
@@ -129,19 +133,19 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **Tekstura lock = part instruction.** Each part carries `follow_grain` (default `true`).
   When it is true the part is rotation-locked; when false the algorithm may rotate the part
   90°. If a locked part can't fit in its forced orientation, the run fails with
-  `impossible_grain`. The catalog `panel.grain_direction` flag remains metadata for
+  `impossible_grain`. The dekor's `tolali` flag remains metadata for
   materials, but it no longer gates this per-part instruction.
 
-| Material `grain_direction` | Part `follow_grain` | Rotation                |
-| -------------------------- | ------------------- | ----------------------- |
+| Dekor `tolali` | Part `follow_grain` | Rotation                |
+| -------------- | ------------------- | ----------------------- |
 | `true`                     | `true`              | locked; no 90° rotation |
 | `true`                     | `false`             | free rotation           |
 | `false`                    | `true`              | locked; no 90° rotation |
 | `false`                    | `false`             | free rotation           |
 
-- **One catalog material → one standard panel size.** The same spec in another size is a
-  separate catalog material (size is part of its identity and name); custom panel sizes
-  per run are future.
+- **One branch material → one sheet size.** The size is part of the branch material's
+  identity, so the same decor in another size is a different row the branch carries; custom
+  panel sizes per run are future.
 - **Kerf and edge trim are per-branch settings**, not global constants — each branch owns its
   saw's kerf and its own edge trim (usable area = panel − 2× edge trim), editable by the
   workshop owner on the branch form ([`workshop.md`](workshop.md)). Platform defaults for a new
@@ -212,8 +216,8 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - As a client, I want to choose the workshop up front so I only ever pick materials it can
   actually cut — but when I switch workshops I don't want that to throw away parts I've
   already entered.
-- As a client, I want to filter the catalog by manufacturer so I get the brand the workshop
-  near me reliably carries (Egger vs. Kronospan).
+- As a client, I want the workshop's decors shown once with their thicknesses beneath, so I
+  pick the decor I want and then the sheet I need instead of scrolling near-identical rows.
 - As a client, I want the matching edge for my panel decor offered first so I'm not hunting
   through tens of edge SKUs for the obvious choice.
 - As a client, I want the draft saved automatically, so I don't lose it if I close the
@@ -235,10 +239,10 @@ The cutting import endpoint accepts three source formats:
 - 2D-Place `.map` layouts. The parser keeps the external sheet layout and returns
   `source_format=map_2dplace`, `material_groups`, and `map_layout`.
 
-For `.map`, the wizard groups sheets by exact size and asks the user to pick one catalog panel
-material for each sheet-size group. The material step shows a live size match indicator: matching
-catalog panel dimensions keep the external placement, while mismatched dimensions degrade to a
-parts-only import. If any imported detail has banding marks, the wizard asks for one edge material
+For `.map`, the wizard groups sheets by exact size and asks the user to pick one branch panel
+format for each sheet-size group. The material step shows a live size match indicator: matching
+sheet dimensions keep the external placement, while mismatched dimensions degrade to a
+parts-only import. If any imported detail has banding marks, the wizard asks for one tape format
 and applies it to all marked sides. The commit endpoint validates the selected panel dimensions
 against the MAP sheet dimensions, validates that every placement matches the generated parts,
 rejects overlapping/out-of-bounds placements, then creates a new draft with an imported result
@@ -318,8 +322,8 @@ Picking or changing the branch opens a single flat branch list — one row per b
 the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
 branches stay selectable, the row just flags why); a search field appears once the list is
 long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`.
-**Changing it never edits the parts list.** Rows that reference materials the new branch
-doesn't carry get a per-row warning + recovery affordances (below).
+**Changing it never edits the parts list.** The picker reloads against the new branch; a row
+still holding the old branch's material is swapped through the ordinary material picker.
 
 ### Parts editor (top)
 
@@ -377,8 +381,8 @@ The review screen carries four blocks:
   blocked. БАЗИС-Мебельщик XML and MAP imports have no columns block — the source carries typed
   fields.
 - **Materials** — the one decision that always needs a person. Materials from the file become
-  groups only; the user picks a panel catalog item for every panel group and an edge catalog item
-  for every edge group, and there is deliberately no automatic matching. A `Толщина`/thickness
+  groups only; the user picks one of the branch's panel formats for every panel group and one
+  of its tape formats for every edge group, and there is deliberately no automatic matching. A `Толщина`/thickness
   value from CSV or XML shows as a muted hint on the group. An unpicked group carries an accent
   border, so the reason the commit is blocked is visible on the thing blocking it. For MAP
   imports the panel-size match verdict renders as a chip on the card, since the whole layout
@@ -409,8 +413,8 @@ The parts table:
 | Column       | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Panel**    | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
-| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the selected panel's catalog `grain_direction` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Panel**    | opens the material picker — the branch's carried panel formats, **grouped by dekor**: one photo + identity line per dekor, its formats as the selectable rows beneath, exactly as the workshop's catalog table draws them. Selection is still **one format, one click**; grouping changes how the list is drawn, not how many steps it takes. There is no manufacturer / type / thickness / sort bar (it duplicated the identity line and added clutter), and no widen-to-full-catalog toggle — a branch is required before the editor opens and the list is always the branch's own. Selected row shows the picked format's label (e.g. `LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm`) |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the dekor's `tolali` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -437,9 +441,10 @@ Pressed means `follow_grain=true` and the part is rotation-locked; unpressed mea
   immediately; the dialog closes with its close control, Escape, or the backdrop.
   A new tape is tentative (`Yangi`) until it is committed into the drawing registry, preserving
   that registry's sticky number and colour identity.
-- **Catalog panel.** `+ Yana kromka qo'shish` opens panel 2. It searches the selected branch's
-  carried tapes with single-select thickness chips. `Shu panelga mos` contains decor/colour
-  matches; all remaining choices are under `Boshqa kromkalar`. Tapes already on the drawing are
+- **Catalog panel.** `+ Yana kromka qo'shish` opens panel 2. It narrows the branch's carried
+  tape formats with an in-dialog search field and single-select thickness chips (the list is
+  already branch-scoped, so this filtering is local to what is loaded). `Shu panelga mos`
+  contains decor matches; all remaining choices are under `Boshqa kromkalar`. Tapes already on the drawing are
   excluded, with an explicit already-added hint. A tape narrower than the panel remains selectable
   but carries the width warning. Selecting one returns to panel 1 armed, without changing sides.
   A fresh drawing with no banded sides starts directly in this catalog panel.
@@ -456,19 +461,15 @@ Per-row inline validation; when something blocks the optimiser the reason is sho
 next to the (disabled) **Optimise** button in the sticky bar — there is no separate roll-up
 banner under the table.
 
-### Recovery affordances — when materials aren't carried at the preferred branch
+### A row whose material is gone
 
-When `preferred_branch_id` is set and a row references materials the branch doesn't carry,
-the row is **not** disabled, **not** dropped, **not** moved. It stays in place, editable,
-with a **per-row warning** on each affected row (there is no separate top-level roll-up
-banner — the warning lives on the row that has the issue):
-
-- The warning reads _"Not at <branch> — pick a different material or change the branch."_
-  Recovery is a material swap: the panel is swapped on the row's panel cell (the picker is
-  pre-filtered to the branch), and when an edge side is affected the warning carries an
-  inline **Pick a different tape** button that opens the edge picker with the same inline
-  note visible.
-- The row's **Delete** (trash) button still works; removal is opt-in and never automatic.
+There is no "not carried at this branch" state any more — branch scoping is structural, so
+every row the picker offers is carried. What survives is the narrower case: a part references
+a material that has **left the catalog** (deactivated, or belonging to a branch the draft has
+since moved away from). Such a row is **not** disabled, **not** dropped, **not** moved. It
+stays in place, editable, with a per-row warning — _"Bu qatordagi list materiali endi katalogda
+yo'q — boshqasini tanlang."_ — and the ordinary material picker is the recovery. The row's
+**Delete** (trash) button still works; removal is opt-in and never automatic.
 
 ### Deleting a drawing (deliberate)
 
@@ -659,10 +660,10 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **Catalog change while a draft sits** — if a material a part references is later removed
   from the catalog, the draft is flagged on next open with that row highlighted; the
   client picks a replacement before re-running.
-- **`preferred_branch_id` set but the branch later goes `inactive`** — the branch is
-  treated as "no carried materials"; the wizard surfaces the same not-carried recovery
-  affordances on every row, plus a banner pointing at the branch's status; the client
-  **changes** the branch to unlock (the selector offers no clear, only a switch).
+- **`preferred_branch_id` set but the branch later goes `inactive`** — the branch-scoped
+  catalog comes back empty, so no row can be re-picked; a banner points at the branch's
+  status and the client **changes** the branch to unlock (the selector offers no clear, only
+  a switch).
 - **`cutting_result_not_usable`** — the order step finds the draft is already `confirmed`
   (concurrent placement, or back-navigation after placing) → redirect to its detail.
 - **Algorithm replaced later** — old `confirmed` results stay exactly as they were,
@@ -676,8 +677,7 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 
 - [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order and which
   cutting metrics drive which price component.
-- [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog (manufacturers,
-  panels, edges) the wizard reads from, and the branch's selection that scopes the
-  editor's catalog.
+- [`catalog-inventory.md`](catalog-inventory.md) — the two-level catalog: the platform's
+  dekorlar and the branch's own formats, which are what the editor actually picks from.
 - [PackingSolver provider spec](https://github.com/BerdiyorovAbrorjon/cutting-engine/blob/main/docs/PACKINGSOLVER_PROVIDER_SPEC.md)
   — the internal multi-provider optimizer contract, validation, fallback, and deployment rules.

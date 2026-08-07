@@ -16,7 +16,6 @@
   "dashboard": "Asosiy",
   "catalog": "Katalog",
   "manufacturers": "Ishlab chiqaruvchilar",
-  "materials": "Materiallar",
   "jobs": "Fon vazifalar",
   "errorMonitor": "Xatolik monitor",
   "admins": "Adminlar",
@@ -39,5 +38,7 @@
   "finance": "Tushum va xarajat",
   "debts": "Qarzdorlik",
   "labour": "Xodimlar mehnati",
-  "staffDetail": "Xodim tafsilotlari"
+  "staffDetail": "Xodim tafsilotlari",
+  "dekorlar": "Dekorlar",
+  "dekorDetail": "Dekor tafsilotlari"
 }

@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-08-07
 order: 30
 ---
 
@@ -15,16 +15,17 @@ suppliers stock arrives from. There is **no reservation** in v1: the order state
 
 ## Stock item
 
-A branch's balance for one material — a single on-hand quantity in the material's stock
-unit (panel count for a `panel` material, integer millimetres for an `edge`) and a
-low-stock threshold in the same unit. The UI displays edge balances as metres. One per
-material per branch.
+A branch's balance for one **branch material** — one dekor in one format
+([`catalog.md`](catalog.md#branch-material)) — as a single on-hand quantity in that
+material's stock unit (sheet count for a panel-shaped dekor, integer millimetres for
+`kromka`) and a low-stock threshold in the same unit. The UI displays tape balances as
+metres. One per branch material, so 16 mm and 18 mm of the same decor are separate rows.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
-| `material_id` | UUID | required; `(branch_id, material_id)` unique |
+| `branch_material_id` | UUID | required; unique — one stock row per branch material. Kept alongside `branch_id` because every inventory read is branch-scoped |
 | `on_hand` | int | the branch's book balance for the material, in its stock unit; **may be negative** — see below |
 | `min_stock` | int | low-stock alert threshold in the same unit; ≥ 0 |
 | `updated_at` | timestamp | |
@@ -48,7 +49,7 @@ correction. Every human-facing path that *lowers* a balance keeps the ≥ 0 guar
 stock-out that would go negative is almost certainly a typo. Movements that *raise* a
 balance are always allowed, so a revert works from below zero too.
 
-Invariants: `(branch_id, material_id)` unique; stock changes only via the inventory
+Invariants: `branch_material_id` unique; stock changes only via the inventory
 module's operations (never raw SQL from elsewhere); `consume` / `restore` carry the
 `order_id` and no actor (system); `stock_in` / `adjust` carry an actor. When
 `on_hand ≤ min_stock` after a change, a low-stock notification fires to the branch's
@@ -59,9 +60,9 @@ The verify-time "projected balance" warning
 ([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time computation,
 not a stored field.
 
-Edge `consume` / `restore` is keyed by **edge material id** (not by thickness): an
+Edge `consume` / `restore` is keyed by **kromka branch material id** (not by thickness): an
 `edge_banding → ready` transition fires one `consume` per `shop` edge material that the
-order's `edge_length_snapshot` carries, each for the millimetres of that exact material. A
+order's `edge_length_snapshot` carries, each for the millimetres of that exact format. A
 revert fires one `restore` per material, mirroring the consume.
 
 ## Stock transaction
@@ -73,7 +74,7 @@ One audit row for one change to a stock item. Append-only.
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
 | `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
-| `quantity` | int | signed change, non-zero, in the material's stock unit |
+| `quantity` | int | signed change, non-zero, in the branch material's stock unit |
 | `balance_after` | int | `on_hand` after the change; may be negative on a `consume` row |
 | `unit_price_tiyin` | bigint? | purchase price per display unit (per panel / per metre), integer tiyin, ≥ 0; `stock_in` only, null otherwise |
 | `total_price_tiyin` | bigint? | authoritative purchase total for the row; panels `quantity × unit price`, edges `quantity_mm × unit price // 1000` (the sale-side per-metre mirror); `stock_in` only |
@@ -140,8 +141,8 @@ Where a branch's stock came from — a lightweight, workshop-scoped record, crea
 demand from the arrival form. No purchase-order flow in v1, but the supplier is a **debt
 counterparty**: supplier invoices, supplier-linked expenses, and signed adjustments fold
 into a derived balance ([`finance.md`](../features/finance.md) → *Debts*). A supplier is
-the workshop's buying counterparty; the material's **manufacturer**
-([`catalog.md`](catalog.md)) is who made it — distinct concepts (a single supplier may
+the workshop's buying counterparty; the dekor's **manufacturer**
+([`catalog.md`](catalog.md#manufacturer)) is who made it — distinct concepts (a single supplier may
 carry materials from several manufacturers, and vice versa).
 
 | Field | Type | Notes |

@@ -38,7 +38,13 @@ from app.models.enums import (
 )
 from app.modules.access.api import can_access_branch, seed_preferred_branch_if_missing
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.catalog.contracts import (
+    BranchMaterial,
+    BranchPricing,
+    Dekor,
+    Manufacturer,
+    is_tape,
+)
 from app.modules.cutting.api import cutting_result_response, get_workshop_draft
 from app.modules.cutting.contracts import (
     CuttingDraft,
@@ -307,7 +313,9 @@ def _add_order_items(
         db.add(
             OrderItem(
                 order_id=order.id,
-                material_id=uuid.UUID(str(priced.part["material_id"])),
+                # parts_snapshot keeps the JSON key `material_id`; what it holds
+                # is a branch_material id (the migration rewrote the values).
+                branch_material_id=uuid.UUID(str(priced.part["material_id"])),
                 material_source=MaterialSource(str(priced.part["material_source"])),
                 material_snapshot=priced.material_snapshot,
                 part_ref=str(priced.part["part_ref"]),
@@ -1120,36 +1128,39 @@ async def _edge_material_meta(
     db: AsyncSession,
     rows: Iterable[WorkerProductionRecord],
 ) -> dict[str, tuple[str, Decimal | None, str | None]]:
-    material_ids = {
+    branch_material_ids = {
         uuid.UUID(material_id)
         for row in rows
         for material_id in row.edge_length_by_material
         if material_id
     }
-    if not material_ids:
+    if not branch_material_ids:
         return {}
+    # No status filter, deliberately: this labels *historical* production, and a
+    # deactivated dekor or format must still render its name rather than an id.
     result = await db.execute(
-        select(Material, Manufacturer)
-        .join(Manufacturer, Material.manufacturer_id == Manufacturer.id)
-        .where(Material.id.in_(material_ids))
+        select(BranchMaterial, Dekor, Manufacturer)
+        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+        .where(BranchMaterial.id.in_(branch_material_ids))
     )
     return {
-        str(material.id): (
+        str(branch_material.id): (
             edge_label(
                 {
                     "manufacturer_name": manufacturer.name,
-                    "decor_code": material.decor_code,
-                    "name": material.name,
-                    "color": material.color,
-                    "thickness_mm": str(material.thickness_mm),
-                    "edge_width_mm": material.edge_width_mm,
+                    "tur": dekor.tur.value,
+                    "kod": dekor.kod,
+                    "nomi": dekor.nomi,
+                    "qalinlik_mm": str(branch_material.qalinlik_mm),
+                    "kromka_eni_mm": branch_material.kromka_eni_mm,
                 },
-                material.id,
+                branch_material.id,
             ),
-            _normalized_decimal(material.thickness_mm),
-            material.color,
+            _normalized_decimal(branch_material.qalinlik_mm),
+            dekor.nomi,
         )
-        for material, manufacturer in result.all()
+        for branch_material, dekor, manufacturer in result.all()
     }
 
 
@@ -1583,7 +1594,7 @@ def _first_name(value: str) -> str:
 
 
 def _panel_material_labels(items: Sequence[OrderItem]) -> list[str]:
-    labels = [material_label(item.material_snapshot, item.material_id) for item in items]
+    labels = [material_label(item.material_snapshot, item.branch_material_id) for item in items]
     return list(dict.fromkeys(labels))
 
 
@@ -1594,7 +1605,7 @@ def _production_job_item(item: OrderItem) -> ProductionJobItem:
         length_mm=item.length_mm,
         width_mm=item.width_mm,
         quantity=item.quantity,
-        material_label=material_label(item.material_snapshot, item.material_id),
+        material_label=material_label(item.material_snapshot, item.branch_material_id),
         edge_top=_production_edge_side(item.edge_top),
         edge_bottom=_production_edge_side(item.edge_bottom),
         edge_left=_production_edge_side(item.edge_left),
@@ -1608,8 +1619,8 @@ def _production_edge_side(edge: dict[str, Any] | None) -> ProductionEdgeSide | N
     snapshot = edge.get("snapshot") or {}
     return ProductionEdgeSide(
         material_label=edge_label(snapshot, edge["material_id"]),
-        thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
-        color=_snapshot_text(snapshot.get("color")),
+        thickness_mm=_snapshot_decimal(_snapshot_first(snapshot, "qalinlik_mm", "thickness_mm")),
+        color=_snapshot_text(_snapshot_first(snapshot, "nomi", "color")),
         source=MaterialSource(str(edge["source"])),
     )
 
@@ -1635,11 +1646,11 @@ async def complete_cutting(
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
     shortfall = False
-    for material_id, quantity in panel_demands.items():
+    for branch_material_id, quantity in panel_demands.items():
         transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
-            material_id=material_id,
+            branch_material_id=branch_material_id,
             order_id=order.id,
             quantity=quantity,
         )
@@ -1690,11 +1701,11 @@ async def complete_banding(
     result = await _order_result(db, order)
     edge_demands = _edge_stock_demands(result)
     shortfall = False
-    for material_id, quantity in edge_demands.items():
+    for branch_material_id, quantity in edge_demands.items():
         transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
-            material_id=material_id,
+            branch_material_id=branch_material_id,
             order_id=order.id,
             quantity=quantity,
         )
@@ -1987,11 +1998,11 @@ async def _cancel_order(
 async def _restore_cutting_step(db: AsyncSession, order: Order) -> dict[uuid.UUID, int]:
     result = await _order_result(db, order)
     demands = _panel_stock_demands(result)
-    for material_id, quantity in demands.items():
+    for branch_material_id, quantity in demands.items():
         await restore_order_stock(
             db,
             branch_id=order.branch_id,
-            material_id=material_id,
+            branch_material_id=branch_material_id,
             order_id=order.id,
             quantity=quantity,
         )
@@ -2005,11 +2016,11 @@ async def _restore_cutting_step(db: AsyncSession, order: Order) -> dict[uuid.UUI
 async def _restore_banding_step(db: AsyncSession, order: Order) -> dict[uuid.UUID, int]:
     result = await _order_result(db, order)
     demands = _edge_stock_demands(result)
-    for material_id, quantity in demands.items():
+    for branch_material_id, quantity in demands.items():
         await restore_order_stock(
             db,
             branch_id=order.branch_id,
-            material_id=material_id,
+            branch_material_id=branch_material_id,
             order_id=order.id,
             quantity=quantity,
         )
@@ -2184,34 +2195,36 @@ async def _order_summary_responses(
         items_by_order[item.order_id].append(item)
 
     demands_by_order: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
-    demanded_material_ids: set[uuid.UUID] = set()
-    demanded_branch_ids: set[uuid.UUID] = set()
+    demanded_branch_material_ids: set[uuid.UUID] = set()
     for order in orders:
         demands = _stock_demands_for_order_summary(order, results.get(order.cutting_result_id))
         if not demands:
             continue
         demands_by_order[order.id] = demands
-        demanded_material_ids.update(demands)
-        demanded_branch_ids.add(order.branch_id)
+        demanded_branch_material_ids.update(demands)
 
-    stock_by_branch_material: dict[tuple[uuid.UUID, uuid.UUID], StockItem] = {}
-    materials: dict[uuid.UUID, Material] = {}
-    if demanded_material_ids:
-        materials = {
-            row.id: row
-            for row in (
-                await db.scalars(select(Material).where(Material.id.in_(demanded_material_ids)))
-            ).all()
-        }
+    stock_by_branch_material: dict[uuid.UUID, StockItem] = {}
+    materials: dict[uuid.UUID, tuple[BranchMaterial, Dekor, Manufacturer]] = {}
+    if demanded_branch_material_ids:
+        material_rows = (
+            await db.execute(
+                select(BranchMaterial, Dekor, Manufacturer)
+                .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+                .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+                .where(BranchMaterial.id.in_(demanded_branch_material_ids))
+            )
+        ).all()
+        materials = {row[0].id: (row[0], row[1], row[2]) for row in material_rows}
+        # A branch material is already branch-scoped, so `unique(branch_material_id)`
+        # replaced the old (branch_id, material_id) pair — one key, no tuple.
         stock_rows = (
             await db.scalars(
                 select(StockItem).where(
-                    StockItem.branch_id.in_(demanded_branch_ids),
-                    StockItem.material_id.in_(demanded_material_ids),
+                    StockItem.branch_material_id.in_(demanded_branch_material_ids),
                 )
             )
         ).all()
-        stock_by_branch_material = {(item.branch_id, item.material_id): item for item in stock_rows}
+        stock_by_branch_material = {item.branch_material_id: item for item in stock_rows}
 
     responses: list[OrderSummaryResponse] = []
     for order in orders:
@@ -2232,7 +2245,6 @@ async def _order_summary_responses(
                     items=items,
                     result=result,
                     stock_warnings=_stock_warnings_from_demands(
-                        branch_id=order.branch_id,
                         demands=demands_by_order.get(order.id, {}),
                         stock_by_branch_material=stock_by_branch_material,
                         materials=materials,
@@ -2400,8 +2412,10 @@ def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialD
             OrderEdgeMaterialDemand(
                 material_id=uuid.UUID(material_id),
                 material_label=edge_label(snapshot, material_id),
-                thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
-                color=_snapshot_text(snapshot.get("color")),
+                thickness_mm=_snapshot_decimal(
+                    _snapshot_first(snapshot, "qalinlik_mm", "thickness_mm")
+                ),
+                color=_snapshot_text(_snapshot_first(snapshot, "nomi", "color")),
                 consumed_mm=int(consumed_mm),
             )
         )
@@ -2423,7 +2437,7 @@ def _order_price_lines(
     for item in items:
         if item.material_source is MaterialSource.SHOP:
             panel_prices.setdefault(
-                item.material_id, int(item.material_snapshot.get("price_tiyin") or 0)
+                item.branch_material_id, int(item.material_snapshot.get("price_tiyin") or 0)
             )
         for edge in (item.edge_top, item.edge_bottom, item.edge_left, item.edge_right):
             if edge is None or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
@@ -2487,6 +2501,20 @@ def _snapshot_text(value: object) -> str | None:
     return text or None
 
 
+def _snapshot_first(snapshot: dict[str, Any], *keys: str) -> object:
+    """First present key, new snapshot vocabulary before the legacy one.
+
+    `order_items.material_snapshot` and `cutting_results.material_snapshots` are
+    frozen history and were NOT rewritten by the reshape, so both vocabularies
+    live in the database side by side — see app/core/material_label.py.
+    """
+    for key in keys:
+        value = snapshot.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def _recorded_income_total(order_id: Any) -> Select[tuple[int]]:
     """Σ of an order's `recorded` income — the single definition of "paid".
 
@@ -2522,25 +2550,25 @@ async def _stock_warnings(db: AsyncSession, order: Order) -> list[OrderStockWarn
         return []
     rows = (
         await db.execute(
-            select(StockItem, Material)
-            .join(Material, Material.id == StockItem.material_id)
+            select(StockItem, BranchMaterial, Dekor, Manufacturer)
+            .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
             .where(
                 StockItem.branch_id == order.branch_id,
-                StockItem.material_id.in_(demands.keys()),
+                StockItem.branch_material_id.in_(demands.keys()),
             )
         )
     ).all()
-    by_material = {item.material_id: (item, material) for item, material in rows}
-    stock_by_branch_material = {
-        (order.branch_id, item.material_id): item for item, material in rows
+    stock_by_branch_material = {item.branch_material_id: item for item, _, _, _ in rows}
+    materials = {
+        branch_material.id: (branch_material, dekor, manufacturer)
+        for _, branch_material, dekor, manufacturer in rows
     }
-    materials = {material.id: material for item, material in rows}
     return _stock_warnings_from_demands(
-        branch_id=order.branch_id,
         demands=demands,
         stock_by_branch_material=stock_by_branch_material,
         materials=materials,
-        by_material=by_material,
     )
 
 
@@ -2563,18 +2591,14 @@ def _stock_demands_for_order_summary(
 
 def _stock_warnings_from_demands(
     *,
-    branch_id: uuid.UUID,
     demands: dict[uuid.UUID, int],
-    stock_by_branch_material: dict[tuple[uuid.UUID, uuid.UUID], StockItem],
-    materials: dict[uuid.UUID, Material],
-    by_material: dict[uuid.UUID, tuple[StockItem | None, Material | None]] | None = None,
+    stock_by_branch_material: dict[uuid.UUID, StockItem],
+    materials: dict[uuid.UUID, tuple[BranchMaterial, Dekor, Manufacturer]],
 ) -> list[OrderStockWarning]:
     warnings: list[OrderStockWarning] = []
-    for material_id, required in demands.items():
-        item = stock_by_branch_material.get((branch_id, material_id))
-        material = materials.get(material_id)
-        if by_material is not None:
-            item, material = by_material.get(material_id, (item, material))
+    for branch_material_id, required in demands.items():
+        item = stock_by_branch_material.get(branch_material_id)
+        material = materials.get(branch_material_id)
         on_hand = item.on_hand if item is not None else 0
         min_stock = item.min_stock if item is not None else 0
         projected = on_hand - required
@@ -2582,15 +2606,55 @@ def _stock_warnings_from_demands(
             continue
         warnings.append(
             OrderStockWarning(
-                material_id=material_id,
-                material_name=material.name if material is not None else str(material_id),
-                kind=material.kind.value if material is not None else "unknown",
+                material_id=branch_material_id,
+                material_name=(
+                    _branch_material_label(*material)
+                    if material is not None
+                    else str(branch_material_id)
+                ),
+                # `kind` keeps its two-value wire domain (`panel` / `edge`) even
+                # though `tur` now has seven values: the client SPA switches on
+                # it, and leaking raw dekor types here would silently widen a
+                # field nothing type-checks.
+                kind=_stock_warning_kind(material),
                 on_hand=on_hand,
                 required=required,
                 projected_after=projected,
             )
         )
     return warnings
+
+
+def _stock_warning_kind(material: tuple[BranchMaterial, Dekor, Manufacturer] | None) -> str:
+    if material is None:
+        return "unknown"
+    return "edge" if is_tape(material[1].tur) else "panel"
+
+
+def _branch_material_label(
+    branch_material: BranchMaterial,
+    dekor: Dekor,
+    manufacturer: Manufacturer,
+) -> str:
+    """Live label for a carried format — there is no stored name to read.
+
+    Used where the row is loaded fresh (stock warnings, price quotes); anything
+    describing a *placed* order reads its frozen snapshot instead.
+    """
+    snapshot: dict[str, Any] = {
+        "manufacturer_name": manufacturer.name,
+        "tur": dekor.tur.value,
+        "kod": dekor.kod,
+        "nomi": dekor.nomi,
+        "qalinlik_mm": str(branch_material.qalinlik_mm),
+        "uzunlik_mm": branch_material.uzunlik_mm,
+        "eni_mm": branch_material.eni_mm,
+        "kromka_eni_mm": branch_material.kromka_eni_mm,
+        "tolali": dekor.tolali,
+    }
+    if is_tape(dekor.tur):
+        return edge_label(snapshot, branch_material.id)
+    return material_label(snapshot, branch_material.id)
 
 
 async def _price_result(
@@ -2609,8 +2673,11 @@ async def _price_result(
     branch_materials = await _active_branch_materials(
         db,
         branch_id=branch_id,
-        material_ids=set(panel_demands) | set(edge_demands),
+        branch_material_ids=set(panel_demands) | set(edge_demands),
     )
+    # The part now names a branch material directly, so "does the branch carry
+    # it" is an id-in-this-branch + still-active test rather than a catalog
+    # lookup. The error codes are unchanged: they are what the SPAs match on.
     for material_id in panel_demands:
         if material_id not in branch_materials:
             raise APIError("branch_does_not_carry_panel", "Branch does not carry a panel material")
@@ -2641,16 +2708,19 @@ async def _price_result(
     total = subtotal_cutting + subtotal_materials + subtotal_edge
     edge_rate = int(pricing.edge_banding_rate_tiyin or 0)
 
-    def _line_name(material_id: uuid.UUID) -> str:
-        snapshot = result.material_snapshots.get(str(material_id), {})
-        manufacturer = str(snapshot.get("manufacturer_name", "")).strip()
-        name = str(snapshot.get("name", "")).strip()
-        return f"{manufacturer} {name}".strip() or "Material"
+    # There is no stored material name left to concatenate, so quote lines use
+    # the same canonical formatter as every other surface — panels and tapes
+    # each with their own shape.
+    def _panel_line_name(material_id: uuid.UUID) -> str:
+        return material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+
+    def _edge_line_name(material_id: uuid.UUID) -> str:
+        return edge_label(result.material_snapshots.get(str(material_id), {}), material_id)
 
     material_lines = [
         MaterialPriceLine(
             material_id=material_id,
-            material_name=_line_name(material_id),
+            material_name=_panel_line_name(material_id),
             panels_used=quantity,
             unit_price_tiyin=branch_materials[material_id].price_tiyin,
             line_total_tiyin=branch_materials[material_id].price_tiyin * quantity,
@@ -2665,7 +2735,7 @@ async def _price_result(
         edge_lines.append(
             EdgePriceLine(
                 material_id=material_id,
-                material_name=_line_name(material_id),
+                material_name=_edge_line_name(material_id),
                 consumed_mm=mm,
                 material_cost_tiyin=material_cost,
                 service_cost_tiyin=service_cost,
@@ -2811,23 +2881,26 @@ async def _active_branch_materials(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_ids: set[uuid.UUID],
+    branch_material_ids: set[uuid.UUID],
 ) -> dict[uuid.UUID, BranchMaterial]:
-    if not material_ids:
+    if not branch_material_ids:
         return {}
     rows = (
         await db.scalars(
             select(BranchMaterial)
-            .join(Material, Material.id == BranchMaterial.material_id)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
             .where(
+                # branch_id is redundant with the id set for a well-formed
+                # order, and load-bearing for a malformed one: it is what stops
+                # another branch's format id from being priced here.
                 BranchMaterial.branch_id == branch_id,
-                BranchMaterial.material_id.in_(material_ids),
+                BranchMaterial.id.in_(branch_material_ids),
                 BranchMaterial.status == MaterialStatus.ACTIVE,
-                Material.status == MaterialStatus.ACTIVE,
+                Dekor.holat == MaterialStatus.ACTIVE,
             )
         )
     ).all()
-    return {row.material_id: row for row in rows}
+    return {row.id: row for row in rows}
 
 
 async def _client_orderable_draft_result(

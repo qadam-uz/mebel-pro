@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-07-29
+updated: 2026-08-07
 order: 40
 ---
 
@@ -27,16 +27,17 @@ indefinitely (no expiry); a client may have at most 50 self-made drafts open at 
 | `name` | text? | operator-editable label; `null` until set. The draft a MAP import commits is seeded from the uploaded file's name (extension stripped, e.g. `AFZAL.map` -> `AFZAL`; blank/unusable leaves it `null`) — every other draft (manual, CSV/XML import) starts unnamed until the operator names it. |
 | `created_via_workshop_id` | UUID? | null for a client self-made draft. Set to the minting workshop when staff created the draft for a walk-in ([`cutting.md`](../features/cutting.md#access)): staff access is scoped by it (workshop-wide), the draft is hidden from the client until the order is placed, and it is excluded from the 50-draft cap. On such a draft `preferred_branch_id` is the staff flow's fixed branch, frozen at creation. Unfinished ones (no bound order, `revision_of_order_id` null) are listed on the workshop's **Saqlangan chizmalar** surface for resuming. |
 | `revision_of_order_id` | UUID? | null except on an order's **revision draft** ([`orders.md`](../features/orders.md#revising-a-placed-order)): staff-minted from the order's confirmed result, branch-locked to the order's branch, unique per order. A revision draft never places a new order — its only exits are apply (back onto its order) or discard — and it is client-invisible like any staff-minted draft. |
-| `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively (rows referencing materials the branch doesn't carry stay editable with inline recovery affordances). |
-| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), optional display `name` (`null` for fallback `D{row}` in the UI), `material_id` (a `panel`), `material_source` (currently normalised to `shop` by the editor), `follow_grain` (bool, default `true` for old snapshots; when true the part is rotation-locked), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <edge-material>, "source": "shop" }`. Edge thickness/colour are derived from each side's edge material. |
+| `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively: after a branch change, rows still holding the previous branch's material stay editable until the client re-picks. |
+| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), optional display `name` (`null` for fallback `D{row}` in the UI), `material_id` (a **branch material** of a panel-shaped dekor — the JSON key kept its name through the catalog reshape; the values were rewritten), `material_source` (currently normalised to `shop` by the editor), `follow_grain` (bool, default `true` for old snapshots; when true the part is rotation-locked), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <a kromka branch material>, "source": "shop" }`. Tape thickness and width are derived from each side's branch material. |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |
 
 Invariants: owned by the client (`client_id`) whether self-made (`created_via_workshop_id`
 null) or staff-minted for a walk-in (set); never visible beyond the access rules in
 [`cutting.md`](../features/cutting.md#access); `parts_snapshot` has 1..100
-parts; every referenced `material_id` is a `panel`-kind material; every side's `edge_*` (when
-non-null) references an `edge`-kind material; each optimise replaces the previous candidate
+parts; every referenced `material_id` is a branch material of a panel-shaped dekor and every
+side's `edge_*` (when non-null) one of a `kromka` dekor, both carried by the draft's branch;
+each optimise replaces the previous candidate
 with one engine-selected result and points `chosen_result_id` to it; an imported MAP result is
 the sole chosen result until a geometry-affecting `parts_snapshot` edit
 (adding/removing a `part_ref`, or changing quantity, dimensions, panel material, or
@@ -65,15 +66,15 @@ is stamped for audit; replacing a solver later doesn't touch past results.
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
 | `status`                                                           | enum       | `candidate` (the draft's current result) · `confirmed` (chosen and bound to an order)                                                                                                |
 | `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; an imported MAP result instead derives both from the imported layout's own geometry (the dominant gap between adjacent parts, the dominant part inset from a sheet edge — [`cutting.md`](../features/cutting.md#imports)) and falls back to `0` / `0` when the layout gives no evidence |
-| `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material)                                                           |
+| `panels_used_by_material`                                          | json       | `{ "<branch_material_id>": 3, "<branch_material_id>": 1 }` — total sheets needed per panel-shaped branch material in this result (≤ 20 per material)                                 |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |
-| `edge_length_by_material`                                          | json       | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material geometric length in integer millimetres; UI/pricing displays metres.                               |
+| `edge_length_by_material`                                          | json       | `{ "<kromka branch_material_id>": 12500, … }` — per-tape geometric length in integer millimetres; UI/pricing displays metres.                               |
 | `parts_snapshot`                                                   | json       | source parts copied from the draft at optimise time, including each part's `name` and `follow_grain`, so the result remains renderable after the draft is deleted on order placement |
-| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every panel/edge material referenced by the result; used for labels and PDFs after catalog edits                             |
-| `edge_length_shop_by_material` / `edge_length_own_by_material`     | json       | source-split geometric edge length, keyed by edge material id, in integer millimetres                                                                                                |
-| `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json       | source-split edge consumption, keyed by edge material id, in integer millimetres; includes the fixed 30 mm overhang per banded side                                                  |
-| `edge_banded_sides_by_material`                                    | json       | `{ "<edge-material_id>": { "shop": 4, "own": 2 } }` — source-split count of banded sides feeding consumption and Phase 5 stock math                                                  |
+| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every branch material the result references — `manufacturer_name`, `tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm` — used for labels and PDFs after catalog edits. **Frozen history is never rewritten**, so pre-reshape rows still carry the old vocabulary (`type`, `decor_code`, `color`, `name`, `thickness_mm`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`) and the label formatter reads both, new key first |
+| `edge_length_shop_by_material` / `edge_length_own_by_material`     | json       | source-split geometric edge length, keyed by kromka branch material id, in integer millimetres                                                                                                |
+| `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json       | source-split edge consumption, keyed by kromka branch material id, in integer millimetres; includes the fixed 30 mm overhang per banded side                                                  |
+| `edge_banded_sides_by_material`                                    | json       | `{ "<kromka branch_material_id>": { "shop": 4, "own": 2 } }` — source-split count of banded sides feeding consumption and Phase 5 stock math                                                  |
 | `order_id`                                                         | UUID?      | the order it's bound to, once `confirmed`                                                                                                                                            |
 | `created_at` / `confirmed_at`                                      | timestamps | as the lifecycle moves                                                                                                                                                               |
 
@@ -96,15 +97,15 @@ and material snapshots.
 
 ## Cutting panel
 
-One physical panel within a result — its material, its index within that material, and how
-much waste it has.
+One physical sheet within a result — its branch material, its index within that material, and
+how much waste it has.
 
 | Field               | Type   | Notes                                                                                                                                                                                                                                                        |
 | ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                | UUID   | PK                                                                                                                                                                                                                                                           |
 | `cutting_result_id` | UUID   | required                                                                                                                                                                                                                                                     |
-| `material_id`       | UUID   | required — which `panel` material this panel is, and which panel-size + grain rules govern its placements                                                                                                                                                    |
-| `panel_index`       | int    | 1, 2, 3, … **within the result's panels of this material**; unique per (result, material); 1..the material's count in `panels_used_by_material`                                                                                                              |
+| `branch_material_id` | UUID  | required — which branch material this sheet is, and which sheet-size + grain rules govern its placements                                                                                                                                                     |
+| `panel_index`       | int    | 1, 2, 3, … **within the result's sheets of this branch material**; unique per (result, branch material); 1..the material's count in `panels_used_by_material`                                                                                                |
 | `waste_area_mm2`    | bigint | ≥ 0                                                                                                                                                                                                                                                          |
 | `cut_count`         | int?   | exact number of engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows, whose cut path is not known.                                                                                                                          |
 | `cut_length_mm`     | int?   | exact Manhattan sum of the engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows.                                                                                                                                            |
@@ -131,7 +132,7 @@ was rotated), and whether it was rotated 90°.
 
 Invariants: every input part-instance (each `part_ref` × each quantity index) in the source
 parts list appears exactly once across the result's placements; the placement sits on a
-panel whose `material_id` matches the part's panel material; a locked part (grained material
+sheet whose `branch_material_id` matches the part's panel material; a locked part (grained decor
 and `follow_grain=true`) is never `rotated`; placements don't overlap and stay within
 `panel − 2× edge_trim`; immutable.
 

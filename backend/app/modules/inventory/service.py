@@ -3,6 +3,7 @@
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 
 from fastapi import status
 from sqlalchemy import Select, select
@@ -10,16 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
+from app.core.search_fold import fold
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    MaterialKind,
+    DekorType,
     Permission,
     StockTransactionType,
     SupplierStatus,
 )
 from app.modules.access.api import BranchScope, resolve_branch_scope, resolve_branch_scope_any
 from app.modules.access.contracts import PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
+
+# The label and its snapshot vocabulary are catalog's to define — inventory only
+# renders them. Importing through catalog's public api keeps one writer for the
+# key set that `app/core/material_label.py` reads.
+from app.modules.catalog.api import branch_material_label
+from app.modules.catalog.contracts import BranchMaterial, Dekor, Manufacturer, is_tape
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier
 from app.modules.inventory.schemas import (
     StockAdjustmentRequest,
@@ -34,19 +41,52 @@ from app.modules.support.contracts import Notification
 
 
 @dataclass(frozen=True)
+class MaterialRecord:
+    """The three rows that together are "a material" after the catalog reshape.
+
+    Stock points at a `BranchMaterial` (the branch's own format of a dekor); the
+    dekor and its manufacturer carry the identity that gets displayed. There is
+    no stored name anywhere, so every caller that needs one asks `label`.
+    """
+
+    branch_material: BranchMaterial
+    dekor: Dekor
+    manufacturer: Manufacturer
+
+    @property
+    def label(self) -> str:
+        return branch_material_label(self.branch_material, self.dekor, self.manufacturer)
+
+    @property
+    def tur(self) -> DekorType:
+        return self.dekor.tur
+
+
+@dataclass(frozen=True)
 class StockRecord:
     stock_item: StockItem
-    material: Material
+    branch_material: BranchMaterial
+    dekor: Dekor
     manufacturer: Manufacturer
+
+    @property
+    def label(self) -> str:
+        return branch_material_label(self.branch_material, self.dekor, self.manufacturer)
 
 
 @dataclass(frozen=True)
 class TransactionRecord:
     transaction: StockTransaction
     stock_item: StockItem
-    material: Material
+    branch_material: BranchMaterial
+    dekor: Dekor
+    manufacturer: Manufacturer
     supplier: Supplier | None
     actor: WorkshopUser | None
+
+    @property
+    def label(self) -> str:
+        return branch_material_label(self.branch_material, self.dekor, self.manufacturer)
 
 
 @dataclass(frozen=True)
@@ -61,20 +101,25 @@ async def ensure_stock_item_for_branch_material(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     min_stock: int,
 ) -> StockItem:
+    """The branch's stock row for one branch material, created at zero if absent.
+
+    `branch_id` is the denormalized scoping column on `stock_items`: callers must
+    pass the branch material's own branch, never an unrelated one (see the note
+    on `StockItem`). The row itself is keyed by `branch_material_id` alone, which
+    is what the unique index enforces.
+    """
+
     row = await db.scalar(
-        select(StockItem).where(
-            StockItem.branch_id == branch_id,
-            StockItem.material_id == material_id,
-        )
+        select(StockItem).where(StockItem.branch_material_id == branch_material_id)
     )
     now = datetime.now(UTC)
     if row is None:
         row = StockItem(
             branch_id=branch_id,
-            material_id=material_id,
+            branch_material_id=branch_material_id,
             on_hand=0,
             min_stock=min_stock,
             updated_at=now,
@@ -91,13 +136,13 @@ async def sync_stock_item_min_stock(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     min_stock: int,
 ) -> StockItem:
     row = await ensure_stock_item_for_branch_material(
         db,
         branch_id=branch_id,
-        material_id=material_id,
+        branch_material_id=branch_material_id,
         min_stock=min_stock,
     )
     return row
@@ -113,28 +158,35 @@ async def list_stock(
 ) -> list[StockRecord]:
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
     query = (
-        select(StockItem, Material, Manufacturer)
-        .join(Material, Material.id == StockItem.material_id)
-        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        _material_join(select(StockItem, BranchMaterial, Dekor, Manufacturer))
         .where(StockItem.branch_id == scope.branch_id)
         # A negative balance is a state that wants resolving — it sorts to the
         # top so nobody has to scroll past a minus sign to find it (QAD-150).
-        .order_by((StockItem.on_hand < 0).desc(), Manufacturer.name, Material.name)
-    )
-    normalized = _optional_text(search)
-    if normalized:
-        pattern = f"%{normalized}%"
-        query = query.where(
-            Material.name.ilike(pattern)
-            | Material.color.ilike(pattern)
-            | Material.decor_code.ilike(pattern)
-            | Manufacturer.name.ilike(pattern)
+        # There is no stored material name to sort on any more, so the order is
+        # the identity the reader sees: maker, decor, then thickness.
+        .order_by(
+            (StockItem.on_hand < 0).desc(),
+            Manufacturer.name,
+            Dekor.nomi,
+            BranchMaterial.qalinlik_mm,
         )
+    )
+    folded = fold(_optional_text(search) or "")
+    if folded:
+        # One folded ILIKE over the stored key replaces the old four-column OR:
+        # `search_key` already carries the decor name, code and maker, script-
+        # and apostrophe-insensitively (see app/core/search_fold.py).
+        query = query.where(Dekor.search_key.ilike(f"%{folded}%"))
     if low_stock_only:
         query = query.where(StockItem.on_hand <= StockItem.min_stock)
     return [
-        StockRecord(stock_item=item, material=material, manufacturer=manufacturer)
-        for item, material, manufacturer in (await db.execute(query)).all()
+        StockRecord(
+            stock_item=item,
+            branch_material=branch_material,
+            dekor=dekor,
+            manufacturer=manufacturer,
+        )
+        for item, branch_material, dekor, manufacturer in (await db.execute(query)).all()
     ]
 
 
@@ -143,7 +195,7 @@ async def list_transactions(
     *,
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID | None = None,
+    branch_material_id: uuid.UUID | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     limit: int = 50,
@@ -151,16 +203,24 @@ async def list_transactions(
 ) -> list[TransactionRecord]:
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
     query = (
-        select(StockTransaction, StockItem, Material, Supplier, WorkshopUser)
-        .join(StockItem, StockItem.id == StockTransaction.stock_item_id)
-        .join(Material, Material.id == StockItem.material_id)
+        _material_join(
+            select(
+                StockTransaction,
+                StockItem,
+                BranchMaterial,
+                Dekor,
+                Manufacturer,
+                Supplier,
+                WorkshopUser,
+            ).join(StockItem, StockItem.id == StockTransaction.stock_item_id)
+        )
         .outerjoin(Supplier, Supplier.id == StockTransaction.supplier_id)
         .outerjoin(WorkshopUser, WorkshopUser.id == StockTransaction.actor_user_id)
         .where(StockItem.branch_id == scope.branch_id)
         .order_by(StockTransaction.created_at.desc())
     )
-    if material_id is not None:
-        query = query.where(StockItem.material_id == material_id)
+    if branch_material_id is not None:
+        query = query.where(StockItem.branch_material_id == branch_material_id)
     if date_from is not None:
         query = query.where(
             StockTransaction.created_at >= datetime.combine(date_from, time.min, tzinfo=UTC)
@@ -175,11 +235,15 @@ async def list_transactions(
         TransactionRecord(
             transaction=tx,
             stock_item=item,
-            material=material,
+            branch_material=branch_material,
+            dekor=dekor,
+            manufacturer=manufacturer,
             supplier=supplier,
             actor=actor,
         )
-        for tx, item, material, supplier, actor in (await db.execute(query)).all()
+        for tx, item, branch_material, dekor, manufacturer, supplier, actor in (
+            await db.execute(query)
+        ).all()
     ]
 
 
@@ -329,7 +393,7 @@ async def record_stock_in(
             note=payload.note,
             lines=[
                 SupplierInvoiceLineInput(
-                    material_id=payload.material_id,
+                    branch_material_id=payload.branch_material_id,
                     quantity=payload.quantity,
                     unit_price_tiyin=payload.unit_price_tiyin,
                     note=payload.note,
@@ -341,7 +405,9 @@ async def record_stock_in(
     return TransactionRecord(
         transaction=line.transaction,
         stock_item=line.stock_item,
-        material=line.material,
+        branch_material=line.branch_material,
+        dekor=line.dekor,
+        manufacturer=line.manufacturer,
         supplier=record.supplier,
         actor=record.recorded_by,
     )
@@ -352,7 +418,7 @@ async def get_last_price(
     *,
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     supplier_id: uuid.UUID | None = None,
 ) -> LastPriceRecord | None:
     """Latest priced stock-in for a branch's material, preferring the given supplier's."""
@@ -366,7 +432,7 @@ async def get_last_price(
             .outerjoin(Supplier, Supplier.id == StockTransaction.supplier_id)
             .where(
                 StockItem.branch_id == scope.branch_id,
-                StockItem.material_id == material_id,
+                StockItem.branch_material_id == branch_material_id,
                 StockTransaction.type == StockTransactionType.STOCK_IN,
                 StockTransaction.unit_price_tiyin.is_not(None),
             )
@@ -407,7 +473,7 @@ async def record_adjustment(
     item, material = await _stock_item_for_movement(
         db,
         scope=scope,
-        material_id=payload.material_id,
+        branch_material_id=payload.branch_material_id,
     )
     transaction = await _apply_stock_delta(
         db,
@@ -426,13 +492,18 @@ async def record_adjustment(
         entity_id=transaction.id,
         workshop_id=scope.workshop_id,
         branch_id=scope.branch_id,
-        summary=f"Adjusted stock for {material.name}",
-        details={"quantity": payload.quantity, "material_id": str(payload.material_id)},
+        summary=f"Adjusted stock for {material.label}",
+        details={
+            "quantity": payload.quantity,
+            "branch_material_id": str(payload.branch_material_id),
+        },
     )
     return TransactionRecord(
         transaction=transaction,
         stock_item=item,
-        material=material,
+        branch_material=material.branch_material,
+        dekor=material.dekor,
+        manufacturer=material.manufacturer,
         supplier=None,
         actor=await db.get(WorkshopUser, principal.principal_id),
     )
@@ -442,7 +513,7 @@ async def consume_order_stock(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     order_id: uuid.UUID,
     quantity: int,
 ) -> StockTransaction:
@@ -454,8 +525,7 @@ async def consume_order_stock(
     item, material = await _stock_item_for_movement(
         db,
         scope=scope,
-        material_id=material_id,
-        allow_unlisted_material=True,
+        branch_material_id=branch_material_id,
     )
     transaction = await _apply_stock_delta(
         db,
@@ -476,7 +546,7 @@ async def restore_order_stock(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     order_id: uuid.UUID,
     quantity: int,
 ) -> StockTransaction:
@@ -490,8 +560,7 @@ async def restore_order_stock(
     item, _ = await _stock_item_for_movement(
         db,
         scope=scope,
-        material_id=material_id,
-        allow_unlisted_material=True,
+        branch_material_id=branch_material_id,
     )
     transaction = await _apply_stock_delta(
         db,
@@ -555,50 +624,76 @@ async def _stock_item_for_movement(
     db: AsyncSession,
     *,
     scope: BranchScope,
-    material_id: uuid.UUID,
-    allow_unlisted_material: bool = False,
-) -> tuple[StockItem, Material]:
-    """The branch's locked stock row for a material, created at zero if absent.
+    branch_material_id: uuid.UUID,
+) -> tuple[StockItem, MaterialRecord]:
+    """The branch's locked stock row for a branch material, created at zero if absent.
 
-    `allow_unlisted_material` is for the order-driven paths only. The branch
-    catalog governs what is *offerable to new clients*; it must not govern
-    whether material that already physically moved can be recorded (QAD-150), so
-    consume/restore proceed on a zero-balance row and the material stays out of
-    the catalog. Human-facing movements keep the catalog check.
+    The old `allow_unlisted_material` escape hatch is gone with the model it was
+    written for. It existed because an order could reference a *platform*
+    material the branch never listed, and QAD-150 says material that physically
+    moved must still be recordable: consume/restore therefore created a bare
+    stock row while the catalog stayed untouched. Now the branch material *is*
+    the material — an order item points straight at this row — so "the branch
+    does not carry it" is no longer a state an order can be in; de-catalogued
+    means `status = inactive`, which still consumes. What QAD-150 actually needs
+    survives untouched: the stock row is created at zero when it is missing, and
+    `_apply_stock_delta` still lets an order-driven consume go negative.
+
+    Deliberately no status filter, exactly as before: a material withdrawn from
+    the branch's offer list can still receive and release stock.
     """
 
-    branch_material = await db.scalar(
-        select(BranchMaterial).where(
-            BranchMaterial.branch_id == scope.branch_id,
-            BranchMaterial.material_id == material_id,
+    row = (
+        await db.execute(
+            select(BranchMaterial, Dekor, Manufacturer)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            .where(
+                BranchMaterial.id == branch_material_id,
+                # Branch-scoped, so another branch's format id can never mint a
+                # stock row whose `branch_id` disagrees with its material's.
+                BranchMaterial.branch_id == scope.branch_id,
+            )
         )
-    )
-    if branch_material is None and not allow_unlisted_material:
+    ).one_or_none()
+    if row is None:
         raise APIError(
             "branch_material_not_found",
             "Material is not selected in this branch",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    query: Select[tuple[StockItem, Material]] = (
-        select(StockItem, Material)
-        .join(Material, Material.id == StockItem.material_id)
-        .where(StockItem.branch_id == scope.branch_id, StockItem.material_id == material_id)
+    branch_material, dekor, manufacturer = row
+    material = MaterialRecord(
+        branch_material=branch_material, dekor=dekor, manufacturer=manufacturer
+    )
+    item = await db.scalar(
+        select(StockItem)
+        .where(StockItem.branch_material_id == branch_material.id)
         .with_for_update()
     )
-    row = (await db.execute(query)).one_or_none()
-    if row is None:
+    if item is None:
         item = await ensure_stock_item_for_branch_material(
             db,
-            branch_id=scope.branch_id,
-            material_id=material_id,
-            min_stock=branch_material.min_stock if branch_material is not None else 0,
+            branch_id=branch_material.branch_id,
+            branch_material_id=branch_material.id,
+            min_stock=branch_material.min_stock,
         )
-        material = await db.get(Material, material_id)
-        if material is None:
-            raise APIError("material_not_found", "Material not found", status_code=404)
-        return item, material
-    item, material = row
     return item, material
+
+
+def _material_join[SelectT: Select[Any]](query: SelectT) -> SelectT:
+    """Stock -> branch material -> dekor -> manufacturer.
+
+    One hop deeper than the old stock -> material -> manufacturer: identity now
+    lives on the dekor while the format lives on the branch's own row, so every
+    read that shows a material to a human needs all three.
+    """
+
+    return (
+        query.join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
+        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+    )
 
 
 async def _inventory_scope(
@@ -689,7 +784,7 @@ async def _emit_negative_stock(
     *,
     scope: BranchScope,
     stock_item: StockItem,
-    material: Material,
+    material: MaterialRecord,
 ) -> None:
     """A consume drove the books negative — nobody is blocked, but it can't be silent."""
 
@@ -707,7 +802,7 @@ async def _notify_inventory_holders(
     *,
     scope: BranchScope,
     stock_item: StockItem,
-    material: Material,
+    material: MaterialRecord,
     event_code: str,
 ) -> None:
     recipient_ids = set(
@@ -731,6 +826,9 @@ async def _notify_inventory_holders(
         ).all()
     )
     now = datetime.now(UTC)
+    # `material_name` is a computed label now — there is no stored name to read —
+    # but the payload key stays: it is what the notification renderers read.
+    material_name = material.label
     for recipient_id in recipient_ids:
         db.add(
             Notification(
@@ -741,8 +839,8 @@ async def _notify_inventory_holders(
                 entity_id=stock_item.id,
                 payload={
                     "branch_id": str(scope.branch_id),
-                    "material_id": str(material.id),
-                    "material_name": material.name,
+                    "branch_material_id": str(material.branch_material.id),
+                    "material_name": material_name,
                     "on_hand": stock_item.on_hand,
                     "min_stock": stock_item.min_stock,
                 },
@@ -783,39 +881,44 @@ async def stock_value(
     )
     rows = (
         await db.execute(
-            select(StockItem.on_hand, Material.kind, latest_price)
-            .join(Material, Material.id == StockItem.material_id)
+            select(StockItem.on_hand, Dekor.tur, latest_price)
+            .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
             .where(StockItem.branch_id == scope.branch_id, StockItem.on_hand != 0)
         )
     ).all()
     total = 0
-    for on_hand, kind, price in rows:
+    for on_hand, tur, price in rows:
         if price is None:
             continue
-        if kind is MaterialKind.PANEL:
-            total += on_hand * int(price)
-        else:
+        if is_tape(tur):
             total += on_hand * int(price) // 1000
+        else:
+            total += on_hand * int(price)
     return total
 
 
-def stock_in_total_tiyin(kind: MaterialKind, quantity: int, unit_price_tiyin: int) -> int:
-    """Total for a priced stock-in: per-panel for panels, per-metre over mm for edges.
+def stock_in_total_tiyin(tur: DekorType, quantity: int, unit_price_tiyin: int) -> int:
+    """Total for a priced stock-in: per-panel for panels, per-metre over mm for kromka.
 
     Mirrors the sale-side per-metre arithmetic so buy and sell math can't drift.
     """
 
-    if kind is MaterialKind.PANEL:
-        return quantity * unit_price_tiyin
-    return quantity * unit_price_tiyin // 1000
+    if is_tape(tur):
+        return quantity * unit_price_tiyin // 1000
+    return quantity * unit_price_tiyin
 
 
-def stock_unit(kind: MaterialKind) -> str:
-    return "panel" if kind is MaterialKind.PANEL else "millimetre"
+def stock_unit(tur: DekorType) -> str:
+    """The unit stock is *counted* in: whole panels, or millimetres of tape."""
+
+    return "millimetre" if is_tape(tur) else "panel"
 
 
-def display_unit(kind: MaterialKind) -> str:
-    return "panel" if kind is MaterialKind.PANEL else "metre"
+def display_unit(tur: DekorType) -> str:
+    """The unit stock is *shown and priced* in: panels, or metres of tape."""
+
+    return "metre" if is_tape(tur) else "panel"
 
 
 def _required_text(value: str, code: str) -> str:

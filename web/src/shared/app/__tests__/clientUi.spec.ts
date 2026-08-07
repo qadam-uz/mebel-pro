@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   clientErrorLabel,
+  draftDisplayName,
   clientGreetingName,
   clientHomeSubtitle,
   clientNextPhaseLabel,
@@ -18,6 +19,7 @@ import {
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
 import type { NotificationItem } from '@/shared/stores/notifications'
+import type { CuttingDraft, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
 
 function notification(overrides: Partial<NotificationItem>): NotificationItem {
   return {
@@ -194,5 +196,116 @@ describe('client UI helpers', () => {
         notification({ event_code: 'inventory.negative_stock', entity_type: 'stock_item' }),
       ),
     ).toBe('alert')
+  })
+})
+
+// draftDisplayName had no coverage at all, which is exactly how it would have
+// broken silently: with `.name` gone from post-reshape snapshots the material
+// list would be empty and every saved draft would render as "Nomsiz", with a
+// green suite. These cases pin the composed-label path in both vocabularies.
+describe('draftDisplayName', () => {
+  function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
+    return {
+      id: 'draft-1',
+      client_id: 'client-1',
+      name: null,
+      preferred_branch_id: null,
+      kerf_mm: 4,
+      edge_trim_mm: 5,
+      parts_snapshot: [],
+      chosen_result_id: null,
+      revision_of_order_id: null,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+      results: [],
+      ...overrides,
+    }
+  }
+
+  function part(materialId: string): CuttingPart {
+    return {
+      part_ref: `part-${materialId}`,
+      name: null,
+      material_id: materialId,
+      material_source: 'shop',
+      follow_grain: true,
+      length_mm: 300,
+      width_mm: 200,
+      quantity: 1,
+      edge_top: null,
+      edge_bottom: null,
+      edge_left: null,
+      edge_right: null,
+    }
+  }
+
+  function withSnapshots(snapshots: Record<string, Record<string, unknown>>): CuttingDraft {
+    const result = {
+      id: 'result-1',
+      material_snapshots: snapshots,
+    } as unknown as CuttingResult
+    return draft({
+      parts_snapshot: Object.keys(snapshots).map(part),
+      chosen_result_id: 'result-1',
+      results: [result],
+    })
+  }
+
+  it('uses the draft name whenever there is one', () => {
+    expect(draftDisplayName(draft({ name: 'Oshxona' }))).toBe('Oshxona')
+  })
+
+  it('names an untitled draft after its materials — new vocabulary', () => {
+    expect(
+      draftDisplayName(
+        withSnapshots({
+          'bm-1': {
+            manufacturer_name: 'Egger',
+            tur: 'ldsp',
+            kod: 'H1334',
+            nomi: 'Sanoma',
+            qalinlik_mm: '18',
+            uzunlik_mm: 2800,
+            eni_mm: 2070,
+          },
+        }),
+      ),
+    ).toBe('LDSP Egger H1334')
+  })
+
+  it('names an untitled draft after its materials — legacy snapshot', () => {
+    expect(
+      draftDisplayName(
+        withSnapshots({
+          'bm-1': {
+            manufacturer_name: 'Egger',
+            type: 'dsp',
+            decor_code: 'H1334',
+            color: 'Sanoma',
+            thickness_mm: '18',
+            panel_length_mm: 2800,
+            panel_width_mm: 2070,
+          },
+        }),
+      ),
+    ).toBe('LDSP Egger H1334')
+  })
+
+  it('joins two materials and counts the rest', () => {
+    const name = draftDisplayName(
+      withSnapshots({
+        'bm-1': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'A' },
+        'bm-2': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'B' },
+        'bm-3': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'C' },
+      }),
+    )
+    expect(name).toBe('LDSP Egger A + LDSP Egger B +1')
+  })
+
+  it('falls back to the untitled copy when no result names a material', () => {
+    expect(draftDisplayName(draft())).toBe('Nomsiz chizma')
+    // An empty snapshot resolves to the generic fallback label, which must be
+    // filtered out rather than becoming the draft's name.
+    expect(draftDisplayName(withSnapshots({ 'bm-1': {} }))).toBe('Nomsiz chizma')
   })
 })

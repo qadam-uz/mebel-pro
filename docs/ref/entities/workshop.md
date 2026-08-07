@@ -2,14 +2,14 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-07-27
+updated: 2026-08-07
 order: 20
 ---
 
 # Workshop
 
 The tenant — and what each tenant publishes per branch: branches. The catalog (materials,
-the branch's selection from them, and branch pricing) lives in [`catalog.md`](catalog.md);
+the branch's own materials, and branch pricing) lives in [`catalog.md`](catalog.md);
 workshop users live in [`identity.md`](identity.md); income and expenses live in
 [`finance.md`](finance.md). Rules: [`access-patterns.md`](../../access-patterns.md) (tenancy
 + branch status), [`orders.md`](../features/orders.md) (the order state machine + production
@@ -47,8 +47,8 @@ Invariants: exactly one `is_owner = true` workshop user per workshop (DB/service
 
 ## Branch
 
-A physical location of a workshop. Owns its warehouse stock, its pricing, and its selection
-from the platform's material catalog (see [`catalog.md`](catalog.md)). Workshop users who
+A physical location of a workshop. Owns its warehouse stock, its pricing, and the formats it
+carries of the platform's decors (see [`catalog.md`](catalog.md)). Workshop users who
 work here have it as their `home_branch_id` ([`identity.md`](identity.md)). Status governs
 whether clients see it and order from it.
 
@@ -71,7 +71,7 @@ visible (shown as closed, with `closed_reason`), no new orders; `inactive` — i
 clients, no new orders, existing orders complete. Transitions owner-only. Never deleted.
 Changing status does **not** revoke staff sessions or grants.
 
-Invariants: everything under the branch (branch material selections, stock, pricing) belongs
+Invariants: everything under the branch (branch materials, stock, pricing) belongs
 to the same workshop; a branch with active orders can be set `inactive` (orders finish; UI
 warns).
 

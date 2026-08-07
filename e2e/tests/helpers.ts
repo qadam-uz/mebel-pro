@@ -22,9 +22,50 @@ export const ownerReadyPassword = "OwnerReady123";
 export const passwordLabel = /^(Password|Parol)$/;
 export const continueButton = /^(Continue|Kirish)$/;
 
-export interface MaterialResponse {
+/**
+ * A platform dekor — identity only (manufacturer, tur, kod, nomi). It has no
+ * thickness, no size and no price: those are a branch fact now. `label` is the
+ * server-composed display string; there is no stored name to read.
+ */
+export interface DekorResponse {
   id: string;
-  name: string;
+  manufacturer_id: string;
+  manufacturer_name: string;
+  tur: string;
+  kod: string | null;
+  nomi: string;
+  label: string;
+}
+
+/**
+ * One dekor in one concrete format, carried by one branch. **This** is the id a
+ * stock row, a cutting part and an order item point at — and it is per branch,
+ * so one branch's id for a format is not another's.
+ */
+export interface BranchMaterialResponse {
+  id: string;
+  branch_id: string;
+  dekor_id: string;
+  dekor: DekorResponse;
+  qalinlik_mm: string;
+  uzunlik_mm: number | null;
+  eni_mm: number | null;
+  kromka_eni_mm: number | null;
+  price_tiyin: number;
+  price_unset: boolean;
+  min_stock: number;
+  label: string;
+}
+
+/** One (thickness + size) combination to attach. Price/threshold default to 0. */
+export interface BranchMaterialFormatInput {
+  // A Decimal on the wire — sent as a string so 0.4 can never take a float trip.
+  qalinlik_mm: string;
+  uzunlik_mm?: number;
+  eni_mm?: number;
+  kromka_eni_mm?: number;
+  price_tiyin?: number;
+  min_stock?: number;
 }
 
 export interface OrderResponse {
@@ -46,6 +87,14 @@ export async function expectOk(response: APIResponse) {
       `API call failed: ${response.url()} → ${response.status()} ${body.slice(0, 500)}`,
     );
   }
+}
+
+/**
+ * Escape a value before it goes into a `RegExp` locator. Server-composed labels
+ * carry `·`, `×` and run ids, so a raw string is not a safe pattern.
+ */
+export function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function runId(testInfo: { workerIndex: number }) {
@@ -152,72 +201,153 @@ export async function readyOwnerToken(
   return access;
 }
 
-export async function createCatalogMaterials(
+export async function createManufacturer(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+) {
+  const response = await request.post(
+    "/api/v1/platform/catalog/manufacturers",
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { name, country: "UZ" },
+    },
+  );
+  await expectOk(response);
+  return (await response.json()).id as string;
+}
+
+export async function createDekor(
+  request: APIRequestContext,
+  token: string,
+  data: {
+    manufacturer_id: string;
+    tur: string;
+    nomi: string;
+    kod?: string | null;
+    tolali?: boolean;
+    image_file_id?: string | null;
+  },
+) {
+  const response = await request.post("/api/v1/platform/catalog/dekorlar", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { tolali: false, ...data },
+  });
+  await expectOk(response);
+  return (await response.json()) as DekorResponse;
+}
+
+/**
+ * The two platform dekorlar every order flow needs: one panel-shaped (`ldsp`)
+ * and one tape (`kromka`). Identity only — the branch decides the formats.
+ */
+export async function createCatalogDekorlar(
   request: APIRequestContext,
   token: string,
   id: string,
 ) {
-  const manufacturer = await request.post(
-    "/api/v1/platform/catalog/manufacturers",
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { name: `Order Maker ${id}`, country: "UZ" },
-    },
+  const manufacturerId = await createManufacturer(
+    request,
+    token,
+    `Order Maker ${id}`,
   );
-  await expectOk(manufacturer);
-  const manufacturerId = (await manufacturer.json()).id as string;
-
-  const panel = await request.post("/api/v1/platform/catalog/materials", {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: "panel",
-      manufacturer_id: manufacturerId,
-      type: "dsp",
-      thickness_mm: "18",
-      color: "White",
-      decor_code: `P5-P-${id}`,
-      panel_length_mm: 900,
-      panel_width_mm: 600,
-      grain_direction: false,
-    },
+  const panel = await createDekor(request, token, {
+    manufacturer_id: manufacturerId,
+    tur: "ldsp",
+    kod: `P5-P-${id}`,
+    nomi: "White",
   });
-  await expectOk(panel);
-
-  const edge = await request.post("/api/v1/platform/catalog/materials", {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: "edge",
-      manufacturer_id: manufacturerId,
-      thickness_mm: "2",
-      edge_width_mm: 19,
-      color: "White",
-      decor_code: `P5-E-${id}`,
-    },
+  const edge = await createDekor(request, token, {
+    manufacturer_id: manufacturerId,
+    tur: "kromka",
+    kod: `P5-E-${id}`,
+    nomi: "White",
   });
-  await expectOk(edge);
-
-  return {
-    panel: (await panel.json()) as MaterialResponse,
-    edge: (await edge.json()) as MaterialResponse,
-  };
+  return { manufacturerId, panel, edge };
 }
 
-export async function addBranchMaterial(
+/**
+ * Attach one dekor to a branch in one or more formats — one transaction, and a
+ * format the branch already carries is *skipped* rather than rejected. Returns
+ * the created branch materials in request order, so a caller that asks for two
+ * formats can name both.
+ */
+export async function carryDekor(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  materialId: string,
-  priceTiyin: number,
-  minStock: number,
+  dekorId: string,
+  formats: BranchMaterialFormatInput[],
 ) {
   const response = await request.post(
     `/api/v1/workshop/branches/${branchId}/materials`,
     {
       headers: { Authorization: `Bearer ${token}` },
-      data: { material_id: materialId, price_tiyin: priceTiyin, min_stock: minStock },
+      data: { dekor_id: dekorId, formats },
     },
   );
   await expectOk(response);
+  const body = (await response.json()) as {
+    created: BranchMaterialResponse[];
+    skipped: unknown[];
+  };
+  // Match each created row back to the format asked for by its own numbers, not
+  // by list position: a mis-mapping here is invisible (every id is a plausible
+  // uuid) and would silently point the test's stock and orders at another row.
+  return formats.map((format) => {
+    const row = body.created.find(
+      (created) =>
+        Number(created.qalinlik_mm) === Number(format.qalinlik_mm) &&
+        created.uzunlik_mm === (format.uzunlik_mm ?? null) &&
+        created.eni_mm === (format.eni_mm ?? null) &&
+        created.kromka_eni_mm === (format.kromka_eni_mm ?? null),
+    );
+    if (!row) {
+      throw new Error(
+        `attach returned no row for ${JSON.stringify(format)} — got ${JSON.stringify(body)}`,
+      );
+    }
+    return row;
+  });
+}
+
+/** The single-format case, which is most of the suite. */
+export async function carryOneFormat(
+  request: APIRequestContext,
+  token: string,
+  branchId: string,
+  dekorId: string,
+  format: BranchMaterialFormatInput,
+) {
+  const [row] = await carryDekor(request, token, branchId, dekorId, [format]);
+  return row;
+}
+
+/** The 900×600×18 panel format the order/cutting flows carry. */
+export function panelFormat(
+  overrides: Partial<BranchMaterialFormatInput> = {},
+): BranchMaterialFormatInput {
+  return {
+    qalinlik_mm: "18",
+    uzunlik_mm: 900,
+    eni_mm: 600,
+    price_tiyin: 250_000,
+    min_stock: 1,
+    ...overrides,
+  };
+}
+
+/** The 2×19 tape format the order/cutting flows carry. */
+export function edgeFormat(
+  overrides: Partial<BranchMaterialFormatInput> = {},
+): BranchMaterialFormatInput {
+  return {
+    qalinlik_mm: "2",
+    kromka_eni_mm: 19,
+    price_tiyin: 10_000,
+    min_stock: 1_000,
+    ...overrides,
+  };
 }
 
 export async function updateBranchPricing(
@@ -239,7 +369,7 @@ export async function stockIn(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  materialId: string,
+  branchMaterialId: string,
   quantity: number,
 ) {
   const response = await request.post(
@@ -247,7 +377,7 @@ export async function stockIn(
     {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        material_id: materialId,
+        branch_material_id: branchMaterialId,
         quantity,
         unit_price_tiyin: 25_000_000,
         supplier: { name: `E2E Supplier ${branchId.slice(0, 6)}` },
@@ -259,9 +389,14 @@ export async function stockIn(
 }
 
 /**
- * A workshop+branch with pricing, two carried materials, and stock — everything a
- * client needs to optimize a draft and place an order. Returns the IDs + an owner
- * token (for driving workshop-side transitions) and the client phone to log in.
+ * A workshop+branch with pricing, two carried branch materials, and stock —
+ * everything a client needs to optimize a draft and place an order. Returns the
+ * IDs + an owner token (for driving workshop-side transitions) and the client
+ * phone to log in.
+ *
+ * `panel` / `edge` are **branch materials**, not dekorlar: that is the id a part,
+ * a stock row and an order item resolve to. The dekorlar behind them come back
+ * as `panelDekor` / `edgeDekor` for the screens that show identity alone.
  */
 export async function seedOrderableBranch(
   request: APIRequestContext,
@@ -272,14 +407,29 @@ export async function seedOrderableBranch(
   const adminAccess = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, adminAccess, id);
   const ownerAccess = await readyOwnerToken(request, setup);
-  const { panel, edge } = await createCatalogMaterials(request, adminAccess, id);
+  const {
+    panel: panelDekor,
+    edge: edgeDekor,
+  } = await createCatalogDekorlar(request, adminAccess, id);
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id, 250_000, 1);
-  await addBranchMaterial(request, ownerAccess, branchId, edge.id, 10_000, 1_000);
+  const panel = await carryOneFormat(
+    request,
+    ownerAccess,
+    branchId,
+    panelDekor.id,
+    panelFormat(),
+  );
+  const edge = await carryOneFormat(
+    request,
+    ownerAccess,
+    branchId,
+    edgeDekor.id,
+    edgeFormat(),
+  );
   await stockIn(request, ownerAccess, branchId, panel.id, 5);
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
-  return { setup, ownerAccess, branchId, panel, edge };
+  return { setup, ownerAccess, branchId, panelDekor, edgeDekor, panel, edge };
 }
 
 export async function clientTokenViaApi(

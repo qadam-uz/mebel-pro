@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
+from app.core.search_fold import fold
 from app.models.enums import (
     AuthenticatedPrincipalType,
     BranchStatus,
@@ -15,7 +16,11 @@ from app.models.enums import (
     WorkshopStatus,
 )
 from app.modules.access.contracts import Client
-from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
+
+# One writer for the label and its snapshot vocabulary: catalog owns both, and
+# a second copy here is how `18` and `18.0000000000` reach two endpoints.
+from app.modules.catalog.api import branch_material_label, normalize_mm
+from app.modules.catalog.contracts import BranchMaterial, Dekor, Manufacturer
 from app.modules.client_portal.schemas import (
     ClientBranchMaterialPreview,
     ClientBranchMaterialResponse,
@@ -200,35 +205,41 @@ async def _branch_material_previews(
     branch_ids: list[uuid.UUID],
 ) -> tuple[dict[uuid.UUID, list[ClientBranchMaterialPreview]], dict[uuid.UUID, int]]:
     """Top-N carried-material previews + total counts for many branches in ONE
-    query, so the branches list avoids the per-branch N+1 (CB-13)."""
+    query, so the branches list avoids the per-branch N+1 (CB-13).
+
+    One dekor now fans out to one row per format a branch carries, so both the
+    preview and `materials_total` count *formats*, not decors — a branch with
+    one decor in three thicknesses reports three.
+    """
     previews: dict[uuid.UUID, list[ClientBranchMaterialPreview]] = {}
     totals: dict[uuid.UUID, int] = {}
     if not branch_ids:
         return previews, totals
     query = (
-        select(BranchMaterial, Material, Manufacturer)
-        .join(Material, Material.id == BranchMaterial.material_id)
-        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        select(BranchMaterial, Dekor, Manufacturer)
+        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
         .where(
             BranchMaterial.branch_id.in_(branch_ids),
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            Material.status == MaterialStatus.ACTIVE,
+            BranchMaterial.price_tiyin > 0,
+            Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
-        .order_by(Manufacturer.name, Material.name)
+        .order_by(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm)
     )
-    for branch_material, material, manufacturer in (await db.execute(query)).all():
+    for branch_material, dekor, manufacturer in (await db.execute(query)).all():
         branch_id = branch_material.branch_id
         totals[branch_id] = totals.get(branch_id, 0) + 1
         bucket = previews.setdefault(branch_id, [])
         if len(bucket) < _BRANCH_PREVIEW_LIMIT:
             bucket.append(
                 ClientBranchMaterialPreview(
-                    id=material.id,
+                    id=branch_material.id,
                     manufacturer_name=manufacturer.name,
-                    name=material.name,
+                    name=branch_material_label(branch_material, dekor, manufacturer),
                     price_tiyin=branch_material.price_tiyin,
-                    display_unit=display_unit(material.kind),
+                    display_unit=display_unit(dekor.tur),
                 )
             )
     return previews, totals
@@ -244,47 +255,44 @@ async def client_branch_materials(
     require_client(principal)
     await _visible_branch_with_workshop(db, branch_id)
     query = (
-        select(BranchMaterial, Material, Manufacturer)
-        .join(Material, Material.id == BranchMaterial.material_id)
-        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        select(BranchMaterial, Dekor, Manufacturer)
+        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            Material.status == MaterialStatus.ACTIVE,
+            # Same gate as the branch-card preview, so the "+N more" count and
+            # this list can never disagree. See _branch_material_previews.
+            BranchMaterial.price_tiyin > 0,
+            Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
-        .order_by(Manufacturer.name, Material.name)
+        .order_by(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm)
     )
     normalized = search.strip() if search else ""
     if normalized:
-        pattern = f"%{normalized.lower()}%"
-        query = query.where(
-            or_(
-                Material.name.ilike(pattern),
-                Material.color.ilike(pattern),
-                Material.decor_code.ilike(pattern),
-                Manufacturer.name.ilike(pattern),
-            )
-        )
+        # Both sides folded: `Sonoma`, `сонома` and `yong'oq` all reach the same
+        # rows, and the stored search_key already carries the manufacturer name,
+        # so this single predicate replaces the old four-column OR.
+        query = query.where(Dekor.search_key.ilike(f"%{fold(normalized)}%"))
     rows = (await db.execute(query)).all()
     return [
         ClientBranchMaterialResponse(
-            id=material.id,
-            kind=material.kind,
+            id=branch_material.id,
+            tur=dekor.tur,
             manufacturer_name=manufacturer.name,
-            type=material.type,
-            name=material.name,
-            thickness_mm=material.thickness_mm,
-            color=material.color,
-            decor_code=material.decor_code,
-            panel_length_mm=material.panel_length_mm,
-            panel_width_mm=material.panel_width_mm,
-            grain_direction=material.grain_direction,
-            image_file_id=material.image_file_id,
+            kod=dekor.kod,
+            nomi=dekor.nomi,
+            tolali=dekor.tolali,
+            image_file_id=dekor.image_file_id,
+            qalinlik_mm=normalize_mm(branch_material.qalinlik_mm),
+            uzunlik_mm=branch_material.uzunlik_mm,
+            eni_mm=branch_material.eni_mm,
+            kromka_eni_mm=branch_material.kromka_eni_mm,
             price_tiyin=branch_material.price_tiyin,
-            display_unit=display_unit(material.kind),
+            display_unit=display_unit(dekor.tur),
         )
-        for branch_material, material, manufacturer in rows
+        for branch_material, dekor, manufacturer in rows
     ]
 
 

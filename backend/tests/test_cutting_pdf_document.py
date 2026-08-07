@@ -1,4 +1,14 @@
-"""Tests for the detailed cutting PDF document builder."""
+# ruff: noqa: RUF001 -- the drawn dimension strings use the display format's
+# multiplication sign, so the expectations must too.
+
+"""Tests for the detailed cutting PDF document builder.
+
+The `material_snapshots` fixtures here deliberately use the **legacy** key
+vocabulary (`kind`/`type`/`name`/`color`/`decor_code`/`panel_length_mm`/…).
+`cutting_results.material_snapshots` is frozen history the reshape migration does
+not rewrite, so the PDF must keep rendering pre-reshape results byte-identically.
+`test_a_new_vocabulary_snapshot_renders_the_same_pdf` covers the other side.
+"""
 
 import re
 import uuid
@@ -58,7 +68,7 @@ def _panel(
 ) -> CuttingPanelResponse:
     return CuttingPanelResponse(
         id=uuid.uuid4(),
-        material_id=panel_id,
+        branch_material_id=panel_id,
         panel_index=panel_index,
         waste_area_mm2=0,
         cut_count=cut_count,
@@ -851,3 +861,89 @@ def test_every_planned_page_gets_its_own_sheet() -> None:
 
     assert planned > 2  # the case is only meaningful with several work pages
     assert pdf.count(b"/Type /Page\n") == planned
+
+
+# --------------------------------------------------------------------------- #
+# Dual-vocabulary snapshot reads
+# --------------------------------------------------------------------------- #
+
+_NEW_PANEL_SNAPSHOT = {
+    "id": str(PANEL_ID),
+    "dekor_id": str(uuid.uuid4()),
+    "manufacturer_id": str(uuid.uuid4()),
+    "manufacturer_name": "Egger",
+    "tur": "ldsp",
+    "kod": "H1334 ST9",
+    "nomi": "Sanoma",
+    "qalinlik_mm": "18",
+    "uzunlik_mm": 1000,
+    "eni_mm": 1000,
+    "kromka_eni_mm": None,
+    "tolali": False,
+    "image_file_id": None,
+}
+
+_LEGACY_PANEL_SNAPSHOT = {
+    "id": str(PANEL_ID),
+    "kind": "panel",
+    "manufacturer_name": "Egger",
+    "type": "dsp",
+    "name": "H1334 ST9",
+    "thickness_mm": "18.0",
+    "color": "Sanoma",
+    "decor_code": "H1334 ST9",
+    "panel_length_mm": 1000,
+    "panel_width_mm": 1000,
+}
+
+
+def test_material_short_reads_both_snapshot_vocabularies() -> None:
+    """Old and new snapshots must name the sheet the same way.
+
+    `cutting_results.material_snapshots` is frozen history the migration does not
+    rewrite, so both vocabularies live in the database forever. Reading only the
+    new keys would silently print an 8-character id fragment on every re-rendered
+    pre-reshape PDF — green tests, wrong paper.
+    """
+    assert pdf_document._material_short(_NEW_PANEL_SNAPSHOT, str(PANEL_ID)) == "H1334 ST9"
+    assert pdf_document._material_short(_LEGACY_PANEL_SNAPSHOT, str(PANEL_ID)) == "H1334 ST9"
+    # A snapshot with no identity at all still degrades to the id fragment
+    # rather than raising.
+    assert pdf_document._material_short({}, str(PANEL_ID)) == str(PANEL_ID)[:8]
+
+
+def test_sheet_dimensions_read_both_snapshot_vocabularies() -> None:
+    """The sheet size drives the drawn map's scale, so a miss is silent and total."""
+    for snapshot in (_NEW_PANEL_SNAPSHOT, _LEGACY_PANEL_SNAPSHOT):
+        assert pdf_document._panel_length_for_snapshot(snapshot) == 1000
+        assert pdf_document._panel_width_for_snapshot(snapshot) == 1000
+
+
+def test_a_new_vocabulary_snapshot_prints_the_same_summary_row() -> None:
+    """The summary table, not just the label helper, is vocabulary-agnostic.
+
+    This is the row that names the sheet and prints its size — the two places a
+    missed legacy key degrades silently (an id fragment, and a 0x0 sheet).
+    """
+    parts = [_part()]
+    panels = [_panel(PANEL_ID, panel_index=1, placements=[_placement("part-1", 0, 0)])]
+
+    legacy = _result(parts=parts, panels=panels)
+    modern = _result(parts=parts, panels=panels)
+    modern.material_snapshots = {
+        **modern.material_snapshots,
+        str(PANEL_ID): dict(_NEW_PANEL_SNAPSHOT),
+    }
+
+    def summary_row(result: CuttingResultResponse) -> tuple[str, str]:
+        stats = pdf_document._material_stats(result)
+        row = next(entry for entry in stats if entry.material_id == str(PANEL_ID))
+        snapshot = pdf_document._material_snapshot(result, row.material_id)
+        return (
+            pdf_document._material_label(snapshot, row.material_id),
+            f"{pdf_document._panel_length_for_snapshot(snapshot)}"
+            f"×{pdf_document._panel_width_for_snapshot(snapshot)}",
+        )
+
+    assert summary_row(modern) == summary_row(legacy)
+    assert summary_row(modern)[1] == "1000×1000"

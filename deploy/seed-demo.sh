@@ -45,8 +45,29 @@
 #     +998901234455  Aziza            3 orders (completed ×2, cancelled)
 #
 #   Also: 2 skeleton workshops (Atlas Mebel, Nur Mebel) so the admin list looks
-#   real; 4 manufacturers; 16 panels + 16 edges (each with a catalog image);
-#   both branches carry all 32 materials with stock; finance ledger populated.
+#   real; 4 manufacturers; 30 platform dekorlar (16 panel-shaped + 14 kromka),
+#   each with a catalog image; both branches carry 34 branch-material formats
+#   each, with stock; finance ledger populated.
+#
+# ─── CATALOG SHAPE (post-reshape) ────────────────────────────────────────────
+#
+#   A *dekor* is platform-owned identity only — manufacturer, tur, kod, nomi,
+#   photo, grain. It has no thickness, no size and no price, because a platform
+#   operator cannot know what a workshop's supplier actually sells.
+#
+#   A *branch material* is one dekor in one concrete format, carried by one
+#   branch: qalinlik + (uzunlik×eni | kromka_eni) + price + min_stock. THAT is
+#   the id every stock row, cutting panel and order item points at — and it is
+#   per branch, so B1's id for "Oq 2800×2070×18" is not B2's.
+#
+#   The demo leans on that fan-out on purpose, so the new screens have data:
+#     · h1145 / w980 kromka are ONE dekor each, carried at two thicknesses
+#       (2 mm and 0.4 mm) — under the old model those were 4 separate materials.
+#     · h1145 panel is carried at 18 mm AND 16 mm, and the 16 mm row is attached
+#       with NO price → price_tiyin 0 → the "narx yo'q" state on the workshop
+#       catalog, and excluded from client-facing listings.
+#     · w980 panel is carried at the standard 2800×2070 AND at 2620×1830, so the
+#       "Nostandart o'lcham" grouping is not empty.
 #
 #   NOTE: the workshop owner shows as full-name "owner" with B1's phone — the API
 #   provisions the owner from its login and forbids editing the owner record, so
@@ -183,9 +204,9 @@ jcall POST "$API/platform/users" "$TOKEN" \
 ok "operator created"
 
 # ============================================================================
-# 4 · Manufacturers + 32 materials (each with a catalog image)
+# 4 · Manufacturers + 30 dekorlar (each with a catalog image)
 # ============================================================================
-say "4 · Manufacturers + 16 panels + 16 edges (uploading catalog images)"
+say "4 · Manufacturers + 16 panel dekorlar + 14 kromka dekorlar (uploading images)"
 
 man_id() { # name country -> id
   jcall POST "$API/platform/catalog/manufacturers" "$TOKEN" \
@@ -199,12 +220,15 @@ man_for() { case "$1" in
   egger) echo "$MAN_EGGER";; swisskrono) echo "$MAN_SWISS";;
   kronospan) echo "$MAN_KRONO";; toshkent) echo "$MAN_TOSH";; esac; }
 
-# Upload a swatch and echo its file_id (empty on any problem — material is then
-# created without an image). One upload per material: a file attaches exactly
-# once, so materials that share a decor still upload their own copy.
+# Upload a swatch and echo its file_id (empty on any problem — the dekor is then
+# created without an image). One upload per dekor: a file attaches exactly once,
+# and one photo now serves every format of that dekor. Two committed swatches
+# (`w980_edge_thin.jpg`, `h1145_edge_thin.jpg`) are therefore no longer uploaded
+# — the 0.4 mm tape is a *format* of the same dekor as the 2 mm one, not its own
+# catalog entry.
 upload_image() { # img-basename -> file_id | ""
   local path="$ASSETS_DIR/$1" resp code
-  [ -f "$path" ] || { warn "image missing: $1 (material created without image)"; return 0; }
+  [ -f "$path" ] || { warn "image missing: $1 (dekor created without image)"; return 0; }
   resp="$(curl -sS -X POST "$API/files" \
     -H "Authorization: Bearer $TOKEN" \
     -F "upload=@$path;type=image/jpeg" -w $'\n%{http_code}')" || true
@@ -215,95 +239,104 @@ upload_image() { # img-basename -> file_id | ""
   esac
 }
 
-# Parallel arrays (bash 3.2 has no associative arrays): decor+kind -> material id.
-MAT_DECOR=(); MAT_KIND=(); MAT_ID=()
-mat_id() { # decor kind -> first matching material id
+# Parallel arrays (bash 3.2 has no associative arrays). Two maps, deliberately:
+#
+#   DEKOR_*  key "<decor>|<shape>"                   -> platform dekor id
+#   BM_*     key "<branch>|<decor>|<shape>|<format>" -> branch_material id
+#
+# The second one MUST be branch-keyed. A dekor is one platform row shared by
+# everyone, but the format a branch carries is its own row with its own id, and
+# that id is what stock-ins, cutting parts and order items reference. Reusing
+# B1's ids on B2 would silently move every B2 order onto B1's shelves.
+#
+# `shape` is `panel` or `kromka` — the coarse split the templates care about,
+# not the dekor's `tur` (which is ldsp/mdf/... and varies per decor).
+# `format` is the literal spec string from the tables below: `LxWxT` for panels,
+# `TxW` for kromka.
+DEKOR_KEY=(); DEKOR_ID=(); DEKOR_FMT=()
+put_dekor() { DEKOR_KEY+=("$1"); DEKOR_ID+=("$2"); DEKOR_FMT+=("$3"); }
+
+BM_KEY=(); BM_ID=()
+put_bm() { BM_KEY+=("$1"); BM_ID+=("$2"); }
+bm_id() { # "<branch>|<decor>|<shape>|<format>" -> branch_material id
   local i
-  for i in "${!MAT_ID[@]}"; do
-    [ "${MAT_DECOR[$i]}" = "$1" ] && [ "${MAT_KIND[$i]}" = "$2" ] && { printf '%s' "${MAT_ID[$i]}"; return; }
+  for i in "${!BM_KEY[@]}"; do
+    [ "${BM_KEY[$i]}" = "$1" ] && { printf '%s' "${BM_ID[$i]}"; return; }
   done
 }
 
-# Panels:  decor|manufacturer|type|length|width|thickness|grain|color|image
-PANELS='
-h1145|egger|dsp|2800|2070|18|true|Sonoma eman|h1145_panel.jpg
-h3734|egger|dsp|2800|2070|18|true|Yong'\''oq|h3734_panel.jpg
-h1180|egger|dsp|2750|1830|16|true|Oq eman|h1180_panel.jpg
-h1137|egger|dsp|2800|2070|18|true|Kulrang eman|h1137_panel.jpg
-h3303|swisskrono|mdf|2800|2070|18|true|To'\''q yong'\''oq|h3303_panel.jpg
-h3702|swisskrono|dsp|2750|1830|16|true|Buk|h3702_panel.jpg
-h1615|swisskrono|dsp|2800|2070|25|true|Qarag'\''ay|h1615_panel.jpg
-h3170|swisskrono|dsp|2800|2070|18|true|Charm eman|h3170_panel.jpg
-w980|kronospan|dsp|2800|2070|18|false|Oq|w980_panel.jpg
-w1100|kronospan|dsp|2750|1830|16|false|Alebastr oq|w1100_panel.jpg
-u999|kronospan|dsp|2800|2070|18|false|Qora|u999_panel.jpg
-u963|kronospan|dsp|2750|1830|18|false|Antrasit|u963_panel.jpg
-u708|toshkent|dsp|2800|2070|18|false|Kashmir|u708_panel.jpg
-u732|toshkent|mdf|2800|2070|25|false|Chang kulrang|u732_panel.jpg
-u636|toshkent|dsp|2800|2070|16|false|Vanil|u636_panel.jpg
-u560|toshkent|mdf|2800|2070|18|false|Ko'\''k|u560_panel.jpg
+# Panel dekorlar:  decor|manufacturer|tur|tolali|nomi|image|formats
+#   formats: comma-separated `uzunlik x eni x qalinlik`; a leading `~` attaches
+#   that format with NO price (price_tiyin 0 — the "narx yo'q" state).
+#   `tur` is the real substrate now: the old `type=dsp` rows were LDSP boards all
+#   along (the label already rendered them "LDSP"), so they seed as `ldsp`.
+PANEL_DEKORLAR='
+h1145|egger|ldsp|true|Sonoma eman|h1145_panel.jpg|2800x2070x18,~2800x2070x16
+h3734|egger|ldsp|true|Yong'\''oq|h3734_panel.jpg|2800x2070x18
+h1180|egger|ldsp|true|Oq eman|h1180_panel.jpg|2750x1830x16
+h1137|egger|ldsp|true|Kulrang eman|h1137_panel.jpg|2800x2070x18
+h3303|swisskrono|mdf|true|To'\''q yong'\''oq|h3303_panel.jpg|2800x2070x18
+h3702|swisskrono|ldsp|true|Buk|h3702_panel.jpg|2750x1830x16
+h1615|swisskrono|ldsp|true|Qarag'\''ay|h1615_panel.jpg|2800x2070x25
+h3170|swisskrono|ldsp|true|Charm eman|h3170_panel.jpg|2800x2070x18
+w980|kronospan|ldsp|false|Oq|w980_panel.jpg|2800x2070x18,2620x1830x18
+w1100|kronospan|ldsp|false|Alebastr oq|w1100_panel.jpg|2750x1830x16
+u999|kronospan|ldsp|false|Qora|u999_panel.jpg|2800x2070x18
+u963|kronospan|ldsp|false|Antrasit|u963_panel.jpg|2750x1830x18
+u708|toshkent|ldsp|false|Kashmir|u708_panel.jpg|2800x2070x18
+u732|toshkent|mdf|false|Chang kulrang|u732_panel.jpg|2800x2070x25
+u636|toshkent|ldsp|false|Vanil|u636_panel.jpg|2800x2070x16
+u560|toshkent|mdf|false|Ko'\''k|u560_panel.jpg|2800x2070x18
 '
 
-# Edges:  decor|manufacturer|thickness|edge_width|color|image
-EDGES='
-h1145|egger|2|19|Sonoma eman|h1145_edge.jpg
-h3734|egger|2|19|Yong'\''oq|h3734_edge.jpg
-h1180|egger|1|19|Oq eman|h1180_edge.jpg
-h1137|egger|2|19|Kulrang eman|h1137_edge.jpg
-h3303|swisskrono|2|19|To'\''q yong'\''oq|h3303_edge.jpg
-h3702|swisskrono|1|19|Buk|h3702_edge.jpg
-h1615|swisskrono|2|42|Qarag'\''ay|h1615_edge.jpg
-h3170|swisskrono|2|22|Charm eman|h3170_edge.jpg
-w980|kronospan|2|19|Oq|w980_edge.jpg
-w1100|kronospan|1|19|Alebastr oq|w1100_edge.jpg
-u999|kronospan|2|19|Qora|u999_edge.jpg
-u963|kronospan|2|19|Antrasit|u963_edge.jpg
-u708|toshkent|1|19|Kashmir|u708_edge.jpg
-u732|toshkent|2|19|Chang kulrang|u732_edge.jpg
-w980|kronospan|0.4|19|Oq|w980_edge_thin.jpg
-h1145|egger|0.4|19|Sonoma eman|h1145_edge_thin.jpg
+# Kromka dekorlar:  decor|manufacturer|nomi|image|formats
+#   formats: comma-separated `qalinlik x kromka_eni`. h1145 and w980 carry two
+#   thicknesses of the SAME dekor — the old catalog had to spend a second
+#   material (and a second swatch) on each of them.
+KROMKA_DEKORLAR='
+h1145|egger|Sonoma eman|h1145_edge.jpg|2x19,0.4x19
+h3734|egger|Yong'\''oq|h3734_edge.jpg|2x19
+h1180|egger|Oq eman|h1180_edge.jpg|1x19
+h1137|egger|Kulrang eman|h1137_edge.jpg|2x19
+h3303|swisskrono|To'\''q yong'\''oq|h3303_edge.jpg|2x19
+h3702|swisskrono|Buk|h3702_edge.jpg|1x19
+h1615|swisskrono|Qarag'\''ay|h1615_edge.jpg|2x42
+h3170|swisskrono|Charm eman|h3170_edge.jpg|2x22
+w980|kronospan|Oq|w980_edge.jpg|2x19,0.4x19
+w1100|kronospan|Alebastr oq|w1100_edge.jpg|1x19
+u999|kronospan|Qora|u999_edge.jpg|2x19
+u963|kronospan|Antrasit|u963_edge.jpg|2x19
+u708|toshkent|Kashmir|u708_edge.jpg|1x19
+u732|toshkent|Chang kulrang|u732_edge.jpg|2x19
 '
 
-json_escape() { printf '%s' "$1" | jq -Rrs @json | sed 's/^"//; s/"$//'; }
+create_dekor() { # manufacturer tur kod nomi tolali file_id -> dekor id
+  jcall POST "$API/platform/catalog/dekorlar" "$TOKEN" "$(jq -nc \
+    --arg mid "$(man_for "$1")" --arg tur "$2" --arg kod "$3" --arg nomi "$4" \
+    --argjson tolali "$5" --arg fid "$6" \
+    '{manufacturer_id:$mid,tur:$tur,kod:$kod,nomi:$nomi,tolali:$tolali}
+     + (if $fid=="" then {} else {image_file_id:$fid} end)')" | jq -r .id
+}
 
-n_panels=0
-while IFS='|' read -r decor man type len wid thick grain color img; do
+n_panel_dekor=0
+while IFS='|' read -r decor man tur tolali nomi img formats; do
   [ -n "$decor" ] || continue
-  fid="$(upload_image "$img")"
-  body="$(jq -nc \
-    --arg mid "$(man_for "$man")" --arg type "$type" \
-    --arg thick "$thick" --arg color "$color" --arg decor "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" \
-    --argjson len "$len" --argjson wid "$wid" --argjson grain "$grain" \
-    --arg fid "$fid" \
-    '{kind:"panel",manufacturer_id:$mid,type:$type,thickness_mm:$thick,
-      color:$color,decor_code:$decor,panel_length_mm:$len,panel_width_mm:$wid,
-      grain_direction:$grain} + (if $fid=="" then {} else {image_file_id:$fid} end)')"
-  id="$(jcall POST "$API/platform/catalog/materials" "$TOKEN" "$body" | jq -r .id)"
-  MAT_DECOR+=("$decor"); MAT_KIND+=("panel"); MAT_ID+=("$id")
-  n_panels=$((n_panels+1))
-done <<< "$PANELS"
-ok "$n_panels panels created"
+  id="$(create_dekor "$man" "$tur" "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" \
+        "$nomi" "$tolali" "$(upload_image "$img")")"
+  put_dekor "$decor|panel" "$id" "$formats"
+  n_panel_dekor=$((n_panel_dekor+1))
+done <<< "$PANEL_DEKORLAR"
+ok "$n_panel_dekor panel dekorlar created"
 
-n_edges=0
-while IFS='|' read -r decor man thick edge_width color img; do
+n_kromka_dekor=0
+while IFS='|' read -r decor man nomi img formats; do
   [ -n "$decor" ] || continue
-  fid="$(upload_image "$img")"
-  body="$(jq -nc \
-    --arg mid "$(man_for "$man")" --arg thick "$thick" --argjson edge_width "$edge_width" \
-    --arg color "$color" --arg decor "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" --arg fid "$fid" \
-    '{kind:"edge",manufacturer_id:$mid,thickness_mm:$thick,
-      color:$color,decor_code:$decor,edge_width_mm:$edge_width} + (if $fid=="" then {} else {image_file_id:$fid} end)')"
-  id="$(jcall POST "$API/platform/catalog/materials" "$TOKEN" "$body" | jq -r .id)"
-  MAT_DECOR+=("$decor"); MAT_KIND+=("edge"); MAT_ID+=("$id")
-  n_edges=$((n_edges+1))
-done <<< "$EDGES"
-ok "$n_edges edges created"
-
-# Named handles for the order templates.
-W980_P="$(mat_id w980 panel)";  W980_E="$(mat_id w980 edge)"
-U963_P="$(mat_id u963 panel)";  U963_E="$(mat_id u963 edge)"
-H1145_P="$(mat_id h1145 panel)"; H1145_E="$(mat_id h1145 edge)"
-H3734_P="$(mat_id h3734 panel)"; H3734_E="$(mat_id h3734 edge)"
+  id="$(create_dekor "$man" kromka "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" \
+        "$nomi" false "$(upload_image "$img")")"
+  put_dekor "$decor|kromka" "$id" "$formats"
+  n_kromka_dekor=$((n_kromka_dekor+1))
+done <<< "$KROMKA_DEKORLAR"
+ok "$n_kromka_dekor kromka dekorlar created"
 
 # ============================================================================
 # 5 · Provision "Mebel Master" + owner ready + 2nd branch
@@ -387,9 +420,9 @@ ACCOUNTANT_ID="$(create_staff "Nigora Saidova" "accountant" "+998911002034" "$BR
   "HisobchiDemo123")"; ok "accountant (Hisobchi @ B1 + B2)"
 
 # ============================================================================
-# 8 · Suppliers + branch carry (all 32 on both branches) + stock-ins
+# 8 · Suppliers + branch attach (every dekor, every format, both branches) + stock
 # ============================================================================
-say "8 · Suppliers, then carry all 32 materials on both branches with stock"
+say "8 · Suppliers, then attach every dekor format on both branches with stock"
 # Create suppliers once (workshop-scoped); reuse their ids on every stock-in so
 # we don't spawn a duplicate supplier row per stock-in.
 sup_id() { # name phone -> id
@@ -403,45 +436,109 @@ SUP4="$(sup_id "Mebel Furnitura Savdo" "+998712300040")"
 SUPPLIERS=("$SUP1" "$SUP2" "$SUP3" "$SUP4")
 ok "4 suppliers created"
 
-carry() { # branch_id material_id price_tiyin min_stock
+# One dekor + every format the branch carries of it, in a single all-or-nothing
+# attach — the real flow the workshop UI drives.
+attach() { # branch_id dekor_id formats_json -> response body
   jcall POST "$API/workshop/branches/$1/materials" "$OWNER_TOKEN" \
-    "{\"material_id\":\"$2\",\"price_tiyin\":$3,\"min_stock\":$4}" >/dev/null
-}
-stockin() { # branch_id material_id quantity supplier_id unit_price_tiyin
-  jcall POST "$API/workshop/branches/$1/stock-in" "$OWNER_TOKEN" \
-    "{\"material_id\":\"$2\",\"quantity\":$3,\"unit_price_tiyin\":$5,\"supplier_id\":\"$4\",\"note\":\"Demo boshlang'ich zaxira\"}" >/dev/null
+    "$(jq -nc --arg d "$2" --argjson f "$3" '{dekor_id:$d,formats:$f}')"
 }
 
-# Two materials that no order touches, planted below min_stock for the low-stock UI.
+# `qalinlik_mm` goes over the wire as a STRING: it is a Decimal server-side, and
+# 0.4 as a JSON float is the one value in this file that a float round-trip could
+# nudge. Everything else is an integer.
+format_json() { # qalinlik uzunlik eni kromka_eni price min_stock   ("" = omit the field)
+  local out="\"qalinlik_mm\":\"$1\""
+  [ -n "$2" ] && out="$out,\"uzunlik_mm\":$2"
+  [ -n "$3" ] && out="$out,\"eni_mm\":$3"
+  [ -n "$4" ] && out="$out,\"kromka_eni_mm\":$4"
+  [ -n "$5" ] && out="$out,\"price_tiyin\":$5"     # omitted → server default 0
+  printf '{%s,"min_stock":%s}' "$out" "$6"
+}
+
+# Match a created row back to the format we asked for by its own numbers, not by
+# list position. A mis-mapping here is invisible — every id is a plausible uuid —
+# and would land B2's stock-ins and orders on B1's shelves.
+pick_bm() { # response qalinlik uzunlik eni kromka_eni -> branch_material id | ""
+  printf '%s' "$1" | jq -r --arg q "$2" --arg u "$3" --arg e "$4" --arg k "$5" '
+    .created
+    | map(select(
+        ((.qalinlik_mm | tostring | tonumber) == ($q | tonumber))
+        and ((.uzunlik_mm // "" | tostring) == $u)
+        and ((.eni_mm // "" | tostring) == $e)
+        and ((.kromka_eni_mm // "" | tostring) == $k)))
+    | (.[0].id // "")'
+}
+
+stockin() { # branch_id branch_material_id quantity supplier_id unit_price_tiyin
+  jcall POST "$API/workshop/branches/$1/stock-in" "$OWNER_TOKEN" \
+    "{\"branch_material_id\":\"$2\",\"quantity\":$3,\"unit_price_tiyin\":$5,\"supplier_id\":\"$4\",\"note\":\"Demo boshlang'ich zaxira\"}" >/dev/null
+}
+
+# Two decors that no order touches, planted below min_stock for the low-stock UI.
 LOWSTOCK="u636 u560"
 is_lowstock() { case " $LOWSTOCK " in *" $1 "*) return 0;; *) return 1;; esac; }
 
-idx=0
-for i in "${!MAT_ID[@]}"; do
-  mid="${MAT_ID[$i]}"; kind="${MAT_KIND[$i]}"; decor="${MAT_DECOR[$i]}"
-  sup="${SUPPLIERS[$((idx % 4))]}"
-  if [ "$kind" = panel ]; then
-    p1=$(( 30000000 + idx*400000 )); p2=$(( p1 + 1500000 ))   # even → safe for qty-2 parts
+# Sale price per format, spread over the catalog so no two rows look alike.
+# Panel prices stay even so qty-2 parts divide cleanly.
+panel_price()  { printf '%s' $(( 30000000 + $1*400000 + $2*900000 + $3*1500000 )); } # dekor_idx fmt_idx b2
+kromka_price() { printf '%s' $(( 900 + $1*40 + $2*150 + $3*120 )); }                 # tiyin per mm
+
+n_bm=0
+for i in "${!DEKOR_KEY[@]}"; do
+  key="${DEKOR_KEY[$i]}"; did="${DEKOR_ID[$i]}"
+  decor="${key%%|*}"; shape="${key##*|}"
+  sup="${SUPPLIERS[$((i % 4))]}"
+  IFS=',' read -r -a FORMATS <<< "${DEKOR_FMT[$i]}"
+
+  for bcode in B1 B2; do
+    bid="$(branch_id_for "$bcode")"
+    # B2 is the pricier, better-stocked branch — the same knob the old seed used.
+    bump=0; [ "$bcode" = B2 ] && bump=1
+
+    # Pass 1 — build the batch.
+    items=""; f=0
+    for spec in "${FORMATS[@]}"; do
+      unpriced=0
+      case "$spec" in '~'*) unpriced=1; spec="${spec#\~}";; esac
+      if [ "$shape" = panel ]; then
+        IFS='x' read -r len wid thick <<< "$spec"
+        price="$(panel_price "$i" "$f" "$bump")"
+        [ "$unpriced" = 1 ] && price=""
+        mins=5; if is_lowstock "$decor"; then mins=60; fi
+        item="$(format_json "$thick" "$len" "$wid" "" "$price" "$mins")"
+      else
+        IFS='x' read -r thick ew <<< "$spec"
+        item="$(format_json "$thick" "" "" "$ew" "$(kromka_price "$i" "$f" "$bump")" 20000)"
+      fi
+      items="${items:+$items,}$item"
+      f=$((f+1))
+    done
+    resp="$(attach "$bid" "$did" "[$items]")"
+
+    # Pass 2 — remember each new id under its format key, then stock it.
     # Purchase (kirim) price ≈ 85% of the branch's sale price — realistic margin.
-    b1=$(( p1 * 85 / 100 )); b2=$(( p2 * 85 / 100 ))
-    if is_lowstock "$decor"; then
-      carry "$BRANCH1_ID" "$mid" "$p1" 60; stockin "$BRANCH1_ID" "$mid" 8 "$sup" "$b1"
-      carry "$BRANCH2_ID" "$mid" "$p2" 60; stockin "$BRANCH2_ID" "$mid" 6 "$sup" "$b2"
-    else
-      q=$(( 45 + idx*4 ))
-      carry "$BRANCH1_ID" "$mid" "$p1" 5; stockin "$BRANCH1_ID" "$mid" "$q" "$sup" "$b1"
-      carry "$BRANCH2_ID" "$mid" "$p2" 5; stockin "$BRANCH2_ID" "$mid" $(( q + 12 )) "$sup" "$b2"
-    fi
-  else
-    e1=$(( 900 + idx*40 )); e2=$(( e1 + 120 ))   # tiyin per mm
-    be1=$(( e1 * 85 / 100 )); be2=$(( e2 * 85 / 100 ))        # kirim per metre
-    q=$(( 180000 + idx*8000 ))
-    carry "$BRANCH1_ID" "$mid" "$e1" 20000; stockin "$BRANCH1_ID" "$mid" "$q" "$sup" "$be1"
-    carry "$BRANCH2_ID" "$mid" "$e2" 20000; stockin "$BRANCH2_ID" "$mid" $(( q + 40000 )) "$sup" "$be2"
-  fi
-  idx=$((idx+1))
+    f=0
+    for spec in "${FORMATS[@]}"; do
+      spec="${spec#\~}"
+      if [ "$shape" = panel ]; then
+        IFS='x' read -r len wid thick <<< "$spec"
+        bmid="$(pick_bm "$resp" "$thick" "$len" "$wid" "")"
+        if is_lowstock "$decor"; then qty=$(( 8 - bump*2 )); else qty=$(( 45 + i*4 + f*7 + bump*12 )); fi
+        buy=$(( $(panel_price "$i" "$f" "$bump") * 85 / 100 ))
+      else
+        IFS='x' read -r thick ew <<< "$spec"
+        bmid="$(pick_bm "$resp" "$thick" "" "" "$ew")"
+        qty=$(( 180000 + i*8000 + f*5000 + bump*40000 ))
+        buy=$(( $(kromka_price "$i" "$f" "$bump") * 85 / 100 ))
+      fi
+      [ -n "$bmid" ] || die "attach on $bcode returned no row for $decor $shape $spec"
+      put_bm "$bcode|$decor|$shape|$spec" "$bmid"
+      stockin "$bid" "$bmid" "$qty" "$sup" "$buy"
+      n_bm=$((n_bm+1)); f=$((f+1))
+    done
+  done
 done
-ok "64 branch-material rows carried and stocked (2 planted low-stock: Vanil, Fjord Ko'k)"
+ok "$n_bm branch materials attached and stocked (low-stock: Vanil, Ko'k · unpriced: Sonoma eman 16 mm)"
 
 # ============================================================================
 # 9 · Skeleton workshops (so the admin list looks real)
@@ -472,6 +569,9 @@ AZIZA_TOKEN="$(client_token "$AZIZA_PHONE" "$AZIZA_NAME")"
 ok "clients logged in (Dilshod, Aziza)"
 
 # ─── Cutting part / template builders ────────────────────────────────────────
+# The parts snapshot keeps its `material_id` key — the reshape re-pointed what it
+# holds (a branch_material id now, not a platform material id) without renaming
+# the key, so old snapshots and new ones stay readable by the same code.
 band() { printf '{"material_id":"%s","source":"shop"}' "$1"; }
 part() { # ref panel l w q top bottom left right
   printf '{"part_ref":"%s","material_id":"%s","material_source":"shop","length_mm":%s,"width_mm":%s,"quantity":%s,"edge_top":%s,"edge_bottom":%s,"edge_left":%s,"edge_right":%s}' \
@@ -502,18 +602,31 @@ tmpl_kitchen() { # panel edge (Oshxona stoli — top with full edge)
     "$(part oyoq_ong  "$p" 560 500 1 "$(band "$e")" "$N" "$N" "$N")" \
     "$(part boglam    "$p" 820 250 1 "$(band "$e")" "$N" "$N" "$N")"
 }
-parts_for() { case "$1" in
-  bookshelf)      tmpl_bookshelf "$W980_P"  "$W980_E";;
-  wardrobe)       tmpl_wardrobe  "$U963_P"  "$U963_E";;
-  kitchen_oak)    tmpl_kitchen   "$H1145_P" "$H1145_E";;
-  kitchen_walnut) tmpl_kitchen   "$H3734_P" "$H3734_E";;
-esac; }
+# A template now resolves per branch: the ids it puts in the parts snapshot are
+# branch materials, and a draft may only reference the ones its own branch
+# carries. Every template picks the 18 mm / 2 mm standard formats.
+parts_for() { # template branch_code
+  local p e
+  case "$1" in
+    bookshelf)      p="$(bm_id "$2|w980|panel|2800x2070x18")";  e="$(bm_id "$2|w980|kromka|2x19")";;
+    wardrobe)       p="$(bm_id "$2|u963|panel|2750x1830x18")";  e="$(bm_id "$2|u963|kromka|2x19")";;
+    kitchen_oak)    p="$(bm_id "$2|h1145|panel|2800x2070x18")"; e="$(bm_id "$2|h1145|kromka|2x19")";;
+    kitchen_walnut) p="$(bm_id "$2|h3734|panel|2800x2070x18")"; e="$(bm_id "$2|h3734|kromka|2x19")";;
+    *) die "unknown template: $1" ;;
+  esac
+  [ -n "$p" ] && [ -n "$e" ] || die "template $1 has no branch material on $2"
+  case "$1" in
+    bookshelf) tmpl_bookshelf "$p" "$e";;
+    wardrobe)  tmpl_wardrobe  "$p" "$e";;
+    *)         tmpl_kitchen   "$p" "$e";;
+  esac
+}
 
 DRAFT_ID=""
-make_draft() { # client_token branch_id template optimize(0/1)
+make_draft() { # client_token branch_code template optimize(0/1)
   DRAFT_ID="$(jcall POST "$API/client/cutting-drafts" "$1" | jq -r .id)"
   jcall PATCH "$API/client/cutting-drafts/$DRAFT_ID" "$1" \
-    "{\"preferred_branch_id\":\"$2\",\"parts_snapshot\":$(parts_for "$3")}" >/dev/null
+    "{\"preferred_branch_id\":\"$(branch_id_for "$2")\",\"parts_snapshot\":$(parts_for "$3" "$2")}" >/dev/null
   [ "$4" = 1 ] && jcall POST "$API/client/cutting-drafts/$DRAFT_ID/optimize" "$1" >/dev/null
   return 0
 }
@@ -577,8 +690,8 @@ record_income() { # order_id amount method days_ago
 # 11 · Standalone client drafts (Dilshod) — never ordered, so they persist
 # ============================================================================
 say "11 · 2 saved cutting drafts for Dilshod (1 optimized, 1 not)"
-make_draft "$DILSHOD_TOKEN" "$BRANCH1_ID" kitchen_oak 1; ok "draft (optimized)"
-make_draft "$DILSHOD_TOKEN" "$BRANCH2_ID" wardrobe    0; ok "draft (not optimized)"
+make_draft "$DILSHOD_TOKEN" B1 kitchen_oak 1; ok "draft (optimized)"
+make_draft "$DILSHOD_TOKEN" B2 wardrobe    0; ok "draft (not optimized)"
 
 # ============================================================================
 # 12 · 9 orders across both branches, driven to every status
@@ -603,7 +716,7 @@ while IFS='|' read -r cli name phone branch status tmpl pay dago note; do
   bid="$(branch_id_for "$branch")"
   if [ "$branch" = B2 ]; then cut="$USTA2_ID"; edg="$USTA2_ID"; else cut="$CUTTER_ID"; edg="$EDGER_ID"; fi
 
-  make_draft "$tok" "$bid" "$tmpl" 1
+  make_draft "$tok" "$branch" "$tmpl" 1
   place_order "$tok" "$bid" "$name" "$phone" "$note"
 
   if [ "$status" = cancelled ]; then
@@ -679,8 +792,9 @@ $(printf '\033[1;32m')╔══════════════════�
                accountant / HisobchiDemo123
   CLIENT       $DILSHOD_PHONE (Dilshod) · $AZIZA_PHONE (Aziza) · OTP $OTP_CODE
 
-  32 materials (with images) · both branches stocked · 9 orders (every status)
-  · finance ledger populated · full credential list is in this file's header.
+  30 dekorlar (with images) · $n_bm branch materials across both branches, all
+  stocked · 9 orders (every status) · finance ledger populated · full credential
+  list is in this file's header.
 
   Rebuild anytime with:  bash deploy/seed-demo.sh --reset
 SUMMARY

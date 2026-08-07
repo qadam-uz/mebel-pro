@@ -128,7 +128,10 @@ class WorkshopOrderEditApplyRequest(VersionedRequest):
 
 class OrderItemResponse(APIModel):
     id: uuid.UUID
-    material_id: uuid.UUID
+    # The live FK, renamed with the column it mirrors (`_order_response` builds
+    # this by `model_validate(item)`, so the two names must match exactly).
+    # `material_snapshot` beside it is frozen history and keeps its old keys.
+    branch_material_id: uuid.UUID
     material_source: MaterialSource
     material_snapshot: dict[str, Any]
     part_ref: str

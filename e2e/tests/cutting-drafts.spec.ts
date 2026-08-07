@@ -3,7 +3,17 @@ import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { databaseUrl, expectOk, expectPdfOpensInTab } from './helpers'
+import {
+  carryOneFormat,
+  createCatalogDekorlar,
+  databaseUrl,
+  edgeFormat,
+  escapeRegExp,
+  expectOk,
+  expectPdfOpensInTab,
+  panelFormat,
+  type BranchMaterialResponse,
+} from './helpers'
 
 const execFileAsync = promisify(execFile)
 const adminPassword = 'AdminPass123'
@@ -11,10 +21,9 @@ const ownerReadyPassword = 'OwnerReady123'
 const passwordLabel = /^(Password|Parol)$/
 const continueButton = /^(Continue|Kirish)$/
 
-interface MaterialResponse {
-  id: string
-  name: string
-}
+// The one panel format this spec's branch carries — 900×600×18, small enough
+// that the optimizer finishes fast. `×` is U+00D7, as the app prints it.
+const PANEL_FORMAT_LABEL = '900×600×18 mm'
 
 interface TokenResponse {
   access_token: string
@@ -125,60 +134,26 @@ async function readyOwnerToken(
   return access
 }
 
-async function createCatalogMaterials(request: APIRequestContext, token: string, id: string) {
-  const manufacturer = await request.post('/api/v1/platform/catalog/manufacturers', {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { name: `Cutting Maker ${id}`, country: 'UZ' },
-  })
-  await expectOk(manufacturer)
-  const manufacturerId = (await manufacturer.json()).id as string
-
-  const panel = await request.post('/api/v1/platform/catalog/materials', {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: 'panel',
-      manufacturer_id: manufacturerId,
-      type: 'dsp',
-      thickness_mm: '18',
-      color: 'White',
-      decor_code: `P4-P-${id}`,
-      panel_length_mm: 900,
-      panel_width_mm: 600,
-      grain_direction: false,
-    },
-  })
-  await expectOk(panel)
-
-  const edge = await request.post('/api/v1/platform/catalog/materials', {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: 'edge',
-      manufacturer_id: manufacturerId,
-      thickness_mm: '2',
-      edge_width_mm: 19,
-      color: 'White',
-      decor_code: `P4-E-${id}`,
-    },
-  })
-  await expectOk(edge)
-
-  return {
-    panel: (await panel.json()) as MaterialResponse,
-    edge: (await edge.json()) as MaterialResponse,
-  }
-}
-
-async function addBranchMaterial(
+/**
+ * The branch's carried formats — a platform dekor is identity only, so the panel
+ * and the tape the editor picks are **branch materials**, created by attaching
+ * one format of each dekor to this branch.
+ */
+async function carriedMaterials(
   request: APIRequestContext,
-  token: string,
+  adminToken: string,
+  ownerToken: string,
   branchId: string,
-  materialId: string,
+  id: string,
 ) {
-  const response = await request.post(`/api/v1/workshop/branches/${branchId}/materials`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { material_id: materialId, price_tiyin: 250000, min_stock: 1 },
-  })
-  await expectOk(response)
+  const { panel: panelDekor, edge: edgeDekor } = await createCatalogDekorlar(
+    request,
+    adminToken,
+    id,
+  )
+  const panel = await carryOneFormat(request, ownerToken, branchId, panelDekor.id, panelFormat())
+  const edge = await carryOneFormat(request, ownerToken, branchId, edgeDekor.id, edgeFormat())
+  return { panelDekor, edgeDekor, panel, edge }
 }
 
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
@@ -195,8 +170,8 @@ async function optimizedClientDraft(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  panel: MaterialResponse,
-  edge: MaterialResponse,
+  panel: BranchMaterialResponse,
+  edge: BranchMaterialResponse,
 ) {
   const created = await request.post('/api/v1/client/cutting-drafts', {
     headers: { Authorization: `Bearer ${token}` },
@@ -340,15 +315,26 @@ async function loginWorkshop(page: Page, login: string, password: string) {
   await expect(page).toHaveURL(/\/workshop\/?$/)
 }
 
-async function chooseEdgeBanding(page: Page, edgeName: string) {
+/**
+ * Pick a material in the cutting picker. The list groups by dekor — photo +
+ * identity once, its formats as rows — but selection is still one format, one
+ * click: the format row IS the choice.
+ */
+async function chooseMaterial(page: Page, dekorLabel: string, formatLabel: string) {
+  const dialog = page.getByRole('dialog', { name: 'Materialni almashtirish' })
+  await expect(dialog.getByText(dekorLabel)).toBeVisible()
+  await dialog.getByRole('button', { name: formatLabel, exact: true }).click()
+}
+
+async function chooseEdgeBanding(page: Page, edgeLabel: string) {
   // The compact row exposes one rectangular edge diagram that opens the picker.
   await page.getByRole('button', { name: 'Kromka tomonlari', exact: true }).click()
   // A drawing with no tapes yet opens straight into the branch tape catalog;
   // picking the tape returns to the banding panel with it armed as current.
   const catalog = page.getByRole('dialog', { name: /Yana kromka qo'shish/ })
-  await catalog.getByRole('button', { name: new RegExp(edgeName) }).click()
+  await catalog.getByRole('button', { name: new RegExp(escapeRegExp(edgeLabel)) }).click()
   const dialog = page.getByRole('dialog', { name: /Kromka yopishtirish/ })
-  await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible()
+  await expect(dialog.getByText(new RegExp(escapeRegExp(edgeLabel)))).toBeVisible()
   // Band top and bottom with the armed tape; edits apply live, so closing the
   // dialog keeps them.
   await dialog.getByRole('button', { name: /^Yuqori tomon/ }).click()
@@ -366,10 +352,14 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
   const adminAccess = await platformToken(request, adminLogin)
   const setup = await provisionWorkshop(request, adminAccess, id)
   const ownerAccess = await readyOwnerToken(request, setup)
-  const { panel, edge } = await createCatalogMaterials(request, adminAccess, id)
   const branchId = setup.branch.id as string
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id)
-  await addBranchMaterial(request, ownerAccess, branchId, edge.id)
+  const { panelDekor, panel, edge } = await carriedMaterials(
+    request,
+    adminAccess,
+    ownerAccess,
+    branchId,
+    id,
+  )
 
   await page.goto('/client/auth/login')
   await page.getByLabel('Telefon raqami').fill(phoneFor(id, 40))
@@ -403,21 +393,18 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
   await page.getByRole('button', { name: '+ Material tanlash' }).click()
-  await page
-    .getByRole('dialog', { name: 'Materialni almashtirish' })
-    .getByRole('button', { name: new RegExp(panel.name) })
-    .click()
+  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL)
   await page.getByLabel("Uzunlik millimetr").fill('260')
   await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
-  await chooseEdgeBanding(page, edge.name)
+  await chooseEdgeBanding(page, edge.label)
   await page.getByRole('button', { name: 'Davom etish' }).click()
 
   // The first optimise creates + persists + optimises the draft, then routes to
   // the standalone result stage.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/)
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
+  await expect(page.getByText(panel.label).first()).toBeVisible()
   // The sheet strip groups thumbnails per material, captioned "List {index}".
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
@@ -446,10 +433,8 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   const adminAccess = await platformToken(request, adminLogin)
   const setup = await provisionWorkshop(request, adminAccess, id)
   const ownerAccess = await readyOwnerToken(request, setup)
-  const { panel, edge } = await createCatalogMaterials(request, adminAccess, id)
   const branchId = setup.branch.id as string
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id)
-  await addBranchMaterial(request, ownerAccess, branchId, edge.id)
+  const { panelDekor } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
 
   await page.goto('/client/auth/login')
   await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))
@@ -475,10 +460,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
   await page.getByRole('button', { name: '+ Material tanlash' }).click()
-  await page
-    .getByRole('dialog', { name: 'Materialni almashtirish' })
-    .getByRole('button', { name: new RegExp(panel.name) })
-    .click()
+  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL)
   await page.getByLabel("Uzunlik millimetr").fill('260')
   await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
@@ -538,10 +520,8 @@ test('workshop opens a confirmed order cutting plan and opens the PDF', async ({
   const adminAccess = await platformToken(request, adminLogin)
   const setup = await provisionWorkshop(request, adminAccess, id)
   const ownerAccess = await readyOwnerToken(request, setup)
-  const { panel, edge } = await createCatalogMaterials(request, adminAccess, id)
   const branchId = setup.branch.id as string
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id)
-  await addBranchMaterial(request, ownerAccess, branchId, edge.id)
+  const { panel, edge } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
 
   const clientLogin = await clientToken(request, phoneFor(id, 80), 'Cutting API Client')
   const resultId = await optimizedClientDraft(
@@ -567,7 +547,9 @@ test('workshop opens a confirmed order cutting plan and opens the PDF', async ({
   // The cutting plan lives in the "Chizma va tarkib" modal now.
   await page.getByRole('button', { name: 'Chizma va tarkib' }).click()
   const chizmaDialog = page.getByRole('dialog', { name: 'Chizma va tarkib' })
-  await expect(chizmaDialog.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
+  await expect(
+    chizmaDialog.getByRole('button', { name: new RegExp(escapeRegExp(panel.label)) }),
+  ).toBeVisible()
   await expect(chizmaDialog.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
 
   // QAD-160 changed every PDF entry point, including this one, from a download

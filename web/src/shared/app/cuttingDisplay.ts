@@ -1,10 +1,27 @@
+import {
+  dekorTurLabel,
+  materialOptionLabel,
+  snapshotEdgeLabel,
+  snapshotMaterialLabel,
+  snapshotShortLabel,
+} from '@/shared/app/materialLabel'
 import { translate } from '@/shared/i18n'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
-import type { PanelMaterialType } from '@/shared/stores/admin'
 
 // Pure presentation helpers shared by the cutting-editor sub-components
 // (CuttingPartRow, the edge-banding modal) extracted from the editor view as part
 // of the CB-93 decomposition. No Vue/runtime dependencies — testable in isolation.
+
+// Label composition lives in one module (app/materialLabel.ts), the mirror of the
+// backend's material_label.py. Re-exported here so the editor's long-standing
+// import path keeps working and nobody is tempted to write a second composer.
+export {
+  dekorTurLabel,
+  materialOptionLabel,
+  snapshotEdgeLabel,
+  snapshotMaterialLabel,
+  snapshotShortLabel,
+}
 
 // The four bandable sides of a part, in render order, plus their labels.
 export const edgeFields = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
@@ -28,14 +45,9 @@ export const sideLabels: Record<EdgeField, string> = {
   },
 }
 
-const PANEL_TYPES: readonly PanelMaterialType[] = ['dsp', 'mdf', 'plywood', 'natural_wood', 'other']
-
-function panelTypeLabel(type: PanelMaterialType): string {
-  return translate(`cutting.panelType.${type}`)
-}
-
 // Deterministic swatch colour for a material: a few named-colour shortcuts, then a
 // stable hash → pastel HSL so the same material always renders the same chip.
+// Callers pass `nomi` where they used to pass `color`.
 export function colorForMaterial(value: string | null | undefined): string {
   const text = (value ?? '').toLowerCase()
   if (text.includes('white') || text.includes('oq')) return '#f7f4ec'
@@ -54,81 +66,21 @@ export function edgeShortLabel(
 ): string {
   void withThickness
   if (!material) return '-'
-  return material.name
+  // Was `material.name`, the server's stored label. That column is gone, so the
+  // same string is composed — through the one composer, never inline.
+  return materialOptionLabel(material)
 }
 
 export function edgeTinyLabel(material: ClientCatalogMaterialOption | null | undefined): string {
   if (!material) return '-'
-  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.thickness_mm}`
+  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.qalinlik_mm}`
 }
 
+// Keyboard-jump filter for the rows already loaded into the open edge-picker
+// modal. The catalog list itself is server-searched; this only narrows what is
+// on screen, which is why it stays client-side (the cutting editor's behaviour
+// is unchanged by the reshape). `name` is gone from the blob; `kod`/`nomi` carry
+// the signal now.
 export function edgeSearchText(material: ClientCatalogMaterialOption): string {
-  return `${material.manufacturer_name} ${material.name} ${material.color} ${material.decor_code ?? ''} ${material.thickness_mm} ${material.edge_width_mm ?? ''}`.toLowerCase()
-}
-
-export function snapshotShortLabel(snapshot: Record<string, unknown> | undefined): string {
-  const decor = typeof snapshot?.decor_code === 'string' ? snapshot.decor_code.trim() : ''
-  if (decor) return decor
-  const color = typeof snapshot?.color === 'string' ? snapshot.color.trim() : ''
-  if (color) return color
-  const name = typeof snapshot?.name === 'string' ? snapshot.name.trim() : ''
-  return name ? name.slice(0, 18) : translate('cutting.material.fallback')
-}
-
-function snapshotText(snapshot: Record<string, unknown> | undefined, key: string) {
-  const value = snapshot?.[key]
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function formatMm(value: unknown) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return String(value ?? '').trim()
-  return parsed.toString()
-}
-
-export function snapshotMaterialLabel(
-  snapshot: Record<string, unknown> | undefined,
-  fallback = translate('cutting.material.fallback'),
-): string {
-  const manufacturer = snapshotText(snapshot, 'manufacturer_name')
-  const rawType = snapshotText(snapshot, 'type') as PanelMaterialType | ''
-  const type = rawType && PANEL_TYPES.includes(rawType) ? panelTypeLabel(rawType) : rawType
-  const decor = snapshotText(snapshot, 'decor_code')
-  const name = snapshotText(snapshot, 'name')
-  const color = snapshotText(snapshot, 'color')
-  const thickness = snapshotText(snapshot, 'thickness_mm')
-  const length = Number(snapshot?.panel_length_mm)
-  const width = Number(snapshot?.panel_width_mm)
-  const base = [type, manufacturer, decor || name].filter(Boolean).join(' ') || fallback
-  const dimensions =
-    Number.isFinite(length) && Number.isFinite(width) && length > 0 && width > 0
-      ? `${length}×${width}${thickness ? `×${formatMm(thickness)}` : ''} mm`
-      : thickness
-        ? `${formatMm(thickness)} mm`
-        : ''
-  const details = [
-    color && !base.toLowerCase().includes(color.toLowerCase()) ? color : '',
-    dimensions,
-  ].filter(Boolean)
-  return [base, ...details].join(' · ')
-}
-
-export function snapshotEdgeLabel(
-  snapshot: Record<string, unknown> | undefined,
-  fallback = translate('cutting.edge.label'),
-): string {
-  const manufacturer = snapshotText(snapshot, 'manufacturer_name')
-  const decor = snapshotText(snapshot, 'decor_code')
-  const name = snapshotText(snapshot, 'name')
-  const color = snapshotText(snapshot, 'color')
-  const thickness = snapshotText(snapshot, 'thickness_mm')
-  const width = Number(snapshot?.edge_width_mm)
-  const base = [manufacturer, decor || name].filter(Boolean).join(' ') || fallback
-  const size =
-    thickness && Number.isFinite(width) && width > 0
-      ? `${formatMm(thickness)}×${width} mm`
-      : thickness
-        ? `${formatMm(thickness)} mm`
-        : ''
-  return [base, color, size].filter(Boolean).join(' · ')
+  return `${material.manufacturer_name} ${material.nomi} ${material.kod ?? ''} ${material.qalinlik_mm} ${material.kromka_eni_mm ?? ''}`.toLowerCase()
 }

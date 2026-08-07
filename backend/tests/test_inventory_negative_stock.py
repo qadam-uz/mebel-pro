@@ -8,7 +8,6 @@ non-negative guard.
 
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 
 import pytest
 from app.core.errors import APIError
@@ -16,14 +15,12 @@ from app.core.principal import AuthenticatedPrincipal
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    MaterialKind,
-    PanelMaterialType,
+    MaterialStatus,
     Permission,
     StockTransactionType,
     UserStatus,
 )
 from app.modules.access.contracts import PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.inventory.api import (
     consume_order_stock,
     list_stock,
@@ -37,40 +34,25 @@ from app.modules.support.contracts import Notification
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
-
-
-async def _material(db: AsyncSession, *, name: str) -> Material:
-    manufacturer = Manufacturer(name=f"Egger {uuid.uuid4().hex[:6]}", country="AT")
-    db.add(manufacturer)
-    await db.flush()
-    material = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name=name,
-        thickness_mm=Decimal("18"),
-        color="Light oak",
-        panel_length_mm=2800,
-        panel_width_mm=2070,
-        grain_direction=True,
-    )
-    db.add(material)
-    await db.flush()
-    return material
+from tests.factories import (
+    MaterialFixture,
+    seed_manufacturer,
+    seed_panel_material,
+    seed_workshop_with_owner,
+)
 
 
 async def _stock_item(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     on_hand: int,
     min_stock: int = 0,
 ) -> StockItem:
     item = StockItem(
         branch_id=branch_id,
-        material_id=material_id,
+        branch_material_id=branch_material_id,
         on_hand=on_hand,
         min_stock=min_stock,
         updated_at=datetime.now(UTC),
@@ -122,20 +104,34 @@ async def _inventory_staff(
     return staff
 
 
+async def _material_named(
+    db: AsyncSession, *, branch_id: uuid.UUID, maker: str, nomi: str
+) -> MaterialFixture:
+    """A carried panel whose manufacturer and decor names are both pinned."""
+    return await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=await seed_manufacturer(db, name=f"{maker} {uuid.uuid4().hex[:6]}"),
+        nomi=nomi,
+        price_tiyin=1,
+    )
+
+
 async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: AsyncSession) -> None:
     workshop, branch, _ = await seed_workshop_with_owner(db_session)
     staff = await _inventory_staff(db_session, workshop_id=workshop.id, branch_id=branch.id)
-    material = await _material(db_session, name="Zero stock panel")
-    db_session.add(
-        BranchMaterial(branch_id=branch.id, material_id=material.id, price_tiyin=1, min_stock=0)
+    material = await seed_panel_material(
+        db_session, branch_id=branch.id, nomi="Zero stock panel", price_tiyin=1
     )
-    item = await _stock_item(db_session, branch_id=branch.id, material_id=material.id, on_hand=5)
+    item = await _stock_item(
+        db_session, branch_id=branch.id, branch_material_id=material.id, on_hand=5
+    )
     order_id = uuid.uuid4()
 
     transaction = await consume_order_stock(
         db_session,
         branch_id=branch.id,
-        material_id=material.id,
+        branch_material_id=material.id,
         order_id=order_id,
         quantity=20,
     )
@@ -147,7 +143,7 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
     await restore_order_stock(
         db_session,
         branch_id=branch.id,
-        material_id=material.id,
+        branch_material_id=material.id,
         order_id=order_id,
         quantity=20,
     )
@@ -157,7 +153,7 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
     await consume_order_stock(
         db_session,
         branch_id=branch.id,
-        material_id=material.id,
+        branch_material_id=material.id,
         order_id=order_id,
         quantity=20,
     )
@@ -165,7 +161,7 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
     restored = await restore_order_stock(
         db_session,
         branch_id=branch.id,
-        material_id=material.id,
+        branch_material_id=material.id,
         order_id=order_id,
         quantity=8,
     )
@@ -189,40 +185,75 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
 async def test_consume_works_for_a_material_dropped_from_the_branch_catalog(
     db_session: AsyncSession,
 ) -> None:
+    """ "Dropped from the catalog" is now `status=inactive`, not a missing row.
+
+    Before the reshape a branch material could vanish while an order was in
+    flight, so consume had to mint one. A material *is* its branch row now — the
+    order item FKs it, so it cannot disappear — and de-catalogued means inactive.
+    The movement path deliberately applies no status filter: what is offerable to
+    new clients is a different question from what physically moved.
+    """
     _, branch, _ = await seed_workshop_with_owner(db_session)
-    material = await _material(db_session, name="Unlisted panel")
-    # No BranchMaterial row at all — the catalog entry was removed mid-order.
+    material = await seed_panel_material(
+        db_session,
+        branch_id=branch.id,
+        nomi="Unlisted panel",
+        price_tiyin=1,
+        status=MaterialStatus.INACTIVE,
+    )
 
     transaction = await consume_order_stock(
         db_session,
         branch_id=branch.id,
-        material_id=material.id,
+        branch_material_id=material.id,
         order_id=uuid.uuid4(),
         quantity=3,
     )
 
     assert transaction.balance_after == -3
     assert transaction.type is StockTransactionType.CONSUME
-    # The material stays OUT of the branch catalog: what is offerable to new
-    # clients is a different question from what physically moved.
-    assert (
-        await db_session.scalar(
-            select(BranchMaterial).where(
-                BranchMaterial.branch_id == branch.id,
-                BranchMaterial.material_id == material.id,
-            )
+    # The stock row is created at zero and then goes negative; the catalog row
+    # stays inactive — consuming it must not quietly re-list it for clients.
+    assert material.branch_material.status is MaterialStatus.INACTIVE
+
+
+async def test_consume_refuses_another_branchs_material(db_session: AsyncSession) -> None:
+    """`stock_items.branch_id` is denormalized, so a mismatch must not be written.
+
+    Resolving the branch material scoped by its own branch is what stops a
+    cutting draft whose `preferred_branch_id` differs from the order's branch
+    from creating a stock row whose branch disagrees with its material's.
+    """
+    _, branch, _ = await seed_workshop_with_owner(db_session)
+    _, other_branch, _ = await seed_workshop_with_owner(
+        db_session, login=f"other-{uuid.uuid4().hex[:6]}"
+    )
+    foreign = await seed_panel_material(db_session, branch_id=other_branch.id, price_tiyin=1)
+
+    with pytest.raises(APIError) as excinfo:
+        await consume_order_stock(
+            db_session,
+            branch_id=branch.id,
+            branch_material_id=foreign.id,
+            order_id=uuid.uuid4(),
+            quantity=1,
         )
+
+    assert excinfo.value.code == "branch_material_not_found"
+    assert (
+        await db_session.scalar(select(StockItem).where(StockItem.branch_material_id == foreign.id))
         is None
     )
 
 
 async def test_manual_stock_out_below_zero_is_still_rejected(db_session: AsyncSession) -> None:
     workshop, branch, owner = await seed_workshop_with_owner(db_session)
-    material = await _material(db_session, name="Guarded panel")
-    db_session.add(
-        BranchMaterial(branch_id=branch.id, material_id=material.id, price_tiyin=1, min_stock=0)
+    material = await seed_panel_material(
+        db_session, branch_id=branch.id, nomi="Guarded panel", price_tiyin=1
     )
-    item = await _stock_item(db_session, branch_id=branch.id, material_id=material.id, on_hand=3)
+    item = await _stock_item(
+        db_session, branch_id=branch.id, branch_material_id=material.id, on_hand=3
+    )
     principal = _owner_principal(owner_id=owner.id, workshop_id=workshop.id)
 
     with pytest.raises(APIError) as excinfo:
@@ -231,7 +262,9 @@ async def test_manual_stock_out_below_zero_is_still_rejected(db_session: AsyncSe
             principal=principal,
             branch_id=branch.id,
             payload=StockAdjustmentRequest(
-                material_id=material.id, quantity=-10, note="Fat-fingered stock take"
+                branch_material_id=material.id,
+                quantity=-10,
+                note="Fat-fingered stock take",
             ),
         )
 
@@ -243,19 +276,19 @@ async def test_negative_rows_sort_first_and_count_against_stock_value(
     db_session: AsyncSession,
 ) -> None:
     workshop, branch, owner = await seed_workshop_with_owner(db_session)
-    # Alphabetically ahead of the negative one, so plain name ordering would win.
-    healthy = await _material(db_session, name="Aaa healthy panel")
-    negative = await _material(db_session, name="Zzz negative panel")
-    for material in (healthy, negative):
-        db_session.add(
-            BranchMaterial(branch_id=branch.id, material_id=material.id, price_tiyin=1, min_stock=0)
-        )
-    await _stock_item(db_session, branch_id=branch.id, material_id=healthy.id, on_hand=4)
-    await _stock_item(db_session, branch_id=branch.id, material_id=negative.id, on_hand=-2)
+    # Ordering is by manufacturer, then decor name, then thickness — there is no
+    # stored material name to sort on any more. Both names put the healthy row
+    # ahead, so only the negative-first rule can pull the other one to the top.
+    healthy = await _material_named(db_session, branch_id=branch.id, maker="Aaa", nomi="Aaa panel")
+    negative = await _material_named(db_session, branch_id=branch.id, maker="Zzz", nomi="Zzz panel")
+    await _stock_item(db_session, branch_id=branch.id, branch_material_id=healthy.id, on_hand=4)
+    await _stock_item(db_session, branch_id=branch.id, branch_material_id=negative.id, on_hand=-2)
     principal = _owner_principal(owner_id=owner.id, workshop_id=workshop.id)
 
     rows = await list_stock(db_session, principal=principal, branch_id=branch.id)
-    assert [row.material.name for row in rows] == [negative.name, healthy.name]
+    assert [row.stock_item.branch_material_id for row in rows] == [negative.id, healthy.id]
+    # The label is computed, never stored — it still names the row for a human.
+    assert "Zzz panel" in rows[0].label
 
     # Never priced, so the figure is zero — but the negative row must not be
     # dropped by a `> 0` filter on the way there.

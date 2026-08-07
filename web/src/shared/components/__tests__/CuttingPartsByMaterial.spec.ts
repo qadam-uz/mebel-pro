@@ -40,6 +40,25 @@ function result(parts: CuttingPart[]): CuttingResult {
         edge_width_mm: 19,
       },
       'edge-legacy': { kind: 'edge', manufacturer_name: 'Egger', decor_code: 'H1137' },
+      // Post-reshape vocabulary: no `name`, no `kind`, and the renamed keys.
+      // The fixtures above are frozen history and stay as the legacy lock.
+      'panel-new': {
+        tur: 'ldsp',
+        manufacturer_name: 'Egger',
+        kod: 'A1',
+        nomi: 'Oq',
+        qalinlik_mm: '18',
+        uzunlik_mm: 2800,
+        eni_mm: 2070,
+      },
+      'edge-new': {
+        tur: 'kromka',
+        manufacturer_name: 'Egger',
+        kod: 'H1137',
+        nomi: 'Kulrang eman',
+        qalinlik_mm: '2',
+        kromka_eni_mm: 19,
+      },
     },
     panels: [],
     panels_used_by_material: {},
@@ -123,8 +142,9 @@ describe('CuttingPartsByMaterial', () => {
     expect(glyphs[1].classes()).toContain('text-ink-muted')
   })
 
-  // The backend generates the tape's canonical name; the registry must print it
-  // verbatim rather than rebuild a shorter one without "Kromka" or the width.
+  // `name` was the catalog's stored label column. It survives only inside
+  // pre-reshape snapshots, which are frozen history — printing it verbatim is
+  // what keeps an old order rendering the string it always did.
   it('names a tape by its generated catalog name', () => {
     const wrapper = mountList([part({ edge_top: { material_id: 'edge-1', source: 'shop' } })])
 
@@ -135,6 +155,20 @@ describe('CuttingPartsByMaterial', () => {
     const wrapper = mountList([part({ edge_top: { material_id: 'edge-legacy', source: 'shop' } })])
 
     expect(wrapper.text()).toContain('Egger H1137')
+  })
+
+  // The same tape written after the reshape has no `name` at all: its label is
+  // composed from the renamed keys, byte-identical to the backend's edge_label().
+  it('composes panel and tape labels from a post-reshape snapshot', () => {
+    const wrapper = mountList([
+      part({
+        material_id: 'panel-new',
+        edge_top: { material_id: 'edge-new', source: 'shop' },
+      }),
+    ])
+
+    expect(wrapper.text()).toContain('LDSP Egger A1 · Oq · 2800×2070×18 mm')
+    expect(wrapper.text()).toContain('Egger H1137 · Kulrang eman · 2×19 mm')
   })
 
   it('renders nothing but the empty note when the result has no parts', () => {

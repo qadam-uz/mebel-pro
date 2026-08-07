@@ -144,7 +144,9 @@ class OrderItem(UUIDPrimaryKey, Base):
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), nullable=False)
-    material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
+    branch_material_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("branch_materials.id"), nullable=False
+    )
     material_source: Mapped[MaterialSource] = mapped_column(
         enum_type(MaterialSource, "material_source"),
         nullable=False,

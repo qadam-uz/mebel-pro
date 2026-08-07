@@ -56,7 +56,8 @@ export function captureApiError(
 }
 
 // Build a query string, dropping only null/undefined/empty-string — `false` and
-// `0` ARE sent (e.g. `carried_only=false`). One shared copy replaces six
+// `0` ARE sent (e.g. `tape=false`, which selects the panel-shaped half of a
+// branch's catalog, and `price_tiyin=0` in an attach payload). One shared copy replaces six
 // store-local `withQuery`s, three of which used a truthy check that silently
 // dropped `false`/`0` (CB-98). Array values become repeated params
 // (`?id=a&id=b`, which FastAPI reads as a `list[...]`); an empty array adds none.

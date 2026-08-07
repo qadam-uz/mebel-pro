@@ -52,17 +52,33 @@ class MaterialStatus(StrEnum):
     INACTIVE = "inactive"
 
 
-class MaterialKind(StrEnum):
-    PANEL = "panel"
-    EDGE = "edge"
+class DekorType(StrEnum):
+    """What a dekor *is* — the single axis that replaced kind + panel type.
 
+    The old model split this in two: `MaterialKind` (panel vs. edge) decided the
+    shape, `PanelMaterialType` (dsp/mdf/...) the substrate. Kromka was never a
+    substrate, only a shape, so the two enums were never independent. One value
+    carries both facts now: `kromka` is tape-shaped, everything else is
+    panel-shaped.
+    """
 
-class PanelMaterialType(StrEnum):
+    LDSP = "ldsp"
     DSP = "dsp"
     MDF = "mdf"
-    PLYWOOD = "plywood"
-    NATURAL_WOOD = "natural_wood"
-    OTHER = "other"
+    FANERA = "fanera"
+    YOGOCH = "yogoch"
+    KROMKA = "kromka"
+    BOSHQA = "boshqa"
+
+    @property
+    def tape_shaped(self) -> bool:
+        """True when the format is a tape (length only, no panel dimensions)."""
+        return self is DekorType.KROMKA
+
+    @property
+    def panel_shaped(self) -> bool:
+        """True when the format is a sheet (length x width, no tape width)."""
+        return not self.tape_shaped
 
 
 class StockTransactionType(StrEnum):

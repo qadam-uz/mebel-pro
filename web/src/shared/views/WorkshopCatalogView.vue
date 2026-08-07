@@ -1,4 +1,14 @@
 <script setup lang="ts">
+/**
+ * "Material katalogi" — what this branch carries, grouped by dekor.
+ *
+ * The catalog reshape split identity (a platform dekor) from format (a branch
+ * row), so a flat list repeated the same decor name once per thickness. The table
+ * groups instead: one photo + identity line per dekor, its formats as indented
+ * rows beneath. A format with `price_unset` carries a "Narx yo'q" pill — it is
+ * hidden from the client-facing catalog until it is priced, and this is the only
+ * screen where that gap is fixable.
+ */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -7,6 +17,7 @@ import { apiTraceId } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
+import { DEKOR_TYPES, dekorTurLabel, formatMm, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -17,6 +28,7 @@ import {
   lowStockThresholdLabel,
 } from '@/shared/app/lowStockThreshold'
 import AppModal from '@/shared/components/AppModal.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
 import FilterStatus from '@/shared/components/FilterStatus.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -29,7 +41,7 @@ import {
   parseDisplayQuantity,
   parseSomToTiyin,
 } from '@/shared/formatters'
-import type { MaterialKind, MaterialStatus } from '@/shared/stores/admin'
+import type { Dekor, DekorType, MaterialStatus } from '@/shared/stores/admin'
 import {
   useWorkshopStore,
   type BranchMaterial,
@@ -43,14 +55,13 @@ const route = useRoute()
 const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>('all')
-const kindFilter = ref<'all' | MaterialKind>('all')
+const turFilter = ref<'all' | DekorType>('all')
 const search = ref('')
 
 // Same defect as Ombor (QAD-182): with a search on, the branch reported it held
 // no materials at all — and offered an add button that would not have helped.
 const catalogFiltered = computed(
-  () =>
-    search.value.trim().length > 0 || kindFilter.value !== 'all' || statusFilter.value !== 'all',
+  () => search.value.trim().length > 0 || turFilter.value !== 'all' || statusFilter.value !== 'all',
 )
 
 // The bar-level reset appears from the second active filter on: with one, it
@@ -58,13 +69,13 @@ const catalogFiltered = computed(
 const activeCatalogFilterCount = computed(
   () =>
     (search.value.trim() ? 1 : 0) +
-    (kindFilter.value === 'all' ? 0 : 1) +
+    (turFilter.value === 'all' ? 0 : 1) +
     (statusFilter.value === 'all' ? 0 : 1),
 )
 
 function resetCatalogFilters() {
   search.value = ''
-  kindFilter.value = 'all'
+  turFilter.value = 'all'
   statusFilter.value = 'all'
 }
 const rowActionId = ref<string | null>(null)
@@ -75,6 +86,7 @@ const materialError = ref<string | null>(null)
 const editingBranchMaterialId = ref<string | null>(null)
 const materialModalOpen = ref(false)
 const attachSheetOpen = ref(false)
+const collapsedDekorIds = ref<Set<string>>(new Set())
 let searchTimer: number | undefined
 const materialForm = reactive({
   // Deliberately empty, not '0': a pre-filled 0 satisfies `required` and lets a
@@ -104,10 +116,11 @@ const statusOptions = computed<DropdownOption[]>(() => [
   { value: 'active', label: t('catalog.status.active'), dot: 'success' },
   { value: 'inactive', label: t('catalog.status.inactive'), dot: 'muted' },
 ])
-const kindOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: t('catalog.filter.kindAll') },
-  { value: 'panel', label: t('catalog.kind.panel') },
-  { value: 'edge', label: t('catalog.kind.edge') },
+// All seven wire values, including `dsp` — it shares the `LDSP` label but is a
+// distinct enum member, and omitting it would leave those dekorlar unfilterable.
+const turOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('catalog.filter.turAll') },
+  ...DEKOR_TYPES.map((value) => ({ value, label: dekorTurLabel(value) })),
 ])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
@@ -118,13 +131,43 @@ const thresholdLabel = computed(() => lowStockThresholdLabel())
 const thresholdColumn = computed(() => lowStockThresholdColumn())
 const thresholdHint = computed(() => lowStockThresholdHint())
 const materialThresholdUnit = computed(() => {
-  const material = editingBranchMaterial.value?.material
-  return material ? thresholdUnit(material.kind) : t('catalog.unit.piece')
+  const row = editingBranchMaterial.value
+  return row ? thresholdUnit(row.dekor.tur) : t('catalog.unit.piece')
 })
 const materialPriceUnit = computed(() => {
-  const material = editingBranchMaterial.value?.material
-  return material ? priceUnit(material.kind) : ''
+  const row = editingBranchMaterial.value
+  return row ? priceUnit(row.dekor.tur) : ''
 })
+
+interface DekorGroup {
+  dekor: Dekor
+  rows: BranchMaterial[]
+}
+
+// Grouped in server order, first appearance wins: the list is paginated, so the
+// grouping must never reorder rows or a "load more" would shuffle the table.
+const dekorGroups = computed<DekorGroup[]>(() => {
+  const groups = new Map<string, DekorGroup>()
+  for (const row of workshop.branchMaterials) {
+    const group = groups.get(row.dekor_id)
+    if (group) group.rows.push(row)
+    else groups.set(row.dekor_id, { dekor: row.dekor, rows: [row] })
+  }
+  return [...groups.values()]
+})
+
+// On-hand comes from the branch's stock list, keyed by branch material. A stock
+// row can be missing (nothing ever arrived), which reads as "—", not as 0.
+const onHandByMaterialId = computed(
+  () =>
+    new Map(
+      workshop.stockItems.map((item) => [
+        item.branch_material_id,
+        { onHand: item.on_hand, unit: item.display_unit, low: item.is_low_stock },
+      ]),
+    ),
+)
+
 function routeSearchValue() {
   const value = route.query.search
   return typeof value === 'string' ? value : ''
@@ -135,39 +178,63 @@ function applyRouteSearch() {
   if (value !== search.value) search.value = value
 }
 
-function materialMeta(row: (typeof workshop.branchMaterials)[number]) {
-  const material = row.material
-  if (material.kind === 'edge') {
-    return t('catalog.meta.edge', {
-      thickness: material.thickness_mm,
-      color: material.color,
-    })
+/** `2800×2070×18 mm` for a panel, `0.4×19 mm` for a tape. */
+function formatLabel(row: BranchMaterial) {
+  const thickness = formatMm(row.qalinlik_mm)
+  if (isTape(row.dekor.tur)) {
+    return row.kromka_eni_mm !== null
+      ? t('catalog.meta.tapeFormat', { thickness, width: row.kromka_eni_mm })
+      : `${thickness} mm`
   }
-  return t('catalog.meta.panel', {
-    type: material.type?.toUpperCase() ?? 'panel',
-    thickness: material.thickness_mm,
-    color: material.color,
-    length: material.panel_length_mm,
-    width: material.panel_width_mm,
-  })
+  return row.uzunlik_mm !== null && row.eni_mm !== null
+    ? t('catalog.meta.panelFormat', {
+        length: row.uzunlik_mm,
+        width: row.eni_mm,
+        thickness,
+      })
+    : `${thickness} mm`
 }
 
-function priceUnit(kind: MaterialKind) {
-  return kind === 'edge' ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
+function priceUnit(tur: DekorType) {
+  return isTape(tur) ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
 }
 
 // Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
 // digits stay aligned on the column's right edge.
 function thresholdParts(row: BranchMaterial) {
-  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.material.kind))
+  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.dekor.tur))
   const splitAt = text.lastIndexOf(' ')
   return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
+}
+
+function onHandText(row: BranchMaterial) {
+  const stock = onHandByMaterialId.value.get(row.id)
+  return stock ? formatStockQuantity(stock.onHand, stock.unit) : '—'
+}
+
+function isLowStock(row: BranchMaterial) {
+  return onHandByMaterialId.value.get(row.id)?.low ?? false
+}
+
+function swatchSource(dekor: Dekor) {
+  return { id: dekor.id, nomi: dekor.nomi, kod: dekor.kod }
+}
+
+function isCollapsed(dekorId: string) {
+  return collapsedDekorIds.value.has(dekorId)
+}
+
+function toggleDekor(dekorId: string) {
+  const next = new Set(collapsedDekorIds.value)
+  if (next.has(dekorId)) next.delete(dekorId)
+  else next.add(dekorId)
+  collapsedDekorIds.value = next
 }
 
 function tableFilters(offset = 0): BranchMaterialFilters {
   return {
     status: statusFilter.value === 'all' ? null : statusFilter.value,
-    kind: kindFilter.value === 'all' ? null : kindFilter.value,
+    tur: turFilter.value === 'all' ? null : turFilter.value,
     search: search.value,
     offset,
   }
@@ -183,10 +250,14 @@ async function loadBranchTable(offset = 0) {
 }
 
 // Full refresh (mount, branch switch, after save): reset the table to page one.
-// The attach sheet loads its own options when it opens, against a catalog that
-// now excludes everything this branch already carries.
+// Stock rides along so the Qoldiq column has numbers; the attach sheet loads its
+// own dekor options when it opens.
 function refreshCatalog() {
-  return loadBranchTable(0)
+  if (!selectedBranchId.value) return Promise.resolve()
+  return Promise.all([
+    loadBranchTable(0),
+    workshop.loadStock(selectedBranchId.value).catch(() => undefined),
+  ])
 }
 
 function loadMoreBranchMaterials() {
@@ -200,10 +271,10 @@ async function saveBranchMaterial() {
   priceFieldError.value = null
   minStockFieldError.value = null
   try {
-    const material = editingBranchMaterial.value?.material
+    const row = editingBranchMaterial.value
     const minStock = parseDisplayQuantity(
       materialForm.minStock,
-      material?.kind === 'edge' ? 'm' : 'pcs',
+      row && isTape(row.dekor.tur) ? 'm' : 'pcs',
     )
     // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100
     // tiyin). null covers both unparseable input and 0 — a 0 so'm material must
@@ -236,21 +307,30 @@ function openAttachSheet() {
   attachSheetOpen.value = true
 }
 
-async function onMaterialsAttached(count: number) {
+// The attach call is not all-or-nothing: a format the branch already carries
+// comes back under `skipped`. That is a notice, never an error.
+async function onMaterialsAttached(result: { created: number; skipped: number }) {
   attachSheetOpen.value = false
   await refreshCatalog()
+  if (result.skipped > 0) {
+    toast.warn(t('inventory.attach.resultSkipped', { n: result.skipped }))
+  }
+  if (result.created === 0) return
   if (!(await notifyProgress())) {
-    toast.success(t('catalog.toast.attached', { n: count }, count))
+    toast.success(t('catalog.toast.attached', { n: result.created }, result.created))
   }
 }
 
 function editBranchMaterial(row: BranchMaterial) {
   editingBranchMaterialId.value = row.id
-  materialForm.priceTiyin = String(row.price_tiyin / 100)
-  // Existing rows keep whatever threshold they were saved with — the new
-  // per-kind defaults apply to new attachments only (no backfill, QAD-159).
-  materialForm.minStock =
-    row.material.kind === 'edge' ? String(row.min_stock / 1000) : String(row.min_stock)
+  // An unpriced format opens with an empty field, not "0" — the operator is here
+  // to set a price, and a prefilled 0 is the value we are asking them to replace.
+  materialForm.priceTiyin = row.price_unset ? '' : String(row.price_tiyin / 100)
+  // Existing rows keep whatever threshold they were saved with — the per-tur
+  // defaults apply to new attachments only (no backfill, QAD-159).
+  materialForm.minStock = isTape(row.dekor.tur)
+    ? String(row.min_stock / 1000)
+    : String(row.min_stock)
   materialError.value = null
   materialModalOpen.value = true
 }
@@ -268,7 +348,7 @@ function resetMaterialForm() {
   minStockFieldError.value = null
 }
 
-async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) {
+async function toggleVisibility(row: BranchMaterial) {
   if (!selectedBranchId.value) return
   rowActionId.value = row.id
   rowActionError.value = null
@@ -289,7 +369,7 @@ async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) 
 }
 
 // Table filters reload just the table (offset 0); the picker is independent.
-watch([statusFilter, kindFilter], () => {
+watch([statusFilter, turFilter], () => {
   void loadBranchTable(0)
 })
 
@@ -320,6 +400,7 @@ watch(
 watch(selectedBranchId, () => {
   materialModalOpen.value = false
   attachSheetOpen.value = false
+  collapsedDekorIds.value = new Set()
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -368,9 +449,9 @@ onBeforeUnmount(() => {
           <input v-model="search" :placeholder="$t('catalog.filter.searchPlaceholder')" />
         </label>
         <ProjectDropdown
-          v-model="kindFilter"
-          :label="$t('catalog.filter.kindLabel')"
-          :options="kindOptions"
+          v-model="turFilter"
+          :label="$t('catalog.filter.turLabel')"
+          :options="turOptions"
           top-label
         />
         <ProjectDropdown
@@ -414,12 +495,12 @@ onBeforeUnmount(() => {
         @close="closeMaterialModal"
       >
         <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
-          <!-- The material itself is fixed once attached — show the name in a plain
-               disabled field (finance-modal precedent); price and threshold are the
-               only editable values. -->
+          <!-- The format itself is fixed once attached — show the server label in a
+               plain disabled field (finance-modal precedent); price and threshold
+               are the only editable values. -->
           <label class="field">
             <span>{{ $t('catalog.form.material') }}</span>
-            <input class="mp-input" :value="editingBranchMaterial?.material.name ?? ''" disabled />
+            <input class="mp-input" :value="editingBranchMaterial?.label ?? ''" disabled />
           </label>
           <label class="field">
             <span>{{ $t('catalog.form.price') }}</span>
@@ -434,6 +515,9 @@ onBeforeUnmount(() => {
             </small>
             <small v-else-if="priceFieldError" class="mp-field-error">
               {{ priceFieldError }}
+            </small>
+            <small v-else-if="editingBranchMaterial?.price_unset" class="text-warning">
+              {{ $t('catalog.price.unsetHint') }}
             </small>
           </label>
           <label class="field">
@@ -480,117 +564,158 @@ onBeforeUnmount(() => {
 
       <section v-else class="card">
         <!-- QAD-159: `tbl-fluid` drops the shared 680px floor for this table only —
-             long Russian decor names used to force the whole page sideways. The name
-             wraps instead, and the columns that repeat what the name already says
-             (Tur) or matter least on a phone (Chegara) fall away as width runs out. -->
+             long Russian decor names used to force the whole page sideways. The
+             dekor line wraps instead, and the columns that repeat what the group
+             header already says (Tur) or matter least on a phone fall away as
+             width runs out. -->
         <div class="table-wrap">
           <table class="tbl tbl-fluid">
             <thead>
               <tr>
-                <!-- Let the descriptive name column absorb the table's slack so the
-                     narrow price/threshold/status columns hug their content on the
-                     right instead of drifting apart across the full width. -->
-                <th class="w-full">{{ $t('catalog.table.material') }}</th>
-                <th class="nowrap hidden lg:table-cell">{{ $t('catalog.table.kind') }}</th>
+                <!-- Let the format column absorb the table's slack so the narrow
+                     price/threshold/stock columns hug their content on the right. -->
+                <th class="w-full">{{ $t('catalog.table.format') }}</th>
+                <th class="nowrap hidden lg:table-cell">{{ $t('catalog.table.tur') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ thresholdColumn }}</th>
+                <th class="nowrap right hidden md:table-cell">
+                  {{ $t('catalog.table.onHand') }}
+                </th>
                 <th class="nowrap">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="row in workshop.branchMaterials" :key="row.id" class="row-clickable">
-                <td>
-                  <div class="flex min-w-0 items-start gap-3">
-                    <span
-                      class="sw mt-1 shrink-0"
-                      :class="materialSwatchClass(row.material)"
-                    ></span>
-                    <span class="grid min-w-0 gap-0.5">
-                      <!-- The name is the edit control, stretched over the row
-                           (QAD-184) — the row no longer ends in a button column. -->
-                      <button
-                        type="button"
-                        class="nm row-open row-open-text break-words"
-                        :aria-label="$t('catalog.table.editRow', { name: row.material.name })"
-                        @click="editBranchMaterial(row)"
-                      >
-                        {{ row.material.name }}
-                      </button>
-                      <small class="block break-words text-ink-muted">{{
-                        materialMeta(row)
-                      }}</small>
-                      <!-- Below `sm` the Narx and Chegara columns are gone — a phone
-                           cannot hold five columns plus a wrapping decor name without
-                           scrolling sideways. The numbers move here instead of being
-                           dropped. -->
-                      <small class="block text-ink-muted sm:hidden">
-                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.material.kind) }} ·
-                        {{ thresholdColumn }}: {{ thresholdParts(row).value }}
-                        {{ thresholdParts(row).unit }}
-                      </small>
-                    </span>
-                  </div>
-                </td>
-                <td class="nowrap hidden lg:table-cell">
-                  <span :class="row.material.kind === 'edge' ? 'pill p-eb' : 'pill p-cut'">
-                    <span class="pd"></span
-                    >{{
-                      row.material.kind === 'edge'
-                        ? $t('catalog.kind.edgeCounted')
-                        : $t('catalog.kind.panel')
-                    }}
-                  </span>
-                </td>
-                <td class="amt nowrap hidden sm:table-cell">
-                  {{ formatTiyin(row.price_tiyin) }}
-                  <small class="block font-normal text-ink-muted">
-                    {{ priceUnit(row.material.kind) }}
-                  </small>
-                </td>
-                <td class="amt muted nowrap hidden sm:table-cell">
-                  {{ thresholdParts(row).value }}
-                  <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
-                </td>
-                <!-- `row-above` lifts the switch over the row's stretched click
-                     layer, so toggling Faol never opens the edit modal. -->
-                <td class="nowrap row-above">
+            <tbody v-for="group in dekorGroups" :key="group.dekor.id">
+              <!-- Group header: the dekor's identity once, then its formats. -->
+              <tr class="bg-sunk">
+                <td colspan="6">
                   <button
                     type="button"
-                    role="switch"
-                    :aria-checked="row.status === 'active'"
-                    :aria-label="$t('catalog.table.statusToggle', { name: row.material.name })"
-                    :aria-busy="rowActionId === row.id || undefined"
-                    :disabled="rowActionId === row.id"
-                    class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
-                    @click="toggleVisibility(row)"
+                    class="flex w-full min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    :aria-expanded="!isCollapsed(group.dekor.id)"
+                    :aria-label="$t('catalog.table.expandDekor', { name: group.dekor.label })"
+                    @click="toggleDekor(group.dekor.id)"
                   >
+                    <AuthFileImage
+                      v-if="group.dekor.image_file_id"
+                      :file-id="group.dekor.image_file_id"
+                      :alt="group.dekor.label"
+                      class="size-[34px] shrink-0 rounded-md object-cover"
+                    />
                     <span
-                      class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
-                      :class="row.status === 'active' ? 'bg-accent' : 'bg-hairline-strong'"
-                      aria-hidden="true"
-                    >
-                      <span
-                        class="absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform"
-                        :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
-                      ></span>
+                      v-else
+                      class="sw"
+                      :class="materialSwatchClass(swatchSource(group.dekor))"
+                    ></span>
+                    <span class="grid min-w-0 flex-1 gap-0.5">
+                      <span class="nm break-words">{{ group.dekor.label }}</span>
+                      <small class="block break-words text-ink-muted">
+                        {{ group.dekor.manufacturer_name }} ·
+                        {{ $t('catalog.meta.formatCount', { n: group.rows.length }) }}
+                      </small>
                     </span>
-                    <!-- The switch carries its own accessible name, so below `sm`
-                         the visible label can go rather than wrap one letter per line. -->
-                    <span
-                      class="hidden text-xs font-bold sm:inline"
-                      :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
-                    >
-                      {{
-                        row.status === 'active'
-                          ? $t('catalog.status.active')
-                          : $t('catalog.status.inactive')
-                      }}
+                    <span class="mp-chip shrink-0 lg:hidden">
+                      {{ dekorTurLabel(group.dekor.tur) }}
                     </span>
                   </button>
                 </td>
               </tr>
-              <tr v-if="workshop.branchMaterials.length === 0">
-                <td colspan="5">
+              <template v-if="!isCollapsed(group.dekor.id)">
+                <tr v-for="row in group.rows" :key="row.id" class="row-clickable">
+                  <td>
+                    <div class="grid min-w-0 gap-0.5 pl-[46px]">
+                      <!-- The format is the edit control, stretched over the row
+                           (QAD-184) — the row no longer ends in a button column. -->
+                      <button
+                        type="button"
+                        class="nm row-open row-open-text break-words"
+                        :aria-label="$t('catalog.table.editRow', { name: row.label })"
+                        @click="editBranchMaterial(row)"
+                      >
+                        {{ formatLabel(row) }}
+                      </button>
+                      <small v-if="row.price_unset" class="block">
+                        <span class="pill p-warn">
+                          <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                        </span>
+                      </small>
+                      <!-- Below `sm` the Narx and Chegara columns are gone — a phone
+                           cannot hold six columns plus a wrapping decor name without
+                           scrolling sideways. The numbers move here instead of being
+                           dropped. -->
+                      <small class="block text-ink-muted sm:hidden">
+                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.dekor.tur) }} ·
+                        {{ thresholdColumn }}: {{ thresholdParts(row).value }}
+                        {{ thresholdParts(row).unit }}
+                      </small>
+                      <small class="block text-ink-muted md:hidden">
+                        {{ $t('catalog.table.onHand') }}: {{ onHandText(row) }}
+                      </small>
+                    </div>
+                  </td>
+                  <td class="nowrap hidden lg:table-cell">
+                    <span :class="isTape(row.dekor.tur) ? 'pill p-eb' : 'pill p-cut'">
+                      <span class="pd"></span>{{ dekorTurLabel(row.dekor.tur) }}
+                    </span>
+                  </td>
+                  <td class="amt nowrap hidden sm:table-cell">
+                    {{ formatTiyin(row.price_tiyin) }}
+                    <small class="block font-normal text-ink-muted">
+                      {{ priceUnit(row.dekor.tur) }}
+                    </small>
+                  </td>
+                  <td class="amt muted nowrap hidden sm:table-cell">
+                    {{ thresholdParts(row).value }}
+                    <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
+                  </td>
+                  <td
+                    class="amt nowrap hidden md:table-cell"
+                    :class="isLowStock(row) ? 'text-warning' : 'muted'"
+                  >
+                    {{ onHandText(row) }}
+                  </td>
+                  <!-- `row-above` lifts the switch over the row's stretched click
+                       layer, so toggling Faol never opens the edit modal. -->
+                  <td class="nowrap row-above">
+                    <button
+                      type="button"
+                      role="switch"
+                      :aria-checked="row.status === 'active'"
+                      :aria-label="$t('catalog.table.statusToggle', { name: row.label })"
+                      :aria-busy="rowActionId === row.id || undefined"
+                      :disabled="rowActionId === row.id"
+                      class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
+                      @click="toggleVisibility(row)"
+                    >
+                      <span
+                        class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+                        :class="row.status === 'active' ? 'bg-accent' : 'bg-hairline-strong'"
+                        aria-hidden="true"
+                      >
+                        <span
+                          class="absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform"
+                          :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
+                        ></span>
+                      </span>
+                      <!-- The switch carries its own accessible name, so below `sm`
+                           the visible label can go rather than wrap one letter per line. -->
+                      <span
+                        class="hidden text-xs font-bold sm:inline"
+                        :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
+                      >
+                        {{
+                          row.status === 'active'
+                            ? $t('catalog.status.active')
+                            : $t('catalog.status.inactive')
+                        }}
+                      </span>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+            <tbody v-if="dekorGroups.length === 0">
+              <tr>
+                <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="catalogFiltered">
                       <h3>{{ $t('catalog.empty.filteredTitle') }}</h3>

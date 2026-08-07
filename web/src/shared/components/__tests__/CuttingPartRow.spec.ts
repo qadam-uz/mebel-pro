@@ -24,26 +24,24 @@ function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   }
 }
 
-function seedPanel(grain_direction: boolean) {
+function seedPanel(tolali: boolean) {
   const cutting = useCuttingStore()
   cutting.panelOptions = [
     {
       id: 'panel-1',
-      kind: 'panel',
+      tur: 'ldsp',
       manufacturer_id: 'maker-1',
       manufacturer_name: 'Maker',
-      type: 'dsp',
-      name: 'Oak',
-      thickness_mm: '18',
-      color: 'Oak',
-      decor_code: null,
-      panel_length_mm: 600,
-      panel_width_mm: 400,
-      grain_direction,
-      edge_width_mm: null,
+      kod: null,
+      nomi: 'Oak',
+      tolali,
       image_file_id: null,
-      branch_carried: true,
-      price_tiyin: null,
+      qalinlik_mm: '18',
+      uzunlik_mm: 600,
+      eni_mm: 400,
+      kromka_eni_mm: null,
+      price_tiyin: 0,
+      price_unset: false,
       display_unit: 'sheet',
     },
   ]
@@ -58,8 +56,6 @@ function mountRow(rowPart: CuttingPart, edgeRegistry: EdgeRegistryEntry[] = []) 
       sizeError: null,
       materialMissing: false,
       optimizeError: null,
-      notCarried: [],
-      preferredBranchName: 'Yunusobod',
       edgeRegistry,
     },
     global: {

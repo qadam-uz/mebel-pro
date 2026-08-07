@@ -77,8 +77,9 @@ const totalEdge = computed(() =>
 // Resolves a part/line material id to its full canonical display label from
 // the chosen result's snapshot — the only place that identity is carried on
 // the wire. Same shape everywhere a material/edge is shown (see
-// snapshotMaterialLabel's own doc): `{type} {manufacturer} {decor or name}` ·
-// `{color}` · `{L}×{W}×{T} mm`.
+// snapshotMaterialLabel's own doc): `{tur} {manufacturer} {kod or nomi}` ·
+// `{nomi}` · `{L}×{W}×{T} mm`. The snapshot may be written in either the new or
+// the pre-reshape vocabulary; the composer reads both.
 function resolveMaterialName(materialId: string): string {
   const snapshot = chosenResult.value?.material_snapshots[materialId]
   if (!snapshot) return materialId

@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { ApiError, api } from '@/shared/api/client'
 import { useOrdersStore } from '@/shared/stores/orders'
-import { useWorkshopStore, type StockItem } from '@/shared/stores/workshop'
+import { useWorkshopStore, type BranchMaterial, type StockItem } from '@/shared/stores/workshop'
 
 vi.mock('@/shared/app/authInit', () => ({
   authInit: () => ({ accessToken: 'access-token' }),
@@ -42,9 +42,27 @@ function stockRow(id: string): StockItem {
   return {
     id,
     branch_id: 'branch-1',
-    material_id: `material-${id}`,
-    material: { id: `material-${id}`, name: `Material ${id}` } as StockItem['material'],
-    kind: 'panel',
+    branch_material_id: `bm-${id}`,
+    // Deliberately not cast: `StockItem.material` is a BranchMaterial now, and a
+    // real minimal object is what makes the fixture fail if the shape drifts.
+    material: {
+      id: `bm-${id}`,
+      branch_id: 'branch-1',
+      dekor_id: `dekor-${id}`,
+      dekor: {} as BranchMaterial['dekor'],
+      qalinlik_mm: '18',
+      uzunlik_mm: 2800,
+      eni_mm: 2070,
+      kromka_eni_mm: null,
+      price_tiyin: 0,
+      price_unset: true,
+      min_stock: 2,
+      status: 'active',
+      label: `LDSP Egger ${id}`,
+      created_at: '2026-07-26T09:00:00Z',
+      updated_at: '2026-07-26T09:00:00Z',
+    },
+    tur: 'ldsp',
     stock_unit: 'sheet',
     display_unit: 'sheet',
     on_hand: 4,

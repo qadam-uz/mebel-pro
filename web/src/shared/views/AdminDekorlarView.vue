@@ -2,22 +2,20 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { buildAdminMaterialWriteRequest, composeMaterialName } from '@/shared/app/adminMaterials'
+import { buildDekorWriteRequest, composeDekorLabel } from '@/shared/app/adminDekorlar'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
+import { DEKOR_TYPES, dekorTurLabel } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
-  positiveDecimal,
-  positiveInteger,
   requiredText,
   type FieldErrors,
 } from '@/shared/app/adminValidation'
 import {
   adminErrorMessage,
   dropdownOption,
-  materialKindLabel,
   materialStatusLabel,
   materialStatusTone,
 } from '@/shared/app/adminUi'
@@ -35,11 +33,10 @@ import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import {
   useAdminStore,
-  type Material,
-  type MaterialFilters,
-  type MaterialKind,
+  type Dekor,
+  type DekorFilters,
+  type DekorType,
   type MaterialStatus,
-  type PanelMaterialType,
 } from '@/shared/stores/admin'
 import { useFilesStore } from '@/shared/stores/files'
 
@@ -50,7 +47,7 @@ const rolePath = useRolePath()
 const modalOpen = ref(false)
 const manufacturerModalOpen = ref(false)
 const uploadError = ref<string | null>(null)
-const statusTarget = ref<{ row: Material; status: MaterialStatus } | null>(null)
+const statusTarget = ref<{ row: Dekor; status: MaterialStatus } | null>(null)
 const formPanel = ref<HTMLElement | null>(null)
 const inlineMfrPanel = ref<HTMLElement | null>(null)
 const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
@@ -68,21 +65,18 @@ const manufacturerError = ref<string | null>(null)
 const imageUploadResetKey = ref(0)
 const search = ref('')
 const statusFilter = ref('all')
-const kindFilter = ref('all')
 const manufacturerFilter = ref<string[]>([])
-const typeFilter = ref<string[]>([])
+const turFilter = ref<string[]>([])
 
+// A dekor is identity only: manufacturer, tur, kod, nomi, tolali, rasm. Thickness,
+// sizes and price belong to the branch row that carries the dekor, so none of them
+// have an input here — that split is the whole point of the catalog reshape.
 const form = reactive({
-  kind: 'panel' as MaterialKind,
   manufacturerId: '',
-  type: 'dsp' as PanelMaterialType,
-  thicknessMm: '18',
-  color: '',
-  decorCode: '',
-  panelLengthMm: '2800',
-  panelWidthMm: '2070',
-  edgeWidthMm: '19',
-  grainDirection: true,
+  tur: 'ldsp' as DekorType,
+  kod: '',
+  nomi: '',
+  tolali: true,
   imageFileId: null as string | null,
 })
 const manufacturerForm = reactive({
@@ -90,59 +84,34 @@ const manufacturerForm = reactive({
   country: '',
   note: '',
 })
-type MaterialField =
-  | 'manufacturerId'
-  | 'thicknessMm'
-  | 'color'
-  | 'type'
-  | 'panelLengthMm'
-  | 'panelWidthMm'
-  | 'edgeWidthMm'
+type DekorField = 'manufacturerId' | 'tur' | 'kod' | 'nomi'
 type InlineManufacturerField = 'name'
-const materialFieldErrors = reactive<FieldErrors<MaterialField>>({})
+const dekorFieldErrors = reactive<FieldErrors<DekorField>>({})
 const inlineManufacturerFieldErrors = reactive<FieldErrors<InlineManufacturerField>>({})
-const materialFieldIds: Record<MaterialField, string> = {
-  manufacturerId: 'mat-manufacturer',
-  thicknessMm: 'mat-thick',
-  color: 'mat-color',
-  type: 'mat-type',
-  panelLengthMm: 'mat-len',
-  panelWidthMm: 'mat-wid',
-  edgeWidthMm: 'mat-edge-width',
+const dekorFieldIds: Record<DekorField, string> = {
+  manufacturerId: 'dek-manufacturer',
+  tur: 'dek-tur',
+  kod: 'dek-kod',
+  nomi: 'dek-nomi',
 }
-const materialFieldOrder: MaterialField[] = [
-  'manufacturerId',
-  'thicknessMm',
-  'color',
-  'type',
-  'panelLengthMm',
-  'panelWidthMm',
-  'edgeWidthMm',
-]
-const materialApiFieldMap: Partial<Record<string, MaterialField>> = {
+const dekorFieldOrder: DekorField[] = ['manufacturerId', 'tur', 'kod', 'nomi']
+const dekorApiFieldMap: Partial<Record<string, DekorField>> = {
   manufacturer_not_found: 'manufacturerId',
-  material_color_required: 'color',
-  invalid_thickness: 'thicknessMm',
-  invalid_edge_width: 'edgeWidthMm',
-  invalid_panel_material: 'type',
-  invalid_panel_size: 'panelLengthMm',
-  invalid_grain: 'type',
+  dekor_nomi_required: 'nomi',
+  // The (manufacturer, tur, kod) uniqueness conflict — anchor it on the code,
+  // which is the field the operator changes to resolve it.
+  dekor_exists: 'kod',
 }
-const materialApiLocMap: Partial<Record<string, MaterialField>> = {
+const dekorApiLocMap: Partial<Record<string, DekorField>> = {
   'body.manufacturer_id': 'manufacturerId',
-  'body.thickness_mm': 'thicknessMm',
-  'body.color': 'color',
-  'body.type': 'type',
-  'body.panel_length_mm': 'panelLengthMm',
-  'body.panel_width_mm': 'panelWidthMm',
-  'body.edge_width_mm': 'edgeWidthMm',
+  'body.tur': 'tur',
+  'body.kod': 'kod',
+  'body.nomi': 'nomi',
 }
 
-const kindOptions = [
-  dropdownOption('all', 'Hammasi', 'list va kromka'),
-  dropdownOption('panel', 'List', 'plita materiallari'),
-  dropdownOption('edge', 'Kromka', 'kromka'),
-]
+const turOptions = computed<ChoiceOption[]>(() =>
+  DEKOR_TYPES.map((tur) => ({ value: tur, label: dekorTurLabel(tur) })),
+)
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
   dropdownOption('active', 'Faol', "filial tanlovida ko'rinadi"),
@@ -164,18 +133,6 @@ const manufacturerChoiceOptions = computed<ChoiceOption[]>(() =>
       meta: manufacturer.country ?? '',
     })),
 )
-const materialTypeOptions: ChoiceOption[] = [
-  { value: 'dsp', label: 'DSP' },
-  { value: 'mdf', label: 'MDF' },
-  { value: 'plywood', label: 'Plywood' },
-  { value: 'natural_wood', label: "Tabiiy yog'och" },
-  { value: 'other', label: 'Boshqa' },
-]
-const materialTypeFilterOptions = computed<ChoiceOption[]>(() => materialTypeOptions)
-const materialKindOptions: ChoiceOption[] = [
-  { value: 'panel', label: 'List', meta: 'plita materiali' },
-  { value: 'edge', label: 'Kromka', meta: 'kromka' },
-]
 
 // Filtering + paging are server-side (the catalog holds hundreds of rows). Every
 // filter change reloads from offset 0; "load more" appends the next page. Search
@@ -183,107 +140,103 @@ const materialKindOptions: ChoiceOption[] = [
 const hasActiveFilters = computed(
   () =>
     search.value.trim() !== '' ||
-    kindFilter.value !== 'all' ||
+    turFilter.value.length > 0 ||
     statusFilter.value !== 'all' ||
-    manufacturerFilter.value.length > 0 ||
-    typeFilter.value.length > 0,
+    manufacturerFilter.value.length > 0,
 )
 
-function currentFilters(): MaterialFilters {
+function currentFilters(): DekorFilters {
   return {
     search: search.value.trim() || undefined,
-    kind: kindFilter.value === 'all' ? undefined : (kindFilter.value as MaterialKind),
+    turlar: turFilter.value.length ? (turFilter.value as DekorType[]) : undefined,
     status: statusFilter.value === 'all' ? undefined : (statusFilter.value as MaterialStatus),
     manufacturerIds: manufacturerFilter.value.length ? manufacturerFilter.value : undefined,
-    materialTypes: typeFilter.value.length ? (typeFilter.value as PanelMaterialType[]) : undefined,
   }
 }
 
-function reloadMaterials() {
-  void admin.loadMaterials(currentFilters())
+function reloadDekorlar() {
+  void admin.loadDekorlar(currentFilters())
 }
 
-function loadMoreMaterials() {
-  void admin.loadMaterials({ ...currentFilters(), offset: admin.materials.length })
+function loadMoreDekorlar() {
+  void admin.loadDekorlar({ ...currentFilters(), offset: admin.dekorlar.length })
 }
 
 let searchTimer: number | undefined
 watch(search, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(reloadMaterials, SEARCH_DEBOUNCE_MS)
+  searchTimer = window.setTimeout(reloadDekorlar, SEARCH_DEBOUNCE_MS)
 })
-watch([kindFilter, statusFilter, manufacturerFilter, typeFilter], reloadMaterials)
+watch([turFilter, statusFilter, manufacturerFilter], reloadDekorlar)
 
-// AB-22: panels must have length >= width (the cut grain/orientation assumption).
-const dimensionError = computed(
-  () =>
-    form.kind === 'panel' &&
-    Number(form.panelLengthMm) > 0 &&
-    Number(form.panelWidthMm) > 0 &&
-    Number(form.panelLengthMm) < Number(form.panelWidthMm),
-)
 const selectedManufacturerName = computed(
   () => admin.manufacturers.find((manufacturer) => manufacturer.id === form.manufacturerId)?.name,
 )
-const materialNamePreview = computed(() =>
-  composeMaterialName(form, selectedManufacturerName.value),
+const dekorLabelPreview = computed(() => composeDekorLabel(form, selectedManufacturerName.value))
+const dekorImageTitle = computed(() => dekorLabelPreview.value || 'Dekor rasmi')
+const dekorImageMeta = computed(() =>
+  [dekorTurLabel(form.tur), selectedManufacturerName.value].filter(Boolean).join(' · '),
 )
-const materialImageTitle = computed(() => materialNamePreview.value || 'Material rasmi')
-const materialImageMeta = computed(() =>
-  [
-    materialKindLabel(form.kind),
-    selectedManufacturerName.value,
-    form.thicknessMm ? `${form.thicknessMm} mm` : null,
-  ]
-    .filter(Boolean)
-    .join(' · '),
+// The swatch is what the operator recognises the dekor by before the photo
+// uploads, so the preview card shows the same one the table will.
+const previewSwatchClass = computed(() =>
+  materialSwatchClass({ id: editingId.value ?? 'preview', nomi: form.nomi, kod: form.kod || null }),
 )
+
+/**
+ * Warns on the (manufacturer, tur, kod) triple the backend enforces — and, for a
+ * dekor with no code, on the (manufacturer, tur, nomi) triple the second partial
+ * index covers. It is a WARNING, not a gate: the check can only see the page
+ * currently loaded, so a real duplicate three pages down would pass silently. The
+ * server has the final say and returns `dekor_exists`.
+ */
+const duplicateWarning = computed(() => {
+  if (!form.manufacturerId) return null
+  const kod = form.kod.trim().toLowerCase()
+  const nomi = form.nomi.trim().toLowerCase()
+  if (!kod && !nomi) return null
+  const clash = admin.dekorlar.find((row) => {
+    if (row.id === editingId.value) return false
+    if (row.manufacturer_id !== form.manufacturerId || row.tur !== form.tur) return false
+    return kod ? (row.kod ?? '').toLowerCase() === kod : !row.kod && row.nomi.toLowerCase() === nomi
+  })
+  return clash ? clash.label : null
+})
 
 function clearFilters() {
   search.value = ''
   statusFilter.value = 'all'
-  kindFilter.value = 'all'
+  turFilter.value = []
   manufacturerFilter.value = []
-  typeFilter.value = []
 }
 
 function openCreate() {
   editingId.value = null
-  form.kind = 'panel'
   form.manufacturerId = admin.manufacturers.find((row) => row.status === 'active')?.id ?? ''
-  form.type = 'dsp'
-  form.thicknessMm = '18'
-  form.color = ''
-  form.decorCode = ''
-  form.panelLengthMm = '2800'
-  form.panelWidthMm = '2070'
-  form.edgeWidthMm = '19'
-  form.grainDirection = true
+  form.tur = 'ldsp'
+  form.kod = ''
+  form.nomi = ''
+  form.tolali = true
   form.imageFileId = null
   saveError.value = null
   uploadError.value = null
   imageUploadResetKey.value += 1
-  clearFieldErrors(materialFieldErrors)
+  clearFieldErrors(dekorFieldErrors)
   modalOpen.value = true
 }
 
-function openEdit(material: Material) {
-  editingId.value = material.id
-  form.kind = material.kind
-  form.manufacturerId = material.manufacturer_id
-  form.type = material.type ?? 'dsp'
-  form.thicknessMm = material.thickness_mm
-  form.color = material.color
-  form.decorCode = material.decor_code ?? ''
-  form.panelLengthMm = String(material.panel_length_mm ?? 2800)
-  form.panelWidthMm = String(material.panel_width_mm ?? 2070)
-  form.edgeWidthMm = String(material.edge_width_mm ?? 19)
-  form.grainDirection = material.grain_direction ?? false
-  form.imageFileId = material.image_file_id
+function openEdit(dekor: Dekor) {
+  editingId.value = dekor.id
+  form.manufacturerId = dekor.manufacturer_id
+  form.tur = dekor.tur
+  form.kod = dekor.kod ?? ''
+  form.nomi = dekor.nomi
+  form.tolali = dekor.tolali
+  form.imageFileId = dekor.image_file_id
   saveError.value = null
   uploadError.value = null
   imageUploadResetKey.value += 1
-  clearFieldErrors(materialFieldErrors)
+  clearFieldErrors(dekorFieldErrors)
   modalOpen.value = true
 }
 
@@ -293,18 +246,7 @@ function openInlineManufacturer() {
   manufacturerModalOpen.value = true
 }
 
-function materialSpec(material: Material) {
-  if (material.kind === 'panel') {
-    return `${materialTypeLabel(material.type)} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
-  }
-  return `kromka · ${material.thickness_mm} x ${material.edge_width_mm ?? '-'} mm`
-}
-
-function materialTypeLabel(type: PanelMaterialType | null | undefined) {
-  return materialTypeOptions.find((option) => option.value === type)?.label ?? 'List'
-}
-
-async function onMaterialFile(file: File) {
+async function onDekorFile(file: File) {
   uploadError.value = null
   try {
     const uploaded = await files.upload(file)
@@ -330,47 +272,39 @@ function removeImage() {
   imageUploadResetKey.value += 1
 }
 
-function validateMaterialForm() {
-  clearFieldErrors(materialFieldErrors)
-  const set = (field: MaterialField, error: string | null) => {
-    if (error) materialFieldErrors[field] = error
+// `tur` renders as chips, not a <FormSelect>, so its required-ness cannot ride on
+// the control's own `required` attribute — it is checked here, at form level.
+function validateDekorForm() {
+  clearFieldErrors(dekorFieldErrors)
+  const set = (field: DekorField, error: string | null) => {
+    if (error) dekorFieldErrors[field] = error
   }
   set('manufacturerId', requiredText(form.manufacturerId, 'Ishlab chiqaruvchini tanlang.'))
-  set('thicknessMm', requiredText(form.thicknessMm) ?? positiveDecimal(form.thicknessMm))
-  set('color', requiredText(form.color))
-  if (form.kind === 'panel') {
-    set('type', requiredText(form.type))
-    set('panelLengthMm', requiredText(form.panelLengthMm) ?? positiveInteger(form.panelLengthMm))
-    set('panelWidthMm', requiredText(form.panelWidthMm) ?? positiveInteger(form.panelWidthMm))
-    if (!materialFieldErrors.panelLengthMm && dimensionError.value) {
-      materialFieldErrors.panelLengthMm = "Uzunlik kenglikdan kichik bo'lmasligi kerak."
-    }
-  } else {
-    set('edgeWidthMm', requiredText(form.edgeWidthMm) ?? positiveInteger(form.edgeWidthMm))
-  }
-  const hasErrors = materialFieldOrder.some((field) => Boolean(materialFieldErrors[field]))
-  if (hasErrors) focusFirstFieldError(materialFieldErrors, materialFieldOrder, materialFieldIds)
+  set('tur', requiredText(form.tur, 'Turni tanlang.'))
+  set('nomi', requiredText(form.nomi))
+  const hasErrors = dekorFieldOrder.some((field) => Boolean(dekorFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(dekorFieldErrors, dekorFieldOrder, dekorFieldIds)
   return !hasErrors
 }
 
 async function save() {
-  if (!validateMaterialForm()) return
+  if (!validateDekorForm()) return
   saving.value = true
   saveError.value = null
   try {
-    const payload = buildAdminMaterialWriteRequest(form)
-    if (editingId.value) await admin.updateMaterial(editingId.value, payload)
-    else await admin.createMaterial(payload)
+    const payload = buildDekorWriteRequest(form)
+    if (editingId.value) await admin.updateDekor(editingId.value, payload)
+    else await admin.createDekor(payload)
     modalOpen.value = false
-    toast.success(editingId.value ? 'Material yangilandi' : "Material qo'shildi")
+    toast.success(editingId.value ? 'Dekor yangilandi' : "Dekor qo'shildi")
   } catch (error) {
-    const fields = fieldErrorsFromApi<MaterialField>(error, materialApiFieldMap, materialApiLocMap)
+    const fields = fieldErrorsFromApi<DekorField>(error, dekorApiFieldMap, dekorApiLocMap)
     if (Object.keys(fields).length > 0) {
-      Object.assign(materialFieldErrors, fields)
-      focusFirstFieldError(materialFieldErrors, materialFieldOrder, materialFieldIds)
+      Object.assign(dekorFieldErrors, fields)
+      focusFirstFieldError(dekorFieldErrors, dekorFieldOrder, dekorFieldIds)
     } else {
-      saveError.value = 'material_save_failed'
-      toast.danger('Material saqlanmadi')
+      saveError.value = 'dekor_save_failed'
+      toast.danger('Dekor saqlanmadi')
     }
   } finally {
     saving.value = false
@@ -416,7 +350,7 @@ async function saveInlineManufacturer() {
   }
 }
 
-function askStatus(row: Material, status: MaterialStatus) {
+function askStatus(row: Dekor, status: MaterialStatus) {
   statusTarget.value = { row, status }
 }
 
@@ -426,17 +360,17 @@ async function confirmStatus() {
   statusTarget.value = null
   actionId.value = target.row.id
   try {
-    await admin.setMaterialStatus(target.row.id, target.status)
+    await admin.setDekorStatus(target.row.id, target.status)
     toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
   } catch (error) {
-    toast.danger(adminErrorMessage(apiErrorCode(error), "Material holatini o'zgartirib bo'lmadi."))
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Dekor holatini o'zgartirib bo'lmadi."))
   } finally {
     actionId.value = null
   }
 }
 
 onMounted(async () => {
-  await Promise.all([admin.loadManufacturers(), admin.loadMaterials()])
+  await Promise.all([admin.loadManufacturers(), admin.loadDekorlar()])
 })
 </script>
 
@@ -444,35 +378,27 @@ onMounted(async () => {
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Material katalogi</h1>
+        <h1>Dekorlar</h1>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">
-        + Yangi material
-      </button>
+      <button type="button" class="admin-primary-action" @click="openCreate">+ Yangi dekor</button>
     </div>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidirish</span>
-        <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
+        <input v-model="search" placeholder="Dekor nomi yoki kodi" />
       </label>
-      <FormSelect
-        v-model="kindFilter"
-        class="admin-filter-select"
+      <MultiSelectFilter
+        v-model="turFilter"
         label="Tur"
-        :options="kindOptions"
+        :options="turOptions"
+        empty-label="Hammasi"
+        selected-label="tanlangan"
       />
       <MultiSelectFilter
         v-model="manufacturerFilter"
         label="Ishlab chiqaruvchilar"
         :options="manufacturerFilterOptions"
-        empty-label="Hammasi"
-        selected-label="tanlangan"
-      />
-      <MultiSelectFilter
-        v-model="typeFilter"
-        label="List turlari"
-        :options="materialTypeFilterOptions"
         empty-label="Hammasi"
         selected-label="tanlangan"
       />
@@ -485,7 +411,7 @@ onMounted(async () => {
     </div>
 
     <section
-      v-if="admin.materialsLoading && admin.materials.length === 0"
+      v-if="admin.dekorlarLoading && admin.dekorlar.length === 0"
       class="admin-card p-5"
       aria-live="polite"
     >
@@ -495,20 +421,20 @@ onMounted(async () => {
     </section>
 
     <AdminErrorState
-      v-else-if="admin.materialsError"
-      :code="admin.materialsError"
-      :trace-id="admin.materialsTraceId"
-      title="Materiallar yuklanmadi"
-      @retry="reloadMaterials()"
+      v-else-if="admin.dekorlarError"
+      :code="admin.dekorlarError"
+      :trace-id="admin.dekorlarTraceId"
+      title="Dekorlar yuklanmadi"
+      @retry="reloadDekorlar()"
     />
 
-    <section v-else-if="admin.materials.length === 0" class="admin-empty">
+    <section v-else-if="admin.dekorlar.length === 0" class="admin-empty">
       <template v-if="!hasActiveFilters">
-        <h3>Material yo'q</h3>
-        <p>Avval ishlab chiqaruvchi qo'shing, keyin list yoki kromka material yarating.</p>
+        <h3>Dekor yo'q</h3>
+        <p>Avval ishlab chiqaruvchi qo'shing, keyin dekor yarating.</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2">
           <button type="button" class="admin-primary-action" @click="openCreate">
-            + Yangi material
+            + Yangi dekor
           </button>
           <RouterLink
             :to="rolePath('/admin/catalog/manufacturers')"
@@ -519,7 +445,7 @@ onMounted(async () => {
         </div>
       </template>
       <template v-else>
-        <h3>Filtrlarga mos material yo'q</h3>
+        <h3>Filtrlarga mos dekor yo'q</h3>
         <p>Filtrlarni o'zgartiring yoki tozalang.</p>
         <button type="button" class="mp-button mp-button-outline mt-3" @click="clearFilters">
           Filtrlarni tozalash
@@ -533,90 +459,84 @@ onMounted(async () => {
           <thead>
             <tr>
               <th><span class="sr-only">Rasm</span></th>
-              <th>Material</th>
+              <th>Dekor</th>
               <th>Ishlab chiqaruvchi</th>
               <th>Tur</th>
-              <th>Turi / o'lcham</th>
-              <th>Qalinligi</th>
-              <th>List o'lchami</th>
               <th>Tekstura</th>
+              <th class="admin-right">Filiallar</th>
               <th>Holat</th>
-              <th>Ustaxonalar</th>
               <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="material in admin.materials" :key="material.id">
+            <tr v-for="dekor in admin.dekorlar" :key="dekor.id">
               <td>
                 <div class="admin-material-thumb">
                   <span
                     class="admin-material-thumb-swatch sw"
-                    :class="materialSwatchClass(material)"
+                    :class="materialSwatchClass(dekor)"
                     aria-hidden="true"
                   ></span>
                   <span class="admin-material-thumb-mark" aria-hidden="true">
-                    {{ material.kind === 'panel' ? 'L' : 'K' }}
+                    {{ dekor.tur === 'kromka' ? 'K' : 'L' }}
                   </span>
                   <AuthFileImage
-                    v-if="material.image_file_id"
-                    :file-id="material.image_file_id"
-                    :alt="material.name"
+                    v-if="dekor.image_file_id"
+                    :file-id="dekor.image_file_id"
+                    :alt="dekor.label"
                     class="admin-material-thumb-img"
                   />
                 </div>
               </td>
               <td class="nm">
-                {{ material.name }}
-                <small>{{ material.color }} . {{ material.decor_code ?? "dekor yo'q" }}</small>
+                {{ dekor.nomi }}
+                <small>{{ dekor.kod ?? "kod yo'q" }}</small>
               </td>
-              <td>{{ material.manufacturer_name }}</td>
+              <td>{{ dekor.manufacturer_name }}</td>
               <td>
                 <span
                   class="admin-pill"
-                  :class="material.kind === 'panel' ? 'admin-pill-success' : 'admin-pill-info'"
+                  :class="dekor.tur === 'kromka' ? 'admin-pill-info' : 'admin-pill-success'"
                 >
-                  {{ materialKindLabel(material.kind) }}
+                  {{ dekorTurLabel(dekor.tur) }}
                 </span>
               </td>
-              <td>{{ materialSpec(material) }}</td>
-              <td class="admin-mono">{{ material.thickness_mm }} mm</td>
-              <td class="admin-mono">
-                <template v-if="material.kind === 'panel'">
-                  {{ material.panel_length_mm }} x {{ material.panel_width_mm }}
-                </template>
-                <template v-else>-</template>
-              </td>
-              <td>{{ material.grain_direction ? 'bor' : '-' }}</td>
+              <td>{{ dekor.tolali ? 'Bor' : "Yo'q" }}</td>
+              <td class="admin-right admin-mono">{{ dekor.branch_usage_count }}</td>
               <td>
-                <span class="admin-pill" :class="materialStatusTone(material.status)">
-                  {{ materialStatusLabel(material.status) }}
+                <span class="admin-pill" :class="materialStatusTone(dekor.holat)">
+                  {{ materialStatusLabel(dekor.holat) }}
                 </span>
               </td>
-              <td class="admin-mono">{{ material.branch_usage_count }}</td>
               <td class="admin-right">
-                <div class="flex justify-end gap-2">
+                <div class="flex flex-wrap justify-end gap-2">
+                  <RouterLink
+                    :to="rolePath(`/admin/catalog/dekorlar/${dekor.id}`)"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${dekor.label} tafsilotlarini ochish`"
+                  >
+                    Tafsilotlar
+                  </RouterLink>
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                    :aria-label="`${material.name} materialini tahrirlash`"
-                    @click="openEdit(material)"
+                    :aria-label="`${dekor.label} dekorini tahrirlash`"
+                    @click="openEdit(dekor)"
                   >
                     Tahrirlash
                   </button>
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                    :disabled="actionId === material.id"
+                    :disabled="actionId === dekor.id"
                     :aria-label="
-                      material.status === 'active'
-                        ? `${material.name} materialini faol emas qilish`
-                        : `${material.name} materialini faollashtirish`
+                      dekor.holat === 'active'
+                        ? `${dekor.label} dekorini faol emas qilish`
+                        : `${dekor.label} dekorini faollashtirish`
                     "
-                    @click="
-                      askStatus(material, material.status === 'active' ? 'inactive' : 'active')
-                    "
+                    @click="askStatus(dekor, dekor.holat === 'active' ? 'inactive' : 'active')"
                   >
-                    {{ material.status === 'active' ? 'Faol emas qilish' : 'Faollashtirish' }}
+                    {{ dekor.holat === 'active' ? 'Faol emas qilish' : 'Faollashtirish' }}
                   </button>
                 </div>
               </td>
@@ -626,14 +546,14 @@ onMounted(async () => {
       </div>
     </section>
 
-    <div v-if="admin.materialsHasMore" class="mt-4 flex justify-center">
+    <div v-if="admin.dekorlarHasMore" class="mt-4 flex justify-center">
       <button
         type="button"
         class="mp-button mp-button-outline"
-        :disabled="admin.materialsLoading"
-        @click="loadMoreMaterials"
+        :disabled="admin.dekorlarLoading"
+        @click="loadMoreDekorlar"
       >
-        {{ admin.materialsLoading ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
+        {{ admin.dekorlarLoading ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
       </button>
     </div>
 
@@ -644,12 +564,12 @@ onMounted(async () => {
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="material-title"
+        aria-labelledby="dekor-title"
         tabindex="-1"
         @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="material-title">{{ editingId ? 'Material tahrirlash' : 'Yangi material' }}</h3>
+          <h3 id="dekor-title">{{ editingId ? 'Dekor tahrirlash' : 'Yangi dekor' }}</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -662,23 +582,14 @@ onMounted(async () => {
         <form novalidate @submit.prevent="save">
           <div class="admin-modal-b">
             <div class="admin-form-grid three">
-              <FormSelect
-                id="mat-kind"
-                v-model="form.kind"
-                label="Tur"
-                :options="materialKindOptions"
-                class="admin-full"
-                :disabled="!!editingId"
-                required
-              />
               <div class="admin-full grid gap-2 md:grid-cols-[1fr_auto]">
                 <FormSelect
-                  id="mat-manufacturer"
+                  id="dek-manufacturer"
                   v-model="form.manufacturerId"
                   label="Ishlab chiqaruvchi"
                   :options="manufacturerChoiceOptions"
                   placeholder="Ishlab chiqaruvchini tanlang"
-                  :error="materialFieldErrors.manufacturerId"
+                  :error="dekorFieldErrors.manufacturerId"
                   required
                 />
                 <button
@@ -689,150 +600,129 @@ onMounted(async () => {
                   + Yangi ishlab chiqaruvchi
                 </button>
               </div>
+
+              <!-- `tur` is a chip group, not a <FormSelect>: seven values the
+                   operator compares side by side, and the choice drives which
+                   formats a branch can register later. Plain toggle buttons —
+                   Tab reaches each one — rather than role="radio", which would
+                   promise arrow-key roving this does not implement. -->
               <div class="admin-field admin-full">
-                <span>Nomi (avtomatik)</span>
+                <span id="dek-tur-label">Tur</span>
                 <div
-                  class="rounded-md border border-hairline bg-sunk px-3 py-2 text-sm font-bold text-ink"
+                  id="dek-tur"
+                  class="flex flex-wrap gap-2"
+                  role="group"
+                  aria-labelledby="dek-tur-label"
+                  tabindex="-1"
                 >
-                  {{ materialNamePreview }}
+                  <button
+                    v-for="option in turOptions"
+                    :key="option.value"
+                    type="button"
+                    class="mp-filter-chip"
+                    :class="
+                      form.tur === option.value
+                        ? 'border-accent bg-accent-soft text-accent'
+                        : undefined
+                    "
+                    :aria-pressed="form.tur === option.value"
+                    @click="form.tur = option.value as DekorType"
+                  >
+                    <span class="mp-filter-chip-dot" aria-hidden="true"></span>
+                    {{ option.label }}
+                  </button>
+                </div>
+                <span v-if="dekorFieldErrors.tur" class="admin-field-error" role="alert">
+                  {{ dekorFieldErrors.tur }}
+                </span>
+              </div>
+
+              <label class="admin-field" for="dek-kod">
+                <span>Kod</span>
+                <input
+                  id="dek-kod"
+                  v-model="form.kod"
+                  placeholder="H1334 ST9"
+                  :aria-invalid="!!dekorFieldErrors.kod"
+                  aria-describedby="dek-kod-error"
+                />
+                <span
+                  v-if="dekorFieldErrors.kod"
+                  id="dek-kod-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ dekorFieldErrors.kod }}
+                </span>
+              </label>
+
+              <label class="admin-field" for="dek-nomi">
+                <span>Nomi</span>
+                <input
+                  id="dek-nomi"
+                  v-model="form.nomi"
+                  required
+                  placeholder="Dub Sonoma"
+                  :aria-invalid="!!dekorFieldErrors.nomi"
+                  aria-describedby="dek-nomi-error"
+                />
+                <span
+                  v-if="dekorFieldErrors.nomi"
+                  id="dek-nomi-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ dekorFieldErrors.nomi }}
+                </span>
+              </label>
+
+              <label
+                class="flex min-h-11 items-center gap-3 self-end rounded-md border border-hairline-strong px-3 text-sm font-bold"
+              >
+                <input v-model="form.tolali" type="checkbox" class="size-4 accent-accent" />
+                Tekstura yo'nalishi bor
+              </label>
+
+              <div class="admin-field admin-full">
+                <span>Dekor kartasi (avtomatik)</span>
+                <div
+                  class="flex items-center gap-3 rounded-md border border-hairline bg-sunk px-3 py-2"
+                >
+                  <span class="sw" :class="previewSwatchClass" aria-hidden="true"></span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-bold text-ink">
+                      {{ dekorLabelPreview }}
+                    </span>
+                    <span class="block text-xs font-bold text-ink-soft">
+                      {{
+                        form.tolali
+                          ? $t('cutting.material.grained')
+                          : $t('cutting.material.grainless')
+                      }}
+                    </span>
+                  </span>
                 </div>
               </div>
-              <FormSelect
-                v-if="form.kind === 'panel'"
-                id="mat-type"
-                v-model="form.type"
-                label="List turi"
-                :options="materialTypeOptions"
-                :error="materialFieldErrors.type"
-                required
-              />
-              <label class="admin-field" for="mat-thick">
-                <span>Qalinligi, mm</span>
-                <input
-                  id="mat-thick"
-                  v-model="form.thicknessMm"
-                  inputmode="decimal"
-                  required
-                  :aria-invalid="!!materialFieldErrors.thicknessMm"
-                  aria-describedby="mat-thick-error"
-                />
-                <span
-                  v-if="materialFieldErrors.thicknessMm"
-                  id="mat-thick-error"
-                  class="admin-field-error"
-                  role="alert"
-                >
-                  {{ materialFieldErrors.thicknessMm }}
-                </span>
-              </label>
-              <label v-if="form.kind === 'edge'" class="admin-field" for="mat-edge-width">
-                <span>Kenglik (mm)</span>
-                <input
-                  id="mat-edge-width"
-                  v-model="form.edgeWidthMm"
-                  inputmode="numeric"
-                  required
-                  :aria-invalid="!!materialFieldErrors.edgeWidthMm"
-                  aria-describedby="mat-edge-width-error"
-                />
-                <span
-                  v-if="materialFieldErrors.edgeWidthMm"
-                  id="mat-edge-width-error"
-                  class="admin-field-error"
-                  role="alert"
-                >
-                  {{ materialFieldErrors.edgeWidthMm }}
-                </span>
-              </label>
-              <label class="admin-field" for="mat-color">
-                <span>Rang / decor</span>
-                <input
-                  id="mat-color"
-                  v-model="form.color"
-                  required
-                  :aria-invalid="!!materialFieldErrors.color"
-                  aria-describedby="mat-color-error"
-                />
-                <span
-                  v-if="materialFieldErrors.color"
-                  id="mat-color-error"
-                  class="admin-field-error"
-                  role="alert"
-                >
-                  {{ materialFieldErrors.color }}
-                </span>
-              </label>
-              <label class="admin-field" for="mat-decor">
-                <span>Decor kodi</span>
-                <input id="mat-decor" v-model="form.decorCode" />
-              </label>
-              <template v-if="form.kind === 'panel'">
-                <label class="admin-field" for="mat-len">
-                  <span>Uzunlik, mm</span>
-                  <input
-                    id="mat-len"
-                    v-model="form.panelLengthMm"
-                    inputmode="numeric"
-                    required
-                    :aria-invalid="!!materialFieldErrors.panelLengthMm"
-                    aria-describedby="mat-len-error"
-                  />
-                  <span
-                    v-if="materialFieldErrors.panelLengthMm"
-                    id="mat-len-error"
-                    class="admin-field-error"
-                    role="alert"
-                  >
-                    {{ materialFieldErrors.panelLengthMm }}
-                  </span>
-                </label>
-                <label class="admin-field" for="mat-wid">
-                  <span>Kenglik, mm</span>
-                  <input
-                    id="mat-wid"
-                    v-model="form.panelWidthMm"
-                    inputmode="numeric"
-                    required
-                    :aria-invalid="!!materialFieldErrors.panelWidthMm"
-                    aria-describedby="mat-wid-error"
-                  />
-                  <span
-                    v-if="materialFieldErrors.panelWidthMm"
-                    id="mat-wid-error"
-                    class="admin-field-error"
-                    role="alert"
-                  >
-                    {{ materialFieldErrors.panelWidthMm }}
-                  </span>
-                </label>
-                <p
-                  v-if="dimensionError"
-                  class="admin-full text-xs font-bold text-danger"
-                  role="alert"
-                >
-                  Uzunlik kenglikdan kichik bo'lmasligi kerak.
-                </p>
-                <label
-                  class="flex min-h-11 items-center gap-3 self-end rounded-md border border-hairline-strong px-3 text-sm font-bold"
-                >
-                  <input
-                    v-model="form.grainDirection"
-                    type="checkbox"
-                    class="size-4 accent-accent"
-                  />
-                  Tekstura yo'nalishi bor
-                </label>
-              </template>
+
+              <p
+                v-if="duplicateWarning"
+                class="admin-full rounded-md bg-warning-soft px-3 py-2 text-xs font-bold text-warning"
+                role="status"
+              >
+                Shu ishlab chiqaruvchida bir xil tur va kod bilan dekor bor:
+                {{ duplicateWarning }}. Saqlash rad etilishi mumkin.
+              </p>
+
               <ImageUploadField
-                id="mat-image"
+                id="dek-image"
                 :file-id="form.imageFileId"
-                :alt="materialImageTitle"
-                :title="materialImageTitle"
-                :meta="materialImageMeta"
+                :alt="dekorImageTitle"
+                :title="dekorImageTitle"
+                :meta="dekorImageMeta"
                 :uploading="files.uploading"
                 :error="uploadError"
                 :reset-key="imageUploadResetKey"
-                @select="onMaterialFile"
+                @select="onDekorFile"
                 @remove="removeImage"
               />
             </div>
@@ -840,7 +730,7 @@ onMounted(async () => {
               v-if="saveError"
               class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Material saqlanmadi.
+              Dekor saqlanmadi.
             </p>
           </div>
           <div class="admin-modal-f">
@@ -850,7 +740,7 @@ onMounted(async () => {
             <button
               type="submit"
               class="mp-button mp-button-primary"
-              :disabled="saving || files.uploading || dimensionError"
+              :disabled="saving || files.uploading"
             >
               {{ files.uploading ? 'Rasm yuklanmoqda' : saving ? 'Saqlanmoqda' : 'Saqlash' }}
             </button>
@@ -947,8 +837,8 @@ onMounted(async () => {
       :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
       :message="
         statusTarget?.status === 'inactive'
-          ? `${statusTarget?.row.name} faol emas qilinadi — uni filiallarning yangi tanlovlaridan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
-          : `${statusTarget?.row.name} faollashtiriladi va filial tanlovida ko'rinadi.`
+          ? `${statusTarget?.row.label} faol emas qilinadi — uni filiallarning yangi tanlovlaridan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.label} faollashtiriladi va filial tanlovida ko'rinadi.`
       "
       confirm-label="Tasdiqlash"
       cancel-label="Bekor qilish"

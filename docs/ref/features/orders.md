@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-08-07
 order: 30
 ---
 
@@ -33,10 +33,11 @@ items, the status history, the production stamps, and a frozen price snapshot. C
 
 Set at creation:
 
-- **Branch** — the client picks one active branch that can fulfil the cutting's material
-  set; branches that don't carry every `shop`-source panel **and every `shop`-source edge
-  material** in the cutting aren't shown. The pick **freezes pricing** against that
-  branch's rates.
+- **Branch** — the draft's branch, carried straight through. A material *is* a branch's
+  format ([`catalog-inventory.md`](catalog-inventory.md)), so the cutting is already bound to
+  one branch by the time it has parts; the order step shows that branch and links back to the
+  editor to change it, rather than offering a second choice. The branch **freezes pricing**
+  against its rates.
 - **Material source — per-item for panels, per-side for edges.** Each part is `shop` (the
   workshop supplies the panel; inventory auto-decrements for it) or `own` (the client
   brings the panel; cutting service only, no stock movement for that panel). Each banded
@@ -317,7 +318,7 @@ current rates.
 |---|---|---|
 | Cutting service | always | the branch's `cutting_rate_tiyin` × the chosen result's total panels — one rate, applied per panel cut (v1's only model) |
 | Panel materials | parts with `material_source = shop` | Σ (the branch's per-panel price × panels attributable to that material's `shop` parts) |
-| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
+| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that tape × the branch's per-metre **raw material** price on that `kromka` branch material) |
 | Edge banding labour | when any `shop` side has banding | total `shop` **consumed metres** of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
 | Discount (chegirma) | when a `manage_orders` user adds one | percent or fixed sum; **subtracted**; capped at the computed subtotal (a discount never makes the price negative); **reason + the user id recorded** (audited) |
 | Surcharge (ustama) | when a `manage_orders` user adds one | percent or fixed sum; **added**; no enforced cap in v1 — the reason + audit are the control; **reason + the user id recorded** (audited) |
@@ -349,9 +350,8 @@ figure — no separate geometric-vs-consumed columns downstream.
 
 **Operational setup gaps fail loudly.** If the branch has no cutting rate set, or has banded
 parts but no edge-banding labour rate set, or doesn't carry an edge material a part uses,
-order creation fails with a clear error and the client picks another branch — the owner must
-fix the branch's pricing or selection
-([`catalog-inventory.md`](catalog-inventory.md)). The relevant error codes:
+order creation fails with a clear error — the owner must fix the branch's rates or attach the
+missing format ([`catalog-inventory.md`](catalog-inventory.md)). The relevant error codes:
 `missing_cutting_rate`, `missing_edge_banding_rate`, `branch_does_not_carry_panel`,
 `branch_does_not_carry_edge`.
 
@@ -572,11 +572,12 @@ actions are danger-styled and name their effect; modal focus is managed.
   "this branch can't take orders right now"; the workshop app flags the branch.
 - **Order has banded parts but the branch's `edge_banding_rate_tiyin` is not set** →
   `missing_edge_banding_rate`; same gating + flag.
-- **Branch doesn't carry a `shop` panel the cutting uses** → `branch_does_not_carry_panel`;
-  the cutting wizard's recovery affordance (material swap) covers this earlier; the
-  order step is the final gate.
-- **Branch doesn't carry a `shop` edge material a side uses** →
-  `branch_does_not_carry_edge`; same affordance path.
+- **A `shop` panel the cutting uses is no longer the branch's** — deactivated, or the draft
+  moved to another branch → `branch_does_not_carry_panel`. A part names a branch material
+  directly now, so this is an id-belongs-to-this-branch-and-is-active test, not a catalog
+  lookup; the editor's material swap covers it earlier and the order step is the final gate.
+- **A `shop` tape a side uses is no longer the branch's** →
+  `branch_does_not_carry_edge`; same test, same recovery.
 - **`shop` material short at verification** → approval is **not** blocked; the operator
   sees a warning and prompts the warehouseman
   ([`catalog-inventory.md`](catalog-inventory.md)).

@@ -30,8 +30,13 @@
     "right": "Право"
   },
   "panelType": {
+    "ldsp": "ЛДСП",
     "dsp": "ЛДСП",
     "mdf": "МДФ",
+    "fanera": "Фанера",
+    "yogoch": "Дерево",
+    "kromka": "Кромка",
+    "boshqa": "Лист",
     "plywood": "Фанера",
     "natural_wood": "Дерево",
     "other": "Лист"
@@ -58,7 +63,12 @@
     "grained": "Материал с текстурой",
     "grainless": "Материал без текстуры",
     "selected": "Выбран",
-    "emptyInBranch": "В этом филиале листовых материалов нет."
+    "emptyInBranch": "В этом филиале листовых материалов нет.",
+    "priceUnset": "Нет цены",
+    "searchLabel": "Поиск материала",
+    "searchPlaceholder": "Название или код декора — Sonoma, H1145, сонома",
+    "searchEmpty": "По этому запросу материалов не найдено.",
+    "pickerEmpty": "В этом филиале нет материалов."
   },
   "editor": {
     "backToDrafts": "Раскрои",
@@ -75,7 +85,6 @@
     "revisionGeneric": "Редактируется заказ",
     "backToOrder": "Вернуться к заказу",
     "change": "Изменить",
-    "notCarriedMeta": "нет в филиале",
     "saveSaved": "Раскрой сохранён",
     "saveSaving": "Раскрой сохраняется",
     "saveEditing": "Редактируется",
@@ -114,8 +123,6 @@
     "duplicate": "Дублировать",
     "moveToMaterial": "Перенести в другой материал",
     "materialMissing": "Листового материала этой строки больше нет в каталоге — выберите другой.",
-    "notCarried": "Строка использует материал, которого нет в филиале {branch} — выберите другой материал или смените филиал.",
-    "pickAnotherEdge": "Выбрать другую кромку",
     "edgeSides": "Кромка: {sides}",
     "noEdge": "Без кромки",
     "emptyResult": "Деталей нет.",
@@ -154,7 +161,6 @@
     "sideAriaCurrent": "Сторона «{side}» — стоит текущая кромка, нажмите чтобы снять",
     "sideAriaOther": "Сторона «{side}» — стоит другая кромка, нажмите чтобы заменить на текущую",
     "sideAriaEmpty": "Сторона «{side}» — нажмите, чтобы добавить текущую кромку",
-    "branchNote": "В филиале {branch} сейчас нет {materials}. Выберите другую кромку.",
     "searchPlaceholder": "Название кромки или код декора",
     "searchAria": "Поиск кромки",
     "thicknessFilterAria": "Фильтр по толщине",
@@ -206,9 +212,6 @@
     "checking": "Проверка",
     "applyColumns": "Применить столбцы",
     "materialsTitle": "Материалы",
-    "branchCatalogOnly": "Только каталог филиала",
-    "showAllCatalog": "Показать весь каталог",
-    "allCatalog": "Весь каталог",
     "branchCatalog": "Каталог {branch} · {n} лист | Каталог {branch} · {n} листа | Каталог {branch} · {n} листов",
     "mapGroupMeta": "из имени файла · лист {width}×{height} · {n} типоразмер | из имени файла · лист {width}×{height} · {n} типоразмера | из имени файла · лист {width}×{height} · {n} типоразмеров",
     "panelLabel": "Листовой материал",

@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-01
+updated: 2026-08-07
 order: 70
 ---
 
@@ -71,7 +71,7 @@ Each SPA stays same-origin with its API (no CORS).
 - **One FastAPI process** — Python 3.12, async end-to-end (asyncio + asyncpg + SQLAlchemy 2.0,
   Alembic, pydantic-settings). Also renders `docs/` as a live site.
 - **One PostgreSQL** — shared by all modules; each module owns its tables.
-- **One MinIO / S3** — material images, logos, and receipt attachments. The `files` module owns
+- **One MinIO / S3** — decor photos, logos, and receipt attachments. The `files` module owns
   stored files; others attach/detach by id. Cutting PDFs are generated on demand from immutable
   cutting-result rows, not stored as file records in v1.
 - **In-process scheduler** — platform maintenance jobs that stay inside the app process; in v1,
@@ -114,7 +114,7 @@ without adding repository layers that would only forward SQLAlchemy calls in thi
 | `access` | platform/workshop/client identity, sessions, OTP, password gates, permission checks |
 | `client_portal` | client profile, public branch browsing, client-visible catalog reads |
 | `workshop` | workshops, branches, branch context, workshop settings |
-| `catalog` | manufacturers, platform materials, branch material selection, branch pricing |
+| `catalog` | manufacturers, platform dekorlar, branch materials (format + price), branch pricing |
 | `inventory` | stock items, suppliers, stock transactions, stock consume/restore seams |
 | `cutting` | cutting drafts, optimizer results, panel layouts, PDFs |
 | `sales` | orders, order state transitions, frozen price snapshots, order status events |
@@ -143,7 +143,7 @@ Three rules every module respects.
 - **Integer-tiyin money.** Every currency value — DB column, API field, intermediate computation
   — is integer tiyin (1 UZS = 100 tiyin). The frontend converts for display only. Money is the
   high-criticality axis; float currency is a bug waiting to happen.
-- **No deletes for business entities.** Workshops, branches, materials, workers, workshop and
+- **No deletes for business entities.** Workshops, branches, dekorlar, branch materials, workshop and
   platform users go to an `inactive` / `blocked` status — there is no `DELETE` path, and no
   `deleted_at` / `is_deleted` flag; the active state is the status enum. History (orders, audit,
   status events, cutting results) is kept forever; deletion would orphan it.
@@ -195,7 +195,7 @@ never sniffed from `navigator.language` — a Russian-localised OS is the norm h
 nothing about which language the operator wants their tools in, so the app stays Uzbek until
 someone chooses otherwise.
 
-Two things stay outside the catalogs. **User data** — branch, material, client and workshop names
+Two things stay outside the catalogs. **User data** — branch, decor, client and workshop names
 — renders as entered, in whatever language it was typed. **Server-rendered documents** (the
 cutting-plan PDF and the akt sverka) are still Uzbek-only: they carry no locale channel, and their
 column widths are tuned to Uzbek string widths. A Russian-speaking user gets a Russian interface

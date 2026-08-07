@@ -305,11 +305,16 @@ async def get_onboarding_status(
         )
         is not None
     )
+    # A format with no price is invisible to clients (client-facing catalog
+    # listings exclude `price_tiyin == 0`), so attaching an unpriced format
+    # cannot be what completes onboarding — the checklist would say "done"
+    # while the branch's public catalog stayed empty. The probe and the client
+    # listing filter deliberately agree.
     materials_added = (
         await db.scalar(
             select(BranchMaterial.id)
             .join(Branch, Branch.id == BranchMaterial.branch_id)
-            .where(Branch.workshop_id == workshop_id)
+            .where(Branch.workshop_id == workshop_id, BranchMaterial.price_tiyin > 0)
             .limit(1)
         )
         is not None

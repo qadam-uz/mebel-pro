@@ -9,16 +9,13 @@
   },
   "filter": {
     "searchLabel": "Поиск",
-    "searchPlaceholder": "Название материала или код декора",
-    "kindLabel": "Тип",
-    "kindAll": "Все типы",
+    "searchPlaceholder": "Название или код декора",
+    "turLabel": "Тип",
+    "turAll": "Все типы",
+    "manufacturerLabel": "Производитель",
+    "manufacturerAll": "Все производители",
     "statusLabel": "Статус",
     "statusAll": "Все"
-  },
-  "kind": {
-    "panel": "Лист",
-    "edge": "Кромка",
-    "edgeCounted": "Кромка (метр)"
   },
   "status": {
     "active": "Активен",
@@ -30,25 +27,32 @@
     "piece": "шт"
   },
   "meta": {
-    "edge": "кромка · {thickness} мм · {color}",
-    "panel": "{type} · {thickness} мм · {color} · {length}x{width}"
+    "panelFormat": "{length}×{width}×{thickness} мм",
+    "tapeFormat": "{thickness}×{width} мм",
+    "formatCount": "{n} формат"
   },
   "table": {
-    "material": "Материал",
-    "kind": "Тип",
+    "dekor": "Декор",
+    "format": "Формат",
+    "tur": "Тип",
     "price": "Цена",
+    "threshold": "Порог",
+    "onHand": "Остаток",
     "status": "Статус",
+    "actions": "Действия",
     "editRow": "{name} — изменить",
-    "statusToggle": "{name} — статус"
+    "statusToggle": "{name} — статус",
+    "rowActions": "{name} — действия",
+    "expandDekor": "Форматы {name}"
   },
   "empty": {
     "title": "В этот филиал материалы не добавлены",
-    "body": "Добавьте материал из каталога платформы.",
+    "body": "Выберите декор из каталога платформы и добавьте его форматы.",
     "filteredTitle": "По фильтру материалов не найдено",
     "filteredBody": "Измените или очистите фильтр."
   },
   "action": {
-    "attach": "+ Добавить материал",
+    "attach": "+ Материал",
     "save": "Сохранить",
     "saving": "Сохранение",
     "cancel": "Отмена",
@@ -56,7 +60,7 @@
     "loadingMore": "Загрузка"
   },
   "form": {
-    "title": "Изменить материал",
+    "title": "Изменить формат",
     "material": "Материал",
     "price": "Цена (сум)",
     "priceInvalid": "Укажите корректную цену — например: 350 000",
@@ -93,5 +97,9 @@
     "uploading": "Загрузка…",
     "busy": "Загрузка",
     "remove": "Убрать файл"
+  },
+  "price": {
+    "unset": "Нет цены",
+    "unsetHint": "Этот формат не виден клиентам — укажите цену."
   }
 }

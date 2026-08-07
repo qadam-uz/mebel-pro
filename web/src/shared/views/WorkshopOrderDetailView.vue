@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
+import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import { useRolePath } from '@/shared/app/paths'
 import {
   isRevisionEvent,
@@ -424,8 +425,11 @@ function warningQuantity(
 }
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
-  const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? t('orders.detail.sheetFallback'))} · ${panel.panel_index}`
+  // New snapshots carry no `name` column; the label is composed from the same
+  // fields the server would use, reading the legacy keys for frozen history.
+  const snapshot = current.material_snapshots[panel.branch_material_id]
+  const label = snapshotMaterialLabel(snapshot, t('orders.detail.sheetFallback'))
+  return `${label} · ${panel.panel_index}`
 }
 
 function selectPlacement(placement: CuttingPlacement) {

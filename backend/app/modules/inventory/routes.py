@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import SupplierStatus
-from app.modules.catalog.api import material_response_from_models
+from app.modules.catalog.api import branch_material_response_from_models
 from app.modules.inventory.api import (
     StockRecord,
     TransactionRecord,
@@ -98,10 +98,10 @@ async def stock_value_get(
     return StockValueResponse(value_tiyin=value)
 
 
-@router.get("/materials/{material_id}/last-price", response_model=StockLastPriceResponse)
+@router.get("/materials/{branch_material_id}/last-price", response_model=StockLastPriceResponse)
 async def material_last_price(
     branch_id: uuid.UUID,
-    material_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
     supplier_id: uuid.UUID | None = None,
@@ -110,7 +110,7 @@ async def material_last_price(
         db,
         principal=principal,
         branch_id=branch_id,
-        material_id=material_id,
+        branch_material_id=branch_material_id,
         supplier_id=supplier_id,
     )
     if row is None:
@@ -133,7 +133,7 @@ async def stock_transactions_index(
     branch_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
-    material_id: uuid.UUID | None = None,
+    branch_material_id: uuid.UUID | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     limit: int = Query(default=50, ge=1, le=100),
@@ -143,7 +143,7 @@ async def stock_transactions_index(
         db,
         principal=principal,
         branch_id=branch_id,
-        material_id=material_id,
+        branch_material_id=branch_material_id,
         date_from=date_from,
         date_to=date_to,
         limit=limit,
@@ -236,11 +236,13 @@ def _stock_response(row: StockRecord) -> StockItemResponse:
     return StockItemResponse(
         id=item.id,
         branch_id=item.branch_id,
-        material_id=item.material_id,
-        material=material_response_from_models(row.material, row.manufacturer),
-        kind=row.material.kind,
-        stock_unit=stock_unit(row.material.kind),
-        display_unit=display_unit(row.material.kind),
+        branch_material_id=item.branch_material_id,
+        material=branch_material_response_from_models(
+            row.branch_material, row.dekor, row.manufacturer
+        ),
+        tur=row.dekor.tur,
+        stock_unit=stock_unit(row.dekor.tur),
+        display_unit=display_unit(row.dekor.tur),
         on_hand=item.on_hand,
         min_stock=item.min_stock,
         is_low_stock=item.on_hand <= item.min_stock,
@@ -253,8 +255,8 @@ def _transaction_response(row: TransactionRecord) -> StockTransactionResponse:
     return StockTransactionResponse(
         id=tx.id,
         stock_item_id=tx.stock_item_id,
-        material_id=row.stock_item.material_id,
-        material_name=row.material.name,
+        branch_material_id=row.stock_item.branch_material_id,
+        material_name=row.label,
         type=tx.type,
         quantity=tx.quantity,
         balance_after=tx.balance_after,

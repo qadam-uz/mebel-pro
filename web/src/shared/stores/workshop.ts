@@ -14,12 +14,7 @@ import {
   INVENTORY_TX_PAGE_LIMIT,
   MATERIALS_PAGE_LIMIT,
 } from '@/shared/app/constants'
-import type {
-  Material,
-  MaterialKind,
-  MaterialStatus,
-  PanelMaterialType,
-} from '@/shared/stores/admin'
+import type { Dekor, DekorType, MaterialStatus } from '@/shared/stores/admin'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 
 export type BranchStatus = 'active' | 'temporarily_closed' | 'inactive'
@@ -99,38 +94,84 @@ export interface BranchPricing {
   updated_by_user_id: string | null
 }
 
+/**
+ * THE material: a dekor in one concrete format, owned by one branch. Identity is
+ * nested under `.dekor`; the format lives here. There is no stored name — render
+ * `label`, which the server composes (backend/app/core/material_label.py).
+ */
 export interface BranchMaterial {
   id: string
   branch_id: string
-  material_id: string
-  material: Material
+  dekor_id: string
+  dekor: Dekor
+  qalinlik_mm: string
+  uzunlik_mm: number | null
+  eni_mm: number | null
+  kromka_eni_mm: number | null
   price_tiyin: number
+  // price_tiyin === 0 means unpriced, not free. Client-facing listings drop these
+  // rows; workshop-facing ones flag them so the gap is visible where it is fixable.
+  price_unset: boolean
   min_stock: number
   status: MaterialStatus
+  label: string
   created_at: string
   updated_at: string
 }
 
+// A dekor the branch may attach. It is never hidden once carried — carrying 18 mm
+// does not stop you adding 16 mm — so the count says how many formats are already in.
 export interface BranchCatalogOption {
-  material: Material
+  dekor: Dekor
+  carried_format_count: number
 }
 
-// QAD-159: the picker excludes materials the branch already carries, so `total`
-// counts exactly what "Filtrdagi hammasi (N)" would select — page included.
+// QAD-159: the picker needs an honest "Filtrdagi hammasi (N)" count, so this
+// endpoint returns the page plus the total matching the same filters.
 export interface BranchCatalogOptionsPage {
   items: BranchCatalogOption[]
   total: number
 }
 
+// Manufacturers only. Thickness used to be a facet here because it was a
+// platform-catalog fact; it is now a per-branch format the operator types in, so
+// there is nothing left to enumerate. `tur` is a fixed enum rendered without asking.
 export interface BranchCatalogFilters {
   manufacturers: { id: string; name: string }[]
-  thicknesses: string[]
 }
 
-export interface BranchMaterialBulkItem {
-  material_id: string
-  price_tiyin: number
-  min_stock: number
+/** One (thickness + size) combination of a dekor a branch wants to carry. */
+export interface BranchMaterialFormatInput {
+  qalinlik_mm: string
+  uzunlik_mm?: number
+  eni_mm?: number
+  kromka_eni_mm?: number
+  // Both optional server-side, defaulting to 0: a branch routinely registers its
+  // whole format list before it knows prices.
+  price_tiyin?: number
+  min_stock?: number
+}
+
+/** Attach one dekor in one or more formats — a single server-side transaction. */
+export interface BranchMaterialAttachRequest {
+  dekor_id: string
+  formats: BranchMaterialFormatInput[]
+}
+
+/** Identifies a format within a (branch, dekor) pair. */
+export interface BranchMaterialFormatKey {
+  qalinlik_mm: string
+  uzunlik_mm: number | null
+  eni_mm: number | null
+  kromka_eni_mm: number | null
+}
+
+export interface BranchMaterialAttachResponse {
+  created: BranchMaterial[]
+  // Formats this branch already carries. The picker shows what is carried, so a
+  // duplicate here is a race, not user error — surface it as "already carried,
+  // skipped", never as a failure.
+  skipped: BranchMaterialFormatKey[]
 }
 
 export interface Supplier {
@@ -148,9 +189,9 @@ export interface Supplier {
 export interface StockItem {
   id: string
   branch_id: string
-  material_id: string
-  material: Material
-  kind: MaterialKind
+  branch_material_id: string
+  material: BranchMaterial
+  tur: DekorType
   stock_unit: string
   display_unit: string
   on_hand: number
@@ -162,7 +203,8 @@ export interface StockItem {
 export interface StockTransaction {
   id: string
   stock_item_id: string
-  material_id: string
+  branch_material_id: string
+  // Server-composed label, not a stored column — leave it alone.
   material_name: string
   type: StockTransactionType
   quantity: number
@@ -182,9 +224,9 @@ export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
 
 export interface SupplierInvoiceLine {
   transaction_id: string
-  material_id: string
+  branch_material_id: string
   material_name: string
-  kind: MaterialKind
+  tur: DekorType
   display_unit: string
   quantity: number
   unit_price_tiyin: number | null
@@ -230,7 +272,7 @@ export interface StockLastPrice {
 }
 
 export interface StockTransactionFilters {
-  material_id?: string | null
+  branch_material_id?: string | null
   date_from?: string | null
   date_to?: string | null
   limit?: number
@@ -239,11 +281,11 @@ export interface StockTransactionFilters {
 
 export interface BranchMaterialFilters {
   search?: string
-  kind?: MaterialKind | null
+  tur?: DekorType | null
   status?: MaterialStatus | null
   manufacturer_id?: string | null
-  material_type?: PanelMaterialType | null
-  thickness_mm?: string | null
+  // Narrows the grouped-by-dekor table to one dekor's formats.
+  dekor_id?: string | null
   offset?: number
   limit?: number
 }
@@ -267,7 +309,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const selectedBranchPricing = ref<BranchPricing | null>(null)
   const catalogOptions = ref<BranchCatalogOption[]>([])
   const catalogOptionsTotal = ref(0)
-  const catalogFilters = ref<BranchCatalogFilters>({ manufacturers: [], thicknesses: [] })
+  const catalogFilters = ref<BranchCatalogFilters>({ manufacturers: [] })
   const branchMaterials = ref<BranchMaterial[]>([])
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
@@ -444,17 +486,15 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   // The add-material picker is server-searched and capped — never the whole
-  // catalog — so opening the sheet on the full material set doesn't freeze.
-  // Returns the page so callers can page through "select everything in the
-  // filter" without the store holding more than the visible list.
+  // catalog — so opening the sheet on the full dekor set doesn't freeze. Returns
+  // the page so a caller can render an honest "Filtrdagi hammasi (N)" without the
+  // store holding more than the visible list.
   async function fetchCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
     return api.get<BranchCatalogOptionsPage>(
-      withQuery(`/workshop/branches/${id}/catalog/materials`, {
+      withQuery(`/workshop/branches/${id}/catalog/dekorlar`, {
         search: filters.search,
-        kind: filters.kind,
+        tur: filters.tur,
         manufacturer_id: filters.manufacturer_id,
-        material_type: filters.material_type,
-        thickness_mm: filters.thickness_mm,
         limit: filters.limit ?? CATALOG_PICKER_LIMIT,
         offset: filters.offset,
       }),
@@ -490,9 +530,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
       const rows = await api.get<BranchMaterial[]>(
         withQuery(`/workshop/branches/${id}/materials`, {
           search: filters.search,
-          kind: filters.kind,
+          tur: filters.tur,
           manufacturer_id: filters.manufacturer_id,
-          material_type: filters.material_type,
+          dekor_id: filters.dekor_id,
           status: filters.status,
           limit: MATERIALS_PAGE_LIMIT,
           offset,
@@ -518,26 +558,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
-  async function addBranchMaterial(id: string, payload: unknown) {
-    const created = await api.post<BranchMaterial>(
+  /**
+   * Attach one dekor in one or more formats. The whole `formats` list lands in a
+   * single server-side transaction, but it is NOT all-or-nothing: a format this
+   * branch already carries comes back under `skipped` instead of failing the call.
+   * Callers must surface `skipped` as "already carried", never as an error.
+   */
+  async function attachBranchMaterials(id: string, payload: BranchMaterialAttachRequest) {
+    const result = await api.post<BranchMaterialAttachResponse>(
       `/workshop/branches/${id}/materials`,
       payload,
       authInit(),
     )
-    branchMaterials.value = [created, ...branchMaterials.value]
+    branchMaterials.value = [...result.created, ...branchMaterials.value]
     await loadStock(id).catch(() => undefined)
     await loadCatalogOptions(id).catch(() => undefined)
-    return created
-  }
-
-  // Bulk attach is atomic server-side: either every row lands or the call throws
-  // naming the offending material, so there is no partial state to reconcile here.
-  async function addBranchMaterialsBulk(id: string, items: BranchMaterialBulkItem[]) {
-    const result = await api.post<{
-      created: BranchMaterial[]
-      skipped_material_ids: string[]
-    }>(`/workshop/branches/${id}/materials/bulk`, { items }, authInit())
-    await loadStock(id).catch(() => undefined)
     return result
   }
 
@@ -639,7 +674,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       () =>
         api.get<StockTransaction[]>(
           withQuery(`/workshop/branches/${id}/stock-transactions`, {
-            material_id: filters.material_id,
+            branch_material_id: filters.branch_material_id,
             date_from: filters.date_from,
             date_to: filters.date_to,
             limit,
@@ -748,11 +783,11 @@ export const useWorkshopStore = defineStore('workshop', () => {
   // always derived from transaction history, never cached as state.
   async function fetchMaterialLastPrice(
     id: string,
-    materialId: string,
+    branchMaterialId: string,
     supplierId?: string | null,
   ) {
     return api.get<StockLastPrice>(
-      withQuery(`/workshop/branches/${id}/materials/${materialId}/last-price`, {
+      withQuery(`/workshop/branches/${id}/materials/${branchMaterialId}/last-price`, {
         supplier_id: supplierId ?? undefined,
       }),
       authInit(),
@@ -1027,7 +1062,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranchPricing.value = null
     catalogOptions.value = []
     catalogOptionsTotal.value = 0
-    catalogFilters.value = { manufacturers: [], thicknesses: [] }
+    catalogFilters.value = { manufacturers: [] }
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
@@ -1106,9 +1141,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loadCatalogOptions,
     fetchCatalogOptions,
     loadCatalogFilters,
-    addBranchMaterialsBulk,
     loadBranchMaterials,
-    addBranchMaterial,
+    attachBranchMaterials,
     updateBranchMaterial,
     setBranchMaterialStatus,
     loadStock,
