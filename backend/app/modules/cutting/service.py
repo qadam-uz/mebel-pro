@@ -282,6 +282,7 @@ async def update_draft(
         parts_snapshot=parts_snapshot,
         own_panel_counts=own_panel_counts,
         own_edge_material_ids=own_edge_material_ids,
+        client_self_serve=True,
     )
 
 
@@ -297,8 +298,15 @@ async def _apply_update(
     parts_snapshot: list[CuttingDraftPart] | None,
     own_panel_counts: dict[uuid.UUID, int] | None = None,
     own_edge_material_ids: list[uuid.UUID] | None = None,
+    client_self_serve: bool,
 ) -> CuttingDraftResponse:
-    """Shared update body: branch id is already resolved/authorized by the caller."""
+    """Shared update body: branch id is already resolved/authorized by the caller.
+
+    ``client_self_serve`` says whose hands are on the draft. It gates only the
+    branch's own-material policy: `own_material_allowed` is about what a client
+    may claim unattended in the app, not about what the shop can arrange at the
+    counter — staff always may (workshop.md).
+    """
     parts_changed = parts_snapshot is not None
     if name_set:
         draft.name = name
@@ -326,11 +334,20 @@ async def _apply_update(
         }
     if own_edge_material_ids is not None:
         draft.own_edge_material_ids = [str(material_id) for material_id in own_edge_material_ids]
+    # The branch decides whether it takes client sheets at all (workshop.md).
+    # Enforced here rather than only in the editor, because the claim reaches
+    # the server as a plain PATCH — and re-checked on *every* write, not just
+    # the ones that carry a claim, so a branch that switches the setting off (or
+    # a draft moved to a branch that never allowed it) drops the stale claim on
+    # the next save instead of quietly pricing sheets the shop will not accept.
+    own_cleared = client_self_serve and await _clear_own_material_when_branch_disallows(
+        db, draft=draft
+    )
     # Ownership never moves a part, so the chosen layout stands
     # (SPEC_CUTTING_GEOMETRY_NEUTRAL_EDITS). What changes is what that layout
     # charges, which is why the claim is projected onto every live result here
     # rather than recomputed at price time from a draft that may have moved on.
-    if own_panel_counts is not None or parts_changed:
+    if own_panel_counts is not None or parts_changed or own_cleared:
         await _project_own_panels_onto_results(db, draft=draft)
     draft.updated_at = datetime.now(UTC)
     await db.flush()
@@ -1438,6 +1455,35 @@ def clamp_own_claim(claim: dict[str, int], panels_used: dict[str, int]) -> dict[
     return applied
 
 
+async def _clear_own_material_when_branch_disallows(
+    db: AsyncSession, *, draft: CuttingDraft
+) -> bool:
+    """Drop a client's own-material claim when its branch does not accept one.
+
+    Returns whether anything was cleared, so the caller knows to re-project the
+    (now empty) claim onto the draft's live results. Confirmed results are
+    frozen history and are never touched — an order already placed keeps the
+    split it was priced with.
+    """
+
+    if not draft.own_panel_counts and not draft.own_edge_material_ids:
+        return False
+    if await _branch_allows_own_material(db, draft.preferred_branch_id):
+        return False
+    draft.own_panel_counts = {}
+    draft.own_edge_material_ids = []
+    return True
+
+
+async def _branch_allows_own_material(db: AsyncSession, branch_id: uuid.UUID | None) -> bool:
+    """A branch-less draft cannot promise a shop floor will take the sheets, so
+    it answers the same way a branch that has not opted in does."""
+    if branch_id is None:
+        return False
+    branch = await db.get(Branch, branch_id)
+    return branch is not None and branch.own_material_allowed
+
+
 async def _project_own_panels_onto_results(db: AsyncSession, *, draft: CuttingDraft) -> None:
     """Copy the draft's own-material claim onto each of its live results.
 
@@ -1512,7 +1558,10 @@ async def _draft_response(
         preferred_branch_id=draft.preferred_branch_id,
         kerf_mm=params.kerf_mm,
         edge_trim_mm=params.edge_trim_mm,
+        own_material_allowed=await _branch_allows_own_material(db, draft.preferred_branch_id),
         parts_snapshot=_parts_snapshot_response(draft.parts_snapshot),
+        own_panel_counts=draft.own_panel_counts,
+        own_edge_material_ids=draft.own_edge_material_ids,
         chosen_result_id=draft.chosen_result_id,
         revision_of_order_id=draft.revision_of_order_id,
         created_at=draft.created_at,

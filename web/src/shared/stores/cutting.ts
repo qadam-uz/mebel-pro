@@ -119,6 +119,11 @@ export interface CuttingDraft {
   // branch (or the platform defaults for a branch-less draft) on every read.
   kerf_mm: number
   edge_trim_mm: number
+  /** Whether this draft's branch takes client-supplied sheets at all. Resolved
+   *  server-side from the branch; the server drops any claim a disallowing
+   *  branch receives, so the editor hides the affordance rather than offering
+   *  a choice that will not survive the save. */
+  own_material_allowed: boolean
   parts_snapshot: CuttingPart[]
   /** Client-supplied material: sheets claimed per catalog material, and the
    *  tapes the client brings on their own roll. The sheet number is a claim,

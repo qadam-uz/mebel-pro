@@ -148,6 +148,7 @@ def _branch_response(row: Branch) -> BranchResponse:
         closed_reason=row.closed_reason,
         kerf_mm=row.kerf_mm,
         edge_trim_mm=row.edge_trim_mm,
+        own_material_allowed=row.own_material_allowed,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

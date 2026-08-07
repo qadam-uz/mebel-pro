@@ -20,6 +20,7 @@ from app.modules.cutting.contracts import (
 )
 from app.modules.cutting.imports.parser import parse_import_file
 from app.modules.support.contracts import ActionLog
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1276,3 +1277,133 @@ async def test_client_catalog_materials_limit_caps_the_branch_load(
     assert capped.status_code == 200
     assert len(capped.json()) == 1
     assert bad_limit.status_code == 422
+
+
+async def _draft_with_own_claim(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    *,
+    own_material_allowed: bool,
+) -> tuple[str, str, dict[str, object]]:
+    """A saved draft carrying an own-sheet claim, on a branch with the setting
+    as given. Returns (access token, draft id, the draft as the server echoes)."""
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    branch = await db_session.get(Branch, branch_id)
+    assert branch is not None
+    branch.own_material_allowed = own_material_allowed
+    await db_session.flush()
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    saved = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={
+            "parts_snapshot": _parts(panel.id, edge.id),
+            "own_panel_counts": {str(panel.id): 2},
+            "own_edge_material_ids": [str(edge.id)],
+        },
+    )
+    assert saved.status_code == 200
+    return access, draft_id, saved.json()
+
+
+async def test_branch_that_takes_client_sheets_keeps_the_claim(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, draft = await _draft_with_own_claim(client, db_session, own_material_allowed=True)
+
+    assert draft["own_material_allowed"] is True
+    # Echoed back, not just stored — the dialog reopens on this payload, so a
+    # claim the server keeps but does not return reads to the client as lost.
+    assert sum(draft["own_panel_counts"].values()) == 2
+    assert len(draft["own_edge_material_ids"]) == 1
+
+
+async def test_branch_that_does_not_take_client_sheets_drops_the_claim(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The editor hides the affordance, but the claim arrives as a plain PATCH —
+    a branch that does not accept client sheets must not be priced as if it did."""
+    _, _, draft = await _draft_with_own_claim(client, db_session, own_material_allowed=False)
+
+    assert draft["own_material_allowed"] is False
+    assert draft["own_panel_counts"] == {}
+    assert draft["own_edge_material_ids"] == []
+
+
+async def test_turning_the_branch_setting_off_clears_an_existing_claim_on_next_save(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access, draft_id, draft = await _draft_with_own_claim(
+        client, db_session, own_material_allowed=True
+    )
+    assert sum(draft["own_panel_counts"].values()) == 2
+
+    branch_id = draft["preferred_branch_id"]
+    branch = await db_session.get(Branch, uuid.UUID(branch_id))
+    assert branch is not None
+    branch.own_material_allowed = False
+    await db_session.flush()
+
+    # Any write re-checks, not only one that carries a claim: the stale claim
+    # would otherwise keep pricing sheets the shop no longer accepts.
+    resaved = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"name": "renamed"},
+    )
+
+    assert resaved.status_code == 200
+    assert resaved.json()["own_panel_counts"] == {}
+    assert resaved.json()["own_edge_material_ids"] == []
+
+
+async def test_staff_may_claim_client_material_on_a_branch_that_forbids_self_serve(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """`own_material_allowed` is a self-serve policy, not a shop-floor ban.
+
+    A branch may keep the option out of the client app and still take a walk-in
+    who turns up with their own sheets, so the staff editor must not inherit
+    the client path's clearing rule.
+    """
+
+    owner_access, _, branch_id, _ = await _workshop_owner_access(db_session)
+    branch = await db_session.get(Branch, branch_id)
+    assert branch is not None
+    assert branch.own_material_allowed is False
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    walk_in, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+    client_row = await db_session.scalar(
+        select(Client).where(Client.preferred_branch_id == branch_id)
+    )
+    assert client_row is not None
+
+    created = await client.post(
+        "/api/v1/workshop/cutting-drafts",
+        headers=_auth(owner_access),
+        json={"branch_id": str(branch_id), "client_id": str(client_row.id)},
+    )
+    assert created.status_code == 201
+    saved = await client.patch(
+        f"/api/v1/workshop/cutting-drafts/{created.json()['id']}",
+        headers=_auth(owner_access),
+        json={
+            "parts_snapshot": _parts(panel.id, edge.id),
+            "own_panel_counts": {str(panel.id): 2},
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    # The branch still reports the self-serve policy as off …
+    assert saved.json()["own_material_allowed"] is False
+    # … and the staff-entered claim survives anyway.
+    assert sum(saved.json()["own_panel_counts"].values()) == 2
+    assert walk_in

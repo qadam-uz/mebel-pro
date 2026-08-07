@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -85,6 +86,13 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     # Platform defaults: kerf 4 mm, edge trim 5 mm.
     kerf_mm: Mapped[int] = mapped_column(nullable=False, default=4, server_default="4")
     edge_trim_mm: Mapped[int] = mapped_column(nullable=False, default=5, server_default="5")
+    # Whether this branch takes a client's own sheets (catalog-inventory.md).
+    # Off until the owner turns it on: accepting client material changes what
+    # the shop stores and what has to arrive before the saw can start, so it is
+    # a decision a branch makes rather than a default it inherits.
+    own_material_allowed: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default=false()
+    )
     status: Mapped[BranchStatus] = mapped_column(
         enum_type(BranchStatus, "branch_status"),
         default=BranchStatus.ACTIVE,

@@ -60,6 +60,7 @@ function draft(id = 'draft-1'): CuttingDraft {
     preferred_branch_id: null,
     kerf_mm: 4,
     edge_trim_mm: 5,
+    own_material_allowed: false,
     parts_snapshot: [],
     own_panel_counts: {},
     own_edge_material_ids: [],

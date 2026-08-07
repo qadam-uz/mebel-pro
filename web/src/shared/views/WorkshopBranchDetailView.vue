@@ -70,6 +70,7 @@ const branchForm = reactive({
   phone: '',
   kerfMm: '',
   edgeTrimMm: '',
+  ownMaterialAllowed: false,
 })
 const additionalPhones = ref<string[]>([])
 // The map picker owns the pin; the form only carries what it reports back.
@@ -232,6 +233,7 @@ function syncForms() {
   phonesValidated.value = false
   branchForm.kerfMm = String(branch.kerf_mm)
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
+  branchForm.ownMaterialAllowed = branch.own_material_allowed
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
   // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
@@ -277,6 +279,7 @@ async function saveBranch() {
       longitude: mapPoint.value ? String(mapPoint.value.longitude) : null,
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
+      own_material_allowed: branchForm.ownMaterialAllowed,
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: cuttingRateTiyin.value,
@@ -612,6 +615,30 @@ onMounted(refreshBranch)
             </div>
             <p class="mt-2 text-xs text-ink-muted">
               {{ $t('workshopAdmin.branchDetail.usableArea') }}
+            </p>
+          </fieldset>
+          <!-- Its own group: this is not a saw property but a policy about what
+               the shop takes in at the door, and it changes what the client is
+               offered in the cutting wizard. -->
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">
+              {{ $t('workshopAdmin.branchDetail.materialSettings') }}
+            </legend>
+            <label
+              class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink-soft"
+              for="branch-detail-own-material"
+            >
+              <input
+                id="branch-detail-own-material"
+                v-model="branchForm.ownMaterialAllowed"
+                type="checkbox"
+                class="size-4 accent-accent"
+                :aria-describedby="'branch-detail-own-material-hint'"
+              />
+              <span>{{ $t('workshopAdmin.branchDetail.ownMaterial') }}</span>
+            </label>
+            <p id="branch-detail-own-material-hint" class="mt-2 text-xs text-ink-muted">
+              {{ $t('workshopAdmin.branchDetail.ownMaterialHint') }}
             </p>
           </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">

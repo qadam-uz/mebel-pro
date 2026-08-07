@@ -382,6 +382,13 @@ jcall PATCH "$API/workshop/branches/$BRANCH2_ID" "$OWNER_TOKEN" \
   '{"kerf_mm":3,"edge_trim_mm":12}' >/dev/null
 ok "cutting settings: B1 kerf 4mm/trim 5mm (default), B2 kerf 3mm/trim 12mm"
 
+# Own material is off for a new branch, so B1 turns it on: the demo needs one
+# branch where the client is offered "I'll bring my own" and one where the
+# affordance is absent, since the difference is the whole point of the setting.
+jcall PATCH "$API/workshop/branches/$BRANCH1_ID" "$OWNER_TOKEN" \
+  '{"own_material_allowed":true}' >/dev/null
+ok "own material: allowed on B1, not on B2"
+
 # ============================================================================
 # 7 · Staff (create → first login → change temp to final)
 # ============================================================================

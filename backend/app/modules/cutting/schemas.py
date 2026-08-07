@@ -218,6 +218,10 @@ class CuttingDraftResponse(APIModel):
     # snapshot; a branch edit changes these on the next fetch.
     kerf_mm: int
     edge_trim_mm: int
+    # Whether the draft's branch takes client-supplied sheets, resolved the same
+    # way — so the editor can hide the own-material affordance instead of
+    # offering a claim the server will drop on save.
+    own_material_allowed: bool = False
     parts_snapshot: list[dict[str, Any]]
     own_panel_counts: dict[str, int] = Field(default_factory=dict)
     own_edge_material_ids: list[str] = Field(default_factory=list)

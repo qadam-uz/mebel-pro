@@ -104,6 +104,7 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "closed_reason": None,
             "kerf_mm": 4,
             "edge_trim_mm": 5,
+            "own_material_allowed": False,
             "permissions": ["manage_orders"],
         }
     ]

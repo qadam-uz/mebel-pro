@@ -276,6 +276,9 @@ async def update_workshop_draft(
         parts_snapshot=parts_snapshot,
         own_panel_counts=own_panel_counts,
         own_edge_material_ids=own_edge_material_ids,
+        # Staff arrange client material at the counter regardless of the
+        # branch's self-serve policy.
+        client_self_serve=False,
     )
 
 

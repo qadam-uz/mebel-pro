@@ -20,6 +20,7 @@ class BranchContextItem(APIModel):
     closed_reason: str | None
     kerf_mm: int
     edge_trim_mm: int
+    own_material_allowed: bool
     permissions: list[Permission] = Field(default_factory=list)
 
 
@@ -55,6 +56,8 @@ class BranchCreateRequest(BaseModel):
     # Physical saw properties (cutting.md); platform defaults when omitted.
     kerf_mm: int = Field(default=4, ge=1, le=20)
     edge_trim_mm: int = Field(default=5, ge=0, le=50)
+    # Off unless asked for — a branch opts in to client-supplied sheets.
+    own_material_allowed: bool = False
 
 
 class BranchPatchRequest(BaseModel):
@@ -66,6 +69,7 @@ class BranchPatchRequest(BaseModel):
     longitude: Decimal | None = None
     kerf_mm: int | None = Field(default=None, ge=1, le=20)
     edge_trim_mm: int | None = Field(default=None, ge=0, le=50)
+    own_material_allowed: bool | None = None
 
 
 class BranchStatusRequest(BaseModel):
@@ -88,6 +92,7 @@ class BranchResponse(APIModel):
     closed_reason: str | None
     kerf_mm: int
     edge_trim_mm: int
+    own_material_allowed: bool
     created_at: datetime
     updated_at: datetime
 
