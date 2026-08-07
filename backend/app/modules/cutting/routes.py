@@ -9,7 +9,6 @@ from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.core.errors import APIError
-from app.models.enums import MaterialKind
 from app.modules.cutting.api import (
     choose_result,
     choose_workshop_result,
@@ -200,21 +199,23 @@ async def client_cutting_results_pdf(
 async def client_catalog_materials_index(
     principal: AccountReadyPrincipal,
     db: Session,
-    kind: MaterialKind,
-    branch_id: uuid.UUID | None = None,
+    branch_id: uuid.UUID,
+    tape: bool = False,
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
-    carried_only: bool = True,
     limit: int | None = Query(default=None, ge=1, le=200),
 ) -> list[ClientCatalogMaterialOption]:
+    # `branch_id` is required and `carried_only` is gone: a material now *is* a
+    # branch's format of a dekor, so there is no platform-wide browse mode left.
+    # `tape` replaces the old `kind` — the edge picker wants kromka, every other
+    # picker wants all panel-shaped dekorlar, which no single `tur` can express.
     return await client_catalog_materials(
         db,
         principal=principal,
-        kind=kind,
+        tape=tape,
         branch_id=branch_id,
         search=search,
         manufacturer_id=manufacturer_id,
-        carried_only=carried_only,
         limit=limit,
     )
 
@@ -351,20 +352,18 @@ async def workshop_cutting_results_pdf(
 async def workshop_catalog_materials_index(
     principal: AccountReadyPrincipal,
     db: Session,
-    kind: MaterialKind,
     branch_id: uuid.UUID,
+    tape: bool = False,
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
-    carried_only: bool = False,
     limit: int | None = Query(default=None, ge=1, le=200),
 ) -> list[ClientCatalogMaterialOption]:
     return await workshop_catalog_materials(
         db,
         principal=principal,
-        kind=kind,
+        tape=tape,
         branch_id=branch_id,
         search=search,
         manufacturer_id=manufacturer_id,
-        carried_only=carried_only,
         limit=limit,
     )

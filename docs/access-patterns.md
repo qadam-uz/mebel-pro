@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-07-08
+updated: 2026-08-07
 order: 50
 ---
 
@@ -24,8 +24,8 @@ and the error monitor. Not a workshop user — does not run anyone's day-to-day.
 ### Workshop owner
 
 The person who owns or runs the furniture workshop. Top authority inside their workshop: stands
-the workshop up end-to-end (branches, stock, pricing, staff, and what each branch carries from
-the platform's material catalog), grants and revokes staff permissions, oversees the order
+the workshop up end-to-end (branches, stock, pricing, staff, and which decors — in which
+formats — each branch carries), grants and revokes staff permissions, oversees the order
 pipeline and the books, and holds the owner-only levers — creating staff and branches, setting
 branch pricing, and the workshop-wide reports.
 
@@ -91,14 +91,14 @@ The tenant is the **workshop**. One database, one app, many workshops.
 
   ```mermaid
   flowchart TD
-      M[("<b>Material</b><br/>platform-wide<br/>master record")]
+      D[("<b>Dekor</b><br/>platform-wide<br/>identity only")]
       Cl[("<b>Client</b><br/>platform-wide<br/>no tenant")]
 
       W["<b>Workshop</b><br/><i>(tenant)</i>"]
       WU["workshop user<br/>1 owner · N staff"]
       PG["permission grant<br/>branch-scoped"]
       B["branch · 1..N"]
-      BMS["branch material<br/>selection"]
+      BM["branch material<br/>format + price"]
       SI["stock item"]
       BP["branch pricing"]
 
@@ -106,16 +106,17 @@ The tenant is the **workshop**. One database, one app, many workshops.
       W --> B
       WU --> PG
       PG --> B
-      B --> BMS
+      B --> BM
       B --> SI
       B --> BP
 
-      BMS -.->|picks from| M
+      BM -.->|one format of| D
       Cl -.->|places order at| B
   ```
 
 One owner per workshop (exactly); a workshop user belongs to one workshop.
-**Materials are global** — master records at the platform level, referenced by each branch's selection.
+**Decor identity is global** — platform-level master records; the **format and the price are
+branch-owned**, and a branch material is what everything downstream points at.
 **Clients are global** — bound to no workshop or branch; they pick a branch per order.
 
 - **Scope by principal** (derived from the authenticated principal, never from client input):

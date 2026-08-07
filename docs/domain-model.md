@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-07-26
+updated: 2026-08-07
 order: 45
 ---
 
@@ -22,20 +22,24 @@ per bounded context.
 - **Client** — the workshop's customer; global to the platform, picks a branch per order.
   Optionally carries a preferred branch that seeds new cutting drafts.
 - **Workshop** — one furniture-cutting business; the tenant. Has many branches.
-- **Branch** — a physical location of a workshop. Owns its stock, prices, and the
-  selection it carries from the material catalog.
-- **Manufacturer** — a platform-wide master record naming who made a material (Egger,
-  Kronospan, Rehau, …). Material identity includes the manufacturer.
-- **Material** — a platform-wide master record of one of two kinds: a **panel** (a
-  cuttable board) or an **edge** (edge-banding tape). Every material names its
-  manufacturer. Branches pick which they carry and set their own price.
-- **Stock item** — a branch's on-hand balance for one material. **Supplier** — where
+- **Branch** — a physical location of a workshop. Owns its stock, its prices, and the
+  formats it carries of the platform's decors.
+- **Manufacturer** — a platform-wide master record naming who made a decor (Egger,
+  Kronospan, Rehau, …). Dekor identity includes the manufacturer.
+- **Dekor** — a platform-wide master record of one decor: its manufacturer, its `tur`
+  (`ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`), its code, its name,
+  its photo, whether it has a grain. **Identity only — no thickness, no size, no price.**
+- **Branch material** — a dekor in one concrete format (thickness plus sheet size, or
+  plus tape width) carried by one branch, at that branch's price. **This is "the
+  material"**: stock, cutting sheets and order lines all point here. The platform cannot
+  know which formats a workshop's supplier sells, so the branch owns them.
+- **Stock item** — a branch's on-hand balance for one branch material. **Supplier** — where
   stock arrived from (lightweight, added on demand; distinct from manufacturer).
   **Supplier invoice** — one arrival document grouping the stock-ins that came in on it,
   carrying the discount the supplier put on the paper; what the workshop owes is folded
   over these, not over individual arrivals.
 - **Cutting result** — the output of an optimization run; names the winning algorithm.
-  Reports panels needed per panel material and edge metres needed per edge material.
+  Reports sheets needed per panel format and tape metres needed per kromka format.
 - **Order** — a client's request for panels cut at a branch. Aggregates the parts,
   the per-side edge picks, the status history, and the cutter / edger who completed
   it (the inputs the production reports read). It holds no money and no stock.

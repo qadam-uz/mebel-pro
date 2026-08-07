@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { api } from '@/shared/api/client'
+import { api, withQuery } from '@/shared/api/client'
 import { openBlobInNewTab } from '@/shared/app/downloadBlob'
 import {
   partFitError,
@@ -46,7 +46,9 @@ vi.mock('@/shared/api/client', () => {
       code: fallback,
       traceId: null,
     })),
-    withQuery: (path: string) => path,
+    // Path-only, so the scope suite can assert prefixes cleanly. It is a spy so
+    // the params object stays inspectable — see the catalog-query test below.
+    withQuery: vi.fn((path: string) => path),
   }
 })
 
@@ -71,13 +73,10 @@ function draft(id = 'draft-1'): CuttingDraft {
 
 const WALK_IN = { id: 'client-9', name: 'Ali Valiyev', phone: '+998901112233' }
 
-const basePanel: Pick<
-  ClientCatalogMaterialOption,
-  'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
-> = {
-  panel_length_mm: 600,
-  panel_width_mm: 400,
-  grain_direction: true,
+const basePanel: Pick<ClientCatalogMaterialOption, 'uzunlik_mm' | 'eni_mm' | 'tolali'> = {
+  uzunlik_mm: 600,
+  eni_mm: 400,
+  tolali: true,
 }
 
 // Drives every store action that talks to the API and returns the request
@@ -96,7 +95,7 @@ async function exerciseEveryPath(store: ReturnType<typeof useCuttingStore>) {
   await store.deleteDraft('draft-1')
   await store.optimizeDraft('draft-1')
   await store.chooseResult('draft-1', 'result-1')
-  await store.loadMaterials({ kind: 'panel', force: true })
+  await store.loadMaterials({ tape: false, branchId: 'branch-1', force: true })
   await store.openClientPdf('result-1')
 
   return {
@@ -298,9 +297,9 @@ describe('partFitError', () => {
     [false, true, 'impossible_grain'],
     [false, false, null],
   ] as const)(
-    'uses follow_grain as the rotation lock for material_grain=%s and follow_grain=%s',
+    'uses follow_grain as the rotation lock for tolali=%s and follow_grain=%s',
     (materialGrain, followGrain, expected) => {
-      const panel = { ...basePanel, grain_direction: materialGrain }
+      const panel = { ...basePanel, tolali: materialGrain }
 
       expect(partFitError(360, 500, panel, followGrain, 10)).toBe(expected)
     },
@@ -312,5 +311,46 @@ describe('partFitError', () => {
   it('gives different verdicts for the same part at different branch trims', () => {
     expect(partFitError(500, 300, basePanel, false, 5)).toBeNull()
     expect(partFitError(500, 300, basePanel, false, 90)).toBe('part_too_large')
+  })
+})
+
+// The scope suite mocks withQuery down to the path, which makes the query string
+// invisible to it. `branch_id` is REQUIRED on both catalog endpoints now, so the
+// "a branch is chosen before materials" invariant needs its own lock.
+describe('loadMaterials query', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(api.get).mockReset().mockResolvedValue([])
+    vi.mocked(withQuery).mockClear()
+  })
+
+  it('always sends branch_id, and sends tape=false rather than dropping it', async () => {
+    await useCuttingStore().loadMaterials({ tape: false, branchId: 'branch-7', force: true })
+
+    const call = vi.mocked(withQuery).mock.calls.at(-1)
+    expect(call?.[0]).toBe('/client/catalog/materials')
+    expect(call?.[1]).toMatchObject({ tape: false, branch_id: 'branch-7' })
+    // Both replaced by `tape`/structural branch scoping — never send them again.
+    expect(call?.[1]).not.toHaveProperty('kind')
+    expect(call?.[1]).not.toHaveProperty('carried_only')
+  })
+
+  it('asks for tapes with tape=true', async () => {
+    await useCuttingStore().loadMaterials({ tape: true, branchId: 'branch-7', force: true })
+
+    expect(vi.mocked(withQuery).mock.calls.at(-1)?.[1]).toMatchObject({
+      tape: true,
+      branch_id: 'branch-7',
+    })
+  })
+
+  it('caches per (tape, branch) so a branch flip refetches', async () => {
+    const store = useCuttingStore()
+    await store.loadMaterials({ tape: false, branchId: 'branch-7' })
+    await store.loadMaterials({ tape: false, branchId: 'branch-7' })
+    expect(vi.mocked(api.get)).toHaveBeenCalledTimes(1)
+
+    await store.loadMaterials({ tape: false, branchId: 'branch-8' })
+    expect(vi.mocked(api.get)).toHaveBeenCalledTimes(2)
   })
 })

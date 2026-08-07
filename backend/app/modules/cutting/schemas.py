@@ -10,9 +10,8 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.enums import (
     CuttingResultSource,
     CuttingResultStatus,
-    MaterialKind,
+    DekorType,
     MaterialSource,
-    PanelMaterialType,
 )
 from app.modules.cutting.imports.base import ImportMapLayout
 from app.schemas.common import APIModel
@@ -172,7 +171,7 @@ class CuttingOffcutResponse(APIModel):
 
 class CuttingPanelResponse(APIModel):
     id: uuid.UUID
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
     cut_count: int | None = None
@@ -253,20 +252,27 @@ class WorkshopCuttingDraftSummary(APIModel):
 
 
 class ClientCatalogMaterialOption(APIModel):
+    """One format a branch carries, as the cutting editors' pickers see it.
+
+    `id` is the branch material — the id a part's `material_id` must resolve to.
+    Listings are always branch-scoped now, so there is no `branch_carried` flag:
+    every row returned is carried by construction.
+    """
+
     id: uuid.UUID
-    kind: MaterialKind
+    tur: DekorType
     manufacturer_id: uuid.UUID
     manufacturer_name: str
-    type: PanelMaterialType | None
-    name: str
-    thickness_mm: Decimal
-    color: str
-    decor_code: str | None
-    panel_length_mm: int | None
-    panel_width_mm: int | None
-    grain_direction: bool | None
-    edge_width_mm: int | None
+    kod: str | None
+    nomi: str
+    tolali: bool
     image_file_id: uuid.UUID | None
-    branch_carried: bool
-    price_tiyin: int | None
+    qalinlik_mm: Decimal
+    uzunlik_mm: int | None
+    eni_mm: int | None
+    kromka_eni_mm: int | None
+    price_tiyin: int
+    # 0 means "the branch has not priced this format yet", not "free". Only the
+    # workshop-facing listing ever returns such a row; clients never see one.
+    price_unset: bool
     display_unit: str

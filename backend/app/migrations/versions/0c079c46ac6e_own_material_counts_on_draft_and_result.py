@@ -1,7 +1,7 @@
 """own material counts on draft and result
 
 Revision ID: 0c079c46ac6e
-Revises: b06a71097c10
+Revises: d1c8ea52f307
 Create Date: 2026-08-04 20:48:38.553098
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0c079c46ac6e"
-down_revision: str | None = "b06a71097c10"
+down_revision: str | None = "d1c8ea52f307"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

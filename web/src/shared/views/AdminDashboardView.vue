@@ -403,11 +403,8 @@ onMounted(loadAll)
           >
             Ishlab chiqaruvchilar
           </RouterLink>
-          <RouterLink
-            :to="rolePath('/admin/catalog/materials')"
-            class="mp-button mp-button-outline"
-          >
-            Materiallar
+          <RouterLink :to="rolePath('/admin/catalog/dekorlar')" class="mp-button mp-button-outline">
+            Dekorlar
           </RouterLink>
           <RouterLink :to="rolePath('/admin/platform/users')" class="mp-button mp-button-outline">
             Adminlar . {{ overview?.platform_users_active ?? 0 }}

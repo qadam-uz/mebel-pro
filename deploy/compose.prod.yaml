@@ -101,6 +101,15 @@ services:
       - backend
     expose:
       - "80"
+    # Unique alias. The edge joined `infra-net` to reach taqsim, and a bare
+    # `web` is ambiguous the moment any neighbour on that network also has one —
+    # Docker resolved it to theirs and every mebel-pro SPA served taqsim's
+    # frontend. `/api/*` kept working only because `backend` happened to be
+    # unique. Project-specific names on a shared network, always.
+    networks:
+      default:
+        aliases:
+          - mebel-web
     logging:
       driver: json-file
       options:
@@ -126,6 +135,13 @@ services:
       # point here and ports 80/443 must be reachable).
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN must be set in deploy/.env}
       ACME_EMAIL: ${ACME_EMAIL:-}
+      # Taqsim's Telegram Mini App runs its own compose stack on this box and
+      # publishes nothing — the edge is its only way in. Bare host, no scheme.
+      # Defaulted rather than required so the server's deploy/.env needs no
+      # edit. `:-` also swallows an explicitly empty value, which matters: an
+      # empty domain renders an anonymous site block, Caddy rejects the whole
+      # config, and the edge won't start — taking mebel-pro down with it.
+      TAQSIM_DOMAIN: ${TAQSIM_DOMAIN:-taqsim-ai.uz}
     ports:
       - "80:80"        # HTTP — also the ACME HTTP-01 challenge / HTTPS redirect
       - "443:443"      # HTTPS
@@ -140,6 +156,13 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    networks:
+      # `default` keeps web/backend reachable AND keeps the edge's source IP
+      # inside 172.29.0.0/24, so TRUSTED_PROXY_CIDRS still matches.
+      # `infra-net` is only so the edge can resolve taqsim-web; it stays out
+      # of the trusted list.
+      - default
+      - infra-net
 
 volumes:
   caddy-data:

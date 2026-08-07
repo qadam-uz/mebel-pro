@@ -13,18 +13,31 @@ from app.models.enums import StockTransactionType, SupplierStatus, enum_type
 class StockItem(UUIDPrimaryKey, Base):
     __tablename__ = "stock_items"
     __table_args__ = (
-        UniqueConstraint("branch_id", "material_id", name="uq_stock_items_branch_material"),
-        CheckConstraint("min_stock >= 0", name="ck_stock_items_min_stock_nonnegative"),
+        UniqueConstraint("branch_material_id", name="uq_stock_items_branch_material"),
     )
     # `on_hand` is deliberately unbounded below: order-driven `consume` records
     # material that physically already moved, so the books may go negative when
     # the matching arrival was never entered (QAD-150). Manual paths still guard
     # in the service layer.
+    #
+    # There is deliberately **no `min_stock` here**. The low-stock threshold is a
+    # property of what the branch carries, so it lives once on
+    # `branch_materials.min_stock`. It used to be mirrored onto this row so the
+    # low-stock filter could be a single-table predicate, kept in step by an
+    # explicit sync call — which is precisely how the two drift: any write path
+    # that forgets the call leaves the alert reading a stale number, silently and
+    # forever. `stock_items` is now only the balance.
 
+    # `branch_id` is kept alongside `branch_material_id` because every inventory
+    # query scopes by branch and the join would otherwise be mandatory. It is a
+    # denormalization: nothing in the schema forces it to agree with
+    # `branch_materials.branch_id`, so the service layer must set it from the
+    # branch material it just resolved, never from an unrelated argument.
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
-    material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
+    branch_material_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("branch_materials.id"), nullable=False
+    )
     on_hand: Mapped[int] = mapped_column(default=0, nullable=False)
-    min_stock: Mapped[int] = mapped_column(default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
 

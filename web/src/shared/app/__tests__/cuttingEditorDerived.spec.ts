@@ -8,9 +8,10 @@ import {
   partDisplayName,
   previewEdgeAssignments,
   registryColorStyle,
+  shortMaterialName,
   syncEdgeAssignments,
 } from '@/shared/app/cuttingEditorDerived'
-import type { CuttingPart } from '@/shared/stores/cutting'
+import type { ClientCatalogMaterialOption, CuttingPart } from '@/shared/stores/cutting'
 
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
@@ -209,5 +210,42 @@ describe('cuttingEditorDerived', () => {
   it('uses fixed registry colours first and generated colours after ten entries', () => {
     expect(registryColorStyle(2).bg).toBe('#D85A30')
     expect(registryColorStyle(11).bg).toMatch(/^hsl\(/)
+  })
+})
+
+// NOTE: every `material_id` in this file is a CuttingPart / CuttingEdgeBand field.
+// The backend deliberately kept those names — only CuttingPanel, OrderItem and the
+// inventory FKs became `branch_material_id`. A repo-wide rename breaks this file.
+describe('shortMaterialName', () => {
+  function option(overrides: Partial<ClientCatalogMaterialOption>): ClientCatalogMaterialOption {
+    return {
+      id: 'bm-abcdefgh-9999',
+      tur: 'ldsp',
+      manufacturer_id: 'mf1',
+      manufacturer_name: 'Egger',
+      kod: null,
+      nomi: '',
+      tolali: false,
+      image_file_id: null,
+      qalinlik_mm: '18',
+      uzunlik_mm: 2800,
+      eni_mm: 2070,
+      kromka_eni_mm: null,
+      price_tiyin: 0,
+      price_unset: true,
+      display_unit: 'sheet',
+      ...overrides,
+    }
+  }
+
+  // Three rungs now, not four: `name` is gone and `color` became `nomi`.
+  it('prefers kod, then nomi, then an id fragment', () => {
+    expect(shortMaterialName(option({ kod: 'H1334', nomi: 'Sanoma' }))).toBe('H1334')
+    expect(shortMaterialName(option({ kod: null, nomi: 'Sanoma' }))).toBe('Sanoma')
+    expect(shortMaterialName(option({ kod: null, nomi: '' }))).toBe('bm-abcde')
+  })
+
+  it('falls back to the catalog string when there is no material at all', () => {
+    expect(shortMaterialName(null)).toBe('Material')
   })
 })

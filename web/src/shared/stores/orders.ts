@@ -74,8 +74,12 @@ export interface EdgePriceLine {
 
 export interface OrderItem {
   id: string
-  material_id: string
+  // Renamed with the reshape (OrderItemResponse). The sibling price/warning/demand
+  // schemas in this file deliberately kept `material_id` — do NOT sweep them.
+  branch_material_id: string
   material_source: MaterialSource
+  // Frozen history: keeps its ORIGINAL key vocabulary, never rewritten by the
+  // migration. Read it through the dual-vocabulary helpers in app/materialLabel.
   material_snapshot: Record<string, unknown>
   part_ref: string
   length_mm: number

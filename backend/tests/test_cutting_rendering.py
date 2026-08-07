@@ -274,7 +274,7 @@ def test_thickening_stamp_prints_only_for_a_thickened_part() -> None:
         ],
         material_snapshots={"m": {"panel_length_mm": 2750, "panel_width_mm": 1830}},
     )
-    panel = SimpleNamespace(material_id="m", placements=[plain, thick], offcuts=[])
+    panel = SimpleNamespace(branch_material_id="m", placements=[plain, thick], offcuts=[])
 
     drawn: list[str] = []
     pdf = canvas.Canvas(BytesIO(), pagesize=(600, 400))

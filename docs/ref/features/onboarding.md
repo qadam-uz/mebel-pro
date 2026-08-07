@@ -2,7 +2,7 @@
 title: Workshop onboarding
 status: draft
 owner: shape
-updated: 2026-07-24
+updated: 2026-08-07
 order: 45
 ---
 
@@ -32,7 +32,7 @@ exactly what is missing and should lead.
   | - | ---- | --------- |
   | 1 | Change the temp password | `password_reset_required = false` on the signed-in user |
   | 2 | Set branch prices | ≥ 1 `active` branch has **both** `cutting_rate_tiyin` and `edge_banding_rate_tiyin` set |
-  | 3 | Add materials | ≥ 1 branch material selection exists in the workshop |
+  | 3 | Add materials | ≥ 1 branch material exists in the workshop |
 
   Step 1 is hard-gated platform-wide (the account gate in
   [`access-management.md`](access-management.md) blocks every non-account route). Steps 2–3
@@ -130,5 +130,5 @@ flowchart TD
 - [`access-management.md`](access-management.md) — the account gate and provisioning that
   precede this flow.
 - [`workshop.md`](workshop.md) — the branch settings the guide points at.
-- [`catalog-inventory.md`](catalog-inventory.md) — the material selection that completes
+- [`catalog-inventory.md`](catalog-inventory.md) — the branch materials that complete
   setup.

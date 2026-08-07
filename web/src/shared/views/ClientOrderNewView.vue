@@ -67,6 +67,9 @@ const totalEdge = computed(() =>
     : 0,
 )
 
+// "To'liq xulosa" (step 4): the itemized bill, derived via the pure helpers in
+// clientOrderReview.ts so it stays unit-testable. The per-part table this step
+// used to carry is gone — the rail's part count is the summary now.
 const billRows = computed(() => (quote.value ? buildBillRows(quote.value) : []))
 
 const blocker = computed(() =>

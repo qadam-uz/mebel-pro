@@ -6,12 +6,12 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 from app.models.enums import (
+    DekorType,
     InvoicePaymentStatus,
-    MaterialKind,
     StockTransactionType,
     SupplierStatus,
 )
-from app.modules.catalog.schemas import MaterialResponse
+from app.modules.catalog.schemas import BranchMaterialResponse
 from app.schemas.common import APIModel
 
 
@@ -46,7 +46,7 @@ class InlineSupplierInput(BaseModel):
 
 
 class StockInRequest(BaseModel):
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
     quantity: int
     unit_price_tiyin: int
     supplier_id: uuid.UUID | None = None
@@ -55,7 +55,7 @@ class StockInRequest(BaseModel):
 
 
 class StockAdjustmentRequest(BaseModel):
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
     quantity: int
     note: str
 
@@ -63,9 +63,11 @@ class StockAdjustmentRequest(BaseModel):
 class StockItemResponse(APIModel):
     id: uuid.UUID
     branch_id: uuid.UUID
-    material_id: uuid.UUID
-    material: MaterialResponse
-    kind: MaterialKind
+    branch_material_id: uuid.UUID
+    # The branch's own format of a dekor — identity nested under `.dekor`. There
+    # is no stored name, so the display string arrives as `material.label`.
+    material: BranchMaterialResponse
+    tur: DekorType
     stock_unit: str
     display_unit: str
     on_hand: int
@@ -77,7 +79,8 @@ class StockItemResponse(APIModel):
 class StockTransactionResponse(APIModel):
     id: uuid.UUID
     stock_item_id: uuid.UUID
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
+    # Computed label, not a stored column — see app/core/material_label.py.
     material_name: str
     type: StockTransactionType
     quantity: int
@@ -100,7 +103,7 @@ class StockValueResponse(APIModel):
 
 
 class SupplierInvoiceLineInput(BaseModel):
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
     quantity: int
     unit_price_tiyin: int
     note: str | None = None
@@ -121,9 +124,9 @@ class SupplierInvoiceCreateRequest(BaseModel):
 
 class SupplierInvoiceLineResponse(APIModel):
     transaction_id: uuid.UUID
-    material_id: uuid.UUID
+    branch_material_id: uuid.UUID
     material_name: str
-    kind: MaterialKind
+    tur: DekorType
     display_unit: str
     quantity: int
     unit_price_tiyin: int | None

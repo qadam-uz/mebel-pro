@@ -28,7 +28,6 @@ from app.modules.inventory.service import (
     stock_in_total_tiyin,
     stock_unit,
     stock_value,
-    sync_stock_item_min_stock,
     update_supplier,
 )
 
@@ -58,6 +57,5 @@ __all__ = [
     "stock_in_total_tiyin",
     "stock_unit",
     "stock_value",
-    "sync_stock_item_min_stock",
     "update_supplier",
 ]

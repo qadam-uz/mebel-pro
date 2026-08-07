@@ -8,7 +8,16 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { databaseUrl, expectOk } from "./helpers";
+import {
+  carryOneFormat,
+  createCatalogDekorlar,
+  databaseUrl,
+  edgeFormat,
+  escapeRegExp,
+  expectOk,
+  panelFormat,
+  type BranchMaterialResponse,
+} from "./helpers";
 
 const execFileAsync = promisify(execFile);
 const adminPassword = "AdminPass123";
@@ -16,10 +25,8 @@ const ownerReadyPassword = "OwnerReady123";
 const passwordLabel = /^(Password|Parol)$/;
 const continueButton = /^(Continue|Kirish)$/;
 
-interface MaterialResponse {
-  id: string;
-  name: string;
-}
+// The one panel format this spec's branch carries. `×` is U+00D7, as printed.
+const PANEL_FORMAT_LABEL = "900×600×18 mm";
 
 interface TokenResponse {
   access_token: string;
@@ -139,76 +146,38 @@ async function readyOwnerToken(
   return access;
 }
 
-async function createCatalogMaterials(
+/**
+ * The branch's carried formats. A dekor is platform identity; the panel and the
+ * tape a part points at are **branch materials** — one dekor in one format,
+ * carried by this branch.
+ */
+async function carriedMaterials(
   request: APIRequestContext,
-  token: string,
+  adminToken: string,
+  ownerToken: string,
+  branchId: string,
   id: string,
 ) {
-  const manufacturer = await request.post(
-    "/api/v1/platform/catalog/manufacturers",
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { name: `Order Maker ${id}`, country: "UZ" },
-    },
+  const { panel: panelDekor, edge: edgeDekor } = await createCatalogDekorlar(
+    request,
+    adminToken,
+    id,
   );
-  await expectOk(manufacturer);
-  const manufacturerId = (await manufacturer.json()).id as string;
-
-  const panel = await request.post("/api/v1/platform/catalog/materials", {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: "panel",
-      manufacturer_id: manufacturerId,
-      type: "dsp",
-      thickness_mm: "18",
-      color: "White",
-      decor_code: `P5-P-${id}`,
-      panel_length_mm: 900,
-      panel_width_mm: 600,
-      grain_direction: false,
-    },
-  });
-  await expectOk(panel);
-
-  const edge = await request.post("/api/v1/platform/catalog/materials", {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      kind: "edge",
-      manufacturer_id: manufacturerId,
-      thickness_mm: "2",
-      edge_width_mm: 19,
-      color: "White",
-      decor_code: `P5-E-${id}`,
-    },
-  });
-  await expectOk(edge);
-
-  return {
-    panel: (await panel.json()) as MaterialResponse,
-    edge: (await edge.json()) as MaterialResponse,
-  };
-}
-
-async function addBranchMaterial(
-  request: APIRequestContext,
-  token: string,
-  branchId: string,
-  materialId: string,
-  priceTiyin: number,
-  minStock: number,
-) {
-  const response = await request.post(
-    `/api/v1/workshop/branches/${branchId}/materials`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      data: {
-        material_id: materialId,
-        price_tiyin: priceTiyin,
-        min_stock: minStock,
-      },
-    },
+  const panel = await carryOneFormat(
+    request,
+    ownerToken,
+    branchId,
+    panelDekor.id,
+    panelFormat(),
   );
-  await expectOk(response);
+  const edge = await carryOneFormat(
+    request,
+    ownerToken,
+    branchId,
+    edgeDekor.id,
+    edgeFormat(),
+  );
+  return { panelDekor, edgeDekor, panel, edge };
 }
 
 async function updateBranchPricing(
@@ -230,7 +199,7 @@ async function stockIn(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  materialId: string,
+  branchMaterialId: string,
   quantity: number,
 ) {
   const response = await request.post(
@@ -238,7 +207,7 @@ async function stockIn(
     {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        material_id: materialId,
+        branch_material_id: branchMaterialId,
         quantity,
         unit_price_tiyin: 25_000_000,
         supplier: { name: `E2E Supplier ${branchId.slice(0, 6)}` },
@@ -265,7 +234,7 @@ async function optimizedDraftWithoutPricing(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  panel: MaterialResponse,
+  panel: BranchMaterialResponse,
 ) {
   const created = await request.post("/api/v1/client/cutting-drafts", {
     headers: { Authorization: `Bearer ${token}` },
@@ -349,15 +318,36 @@ async function chooseOption(
   await page.getByRole("option", { name: optionName }).click();
 }
 
+/**
+ * Pick a material in the cutting picker. The list groups by dekor — photo +
+ * identity once, formats as rows beneath — but selection is still one format,
+ * one click.
+ */
+async function chooseMaterial(
+  page: Page,
+  dekorLabel: string,
+  formatLabel: string,
+) {
+  const dialog = page.getByRole("dialog", {
+    name: "Materialni almashtirish",
+  });
+  await expect(dialog.getByText(dekorLabel)).toBeVisible();
+  await dialog.getByRole("button", { name: formatLabel, exact: true }).click();
+}
+
 async function chooseEdgeBanding(page: Page, edgeName: string) {
   // The compact row exposes one rectangular edge diagram that opens the picker.
   await page.getByRole("button", { name: "Kromka tomonlari", exact: true }).click();
   // A drawing with no tapes yet opens straight into the branch tape catalog;
   // picking the tape returns to the banding panel with it armed as current.
   const catalog = page.getByRole("dialog", { name: /Yana kromka qo'shish/ });
-  await catalog.getByRole("button", { name: new RegExp(edgeName) }).click();
+  await catalog
+    .getByRole("button", { name: new RegExp(escapeRegExp(edgeName)) })
+    .click();
   const dialog = page.getByRole("dialog", { name: /Kromka yopishtirish/ });
-  await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible();
+  await expect(
+    dialog.getByText(new RegExp(escapeRegExp(edgeName))),
+  ).toBeVisible();
   // Band top and bottom with the armed tape; edits apply live, so closing the
   // dialog keeps them.
   await dialog.getByRole("button", { name: /^Yuqori tomon/ }).click();
@@ -377,21 +367,14 @@ test("client places an order and workshop completes it through production queues
   const adminAccess = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, adminAccess, id);
   const ownerAccess = await readyOwnerToken(request, setup);
-  const { panel, edge } = await createCatalogMaterials(
-    request,
-    adminAccess,
-    id,
-  );
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id, 250_000, 1);
-  await addBranchMaterial(
+  const { panelDekor, panel, edge } = await carriedMaterials(
     request,
+    adminAccess,
     ownerAccess,
     branchId,
-    edge.id,
-    10_000,
-    1_000,
+    id,
   );
   await stockIn(request, ownerAccess, branchId, panel.id, 5);
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
@@ -426,14 +409,11 @@ test("client places an order and workshop completes it through production queues
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
   await page.getByRole("button", { name: "+ Material tanlash" }).click();
-  await page
-    .getByRole("dialog", { name: "Materialni almashtirish" })
-    .getByRole("button", { name: new RegExp(panel.name) })
-    .click();
+  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL);
   await page.getByLabel("Uzunlik millimetr").fill("260");
   await page.getByLabel("Kenglik millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
-  await chooseEdgeBanding(page, edge.name);
+  await chooseEdgeBanding(page, edge.label);
   await page.getByRole("button", { name: "Davom etish" }).click();
 
   // First optimise persists the draft and hands off to the standalone result stage.
@@ -609,9 +589,15 @@ test("client sees branch pricing setup errors while placing an order", async ({
   const adminAccess = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, adminAccess, id);
   const ownerAccess = await readyOwnerToken(request, setup);
-  const { panel } = await createCatalogMaterials(request, adminAccess, id);
   const branchId = setup.branch.id as string;
-  await addBranchMaterial(request, ownerAccess, branchId, panel.id, 250_000, 1);
+  // No branch pricing on purpose — the quote must fail with a setup error.
+  const { panel } = await carriedMaterials(
+    request,
+    adminAccess,
+    ownerAccess,
+    branchId,
+    id,
+  );
   const clientAccess = await clientToken(request, clientPhone, `Price Client ${id}`);
   const draft = await optimizedDraftWithoutPricing(
     request,

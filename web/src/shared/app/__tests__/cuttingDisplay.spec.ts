@@ -7,9 +7,6 @@ import {
   edgeShortLabel,
   edgeTinyLabel,
   sideLabels,
-  snapshotEdgeLabel,
-  snapshotMaterialLabel,
-  snapshotShortLabel,
 } from '@/shared/app/cuttingDisplay'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
@@ -18,21 +15,19 @@ function material(
 ): ClientCatalogMaterialOption {
   return {
     id: 'm1',
-    kind: 'edge',
+    tur: 'kromka',
     manufacturer_id: 'mf1',
     manufacturer_name: 'Egger Group',
-    type: null,
-    name: 'ABS H1334',
-    thickness_mm: '0.4',
-    color: 'White',
-    decor_code: 'H1334',
-    panel_length_mm: null,
-    panel_width_mm: null,
-    grain_direction: null,
-    edge_width_mm: 19,
+    kod: 'H1334',
+    nomi: 'White',
+    tolali: false,
     image_file_id: null,
-    branch_carried: true,
-    price_tiyin: null,
+    qalinlik_mm: '0.4',
+    uzunlik_mm: null,
+    eni_mm: null,
+    kromka_eni_mm: 19,
+    price_tiyin: 0,
+    price_unset: true,
     display_unit: 'm',
     ...overrides,
   }
@@ -63,9 +58,13 @@ describe('colorForMaterial', () => {
 })
 
 describe('edgeShortLabel', () => {
-  it('uses the generated material name without adding duplicate suffixes', () => {
-    expect(edgeShortLabel(material())).toBe('ABS H1334')
-    expect(edgeShortLabel(material(), true)).toBe('ABS H1334')
+  // BEHAVIOUR CHANGE driven by the reshape: the option used to carry the server's
+  // stored `name` ('ABS H1334') and this echoed it. That column is gone, so the
+  // label is composed through the one composer — the same string the order review,
+  // the PDF and the production card show for this tape.
+  it('composes the canonical edge label without adding duplicate suffixes', () => {
+    expect(edgeShortLabel(material())).toBe('Egger Group H1334 · White · 0.4×19 mm')
+    expect(edgeShortLabel(material(), true)).toBe('Egger Group H1334 · White · 0.4×19 mm')
   })
 
   it('renders "-" for no material', () => {
@@ -81,52 +80,11 @@ describe('edgeTinyLabel', () => {
 })
 
 describe('edgeSearchText', () => {
+  // Kept, not deleted: this narrows the rows already loaded into the open edge
+  // picker (a keyboard jump), it is not the catalog search. `name` left the blob
+  // with the column; `kod` and `nomi` carry the signal now.
   it('lower-cases a searchable blob of the material fields', () => {
-    expect(edgeSearchText(material())).toBe('egger group abs h1334 white h1334 0.4 19')
-    expect(edgeSearchText(material({ decor_code: null }))).toBe(
-      'egger group abs h1334 white  0.4 19',
-    )
-  })
-})
-
-describe('snapshotShortLabel', () => {
-  it('uses decor, then colour, then a name prefix', () => {
-    expect(snapshotShortLabel({ decor_code: 'H1334', color: 'Oak', name: 'Panel' })).toBe('H1334')
-    expect(snapshotShortLabel({ decor_code: null, color: 'Oak', name: 'Panel' })).toBe('Oak')
-    expect(snapshotShortLabel({ name: 'Generated material label' })).toBe('Generated material')
-  })
-
-  it('builds fuller result labels for panel and edge snapshots', () => {
-    expect(
-      snapshotMaterialLabel({
-        manufacturer_name: 'Egger',
-        type: 'dsp',
-        decor_code: 'H1334 ST9',
-        color: 'Sanoma',
-        thickness_mm: '18',
-        panel_length_mm: 2800,
-        panel_width_mm: 2070,
-      }),
-    ).toBe('LDSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
-    expect(
-      snapshotMaterialLabel({
-        manufacturer_name: 'Kronospan',
-        type: 'dsp',
-        decor_code: 'TD-W18',
-        color: 'White',
-        thickness_mm: '18.0',
-        panel_length_mm: 2800,
-        panel_width_mm: 2070,
-      }),
-    ).toBe('LDSP Kronospan TD-W18 · White · 2800×2070×18 mm')
-    expect(
-      snapshotEdgeLabel({
-        manufacturer_name: 'Egger',
-        decor_code: 'H1334 ST9',
-        color: 'Sanoma',
-        thickness_mm: '0.4',
-        edge_width_mm: 20,
-      }),
-    ).toBe('Egger H1334 ST9 · Sanoma · 0.4×20 mm')
+    expect(edgeSearchText(material())).toBe('egger group white h1334 0.4 19')
+    expect(edgeSearchText(material({ kod: null }))).toBe('egger group white  0.4 19')
   })
 })

@@ -72,6 +72,9 @@ const branchForm = reactive({
   edgeTrimMm: '',
 })
 const additionalPhones = ref<string[]>([])
+// The map picker owns the pin; the form only carries what it reports back.
+const mapPoint = ref<{ latitude: number; longitude: number } | null>(null)
+
 // Per-row phone errors surface from the first save attempt on, then stay live so
 // fixing or removing a row clears its message.
 const phonesValidated = ref(false)
@@ -219,6 +222,12 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
+  // Round-trip the stored pin back into a link so the field shows what is saved
+  // rather than sitting empty on a branch that already has coordinates.
+  mapPoint.value =
+    branch.latitude != null && branch.longitude != null
+      ? { latitude: Number(branch.latitude), longitude: Number(branch.longitude) }
+      : null
   additionalPhones.value = [...branch.additional_phones]
   phonesValidated.value = false
   branchForm.kerfMm = String(branch.kerf_mm)
@@ -264,6 +273,8 @@ async function saveBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       additional_phones: additionalPhones.value,
+      latitude: mapPoint.value ? String(mapPoint.value.latitude) : null,
+      longitude: mapPoint.value ? String(mapPoint.value.longitude) : null,
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
     })

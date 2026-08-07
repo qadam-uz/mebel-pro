@@ -94,10 +94,10 @@ def invoice_response(record: InvoiceRecord) -> SupplierInvoiceResponse:
         lines=[
             SupplierInvoiceLineResponse(
                 transaction_id=line.transaction.id,
-                material_id=line.stock_item.material_id,
-                material_name=line.material.name,
-                kind=line.material.kind,
-                display_unit=display_unit(line.material.kind),
+                branch_material_id=line.stock_item.branch_material_id,
+                material_name=line.label,
+                tur=line.dekor.tur,
+                display_unit=display_unit(line.dekor.tur),
                 quantity=line.transaction.quantity,
                 unit_price_tiyin=line.transaction.unit_price_tiyin,
                 total_price_tiyin=line.transaction.total_price_tiyin,

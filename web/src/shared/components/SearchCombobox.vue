@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import { foldIncludes } from '@/shared/app/searchFold'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
@@ -70,25 +72,80 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const inputRef = ref<HTMLInputElement | null>(null)
+// The vertical anchor is the whole FIELD — input plus its error message — not the
+// input alone. Anchoring to the input would open the panel straight over the
+// error text, which is the defect the old `top-full`-below-the-message layout
+// was built to avoid. Horizontal placement still follows the input.
+const fieldRef = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const query = ref('')
 const open = ref(false)
 const activeIndex = ref(0)
 const id = nextStableId('mp-combobox')
-const {
-  dropUp,
-  start: startPlacement,
-  stop: stopPlacement,
-} = useDropdownPlacement(inputRef, listRef)
+// `useDropdownPlacement` still drives scroll-into-view and the open/close
+// lifecycle; its `dropUp` is unused now that `updatePanelPosition` decides the
+// flip itself from the measured viewport.
+const { start: startPlacement, stop: stopPlacement } = useDropdownPlacement(inputRef, listRef)
+
+// The panel teleports to <body> and is placed from the trigger, like every other
+// popover here (ActionMenu, ProjectDropdown, DateField). It has to leave: this
+// combobox is used inside `.table-wrap`, which is `overflow-x: auto` and so
+// clips on BOTH axes per spec, and its old `z-40` sat under the modal layer —
+// so in the Kirim form the list rendered behind the row beneath it. Fixed
+// positioning also frees the width: anchored to the cell it was ~200px and
+// truncated "Egger H1137 · Kulrang eman" to "Egger H1137 · K...".
+const PANEL_GUTTER = 8
+const PANEL_MIN_WIDTH = 420
+const PANEL_MAX_HEIGHT = 288
+const panelStyle = ref<CSSProperties>({})
+
+function updatePanelPosition() {
+  const trigger = inputRef.value
+  if (!trigger) return
+  const inputRect = overlayRect(trigger)
+  // `rect` spans the field so the panel clears any error message below the input.
+  const rect = fieldRef.value ? overlayRect(fieldRef.value) : inputRect
+  const { width: viewportWidth, height: viewportHeight } = overlayViewport()
+  // Never narrower than the trigger, never wider than the viewport allows.
+  const width = Math.min(
+    Math.max(inputRect.width, PANEL_MIN_WIDTH),
+    Math.max(160, viewportWidth - PANEL_GUTTER * 2),
+  )
+  const below = viewportHeight - rect.bottom - PANEL_GUTTER - 4
+  const above = rect.top - PANEL_GUTTER - 4
+  const openUp = below < PANEL_MAX_HEIGHT && above > below
+  const maxHeight = Math.max(120, Math.min(openUp ? above : below, PANEL_MAX_HEIGHT))
+  const left = Math.min(
+    Math.max(inputRect.left, PANEL_GUTTER),
+    Math.max(PANEL_GUTTER, viewportWidth - width - PANEL_GUTTER),
+  )
+  const top = openUp
+    ? Math.max(PANEL_GUTTER, rect.top - maxHeight - 4)
+    : Math.min(rect.bottom + 4, viewportHeight - PANEL_GUTTER)
+  panelStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${width}px`,
+    maxHeight: `${maxHeight}px`,
+  }
+}
+
+watch(open, async (isOpen) => {
+  if (!isOpen) return
+  await nextTick()
+  updatePanelPosition()
+})
 
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const showClear = computed(() => props.clearable && !!props.modelValue && !props.disabled)
 const filteredOptions = computed(() => {
   if (props.serverFiltered) return props.options
-  const value = query.value.trim().toLowerCase()
+  const value = query.value.trim()
   if (!value) return props.options
+  // Folded, not lowercased: the labels are stored in Latin and workshops type on
+  // a Cyrillic keyboard. `сонома` has to reach `Sonoma eman` — see searchFold.ts.
   return props.options.filter((option) =>
-    `${option.label} ${option.meta ?? ''}`.toLowerCase().includes(value),
+    foldIncludes(`${option.label} ${option.meta ?? ''}`, value),
   )
 })
 const activeOptionId = computed(() => {
@@ -325,10 +382,15 @@ defineExpose({ focus })
 
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
+  window.addEventListener('resize', updatePanelPosition)
+  // Capture phase: the trigger's own scroll container is what moves it.
+  window.addEventListener('scroll', updatePanelPosition, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
+  window.removeEventListener('resize', updatePanelPosition)
+  window.removeEventListener('scroll', updatePanelPosition, true)
   cancelPendingSearch()
 })
 </script>
@@ -350,7 +412,7 @@ onBeforeUnmount(() => {
          cover the words from. The inner box keeps the swatch and the clear
          button glued to the input itself, whatever the message does to the
          outer height. -->
-    <div class="relative">
+    <div ref="fieldRef" data-placement-anchor class="relative">
       <div class="relative">
         <span
           v-if="swatchColor"
@@ -407,76 +469,84 @@ onBeforeUnmount(() => {
       <p v-if="error" :id="errorId" class="mt-1 text-sm font-bold text-danger">
         {{ error }}
       </p>
-      <ul
-        v-if="open"
-        :id="`${id}-listbox`"
-        ref="listRef"
-        role="listbox"
-        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
-        :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
-        :aria-labelledby="`${id}-label`"
-      >
-        <li
-          v-for="(option, index) in filteredOptions"
-          :id="`${id}-${option.value}`"
-          :key="option.value"
-          role="option"
-          :aria-selected="option.value === modelValue"
-          class="grid min-h-11 cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-md px-3 py-2 text-sm"
-          :class="[
-            option.disabled ? 'cursor-not-allowed text-ink-muted opacity-55' : '',
-            index === activeIndex ? 'bg-sunk' : 'bg-elevated',
-            option.value === modelValue ? 'text-accent' : 'text-ink',
-          ]"
-          @mouseenter="activeIndex = index"
-          @click="choose(option)"
+      <Teleport to="body">
+        <!-- Esc is bound here as well as on the wrapper: focus is in the input,
+             which is no longer an ancestor of this panel once teleported. -->
+        <ul
+          v-if="open"
+          :id="`${id}-listbox`"
+          ref="listRef"
+          role="listbox"
+          class="fixed z-[90] overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+          :style="panelStyle"
+          :aria-labelledby="`${id}-label`"
+          @keydown.esc.stop.prevent="closeList(true)"
         >
-          <span class="min-w-0">
-            <slot name="option" :option="option" :selected="option.value === modelValue">
-              <span class="block truncate font-bold">{{ option.label }}</span>
-              <span v-if="option.meta" class="block truncate font-mono text-[11px] text-ink-muted">
-                {{ option.meta }}
-              </span>
-            </slot>
-          </span>
-          <svg
-            v-if="option.value === modelValue"
-            class="size-4"
-            viewBox="0 0 20 20"
-            aria-hidden="true"
+          <li
+            v-for="(option, index) in filteredOptions"
+            :id="`${id}-${option.value}`"
+            :key="option.value"
+            role="option"
+            :aria-selected="option.value === modelValue"
+            class="grid min-h-11 cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-md px-3 py-2 text-sm"
+            :class="[
+              option.disabled ? 'cursor-not-allowed text-ink-muted opacity-55' : '',
+              index === activeIndex ? 'bg-sunk' : 'bg-elevated',
+              option.value === modelValue ? 'text-accent' : 'text-ink',
+            ]"
+            @mouseenter="activeIndex = index"
+            @click="choose(option)"
           >
-            <path
-              d="m4.5 10.5 3.2 3.2L15.5 6"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-            />
-          </svg>
-        </li>
-        <li
-          v-if="loading"
-          class="px-3 py-3 text-sm font-bold text-ink-muted"
-          role="status"
-          aria-live="polite"
-        >
-          {{ loadingLabel }}
-        </li>
-        <li
-          v-else-if="filteredOptions.length === 0"
-          class="px-3 py-3 text-sm font-bold text-ink-muted"
-        >
-          {{ noResultsLabel }}
-        </li>
-        <li
-          v-if="hint"
-          role="presentation"
-          class="mt-1 border-t border-hairline px-3 pb-1 pt-2 text-[11px] leading-tight text-ink-muted"
-        >
-          {{ hint }}
-        </li>
-      </ul>
+            <span class="min-w-0">
+              <slot name="option" :option="option" :selected="option.value === modelValue">
+                <span class="block break-words font-bold">{{ option.label }}</span>
+                <span
+                  v-if="option.meta"
+                  class="block truncate font-mono text-[11px] text-ink-muted"
+                >
+                  {{ option.meta }}
+                </span>
+              </slot>
+            </span>
+            <svg
+              v-if="option.value === modelValue"
+              class="size-4"
+              viewBox="0 0 20 20"
+              aria-hidden="true"
+            >
+              <path
+                d="m4.5 10.5 3.2 3.2L15.5 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+              />
+            </svg>
+          </li>
+          <li
+            v-if="loading"
+            class="px-3 py-3 text-sm font-bold text-ink-muted"
+            role="status"
+            aria-live="polite"
+          >
+            {{ loadingLabel }}
+          </li>
+          <li
+            v-else-if="filteredOptions.length === 0"
+            class="px-3 py-3 text-sm font-bold text-ink-muted"
+          >
+            {{ noResultsLabel }}
+          </li>
+          <li
+            v-if="hint"
+            role="presentation"
+            class="mt-1 border-t border-hairline px-3 pb-1 pt-2 text-[11px] leading-tight text-ink-muted"
+          >
+            {{ hint }}
+          </li>
+        </ul>
+      </Teleport>
     </div>
   </div>
 </template>

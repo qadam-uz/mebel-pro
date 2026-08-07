@@ -1,4 +1,5 @@
 import { DRAFT_LIMIT } from '@/shared/app/constants'
+import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import { translate, translatePlural } from '@/shared/i18n'
 import type { NotificationItem } from '@/shared/stores/notifications'
 import type { OrderStatus } from '@/shared/stores/orders'
@@ -9,12 +10,21 @@ export function draftDisplayName(draft: CuttingDraft): string {
   if (draft.name) return draft.name
   const result =
     draft.results.find((item) => item.id === draft.chosen_result_id) ?? draft.results[0]
+  // Post-reshape snapshots have no `name`, so the label is composed (which also
+  // gives pre-reshape drafts their historical string). The first `·` segment is
+  // the identity prefix — «LDSP Egger H1334» — exactly what `.name.split('·')[0]`
+  // used to yield. The fallback string is filtered out so an unlabelled snapshot
+  // never becomes the draft's name.
+  const fallback = translate('cutting.material.fallback')
   const materials = [
     ...new Set(
       draft.parts_snapshot
-        .map((part) => result?.material_snapshots[part.material_id]?.name)
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => value.split('·')[0].trim()),
+        .map((part) => {
+          const snapshot = result?.material_snapshots[part.material_id]
+          return snapshot ? snapshotMaterialLabel(snapshot, fallback) : ''
+        })
+        .map((value) => value.split('·')[0].trim())
+        .filter((value) => value && value !== fallback),
     ),
   ]
   if (materials.length)

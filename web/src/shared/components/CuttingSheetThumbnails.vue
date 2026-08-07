@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { panelDisplayIndex, panelFillPercent } from '@/shared/app/cuttingResultsDisplay'
-import { snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
+import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
 import type { CuttingPanel, CuttingResult } from '@/shared/stores/cutting'
 
 defineProps<{
@@ -19,15 +19,21 @@ function numberSnapshot(value: unknown, fallback: number) {
 }
 
 function snapshot(result: CuttingResult, panel: CuttingPanel) {
-  return result.material_snapshots[panel.material_id] ?? {}
+  return result.material_snapshots[panel.branch_material_id] ?? {}
 }
 
+// Frozen history: pre-reshape snapshots only carry panel_length_mm/panel_width_mm,
+// so the legacy key stays in the read. Without it every historical thumbnail falls
+// back to 1000×700 and renders at the wrong aspect ratio, with no error.
 function panelLength(result: CuttingResult, panel: CuttingPanel) {
-  return numberSnapshot(snapshot(result, panel).panel_length_mm, 1000)
+  return numberSnapshot(
+    snapshotValue(snapshot(result, panel), 'uzunlik_mm', 'panel_length_mm'),
+    1000,
+  )
 }
 
 function panelWidth(result: CuttingResult, panel: CuttingPanel) {
-  return numberSnapshot(snapshot(result, panel).panel_width_mm, 700)
+  return numberSnapshot(snapshotValue(snapshot(result, panel), 'eni_mm', 'panel_width_mm'), 700)
 }
 
 function viewBox(result: CuttingResult, panel: CuttingPanel) {
@@ -42,14 +48,14 @@ function panelGroups(result: CuttingResult) {
   const groups: Array<{ materialId: string; label: string; panels: CuttingPanel[] }> = []
   const indexByMaterial = new Map<string, number>()
   for (const panel of result.panels) {
-    let group = groups[indexByMaterial.get(panel.material_id) ?? -1]
+    let group = groups[indexByMaterial.get(panel.branch_material_id) ?? -1]
     if (!group) {
       group = {
-        materialId: panel.material_id,
-        label: snapshotMaterialLabel(snapshot(result, panel), panel.material_id.slice(0, 8)),
+        materialId: panel.branch_material_id,
+        label: snapshotMaterialLabel(snapshot(result, panel), panel.branch_material_id.slice(0, 8)),
         panels: [],
       }
-      indexByMaterial.set(panel.material_id, groups.length)
+      indexByMaterial.set(panel.branch_material_id, groups.length)
       groups.push(group)
     }
     group.panels.push(panel)

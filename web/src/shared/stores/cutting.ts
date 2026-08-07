@@ -4,8 +4,9 @@ import { defineStore } from 'pinia'
 import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
+import { materialOptionLabel } from '@/shared/app/materialLabel'
 import { translate } from '@/shared/i18n'
-import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
+import type { DekorType } from '@/shared/stores/admin'
 import type { ImportMapLayout } from '@/shared/stores/cuttingImport'
 
 export type MaterialSource = 'shop' | 'own'
@@ -71,7 +72,10 @@ export interface CuttingPlacement {
 
 export interface CuttingPanel {
   id: string
-  material_id: string
+  // Renamed with the reshape (CuttingPanelResponse). NOTE: `CuttingPart.material_id`
+  // and `CuttingEdgeBand.material_id` above deliberately kept their names — the
+  // backend did not rename those, they just resolve to a branch-material id now.
+  branch_material_id: string
   panel_index: number
   waste_area_mm2: number
   offcuts: CuttingOffcut[]
@@ -160,23 +164,31 @@ export interface CuttingMapImportCommitPayload {
   source_filename?: string | null
 }
 
+/**
+ * One format a branch carries, as the cutting editors' pickers see it. `id` is the
+ * branch material — the id a part's `material_id` must resolve to.
+ *
+ * Listings are always branch-scoped now, so there is no `branch_carried` flag:
+ * every row returned is carried by construction. This is also the ONE reshaped
+ * response with no server-composed `label` — use `materialLabel()` below.
+ */
 export interface ClientCatalogMaterialOption {
   id: string
-  kind: MaterialKind
+  tur: DekorType
   manufacturer_id: string
   manufacturer_name: string
-  type: PanelMaterialType | null
-  name: string
-  thickness_mm: string
-  color: string
-  decor_code: string | null
-  panel_length_mm: number | null
-  panel_width_mm: number | null
-  grain_direction: boolean | null
-  edge_width_mm: number | null
+  kod: string | null
+  nomi: string
+  tolali: boolean
   image_file_id: string | null
-  branch_carried: boolean
-  price_tiyin: number | null
+  qalinlik_mm: string
+  uzunlik_mm: number | null
+  eni_mm: number | null
+  kromka_eni_mm: number | null
+  price_tiyin: number
+  // 0 means "the branch has not priced this format yet", not "free". Only the
+  // workshop-facing listing ever returns such a row; clients never see one.
+  price_unset: boolean
   display_unit: string
 }
 
@@ -192,9 +204,15 @@ export interface ClientBranchOption {
   edge_trim_mm: number
 }
 
+/**
+ * The picker option's display string. The server used to send a stored `name`;
+ * `ClientCatalogMaterialOption` carries no `label`, so the string is composed —
+ * once, in `@/shared/app/materialLabel`, which mirrors the backend's
+ * `material_label.py` byte for byte. Never re-implement it at a call site.
+ */
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
   if (!material) return translate('cutting.material.none')
-  return material.name
+  return materialOptionLabel(material)
 }
 
 export function metres(mm: number) {
@@ -212,19 +230,16 @@ export function metres(mm: number) {
 export function partFitError(
   lengthMm: number,
   widthMm: number,
-  panel: Pick<
-    ClientCatalogMaterialOption,
-    'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
-  >,
+  panel: Pick<ClientCatalogMaterialOption, 'uzunlik_mm' | 'eni_mm' | 'tolali'>,
   followGrain: boolean,
   trimMm: number,
 ): 'impossible_grain' | 'part_too_large' | null {
-  if (panel.panel_length_mm == null || panel.panel_width_mm == null) return null
+  if (panel.uzunlik_mm == null || panel.eni_mm == null) return null
   const length = Number(lengthMm)
   const width = Number(widthMm)
   if (!Number.isFinite(length) || !Number.isFinite(width)) return null
-  const usableLength = panel.panel_length_mm - 2 * trimMm
-  const usableWidth = panel.panel_width_mm - 2 * trimMm
+  const usableLength = panel.uzunlik_mm - 2 * trimMm
+  const usableWidth = panel.eni_mm - 2 * trimMm
   const fitsNormal = length <= usableLength && width <= usableWidth
   const fitsRotated = width <= usableLength && length <= usableWidth
   const locked = followGrain
@@ -235,29 +250,12 @@ export function partFitError(
 export const EDGE_SIDES = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
 export type EdgeSide = (typeof EDGE_SIDES)[number]
 
-/**
- * Which of a part's SHOP-sourced materials the chosen branch doesn't carry — the
- * panel (`'panel'`) and/or each banded side. Empty when no branch is chosen or all
- * are carried. Pure: the panel/edge resolvers are passed in, so it's unit-testable
- * without the store (CB-124). Drives the per-row recovery banner (CB-19/CB-86).
- */
-export function partNotCarried(
-  part: CuttingPart,
-  branchId: string | null | undefined,
-  resolvePanel: (id: string | null | undefined) => { branch_carried: boolean } | null,
-  resolveEdge: (id: string | null | undefined) => { branch_carried: boolean } | null,
-): string[] {
-  if (!branchId) return []
-  const issues: string[] = []
-  const panel = resolvePanel(part.material_id)
-  if (part.material_source === 'shop' && panel && !panel.branch_carried) issues.push('panel')
-  for (const side of EDGE_SIDES) {
-    const band = part[side]
-    const material = resolveEdge(band?.material_id)
-    if (band?.source === 'shop' && material && !material.branch_carried) issues.push(side)
-  }
-  return issues
-}
+// `partNotCarried()` used to live here and drove the per-row "this branch does
+// not carry it" recovery banner (CB-19/CB-86). Branch scoping is structural now
+// — `branch_id` is required on the catalog endpoints and every returned row is
+// carried by construction — so the check has no input left and was deleted with
+// its banner. A part can still reference a material that has since left the
+// catalog; that is `materialMissing`, a different condition, and it stays.
 
 export const useCuttingStore = defineStore('cutting', () => {
   // Role scope (default 'client' — the client SPA needs zero configuration).
@@ -310,7 +308,7 @@ export const useCuttingStore = defineStore('cutting', () => {
   const branchOptions = ref<ClientBranchOption[]>([])
   const panelOptions = ref<ClientCatalogMaterialOption[]>([])
   const edgeOptions = ref<ClientCatalogMaterialOption[]>([])
-  // Per-(kind, branch, …) catalog cache (CB-40): the editor re-requests the same
+  // Per-(tape, branch, …) catalog cache (CB-40): the editor re-requests the same
   // material list on remount and when the branch flips back, and the full list
   // drives client-side filtering — so reuse a recent result instead of re-fetching
   // an identical payload. Keyed by the full query; ~30s freshness like branch-options.
@@ -535,37 +533,44 @@ export const useCuttingStore = defineStore('cutting', () => {
     branchOptionsLoadedAt.value = Date.now()
   }
 
+  /**
+   * The branch's catalog for one picker. `branchId` is REQUIRED — the branch is
+   * chosen before the cutting flow reaches materials, and the old "no branch,
+   * browse everything" mode is gone with `carried_only`. `tape` replaces the old
+   * `kind`: the edge picker wants kromka, every other picker wants all
+   * panel-shaped dekorlar, which no single `tur` can express. `tape=false` must
+   * reach the server, so it is passed through `withQuery`'s falsy-preserving path.
+   */
   async function loadMaterials(params: {
-    kind: MaterialKind
-    branchId?: string | null
+    tape: boolean
+    branchId: string
     search?: string
-    carriedOnly?: boolean
+    manufacturerId?: string | null
     limit?: number
     force?: boolean
   }) {
-    const carriedOnly = params.carriedOnly ?? false
-    const cacheKey = `${params.kind}:${params.branchId ?? 'all'}:${params.search ?? ''}:${carriedOnly}:${params.limit ?? ''}`
+    const cacheKey = `${params.tape}:${params.branchId}:${params.search ?? ''}:${params.manufacturerId ?? ''}:${params.limit ?? ''}`
     const cached = materialsCache.get(cacheKey)
     if (!params.force && cached && Date.now() - cached.at < 30_000) {
-      if (params.kind === 'panel') panelOptions.value = cached.items
-      else edgeOptions.value = cached.items
+      if (params.tape) edgeOptions.value = cached.items
+      else panelOptions.value = cached.items
       return cached.items
     }
     materialsLoading.value = true
     try {
       const materials = await api.get<ClientCatalogMaterialOption[]>(
         withQuery(scopedPath('/catalog/materials'), {
-          kind: params.kind,
+          tape: params.tape,
           branch_id: params.branchId,
           search: params.search,
-          carried_only: carriedOnly,
+          manufacturer_id: params.manufacturerId,
           limit: params.limit,
         }),
         authInit(),
       )
       materialsCache.set(cacheKey, { at: Date.now(), items: materials })
-      if (params.kind === 'panel') panelOptions.value = materials
-      else edgeOptions.value = materials
+      if (params.tape) edgeOptions.value = materials
+      else panelOptions.value = materials
       return materials
     } finally {
       materialsLoading.value = false

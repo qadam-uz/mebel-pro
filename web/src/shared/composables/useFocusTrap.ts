@@ -71,6 +71,22 @@ export function useFocusTrap(
     }
   }
 
+  /**
+   * Escape, bound to the document rather than only to the panel.
+   *
+   * The panel handler needs the keypress to bubble out of the focused element,
+   * which quietly stops being true the moment focus is anywhere else: a popover
+   * teleported to <body> (every dropdown here, per web/AGENTS.md), or a control
+   * that unmounts on selection and drops focus to <body>. Either way the modal
+   * stopped closing on Escape — and only sometimes, which is worse than never.
+   * Document level makes it independent of where focus landed.
+   */
+  function onDocumentKeydown(event: KeyboardEvent) {
+    if (!open.value || event.key !== 'Escape' || event.defaultPrevented) return
+    event.preventDefault()
+    onEscape()
+  }
+
   watch(
     open,
     async (isOpen) => {
@@ -78,10 +94,12 @@ export function useFocusTrap(
         previousFocus =
           document.activeElement instanceof HTMLElement ? document.activeElement : null
         lockBodyScroll()
+        document.addEventListener('keydown', onDocumentKeydown)
         await nextTick()
         const items = focusables()
         ;(items[0] ?? panelRef.value)?.focus()
       } else {
+        document.removeEventListener('keydown', onDocumentKeydown)
         unlockBodyScroll()
         if (previousFocus) {
           previousFocus.focus()
@@ -93,6 +111,7 @@ export function useFocusTrap(
   )
 
   onBeforeUnmount(() => {
+    document.removeEventListener('keydown', onDocumentKeydown)
     if (open.value) {
       unlockBodyScroll()
       if (previousFocus) previousFocus.focus()

@@ -74,6 +74,7 @@ function apiValidationMessage(code: string | null): string {
     // `material_name_required` was here too; the backend never raises it — a
     // material's name is derived, not typed (QAD-163 cross-check).
     case 'material_color_required':
+    case 'dekor_nomi_required':
     case 'workshop_name_required':
     case 'branch_name_required':
     case 'branch_address_required':
@@ -109,6 +110,8 @@ function apiValidationMessage(code: string | null): string {
       return "List maydonlarini to'ldiring."
     case 'invalid_grain':
       return "Tekstura yo'nalishini belgilang."
+    case 'dekor_exists':
+      return 'Bu ishlab chiqaruvchida shu tur va kod bilan dekor bor.'
     default:
       return 'Maydon qiymatini tekshiring.'
   }

@@ -47,7 +47,7 @@ const fieldOrder: ManufacturerField[] = ['name']
 
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
-  dropdownOption('active', 'Faol', "yangi material uchun ko'rinadi"),
+  dropdownOption('active', 'Faol', "yangi dekor uchun ko'rinadi"),
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
 const countryFilter = ref('all')
@@ -70,8 +70,8 @@ const filtered = computed(() => {
   })
 })
 
-function materialCount(id: string) {
-  return admin.materials.filter((material) => material.manufacturer_id === id).length
+function dekorCount(id: string) {
+  return admin.dekorlar.filter((dekor) => dekor.manufacturer_id === id).length
 }
 
 function openCreate() {
@@ -156,7 +156,7 @@ async function confirmStatus() {
 }
 
 onMounted(async () => {
-  await Promise.all([admin.loadManufacturers(), admin.loadMaterials()])
+  await Promise.all([admin.loadManufacturers(), admin.loadDekorlar()])
 })
 </script>
 
@@ -206,7 +206,7 @@ onMounted(async () => {
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Ishlab chiqaruvchi yo'q</h3>
-      <p>Material yaratishdan oldin ishlab chiqaruvchi qo'shing.</p>
+      <p>Dekor yaratishdan oldin ishlab chiqaruvchi qo'shing.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -216,7 +216,7 @@ onMounted(async () => {
             <tr>
               <th>Ishlab chiqaruvchi</th>
               <th>Davlat</th>
-              <th class="admin-right">Materiallar</th>
+              <th class="admin-right">Dekorlar</th>
               <th>Holat</th>
               <th>Izoh</th>
               <th><span class="sr-only">Amallar</span></th>
@@ -229,7 +229,7 @@ onMounted(async () => {
                 <small>{{ manufacturer.id.slice(0, 8) }}</small>
               </td>
               <td>{{ manufacturer.country ?? '-' }}</td>
-              <td class="admin-right admin-mono">{{ materialCount(manufacturer.id) }}</td>
+              <td class="admin-right admin-mono">{{ dekorCount(manufacturer.id) }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(manufacturer.status)">
                   {{ materialStatusLabel(manufacturer.status) }}
@@ -355,8 +355,8 @@ onMounted(async () => {
       :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
       :message="
         statusTarget?.status === 'inactive'
-          ? `${statusTarget?.row.name} faol emas qilinadi — uning materiallari yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
-          : `${statusTarget?.row.name} faollashtiriladi va yangi material tanlovida ko'rinadi.`
+          ? `${statusTarget?.row.name} faol emas qilinadi — uning dekorlari yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va yangi dekor tanlovida ko'rinadi.`
       "
       confirm-label="Tasdiqlash"
       cancel-label="Bekor qilish"

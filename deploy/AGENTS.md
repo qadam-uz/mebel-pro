@@ -12,7 +12,7 @@ stack on its own; pick whichever matches the environment.
 | ------------------- | ----- |
 | `compose.yaml`      | **Dev**, self-contained. `postgres` (17-alpine, named volume), `minio` (S3-compatible, named volume) + `createbuckets` (one-shot `mc` that creates the bucket then exits), `backend` (source-mounted, `uvicorn --reload` autoreload, the repo's `docs/` bind-mounted at `/docs`, plus an optional `cutting-engine` checkout at `/opt/cutting-engine` — see `CUTTING_ENGINE_SRC` below), `web` (Vite dev server on `node:22-slim`, HMR). Ports published on the host: 5432, 9000/9001 (MinIO API + console), 8000, 5173. |
 | `compose.prod.yaml` | **Prod**, self-contained. No local data services — backend joins the external `infra-net` Docker network and reaches the shared `postgres` + `minio` services by name. `backend` runs the built image (alembic upgrade on start), `web` is the built SPA served by nginx, and a **Caddy edge** (built from `edge.Dockerfile`, Caddyfile baked in) is the only published service (80 / 443 / 443-UDP; auto-HTTPS per host). Edge subdomain routing (apex/`app.*`/`workshop.*`/`admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. Includes per-service log rotation and resource caps. Bucket creation is **not** done here — provision the `MINIO_BUCKET` on the shared MinIO once via its console / `mc`. |
-| `Caddyfile`         | Edge reverse-proxy config. **Baked into the edge image**, not mounted — a config change ships as a new image, so `up -d --build` recreates the edge deterministically (a bind-mounted file's contents are invisible to Compose and would strand Caddy on a stale in-memory config). |
+| `Caddyfile`         | Edge reverse-proxy config. **Baked into the edge image**, not mounted — a config change ships as a new image, so `up -d --build` recreates the edge deterministically (a bind-mounted file's contents are invisible to Compose and would strand Caddy on a stale in-memory config). Also carries the `{$TAQSIM_DOMAIN}` site for the **taqsim** project — see below. |
 | `edge.Dockerfile`   | Two lines: `FROM caddy:2.8-alpine` + `COPY Caddyfile`. Build context is this `deploy/` dir, scoped by `.dockerignore` to just the Caddyfile. Per-env values (`BASE_DOMAIN`, `ACME_EMAIL`) stay runtime env — Caddy substitutes them at load. |
 | `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF`, then **re-exec the freshly-checked-out script once** (so a fix to the deploy flow applies the same deploy, not the next) → verify `deploy/.env` and `infra-net` exist → `docker compose -f compose.prod.yaml up -d --build --remove-orphans` → wait for backend healthcheck → prune dangling images. Idempotent; runnable manually too. |
 | `.env.dev.example`  | Dev env contract — ready-to-use defaults. Copy to `.env` for `compose.yaml`. |
@@ -21,6 +21,33 @@ stack on its own; pick whichever matches the environment.
 | `seed-assets/`      | Committed catalog images used by `seed-demo.sh` — 32 material swatch JPEGs in `materials/` (`<decor>_panel.jpg` / `<decor>_edge.jpg`, ~480px, ~30 KiB each): wood decors tinted from CC0 textures, uni colours + edge-tape cards generated. One upload per material; a missing file just skips that material's image. |
 
 > The `web` *container* still has its own minimal nginx config (`../web/nginx.conf`, SPA history fallback) — it's purely a static file server behind the edge and never touches TLS. `deploy/Caddyfile` is the **edge** in front of everything; that's the one that terminates HTTPS and auto-renews the certificate.
+
+## The edge also fronts taqsim (2026-08-07)
+
+The VPS is shared. **taqsim** (a Telegram bot + its Mini App) runs its own
+compose stack from `/opt/taqsim` and publishes **no** host ports, because this
+edge already owns 80/443. So the edge is taqsim's only way in:
+
+- `edge` joins `infra-net` (it previously sat on `default` only) purely to
+  resolve taqsim's container. It stays **out** of `TRUSTED_PROXY_CIDRS` — the
+  backend still trusts only `172.29.0.0/24`, and the edge reaches `backend`
+  over `default`, so its source IP is unchanged.
+- `Caddyfile` has one site block: `{$TAQSIM_DOMAIN}` → `reverse_proxy
+  taqsim-web:80`. `taqsim-web` is an explicit **network alias** declared in
+  taqsim's `docker-compose.prod.yml`; its own Caddy serves the SPA and proxies
+  `/api/*` onward, so one line covers the whole site.
+- `TAQSIM_DOMAIN` is a **bare host, no scheme**, defaulted to `taqsim-ai.uz`
+  so the server's `deploy/.env` needs no edit. Never set it to an *empty*
+  string: that renders an anonymous server block, Caddy rejects the entire
+  config, and the edge fails to start — taking mebel-pro down for a
+  neighbour's variable. The `:-` form treats empty as unset, so the default
+  still wins; only a deliberate `TAQSIM_DOMAIN=""` inside the Caddyfile's
+  own environment could break it.
+
+Consequence to keep in mind: a taqsim domain change now needs a mebel-pro
+`.env` edit, and a Caddyfile edit here rebuilds the edge for both projects.
+That coupling is the price of one shared edge; the alternative (a third
+standalone proxy) can't work, since only one process can bind :443.
 
 ## Why no overlay
 

@@ -181,7 +181,7 @@ class CuttingPanel(UUIDPrimaryKey, Base):
     __table_args__ = (
         UniqueConstraint(
             "cutting_result_id",
-            "material_id",
+            "branch_material_id",
             "panel_index",
             name="uq_cutting_panels_result_material_index",
         ),
@@ -197,7 +197,9 @@ class CuttingPanel(UUIDPrimaryKey, Base):
     cutting_result_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("cutting_results.id"), nullable=False
     )
-    material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
+    branch_material_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("branch_materials.id"), nullable=False
+    )
     panel_index: Mapped[int] = mapped_column(nullable=False)
     waste_area_mm2: Mapped[int] = mapped_column(nullable=False)
     # Imported MAP and pre-migration rows deliberately retain unknown cut metrics.

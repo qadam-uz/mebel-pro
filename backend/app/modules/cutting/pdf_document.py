@@ -376,12 +376,12 @@ def _draw_sheet_title_block(
     first_page: bool,
 ) -> float:
     panel = group.panels[0]
-    snapshot = _material_snapshot(result, panel.material_id)
+    snapshot = _material_snapshot(result, panel.branch_material_id)
     y = _PAGE_H - _MARGIN
     box_h = 58
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
-    material = _material_label(snapshot, panel.material_id)
+    material = _material_label(snapshot, panel.branch_material_id)
     dims = f"{_panel_length(result, panel)}×{_panel_width(result, panel)} mm"
     list_label = (
         f"List {group.start}" if group.start == group.end else f"List {group.start}–{group.end}"
@@ -532,13 +532,13 @@ def _panel_group_key(panel: CuttingPanelResponse) -> tuple[Any, ...]:
             for item in panel.offcuts
         )
     )
-    return str(panel.material_id), placements, offcuts
+    return str(panel.branch_material_id), placements, offcuts
 
 
 def _material_stats(result: CuttingResultResponse) -> list[MaterialStats]:
     stats: dict[str, MaterialStats] = {}
     for panel in result.panels:
-        material_id = str(panel.material_id)
+        material_id = str(panel.branch_material_id)
         areas = _panel_areas(result, panel)
         piece_count = len(panel.placements)
         current = stats.get(material_id, MaterialStats(material_id, 0, 0, 0, 0, 0, 0))
@@ -562,7 +562,7 @@ def _panel_areas(result: CuttingResultResponse, panel: CuttingPanelResponse) -> 
     usable_area = sum(item.length_mm * item.width_mm for item in panel.offcuts if item.usable)
     waste_area = max(0, sheet_area - parts_area - usable_area)
     return MaterialStats(
-        str(panel.material_id),
+        str(panel.branch_material_id),
         1,
         len(panel.placements),
         sheet_area,
@@ -653,7 +653,7 @@ def _panel_part_rows(
 def _usable_offcut_rows(result: CuttingResultResponse) -> list[tuple[str, int, int, int]]:
     counts: dict[tuple[str, int, int], int] = {}
     for panel in result.panels:
-        material_id = str(panel.material_id)
+        material_id = str(panel.branch_material_id)
         for offcut in panel.offcuts:
             if not offcut.usable:
                 continue
@@ -670,8 +670,17 @@ def _usable_offcut_rows(result: CuttingResultResponse) -> list[tuple[str, int, i
 
 
 def _material_short(snapshot: dict[str, Any], material_id: str) -> str:
+    """Shortest thing that still names the material, for a narrow column.
+
+    Reads both snapshot vocabularies for the same reason
+    `app/core/material_label.py` does: results frozen before the catalog
+    reshape carry `decor_code`/`color`/`name`, and a PDF re-rendered from one
+    of those must not degrade to an id fragment.
+    """
     return (
-        _snapshot_text(snapshot, "decor_code")
+        _snapshot_text(snapshot, "kod")
+        or _snapshot_text(snapshot, "nomi")
+        or _snapshot_text(snapshot, "decor_code")
         or _snapshot_text(snapshot, "color")
         or _snapshot_text(snapshot, "name")
         or material_id[:8]
@@ -684,11 +693,17 @@ def _snapshot_text(snapshot: dict[str, Any], key: str) -> str:
 
 
 def _panel_length_for_snapshot(snapshot: dict[str, Any]) -> int:
-    return _int_snapshot(snapshot.get("panel_length_mm"), fallback=0)
+    return _int_snapshot(_snapshot_size(snapshot, "uzunlik_mm", "panel_length_mm"), fallback=0)
 
 
 def _panel_width_for_snapshot(snapshot: dict[str, Any]) -> int:
-    return _int_snapshot(snapshot.get("panel_width_mm"), fallback=0)
+    return _int_snapshot(_snapshot_size(snapshot, "eni_mm", "panel_width_mm"), fallback=0)
+
+
+def _snapshot_size(snapshot: dict[str, Any], key: str, legacy_key: str) -> Any:
+    """New snapshot key first, pre-reshape key as the fallback."""
+    value = snapshot.get(key)
+    return value if value is not None else snapshot.get(legacy_key)
 
 
 def _part_name(part: dict[str, Any], index: int) -> str:
@@ -1129,7 +1144,7 @@ def _draw_work_card(
     panel = unit.group.panels[0]
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(x, y, width, height)
-    snapshot = _material_snapshot(result, panel.material_id)
+    snapshot = _material_snapshot(result, panel.branch_material_id)
     parts_by_ref = _parts_by_ref(result)
     # Card header: exactly 4 lines — list range, material, kromka materials
     # used on this sheet, then the area/KIM/qoldiq metrics.
@@ -1138,7 +1153,7 @@ def _draw_work_card(
         pdf,
         x + 6,
         y + height - 27,
-        _material_label(snapshot, str(panel.material_id)),
+        _material_label(snapshot, str(panel.branch_material_id)),
         7.5,
     )
     edge_labels = _sheet_edge_labels(result, panel, parts_by_ref)
@@ -1180,14 +1195,14 @@ def _draw_register_continuation(
     page: PdfPagePlan,
 ) -> None:
     panel = unit.group.panels[0]
-    snapshot = _material_snapshot(result, panel.material_id)
+    snapshot = _material_snapshot(result, panel.branch_material_id)
     list_label = _sheet_list_label(unit.group)
     _draw_text(pdf, _MARGIN, _PAGE_H - _MARGIN, f"{list_label} · Detallar (davomi)", 11, bold=True)
     _draw_text(
         pdf,
         _MARGIN,
         _PAGE_H - _MARGIN - 15,
-        _clip(_material_label(snapshot, str(panel.material_id)), _CONTENT_W),
+        _clip(_material_label(snapshot, str(panel.branch_material_id)), _CONTENT_W),
         8,
     )
     del registry  # edge materials print in the work card's "Kromkalar" line, not per row

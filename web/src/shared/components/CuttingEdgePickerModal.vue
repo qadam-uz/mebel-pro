@@ -8,6 +8,7 @@ import {
   edgeFields,
   edgeSearchText,
   edgeShortLabel,
+  materialOptionLabel,
   sideLabels,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
@@ -34,8 +35,6 @@ const props = defineProps<{
   initialSide: EdgeField | null
   partNumber: number
   preferredEdgeId: string | null
-  preferredBranchId: string | null
-  preferredBranchName: string
   // Overrides the "detal #N" part of the title — used for bulk apply ("N detalga").
   titleSuffix?: string
   edgeRegistry: EdgeRegistryEntry[]
@@ -116,13 +115,6 @@ function firstEdgeId(edges: Record<EdgeField, CuttingEdgeBand | null>) {
   )
 }
 
-// The picker is branch-scoped like the panel picker (docs/ref/features/cutting.md):
-// only tapes the selected branch carries are offered or recommended. A tape already
-// on one of this part's sides stays visible (flagged) so the selection can't vanish.
-const carriedEdgeOptions = computed(() =>
-  cutting.edgeOptions.filter((material) => material.branch_carried),
-)
-
 function mostUsedEdgeId(edges: Record<EdgeField, CuttingEdgeBand | null>) {
   const counts = new Map<string, number>()
   for (const side of edgeFields) {
@@ -137,7 +129,7 @@ function recommendedEdgeForPart() {
   if (!part) return null
   return recommendedEdge(
     panelForEdgeRanking(),
-    carriedEdgeOptions.value,
+    cutting.edgeOptions,
     lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
     props.groupEdgeIds,
@@ -148,7 +140,7 @@ function recommendedEdgeForPart() {
 function panelThicknessForPart() {
   if (!props.part) return null
   const panel = materialById(props.part.material_id)
-  const thickness = Number(panel?.thickness_mm)
+  const thickness = Number(panel?.qalinlik_mm)
   if (!Number.isFinite(thickness)) return null
   return thickenedState.value ? thickness * 2 : thickness
 }
@@ -161,14 +153,14 @@ function panelForEdgeRanking() {
   const panel = props.part ? materialById(props.part.material_id) : null
   if (!panel || !thickenedState.value) return panel
   const doubled = panelThicknessForPart()
-  return doubled == null ? panel : { ...panel, thickness_mm: String(doubled) }
+  return doubled == null ? panel : { ...panel, qalinlik_mm: String(doubled) }
 }
 
-function narrowWarning(material: { edge_width_mm: number | null } | null | undefined) {
+function narrowWarning(material: { kromka_eni_mm: number | null } | null | undefined) {
   const panelThickness = panelThicknessForPart()
   if (!material || panelThickness == null || !edgeTooNarrow(panelThickness, material)) return null
   return t('cutting.edge.narrowWarning', {
-    width: material.edge_width_mm,
+    width: material.kromka_eni_mm,
     thickness: panelThickness,
   })
 }
@@ -299,7 +291,7 @@ function sideAria(side: EdgeField) {
 }
 
 const edgeThicknesses = computed(() =>
-  [...new Set(carriedEdgeOptions.value.map((material) => material.thickness_mm))]
+  [...new Set(cutting.edgeOptions.map((material) => material.qalinlik_mm))]
     .filter((value): value is string => Boolean(value))
     .sort((left, right) => Number(left) - Number(right)),
 )
@@ -315,11 +307,12 @@ const catalogFilteredEdges = computed(() => {
   const part = props.part
   if (!part) return []
   const query = edgePickerSearch.value.trim().toLowerCase()
+  // No carried filter: the catalog endpoint is branch-scoped, so every row it
+  // returns is one this branch carries.
   return rankedEdges(panelForEdgeRanking(), cutting.edgeOptions)
-    .filter(({ material }) => material.branch_carried)
     .filter(({ material }) =>
       edgePickerThickness.value !== 'all'
-        ? material.thickness_mm === edgePickerThickness.value
+        ? material.qalinlik_mm === edgePickerThickness.value
         : true,
     )
     .filter(({ material }) => {
@@ -340,8 +333,8 @@ const catalogOnlyAddedHint = computed(
     edgePickerMaterials.value.length === 0 &&
     catalogFilteredEdges.value.length > 0,
 )
-const catalogPanelName = computed(
-  () => materialById(props.part?.material_id)?.name ?? t('cutting.material.none'),
+const catalogPanelName = computed(() =>
+  materialOptionLabel(materialById(props.part?.material_id), t('cutting.material.none')),
 )
 const edgePickerActiveSides = computed(() => bandedEdgeFields(edgePickerState.value))
 const edgePickerPatternKey = computed(() => {
@@ -361,24 +354,6 @@ const edgePickerSelectedMaterialId = computed(() => {
   return first ?? null
 })
 const partDisplayName = computed(() => props.part?.name?.trim() || `D${props.partNumber}`)
-const edgePickerBranchNote = computed(() => {
-  if (!props.preferredBranchId) return null
-  const missing = new Map<string, string>()
-  for (const side of edgeFields) {
-    const edge = edgePickerState.value[side]
-    if (!edge) continue
-    const material = edgeById(edge.material_id)
-    if (material && !material.branch_carried) {
-      missing.set(material.id, edgeShortLabel(material, true))
-    }
-  }
-  if (!missing.size) return null
-  return t('cutting.edge.branchNote', {
-    branch: props.preferredBranchName,
-    materials: [...missing.values()].join(' · '),
-  })
-})
-
 function applyEdgePattern(key: string) {
   if (!props.part) return
   const pattern = edgePatterns.value.find((item) => item.key === key)
@@ -894,10 +869,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-
-          <div v-if="edgePickerBranchNote" class="ep-branch-note">
-            {{ edgePickerBranchNote }}
-          </div>
         </template>
 
         <template v-else>
@@ -958,14 +929,14 @@ onBeforeUnmount(() => {
             >
               <span
                 class="size-4 shrink-0 rounded border border-hairline-strong"
-                :style="{ background: colorForMaterial(material.color) }"
+                :style="{ background: colorForMaterial(material.nomi) }"
               ></span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-bold text-ink">{{
                   edgeShortLabel(material)
                 }}</span>
                 <span class="block text-xs text-ink-muted">
-                  {{ material.thickness_mm }} mm · {{ material.edge_width_mm }} mm
+                  {{ material.qalinlik_mm }} mm · {{ material.kromka_eni_mm }} mm
                 </span>
                 <span v-if="narrowWarning(material)" class="block text-xs text-warning">
                   {{ narrowWarning(material) }}
@@ -990,14 +961,14 @@ onBeforeUnmount(() => {
             >
               <span
                 class="size-4 shrink-0 rounded border border-hairline-strong"
-                :style="{ background: colorForMaterial(material.color) }"
+                :style="{ background: colorForMaterial(material.nomi) }"
               ></span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-bold text-ink">{{
                   edgeShortLabel(material)
                 }}</span>
                 <span class="block text-xs text-ink-muted">
-                  {{ material.thickness_mm }} mm · {{ material.edge_width_mm }} mm
+                  {{ material.qalinlik_mm }} mm · {{ material.kromka_eni_mm }} mm
                 </span>
                 <span v-if="narrowWarning(material)" class="block text-xs text-warning">
                   {{ narrowWarning(material) }}

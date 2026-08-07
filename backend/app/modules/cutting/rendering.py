@@ -510,13 +510,25 @@ def _material_snapshot(result: CuttingResultResponse, material_id: object) -> di
 
 
 def _panel_length(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.material_id)
-    return _int_snapshot(snapshot.get("panel_length_mm"), fallback=1000)
+    snapshot = _material_snapshot(result, panel.branch_material_id)
+    return _int_snapshot(_snapshot_size(snapshot, "uzunlik_mm", "panel_length_mm"), fallback=1000)
 
 
 def _panel_width(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.material_id)
-    return _int_snapshot(snapshot.get("panel_width_mm"), fallback=700)
+    snapshot = _material_snapshot(result, panel.branch_material_id)
+    return _int_snapshot(_snapshot_size(snapshot, "eni_mm", "panel_width_mm"), fallback=700)
+
+
+def _snapshot_size(snapshot: dict[str, object], key: str, legacy_key: str) -> object:
+    """New snapshot key first, pre-reshape key as the fallback.
+
+    Both vocabularies live in the DB forever — `material_snapshots` is frozen
+    history the migration deliberately does not rewrite. Reading only the new
+    key would silently draw every pre-reshape sheet map at the 1000×700
+    fallback, with every placement scaled wrong and no error raised.
+    """
+    value = snapshot.get(key)
+    return value if value is not None else snapshot.get(legacy_key)
 
 
 def _int_snapshot(value: object, *, fallback: int) -> int:

@@ -7,6 +7,7 @@ import {
   orphanPartIndexByRef,
 } from '@/shared/app/cuttingResultsDisplay'
 import { partDisplayName, registryEntryForBand } from '@/shared/app/cuttingEditorDerived'
+import { snapshotValue } from '@/shared/app/materialLabel'
 import type { EdgeField } from '@/shared/app/cuttingDisplay'
 import type {
   CuttingOffcut,
@@ -55,9 +56,18 @@ const emit = defineEmits<{
   'clear-selection': []
 }>()
 
-const material = computed(() => props.result.material_snapshots[props.panel.material_id] ?? {})
-const panelLength = computed(() => numberSnapshot(material.value.panel_length_mm, 1000))
-const panelWidth = computed(() => numberSnapshot(material.value.panel_width_mm, 700))
+const material = computed(
+  () => props.result.material_snapshots[props.panel.branch_material_id] ?? {},
+)
+// Frozen history: a pre-reshape snapshot only carries panel_length_mm/panel_width_mm.
+// Without the legacy read the 1000×700 fallbacks below would silently draw every
+// historical sheet at the wrong aspect ratio, placements spilling outside it.
+const panelLength = computed(() =>
+  numberSnapshot(snapshotValue(material.value, 'uzunlik_mm', 'panel_length_mm'), 1000),
+)
+const panelWidth = computed(() =>
+  numberSnapshot(snapshotValue(material.value, 'eni_mm', 'panel_width_mm'), 700),
+)
 const viewBox = computed(() => `0 0 ${panelLength.value} ${panelWidth.value}`)
 const normScale = computed(() => NORM_WIDTH / panelLength.value)
 const labelFontSize = computed(() => LABEL_FONT / normScale.value)

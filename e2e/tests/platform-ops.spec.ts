@@ -96,11 +96,11 @@ test('reset-required operator sees the gate and a locked nav', async ({ page }, 
   await expect(page.getByRole('tab', { name: 'Parol' })).toHaveAttribute('aria-selected', 'true')
 
   // The sidebar nav is locked, not silently navigable.
-  await expect(page.getByRole('link', { name: 'Materiallar' }).first()).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Dekorlar' }).first()).toHaveAttribute(
     'aria-disabled',
     'true',
   )
-  await page.goto('/admin/catalog/materials')
+  await page.goto('/admin/catalog/dekorlar')
   await expect(page).toHaveURL(/\/admin\/profile/)
 })
 

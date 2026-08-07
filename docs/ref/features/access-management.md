@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-28
+updated: 2026-08-07
 order: 20
 ---
 
@@ -267,7 +267,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | `view_orders`          | **read-only** access to the branch's orders — list, search, and open any order in the branch, including the client's name and phone, line prices, materials and production stamps. No action on them, and no dashboard section of its own. It was called `view_dashboard` until 2026-07; the name promised a KPI page while the grant handed over every order in the branch, so it was renamed to what it does. |
 | `manage_orders`        | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, cancel any pre-`completed` order with a reason, and **create a cutting draft + place an order on behalf of a walk-in client**, resolving them by phone ([Staff-resolved walk-ins](#staff-resolved-walk-ins-find-or-create)). Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md).    |
 | `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
-| `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
+| `manage_catalog`       | the branch's own materials — attach a platform dekor in the formats the branch carries, set each one's price and min-stock, activate / deactivate. (Dekorlar themselves are platform-side.)                                                                                                                                                                                                                                     |
 | `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
 | `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`), and **read** the supplier list an expense is attributed to. See [`finance.md`](finance.md).                                                                                                                                                                                                |
 | `view_finance_reports` | read-only access to the home finance summary tiles (income · expenses · net) and the worker-production report. The income / expense ledgers themselves require `manage_finance`. See [`finance.md`](finance.md).                                                                                                                                                                                          |
@@ -502,7 +502,7 @@ than no duplicate — if another one appears, delete it rather than syncing it.
 
 A staff user may hold grants on multiple branches. The workshop app uses a **branch picker** —
 a chip in the top bar ("Branch: Yunusobod ▼") that defines the current branch context. Every
-branch-scoped screen (orders, inventory, dashboard, catalog selection, workers) reads from
+branch-scoped screen (orders, inventory, dashboard, material catalog, workers) reads from
 it.
 
 Rules:

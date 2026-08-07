@@ -8,7 +8,12 @@ import { ApiError } from '@/shared/api/client'
 import type { CuttingEditorAdapter } from '@/shared/app/cuttingEditorAdapter'
 import { clientConfig, roleConfigKey, workshopConfig } from '@/shared/app/roleConfig'
 import CuttingEditorView from '@/shared/views/CuttingEditorView.vue'
-import { useCuttingStore, type CuttingDraft, type CuttingPart } from '@/shared/stores/cutting'
+import {
+  useCuttingStore,
+  type ClientCatalogMaterialOption,
+  type CuttingDraft,
+  type CuttingPart,
+} from '@/shared/stores/cutting'
 
 const editorRoutes = [
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
@@ -124,8 +129,6 @@ async function mountEditor(
             'sizeError',
             'materialMissing',
             'optimizeError',
-            'notCarried',
-            'preferredBranchName',
             'edgeRegistry',
           ],
           emits: ['open-edge-picker', 'update:length'],
@@ -460,5 +463,79 @@ describe('CuttingEditorView app-supplied branch', () => {
 
     expect(wrapper.text()).toContain('Chilonzor filiali')
     expect(wrapper.text()).not.toContain('Yunusobod filiali')
+  })
+})
+
+// The picker reads like the catalog table: one photo + identity line per dekor,
+// its formats listed beneath. Selection is unchanged — one format, one click, no
+// extra step — and there is no "this branch does not carry it" state left, because
+// the catalog endpoint is branch-scoped.
+describe('CuttingEditorView material picker', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  function option(overrides: Partial<ClientCatalogMaterialOption> = {}) {
+    return {
+      id: 'm-1',
+      tur: 'ldsp',
+      manufacturer_id: 'mfr-1',
+      manufacturer_name: 'Egger',
+      kod: 'H1334',
+      nomi: 'Dub Sonoma',
+      tolali: true,
+      image_file_id: null,
+      qalinlik_mm: '18',
+      uzunlik_mm: 2800,
+      eni_mm: 2070,
+      kromka_eni_mm: null,
+      price_tiyin: 120_000,
+      price_unset: false,
+      display_unit: 'sheet',
+      ...overrides,
+    } as ClientCatalogMaterialOption
+  }
+
+  it('groups formats under one dekor heading and picks a format in one click', async () => {
+    const { wrapper, cutting } = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-1' }),
+    )
+    cutting.panelOptions = [
+      option({ id: 'm-18' }),
+      option({ id: 'm-16', qalinlik_mm: '16', uzunlik_mm: 2750, eni_mm: 1830 }),
+      option({
+        id: 'm-other',
+        kod: 'W980',
+        nomi: 'Oq',
+        qalinlik_mm: '18',
+        price_tiyin: 0,
+        price_unset: true,
+      }),
+    ]
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Material tanlash'))!
+      .trigger('click')
+
+    const groups = wrapper.findAll('[role="dialog"] section')
+    expect(groups).toHaveLength(2)
+    // Identity once per dekor — the label without its format tail — then the
+    // formats as the rows underneath.
+    expect(groups[0].text()).toContain('LDSP Egger H1334 · Dub Sonoma')
+    expect(groups[0].findAll('button').map((button) => button.text())).toEqual([
+      '2800×2070×18 mm',
+      '2750×1830×16 mm',
+    ])
+    // A workshop-facing row with no price is flagged rather than silently quoted at 0.
+    expect(groups[1].text()).toContain("Narx yo'q")
+
+    // One click on a format row picks it and closes — no second step.
+    await groups[0].findAll('button')[1].trigger('click')
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
   })
 })

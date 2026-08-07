@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import BranchStatus, MaterialKind, PanelMaterialType, UserStatus
+from app.models.enums import BranchStatus, DekorType, UserStatus
 from app.schemas.common import APIModel
 
 
@@ -74,17 +74,24 @@ class ClientBranchResponse(APIModel):
 
 
 class ClientBranchMaterialResponse(APIModel):
+    """One format a branch carries, as a client sees it.
+
+    `id` is the branch material — the thing that gets ordered. Identity (tur,
+    kod, nomi, tolali, image) comes from the dekor, dimensions from the branch's
+    own format. There is no `name`: the client composes the label, or reads the
+    preview's precomposed one.
+    """
+
     id: uuid.UUID
-    kind: MaterialKind
+    tur: DekorType
     manufacturer_name: str
-    type: PanelMaterialType | None
-    name: str
-    thickness_mm: Decimal
-    color: str
-    decor_code: str | None
-    panel_length_mm: int | None
-    panel_width_mm: int | None
-    grain_direction: bool | None
+    kod: str | None
+    nomi: str
+    tolali: bool
     image_file_id: uuid.UUID | None
+    qalinlik_mm: Decimal
+    uzunlik_mm: int | None
+    eni_mm: int | None
+    kromka_eni_mm: int | None
     price_tiyin: int
     display_unit: str

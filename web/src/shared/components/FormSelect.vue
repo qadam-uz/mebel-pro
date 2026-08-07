@@ -211,6 +211,7 @@ onBeforeUnmount(() => {
           :aria-selected="option.value === modelValue"
           class="grid min-h-11 grid-cols-[1fr_auto] items-center gap-3 rounded-md px-3 py-2 text-sm"
           :class="[
+            option.separator ? 'mt-1 border-t border-hairline pt-3' : '',
             option.disabled ? 'cursor-not-allowed text-ink-muted opacity-55' : 'cursor-pointer',
             index === activeIndex ? 'bg-sunk' : 'bg-elevated',
             option.value === modelValue ? 'text-accent' : 'text-ink',
