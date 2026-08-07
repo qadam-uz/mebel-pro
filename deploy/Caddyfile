@@ -89,6 +89,17 @@ workshop.{$BASE_DOMAIN} {
 	}
 }
 
+# Taqsim Telegram Mini App — a SEPARATE compose stack on this same box
+# (/opt/taqsim). It publishes no host ports, so this edge is its only entry.
+# `taqsim-web` is a network alias on the shared `infra-net`; it serves the SPA
+# and proxies its own /api/* to the taqsim bot, so one line covers the site.
+# Renaming that alias in taqsim's docker-compose.prod.yml breaks this block.
+{$TAQSIM_DOMAIN} {
+	import common
+
+	reverse_proxy taqsim-web:80
+}
+
 # Superadmin SPA + same-origin API + the live docs site + OpenAPI UIs.
 admin.{$BASE_DOMAIN} {
 	import common
