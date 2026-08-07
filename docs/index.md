@@ -2,7 +2,7 @@
 title: Getting started
 status: stable
 owner: shape
-updated: 2026-05-25
+updated: 2026-08-07
 order: 1
 ---
 
@@ -40,8 +40,8 @@ Two pains, one product:
 
 ## What success looks like
 
-- A workshop can stand up its world (branches, stock, pricing, staff, and what each branch
-  carries from the platform's material catalog) and start taking online orders without a
+- A workshop can stand up its world (branches, stock, pricing, staff, and which decors — in
+  which formats — each branch carries) and start taking online orders without a
   spreadsheet.
 - A client can go from "I need these panels" to a placed, priced order — with a cutting layout they
   can see and a PDF the shop floor can cut from — in one sitting, on a phone.

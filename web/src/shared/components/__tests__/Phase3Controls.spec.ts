@@ -102,6 +102,7 @@ describe('Phase 3 shared controls', () => {
 
   it('SearchCombobox filters by typed text and picks with Enter', async () => {
     const wrapper = mount(SearchCombobox, {
+      global: { stubs: { teleport: true } },
       props: {
         label: 'Material',
         modelValue: null,
@@ -122,6 +123,7 @@ describe('Phase 3 shared controls', () => {
 
   it('SearchCombobox closes on outside click and restores selected label', async () => {
     const wrapper = mount(SearchCombobox, {
+      global: { stubs: { teleport: true } },
       props: {
         label: 'Material',
         modelValue: 'edge',

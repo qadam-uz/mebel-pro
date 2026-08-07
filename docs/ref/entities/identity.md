@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-08-07
 order: 10
 ---
 
@@ -120,8 +120,8 @@ created only by a successful first verification or by workshop staff resolving a
 staff (`account_blocked` on both paths);
 `preferred_branch_id`, when set, references a branch the client may see (any workshop's
 `active` or `temporarily_closed` branch); the field is **not** scope-enforced (a branch
-later going `inactive` doesn't clear it — the cutting wizard surfaces the situation as the
-same recovery affordances as a no-longer-carried material; see
+later going `inactive` doesn't clear it — the branch-scoped catalog simply comes back empty
+and the editor asks for a different workshop; see
 [`cutting.md`](../features/cutting.md)).
 
 ## Phone verification challenge

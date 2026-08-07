@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
-  addBranchMaterial,
+  carryOneFormat,
   continueButton,
-  createCatalogMaterials,
+  createCatalogDekorlar,
+  escapeRegExp,
   ownerReadyPassword,
+  panelFormat,
   passwordLabel,
   platformToken,
   provisionWorkshop,
@@ -41,7 +43,7 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await seedPlatform(adminLogin);
   const adminAccess = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, adminAccess, id);
-  const { panel } = await createCatalogMaterials(request, adminAccess, id);
+  const { panel } = await createCatalogDekorlar(request, adminAccess, id);
 
   // Step 1 — the account gate pins the fresh owner to the password form; after
   // the forced change the owner lands on the home checklist automatically.
@@ -82,15 +84,25 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   const catalogHint = page.getByRole("dialog", { name: "Katalogga material qo'shing" });
   await expect(catalogHint).toBeVisible();
   await expect(catalogHint.getByText("3/3-qadam")).toBeVisible();
-  await page.getByRole("button", { name: "+ Material qo'shish" }).first().click();
+  await page.getByRole("button", { name: "+ Material", exact: true }).first().click();
   await expect(catalogHint).toHaveCount(0);
 
-  // QAD-159: attaching is a two-step multi-select sheet — pick, then price.
-  const attachSheet = page.getByRole("dialog");
-  await attachSheet.getByRole("checkbox", { name: panel.name }).check();
-  await attachSheet.getByRole("button", { name: /Davom etish/ }).click();
-  await attachSheet.getByLabel(`${panel.name} narxi`).fill("250000");
-  await attachSheet.getByRole("button", { name: /materialni qo'shish/ }).click();
+  // The catalog reshape split identity from o'lcham, so attaching is two steps:
+  // tick the dekor (step 1 is multi-select), then pick the o'lchamlar and price
+  // them. The result rows are named by dekor as well as o'lcham.
+  const pickStep = page.getByRole("dialog", { name: "Dekor tanlash" });
+  await pickStep
+    .getByRole("checkbox", { name: new RegExp(escapeRegExp(panel.label)) })
+    .check();
+  await pickStep.getByRole("button", { name: "Davom etish" }).click();
+
+  const formatStep = page.getByRole("dialog", { name: "O'lchamlar va narx" });
+  await formatStep.getByRole("button", { name: "18 mm", exact: true }).click();
+  await formatStep.getByRole("button", { name: "2800×2070", exact: true }).click();
+  await formatStep
+    .getByLabel(`${panel.label} · 2800×2070×18 mm narxi`)
+    .fill("250000");
+  await formatStep.getByRole("button", { name: /o'lchamni qo'shish/ }).click();
 
   await expect(
     page.getByText("Dastlabki sozlash yakunlandi", { exact: false }),
@@ -113,9 +125,15 @@ test("an established owner sees no checklist and no spotlight", async ({
   const setup = await provisionWorkshop(request, adminAccess, id);
   // Complete the whole setup via the API — the derived status must read done.
   const ownerAccess = await readyOwnerToken(request, setup);
-  const { panel } = await createCatalogMaterials(request, adminAccess, id);
+  const { panel } = await createCatalogDekorlar(request, adminAccess, id);
   await updateBranchPricing(request, ownerAccess, setup.branch.id as string);
-  await addBranchMaterial(request, ownerAccess, setup.branch.id as string, panel.id, 250_000, 1);
+  await carryOneFormat(
+    request,
+    ownerAccess,
+    setup.branch.id as string,
+    panel.id,
+    panelFormat(),
+  );
 
   await page.goto("/workshop/");
   await page.getByLabel("Login").fill(setup.ownerLogin);

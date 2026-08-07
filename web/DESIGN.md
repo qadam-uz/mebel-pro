@@ -372,6 +372,9 @@ Russian and appear in the Russian column on purpose.
 | A distinct part size on a drawing      | `xil`               | `типоразмер`         | `qator`, `tur`                    |
 | A saved cutting drawing                | `chizma`            | `раскрой`            | `eskiz`, `draft`                  |
 | A panel sheet                          | `list`              | `лист`               | `plita`, `panel`                  |
+| One buyable size of a dekor            | `o'lcham`           | `размер`             | `format`                          |
+| A sheet's length × width               | `list o'lchami`     | `размер листа`       | bare `o'lcham`                    |
+| A tape's width                         | `lenta eni`         | `ширина ленты`       | bare `o'lcham`, `eni`             |
 | Edge tape (the material)               | `kromka`            | `кромка`             | `krom`                            |
 | The edge-banding station / stage       | `Krom` / `Kromka`   | `Кромка`             | — _owner's ruling pending_        |
 | The cutting station / stage            | `Kesish`            | `Распил`             | —                                 |
@@ -395,6 +398,13 @@ Russian and appear in the Russian column on purpose.
 arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
 income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
 of the interface) are different words for different things.
+
+`o'lcham` is the whole a branch carries and prices — a dekor at one thickness in one size
+(`2750×1830×18`, or `2 mm × 19` for kromka); the API calls it a `format` and always will, but no
+screen does. It **contains** a `list o'lchami` (`2750×1830`) or a `lenta eni` (`19`), so those
+two stay qualified wherever they are named: a bare `O'lcham` on a size chip group, a column, or
+an "add" dialog reads as the whole and hides the part. `format` never reaches a screen in any
+locale.
 
 `joylashtirish` belongs to the cutting result and nothing else — a part fitted onto a sheet
 (`Joylashtirildi 12/14`, `Fayldan joylashuv`). The `new` order status used to borrow the same

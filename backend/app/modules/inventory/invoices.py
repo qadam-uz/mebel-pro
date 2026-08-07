@@ -27,14 +27,17 @@ from app.models.enums import (
     SupplierStatus,
 )
 from app.modules.access.contracts import WorkshopUser
-from app.modules.catalog.contracts import Material
+from app.modules.catalog.api import branch_material_label
+from app.modules.catalog.contracts import BranchMaterial, Dekor, Manufacturer
 from app.modules.finance.contracts import Expense
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier, SupplierInvoice
 from app.modules.inventory.schemas import SupplierInvoiceCreateRequest, SupplierInvoiceLineInput
 from app.modules.inventory.service import (
+    MaterialRecord,
     _apply_stock_delta,
     _create_supplier_for_scope,
     _inventory_scope,
+    _material_join,
     _optional_text,
     _stock_item_for_movement,
     _supplier_in_scope,
@@ -53,7 +56,15 @@ INVOICE_NUMBER_PREFIX = "K-"
 class InvoiceLineRecord:
     transaction: StockTransaction
     stock_item: StockItem
-    material: Material
+    branch_material: BranchMaterial
+    dekor: Dekor
+    manufacturer: Manufacturer
+
+    @property
+    def label(self) -> str:
+        """The line's material as a human reads it — computed, never stored."""
+
+        return branch_material_label(self.branch_material, self.dekor, self.manufacturer)
 
 
 @dataclass(frozen=True)
@@ -132,19 +143,23 @@ async def create_invoice(
 
     # Resolve and price every line first: the invoice row must carry the
     # subtotal, and it must exist before its lines can point at it.
-    priced: list[tuple[SupplierInvoiceLineInput, StockItem, Material, int]] = []
+    priced: list[tuple[SupplierInvoiceLineInput, StockItem, MaterialRecord, int]] = []
     subtotal = 0
     for line in payload.lines:
         if line.quantity <= 0:
             raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
         if line.unit_price_tiyin < 0:
             raise APIError("invalid_price", "Price cannot be negative", status_code=400)
+        # Deliberately no "create the material if it is missing" fallback here:
+        # an arrival for a format the branch does not carry is a typo, and this
+        # path must never quietly extend the catalog. Only the order-driven
+        # movements in service.py may proceed on a freshly created stock row.
         item, material = await _stock_item_for_movement(
             db,
             scope=scope,
-            material_id=line.material_id,
+            branch_material_id=line.branch_material_id,
         )
-        line_total = stock_in_total_tiyin(material.kind, line.quantity, line.unit_price_tiyin)
+        line_total = stock_in_total_tiyin(material.tur, line.quantity, line.unit_price_tiyin)
         subtotal += line_total
         priced.append((line, item, material, line_total))
 
@@ -184,7 +199,15 @@ async def create_invoice(
             total_price_tiyin=line_total,
             invoice_id=invoice.id,
         )
-        lines.append(InvoiceLineRecord(transaction=transaction, stock_item=item, material=material))
+        lines.append(
+            InvoiceLineRecord(
+                transaction=transaction,
+                stock_item=item,
+                branch_material=material.branch_material,
+                dekor=material.dekor,
+                manufacturer=material.manufacturer,
+            )
+        )
 
     await record_action(
         db,
@@ -386,19 +409,27 @@ async def _lines_by_invoice(
 ) -> dict[uuid.UUID, list[InvoiceLineRecord]]:
     rows = (
         await db.execute(
-            select(StockTransaction, StockItem, Material)
-            .join(StockItem, StockItem.id == StockTransaction.stock_item_id)
-            .join(Material, Material.id == StockItem.material_id)
+            _material_join(
+                select(StockTransaction, StockItem, BranchMaterial, Dekor, Manufacturer).join(
+                    StockItem, StockItem.id == StockTransaction.stock_item_id
+                )
+            )
             .where(StockTransaction.invoice_id.in_(invoice_ids))
             .order_by(StockTransaction.created_at, StockTransaction.id)
         )
     ).all()
     grouped: dict[uuid.UUID, list[InvoiceLineRecord]] = {}
-    for transaction, item, material in rows:
+    for transaction, item, branch_material, dekor, manufacturer in rows:
         if transaction.invoice_id is None:  # pragma: no cover - filtered in the query
             continue
         grouped.setdefault(transaction.invoice_id, []).append(
-            InvoiceLineRecord(transaction=transaction, stock_item=item, material=material)
+            InvoiceLineRecord(
+                transaction=transaction,
+                stock_item=item,
+                branch_material=branch_material,
+                dekor=dekor,
+                manufacturer=manufacturer,
+            )
         )
     return grouped
 

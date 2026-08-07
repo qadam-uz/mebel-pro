@@ -13,7 +13,7 @@ import Icon from '@/shared/components/AppIcon.vue'
 import { type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: one parts-table row. Purely presentational — the editor stays the
-// single owner of `parts`, validation (size/missing/not-carried/optimiser errors),
+// single owner of `parts`, validation (size/missing/optimiser errors),
 // and every mutation; this component renders the row and EMITS edits (granular, so
 // it never mutates the `part` prop — vue/no-mutating-props). The pure swatch/edge
 // display is derived from the catalog via the store + the shared cuttingDisplay
@@ -26,8 +26,6 @@ const props = defineProps<{
   sizeError: string | null
   materialMissing: boolean
   optimizeError: string | null
-  notCarried: string[]
-  preferredBranchName: string
   edgeRegistry: EdgeRegistryEntry[]
 }>()
 const emit = defineEmits<{
@@ -94,8 +92,6 @@ const rotationAllowed = computed(() => !followsGrain.value)
 const grainTitle = computed(() =>
   rotationAllowed.value ? t('cutting.parts.rotationAllowed') : t('cutting.parts.rotationLocked'),
 )
-
-const notCarriedNonPanel = computed(() => props.notCarried.some((issue) => issue !== 'panel'))
 
 function edgeRegistryEntry(side: EdgeField) {
   const band = props.part[side]
@@ -382,28 +378,5 @@ function focusNumericFromPointer(event: MouseEvent) {
       <span aria-hidden="true">!</span>
       <span>{{ optimizeError }}</span>
     </p>
-
-    <div
-      v-if="notCarried.length"
-      class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
-    >
-      <span class="font-black">!</span>
-      <!-- `i18n-t` rather than `$t`: the branch name is bold *inside* the
-           sentence, and Russian does not put it where Uzbek does — splitting the
-           message around the <b> would make the word order untranslatable. -->
-      <i18n-t keypath="cutting.parts.notCarried" tag="span" scope="global" class="min-w-0 flex-1">
-        <template #branch>
-          <b>{{ preferredBranchName }}</b>
-        </template>
-      </i18n-t>
-      <button
-        v-if="notCarriedNonPanel"
-        type="button"
-        class="mp-button mp-button-outline"
-        @click="emit('open-edge-picker', undefined)"
-      >
-        {{ $t('cutting.parts.pickAnotherEdge') }}
-      </button>
-    </div>
   </article>
 </template>

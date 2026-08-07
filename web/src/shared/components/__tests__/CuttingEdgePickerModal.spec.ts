@@ -12,69 +12,72 @@ import {
 
 const panel: ClientCatalogMaterialOption = {
   id: 'panel-1',
-  kind: 'panel',
+  tur: 'ldsp',
   manufacturer_id: 'maker-1',
   manufacturer_name: 'Maker',
-  type: 'dsp',
-  name: 'Panel',
-  thickness_mm: '18',
-  color: 'Oak',
-  decor_code: 'H1234',
-  panel_length_mm: 600,
-  panel_width_mm: 400,
-  grain_direction: false,
-  edge_width_mm: null,
+  kod: 'H1234',
+  nomi: 'Oak',
+  tolali: false,
   image_file_id: null,
-  branch_carried: true,
-  price_tiyin: null,
+  qalinlik_mm: '18',
+  uzunlik_mm: 600,
+  eni_mm: 400,
+  kromka_eni_mm: null,
+  price_tiyin: 0,
+  price_unset: false,
   display_unit: 'sheet',
 }
 
 const edge: ClientCatalogMaterialOption = {
   id: 'edge-1',
-  kind: 'edge',
+  tur: 'kromka',
   manufacturer_id: 'maker-1',
   manufacturer_name: 'Maker',
-  type: null,
-  name: 'Black tape',
-  thickness_mm: '1',
-  color: 'Black',
-  decor_code: null,
-  panel_length_mm: null,
-  panel_width_mm: null,
-  grain_direction: null,
-  edge_width_mm: 19,
+  kod: null,
+  nomi: 'Black tape',
+  tolali: false,
   image_file_id: null,
-  branch_carried: true,
-  price_tiyin: null,
+  qalinlik_mm: '1',
+  uzunlik_mm: null,
+  eni_mm: null,
+  kromka_eni_mm: 19,
+  price_tiyin: 0,
+  price_unset: false,
   display_unit: 'm',
 }
 
 const decorEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-decor',
-  name: 'Decor tape',
-  thickness_mm: '2',
-  color: 'Oak',
-  decor_code: 'H1234',
-  edge_width_mm: 22,
+  kod: 'H1234',
+  nomi: 'Decor tape',
+  qalinlik_mm: '2',
+  kromka_eni_mm: 22,
 }
 
 const colorEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-color',
-  name: 'Color tape',
-  thickness_mm: '0.4',
-  color: 'Oak',
-  decor_code: 'Other',
+  kod: 'Other',
+  nomi: 'Oak',
+  qalinlik_mm: '0.4',
 }
 
 const narrowEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-narrow',
-  name: 'Narrow tape',
-  edge_width_mm: 16,
+  nomi: 'Narrow tape',
+  kromka_eni_mm: 16,
 }
+
+// `ClientCatalogMaterialOption` is the one reshaped response with no server
+// `label`, so every row composes its own through `material_label.py`'s TS
+// mirror. Assert the whole composed string, not a fixture field: a `nomi`-only
+// assertion would pass for the kod-less tapes and quietly diverge for the rest.
+const PANEL_LABEL = 'LDSP Maker H1234 · Oak · 600×400×18 mm'
+const EDGE_LABEL = 'Maker Black tape · 1×19 mm'
+const DECOR_EDGE_LABEL = 'Maker H1234 · Decor tape · 2×22 mm'
+const COLOR_EDGE_LABEL = 'Maker Other · Oak · 0.4×19 mm'
 
 const part: CuttingPart = {
   part_ref: 'part-1',
@@ -98,8 +101,6 @@ function mountPicker(edgeRegistry: EdgeRegistryEntry[] = [], groupEdgeIds: strin
       initialSide: null,
       partNumber: 1,
       preferredEdgeId: null,
-      preferredBranchId: 'branch-1',
-      preferredBranchName: 'Yunusobod',
       edgeRegistry,
       edgeAssignmentEntries: [],
       groupEdgeIds,
@@ -157,7 +158,7 @@ describe('CuttingEdgePickerModal arming', () => {
       [edge.id],
     )
 
-    const tape = wrapper.findAll('button').find((button) => button.text().includes(edge.name))
+    const tape = wrapper.findAll('button').find((button) => button.text().includes(EDGE_LABEL))
     const allSides = wrapper.findAll('button').find((button) => button.text().includes('4 tomon'))
     expect(tape).toBeDefined()
     expect(allSides).toBeDefined()
@@ -208,8 +209,8 @@ describe('CuttingEdgePickerModal arming', () => {
       .filter((text) => text.includes('tape'))
 
     expect(tapeNames).toEqual([
-      expect.stringContaining(decorEdge.name),
-      expect.stringContaining(edge.name),
+      expect.stringContaining(DECOR_EDGE_LABEL),
+      expect.stringContaining(EDGE_LABEL),
     ])
   })
 
@@ -238,7 +239,7 @@ describe('CuttingEdgePickerModal arming', () => {
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes(decorEdge.name))!
+      .find((button) => button.text().includes(DECOR_EDGE_LABEL))!
       .trigger('click')
     await wrapper
       .findAll('button')
@@ -283,36 +284,36 @@ describe('CuttingEdgePickerModal arming', () => {
       .find((button) => button.text().includes('Yana kromka'))!
       .trigger('click')
 
-    expect(wrapper.text()).toContain("Shu listga mos · Panel bo'yicha")
+    expect(wrapper.text()).toContain(`Shu listga mos · ${PANEL_LABEL} bo'yicha`)
     expect(wrapper.text()).toContain('dekor mos')
     expect(wrapper.text()).toContain('rang mos')
     expect(wrapper.text()).toContain('Boshqa kromkalar')
     expect(wrapper.text()).toContain('list qalinligidan (18 mm) tor')
-    expect(wrapper.text()).not.toContain(edge.name)
+    expect(wrapper.text()).not.toContain(EDGE_LABEL)
 
     const thicknessFilter = wrapper.get('[aria-label="Qalinlik filtri"]')
     await thicknessFilter
       .findAll('button')
       .find((button) => button.text() === '2 mm')!
       .trigger('click')
-    expect(wrapper.text()).toContain(decorEdge.name)
-    expect(wrapper.text()).not.toContain(colorEdge.name)
+    expect(wrapper.text()).toContain(DECOR_EDGE_LABEL)
+    expect(wrapper.text()).not.toContain(COLOR_EDGE_LABEL)
 
     await thicknessFilter
       .findAll('button')
       .find((button) => button.text() === 'Hammasi')!
       .trigger('click')
-    await wrapper.get('[aria-label="Kromka qidirish"]').setValue(edge.name)
+    await wrapper.get('[aria-label="Kromka qidirish"]').setValue(edge.nomi)
     expect(wrapper.text()).toContain("Bu kromka allaqachon chizmada — 1-ro'yxatdan tanlang.")
 
     await wrapper.get('[aria-label="Kromka qidirish"]').setValue('')
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes(decorEdge.name))!
+      .find((button) => button.text().includes(DECOR_EDGE_LABEL))!
       .trigger('click')
 
     expect(wrapper.text()).toContain('Chizmadagi kromkalar')
-    expect(wrapper.text()).toContain(decorEdge.name)
+    expect(wrapper.text()).toContain(DECOR_EDGE_LABEL)
     expect(wrapper.text()).toContain('Yangi')
     expect(wrapper.get('button[aria-label^="Yuqori tomon"]').attributes('aria-pressed')).toBe(
       'false',

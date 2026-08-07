@@ -1,4 +1,8 @@
-import { snapshotMaterialLabel, snapshotShortLabel } from '@/shared/app/cuttingDisplay'
+import {
+  snapshotMaterialLabel,
+  snapshotShortLabel,
+  snapshotValue,
+} from '@/shared/app/materialLabel'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
@@ -33,9 +37,11 @@ export function numberSnapshot(value: unknown, fallback: number) {
 export { snapshotShortLabel }
 
 export function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
-  const snapshot = result.material_snapshots[panel.material_id]
-  const length = numberSnapshot(snapshot?.panel_length_mm, 0)
-  const width = numberSnapshot(snapshot?.panel_width_mm, 0)
+  const snapshot = result.material_snapshots[panel.branch_material_id]
+  // Frozen history: pre-reshape snapshots only have panel_length_mm/panel_width_mm.
+  // Drop the legacy read and every historical result silently shows '-' here.
+  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
+  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
   if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return '-'
   return `${Math.max(0, 100 - (panel.waste_area_mm2 / (length * width)) * 100).toFixed(1)}%`
 }
@@ -169,8 +175,8 @@ export function resultSheetPartGroups(result: CuttingResult): ResultSheetPartGro
     panelId: panel.id,
     sheetLabel: translate('cutting.result.sheetLabel', { n: panelDisplayIndex(result, panel) }),
     materialLabel: snapshotMaterialLabel(
-      result.material_snapshots[panel.material_id],
-      panel.material_id.slice(0, 8),
+      result.material_snapshots[panel.branch_material_id],
+      panel.branch_material_id.slice(0, 8),
     ),
     groups: groupPanelPlacements(result, panel).sort(
       (left, right) => rank(left.partRef) - rank(right.partRef),

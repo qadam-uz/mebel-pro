@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-08-07
 order: 60
 ---
 
@@ -14,7 +14,7 @@ the audit log (action log + status change log). Wired into every other module by
 ## File
 
 A stored blob in object storage with its metadata, optionally attached to another entity: a
-material's sample image, a workshop's logo, a payment/refund/delivery receipt scan, a generated
+dekor's photo, a workshop's logo, a payment/refund/delivery receipt scan, a generated
 cutting-map PDF. The `files` module owns the blob + metadata; other modules attach/detach by id
 and never touch object storage directly.
 
@@ -26,7 +26,7 @@ and never touch object storage directly.
 | `content_type` | text | MIME type; validated against the allowed set for the attach context |
 | `size_bytes` | bigint | ≤ configured max (default 10 MB) |
 | `storage_status` | enum | `pending` / `stored` / `deleted` |
-| `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …) |
+| `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …). A catalog image still stores the literal `material` while `entity_id` points at a **dekor** — the reshape re-pointed the id and left the label, so no historical row had to be rewritten |
 | `entity_id` | UUID? | the attached entity's id |
 | `sort_order` | int? | ordering when an entity has several files |
 | `uploaded_by_type` / `uploaded_by_id` | enum / UUID | the principal who uploaded it |
@@ -76,7 +76,7 @@ what" half of the audit log. Append-only.
 | `actor_type` | enum | `platform_user` / `workshop_user` / `client` / `system` |
 | `actor_user_id` / `actor_client_id` | UUID? / UUID? | mutually exclusive (or both null if `system`) |
 | `workshop_id` / `branch_id` | UUID? / UUID? | for scoping the viewer; null for client-only / platform-only actions |
-| `action` | text | a stable action code, e.g. `material.created`, `order.discount_applied`, `workshop.blocked`, `user.password_reset` |
+| `action` | text | a stable action code, e.g. `catalog.dekor.create`, `order.discount_applied`, `workshop.blocked`, `user.password_reset` |
 | `entity_type` / `entity_id` | text? / UUID? | the affected entity |
 | `summary` | text? | short human description |
 | `details` | json? | context / before-after (sensitive fields masked) |
@@ -91,14 +91,14 @@ branches); a platform operator sees all.
 ## Status change log
 
 One row per state transition of any entity that has a status — primarily orders (mirroring each
-[order status event](sales.md#order-status-event)), but also branches, materials, workers,
+[order status event](sales.md#order-status-event)), but also branches, dekorlar, branch materials, workers,
 workshops, users, refunds going `active`/`blocked`/`inactive`/`completed`/etc. The "what changed
 state" half of the audit log. Append-only.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `entity_type` | text | `order` / `branch` / `material` / `workshop` / `workshop_user` / `client` / `income` / `expense` / … |
+| `entity_type` | text | `order` / `branch` / `dekor` / `branch_material` / `workshop` / `workshop_user` / `client` / `income` / `expense` / … |
 | `entity_id` | UUID | the entity's id |
 | `workshop_id` / `branch_id` | UUID? / UUID? | for scoping the viewer |
 | `from_status` | text? | null for the first |

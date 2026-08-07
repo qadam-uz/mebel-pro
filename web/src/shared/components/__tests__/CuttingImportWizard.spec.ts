@@ -21,9 +21,7 @@ function mountWizard(props: Record<string, unknown> = {}) {
     props: {
       open: true,
       panelChoices: [{ value: 'panel-1', label: 'Panel 1' }],
-      allPanelChoices: [{ value: 'panel-1', label: 'Panel 1' }],
       edgeChoices: [],
-      allEdgeChoices: [],
       hasExistingParts: false,
       currentPieces: 0,
       currentParts: 0,

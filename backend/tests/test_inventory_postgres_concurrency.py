@@ -11,13 +11,12 @@ from app.core.security import hash_password
 from app.models import Base, import_all_models
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    MaterialKind,
+    DekorType,
     MaterialStatus,
-    PanelMaterialType,
     SupplierStatus,
 )
 from app.modules.access.contracts import WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Dekor, Manufacturer
 from app.modules.inventory.api import create_invoice, record_adjustment
 from app.modules.inventory.contracts import (
     StockItem,
@@ -34,6 +33,8 @@ from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from tests.factories import make_search_key
 
 import_all_models()
 
@@ -87,34 +88,33 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
             manufacturer = Manufacturer(name="Egger", status=MaterialStatus.ACTIVE)
             setup.add_all([owner, manufacturer])
             await setup.flush()
-            material = Material(
-                kind=MaterialKind.PANEL,
+            dekor = Dekor(
                 manufacturer_id=manufacturer.id,
-                type=PanelMaterialType.DSP,
-                name="Panel",
-                thickness_mm=Decimal("18"),
-                color="Oak",
-                panel_length_mm=2800,
-                panel_width_mm=2070,
-                grain_direction=True,
+                tur=DekorType.LDSP,
+                kod=None,
+                nomi="Oak",
+                tolali=True,
+                holat=MaterialStatus.ACTIVE,
+                search_key=make_search_key(nomi="Oak", kod=None, manufacturer_name="Egger"),
+            )
+            setup.add(dekor)
+            await setup.flush()
+            material = BranchMaterial(
+                branch_id=branch.id,
+                dekor_id=dekor.id,
+                qalinlik_mm=Decimal("18"),
+                uzunlik_mm=2800,
+                eni_mm=2070,
+                price_tiyin=100000,
+                min_stock=0,
                 status=MaterialStatus.ACTIVE,
             )
             setup.add(material)
             await setup.flush()
-            setup.add(
-                BranchMaterial(
-                    branch_id=branch.id,
-                    material_id=material.id,
-                    price_tiyin=100000,
-                    min_stock=0,
-                    status=MaterialStatus.ACTIVE,
-                )
-            )
             stock_item = StockItem(
                 branch_id=branch.id,
-                material_id=material.id,
+                branch_material_id=material.id,
                 on_hand=10,
-                min_stock=0,
                 updated_at=datetime.now(UTC),
             )
             setup.add(stock_item)
@@ -137,7 +137,7 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
                         principal=principal,
                         branch_id=branch.id,
                         payload=StockAdjustmentRequest(
-                            material_id=material.id,
+                            branch_material_id=material.id,
                             quantity=-7,
                             note="Concurrent stock take",
                         ),
@@ -214,40 +214,39 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
             manufacturer = Manufacturer(name="Kronospan", status=MaterialStatus.ACTIVE)
             setup.add_all([owner, manufacturer])
             await setup.flush()
-            material = Material(
-                kind=MaterialKind.PANEL,
+            dekor = Dekor(
                 manufacturer_id=manufacturer.id,
-                type=PanelMaterialType.DSP,
-                name="Panel",
-                thickness_mm=Decimal("18"),
-                color="Ash",
-                panel_length_mm=2800,
-                panel_width_mm=2070,
-                grain_direction=True,
+                tur=DekorType.LDSP,
+                kod=None,
+                nomi="Ash",
+                tolali=True,
+                holat=MaterialStatus.ACTIVE,
+                search_key=make_search_key(nomi="Ash", kod=None, manufacturer_name="Kronospan"),
+            )
+            setup.add(dekor)
+            await setup.flush()
+            material = BranchMaterial(
+                branch_id=branch.id,
+                dekor_id=dekor.id,
+                qalinlik_mm=Decimal("18"),
+                uzunlik_mm=2800,
+                eni_mm=2070,
+                price_tiyin=100000,
+                min_stock=0,
                 status=MaterialStatus.ACTIVE,
             )
             setup.add(material)
             await setup.flush()
-            setup.add(
-                BranchMaterial(
-                    branch_id=branch.id,
-                    material_id=material.id,
-                    price_tiyin=100000,
-                    min_stock=0,
-                    status=MaterialStatus.ACTIVE,
-                )
-            )
             # The stock row exists up front, as it does for any material a
             # branch already carries: this test is about the numbering lock, and
             # racing the lazy first-arrival creation of a `stock_items` row would
-            # trip the branch/material unique index instead — a different,
+            # trip the branch-material unique index instead — a different,
             # pre-existing race that has nothing to do with `K-…`.
             setup.add(
                 StockItem(
                     branch_id=branch.id,
-                    material_id=material.id,
+                    branch_material_id=material.id,
                     on_hand=0,
-                    min_stock=0,
                     updated_at=datetime.now(UTC),
                 )
             )
@@ -280,7 +279,7 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
                             supplier_id=supplier.id,
                             lines=[
                                 SupplierInvoiceLineInput(
-                                    material_id=material.id,
+                                    branch_material_id=material.id,
                                     quantity=2,
                                     unit_price_tiyin=100000,
                                 )

@@ -1438,8 +1438,7 @@
     text-transform: uppercase;
   }
 
-  .ep-empty,
-  .ep-branch-note {
+  .ep-empty {
     border-radius: 7px;
     font-size: 0.78125rem;
     font-weight: 600;
@@ -1452,12 +1451,6 @@
     background: var(--color-sunk);
     color: var(--color-ink-muted);
     text-align: center;
-  }
-
-  .ep-branch-note {
-    border: 1px solid var(--color-warning-border);
-    background: var(--color-warning-soft);
-    color: var(--color-warning);
   }
 
   .client-trace {
@@ -3022,6 +3015,13 @@
   }
 
   .tbl tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* A `.hint-row` is a continuation of the row above it — a provenance note that
+     is too wide to live inside one cell. Dropping the preceding row's rule keeps
+     the pair reading as one line item instead of two. */
+  .tbl tr:has(+ .hint-row) td {
     border-bottom: 0;
   }
 

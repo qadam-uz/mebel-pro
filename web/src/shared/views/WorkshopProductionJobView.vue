@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import { useRolePath } from '@/shared/app/paths'
 import {
   clearPanelMarks,
@@ -113,8 +114,10 @@ const markedCount = computed(() => {
 })
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
-  const snapshot = current.material_snapshots[panel.material_id]
-  const name = String(snapshot?.name ?? t('finance.job.panelFallback'))
+  // New snapshots carry no `name` column; compose the label from the same fields
+  // the server uses, reading the legacy keys for frozen history.
+  const snapshot = current.material_snapshots[panel.branch_material_id]
+  const name = snapshotMaterialLabel(snapshot, t('finance.job.panelFallback'))
   return `${name} · ${panel.panel_index}`
 }
 

@@ -19,7 +19,6 @@ from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
     CuttingResultStatus,
-    MaterialKind,
     Permission,
     UserStatus,
 )
@@ -338,11 +337,10 @@ async def workshop_catalog_materials(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
-    kind: MaterialKind,
+    tape: bool,
     branch_id: uuid.UUID,
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
-    carried_only: bool = False,
     limit: int | None = None,
 ) -> list[ClientCatalogMaterialOption]:
     # A staff draft is always branch-scoped — the branch must belong to the
@@ -350,13 +348,15 @@ async def workshop_catalog_materials(
     await resolve_branch_scope(
         db, principal, branch_id=branch_id, permission=Permission.MANAGE_ORDERS
     )
+    # Staff see unpriced formats (flagged `price_unset`) so the gap is visible
+    # where it is fixable; the client listing drops them entirely.
     return await _catalog_materials(
         db,
-        kind=kind,
+        tape=tape,
         branch_id=branch_id,
         search=search,
         manufacturer_id=manufacturer_id,
-        carried_only=carried_only,
+        include_unpriced=True,
         limit=limit,
     )
 

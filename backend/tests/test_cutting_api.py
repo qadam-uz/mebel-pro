@@ -8,14 +8,12 @@ import pytest
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    MaterialKind,
-    PanelMaterialType,
+    DekorType,
     Permission,
     UserStatus,
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.cutting.contracts import (
     CuttingDraft,
     CuttingPanel,
@@ -26,7 +24,14 @@ from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import (
+    MaterialFixture,
+    seed_branch_material,
+    seed_kromka_material,
+    seed_manufacturer,
+    seed_panel_material,
+    seed_workshop_with_owner,
+)
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -103,56 +108,53 @@ async def _staff_user_access(
 async def _materials(
     db: AsyncSession,
     *,
-    branch_id: uuid.UUID | None = None,
-) -> tuple[Material, Material, Material]:
-    manufacturer = Manufacturer(name=f"Egger {uuid.uuid4().hex[:6]}", country="AT")
-    db.add(manufacturer)
-    await db.flush()
-    panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Oak DSP 18",
-        thickness_mm=Decimal("18"),
-        color="Oak",
-        decor_code="H1334",
-        panel_length_mm=600,
-        panel_width_mm=400,
-        grain_direction=False,
+    branch_id: uuid.UUID,
+) -> tuple[MaterialFixture, MaterialFixture, MaterialFixture]:
+    """The branch's shelf: a plain panel, a kromka, and a grained panel.
+
+    `branch_id` is required since the reshape — a material *is* a branch's
+    format of a dekor, so there is no platform-wide material to reference and
+    every one of these must be carried by the branch to be pickable.
+    """
+    manufacturer = await seed_manufacturer(db)
+    panel = await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="H1334",
+        nomi="Oak",
+        tolali=False,
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=600,
+        eni_mm=400,
+        price_tiyin=250000,
+        min_stock=1,
     )
-    other_panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.MDF,
-        name="White MDF 16",
-        thickness_mm=Decimal("16"),
-        color="White",
-        decor_code="W980",
-        panel_length_mm=600,
-        panel_width_mm=400,
-        grain_direction=True,
+    other_panel = await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        tur=DekorType.MDF,
+        kod="W980",
+        nomi="White",
+        tolali=True,
+        qalinlik_mm=Decimal("16"),
+        uzunlik_mm=600,
+        eni_mm=400,
+        price_tiyin=180000,
+        min_stock=1,
     )
-    edge = Material(
-        kind=MaterialKind.EDGE,
-        manufacturer_id=manufacturer.id,
-        name="Oak edge 0.4",
-        thickness_mm=Decimal("0.4"),
-        color="Oak",
-        decor_code="H1334",
-        edge_width_mm=19,
+    edge = await seed_kromka_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="H1334",
+        nomi="Oak",
+        qalinlik_mm=Decimal("0.4"),
+        kromka_eni_mm=19,
+        price_tiyin=1000,
+        min_stock=1,
     )
-    db.add_all([panel, other_panel, edge])
-    await db.flush()
-    if branch_id is not None:
-        db.add(
-            BranchMaterial(
-                branch_id=branch_id,
-                material_id=panel.id,
-                price_tiyin=250000,
-                min_stock=1,
-            )
-        )
-    await db.flush()
     return panel, edge, other_panel
 
 
@@ -176,42 +178,32 @@ async def _map_materials(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-) -> tuple[Material, Material]:
-    manufacturer = Manufacturer(name=f"Map Panels {uuid.uuid4().hex[:6]}", country="UZ")
-    db.add(manufacturer)
-    await db.flush()
-    panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Map panel 2750x1830",
-        thickness_mm=Decimal("18"),
-        color="White",
-        decor_code="MAP",
-        panel_length_mm=2750,
-        panel_width_mm=1830,
-        grain_direction=False,
+) -> tuple[MaterialFixture, MaterialFixture]:
+    manufacturer = await seed_manufacturer(db, name=f"Map Panels {uuid.uuid4().hex[:6]}")
+    panel = await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="MAP",
+        nomi="White",
+        tolali=False,
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=2750,
+        eni_mm=1830,
+        price_tiyin=350000,
+        min_stock=1,
     )
-    edge = Material(
-        kind=MaterialKind.EDGE,
-        manufacturer_id=manufacturer.id,
-        name="Map edge",
-        thickness_mm=Decimal("0.4"),
-        color="White",
-        decor_code="MAP",
-        edge_width_mm=19,
+    edge = await seed_kromka_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="MAP",
+        nomi="White",
+        qalinlik_mm=Decimal("0.4"),
+        kromka_eni_mm=19,
+        price_tiyin=1000,
+        min_stock=1,
     )
-    db.add_all([panel, edge])
-    await db.flush()
-    db.add(
-        BranchMaterial(
-            branch_id=branch_id,
-            material_id=panel.id,
-            price_tiyin=350000,
-            min_stock=1,
-        )
-    )
-    await db.flush()
     return panel, edge
 
 
@@ -351,27 +343,22 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert action_count == 5
 
 
-async def _big_panel(db: AsyncSession) -> Material:
+async def _big_panel(db: AsyncSession, *, branch_id: uuid.UUID) -> MaterialFixture:
     """A panel generous enough that different branch edge-trims still leave room
     to place the parts (per-branch kerf/trim, cutting.md)."""
-    manufacturer = Manufacturer(name=f"BigPanels {uuid.uuid4().hex[:6]}", country="UZ")
-    db.add(manufacturer)
-    await db.flush()
-    panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Big DSP 18",
-        thickness_mm=Decimal("18"),
-        color="White",
-        decor_code="H1000",
-        panel_length_mm=1000,
-        panel_width_mm=800,
-        grain_direction=False,
+    return await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=await seed_manufacturer(db, name=f"BigPanels {uuid.uuid4().hex[:6]}"),
+        kod="H1000",
+        nomi="White",
+        tolali=False,
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=1000,
+        eni_mm=800,
+        price_tiyin=300000,
+        min_stock=1,
     )
-    db.add(panel)
-    await db.flush()
-    return panel
 
 
 async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
@@ -399,21 +386,36 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
         json={"kerf_mm": 3, "edge_trim_mm": 50},
     )
     assert patched_branch2.status_code == 200
-    panel = await _big_panel(db_session)
-    parts = [
-        {
-            "part_ref": "shelf",
-            "material_id": str(panel.id),
-            "material_source": "shop",
-            "length_mm": 480,
-            "width_mm": 380,
-            "quantity": 3,
-            "edge_top": None,
-            "edge_bottom": None,
-            "edge_left": None,
-            "edge_right": None,
-        }
-    ]
+    # A material is a branch's own row now, so the "same" panel has to be
+    # carried by both branches — the point of the test is the kerf/trim, and the
+    # two rows are deliberately the identical format of one dekor.
+    panel = await _big_panel(db_session, branch_id=branch1_id)
+    panel2 = await seed_branch_material(
+        db_session,
+        branch_id=uuid.UUID(branch2_id),
+        dekor=panel.dekor,
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=1000,
+        eni_mm=800,
+        price_tiyin=300000,
+        min_stock=1,
+    )
+
+    def parts_for(branch_material_id: uuid.UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "part_ref": "shelf",
+                "material_id": str(branch_material_id),
+                "material_source": "shop",
+                "length_mm": 480,
+                "width_mm": 380,
+                "quantity": 3,
+                "edge_top": None,
+                "edge_bottom": None,
+                "edge_left": None,
+                "edge_right": None,
+            }
+        ]
 
     access1, _ = await _client_access(
         db_session, phone="+998901111051", preferred_branch_id=branch1_id
@@ -422,7 +424,7 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
     await client.patch(
         f"/api/v1/client/cutting-drafts/{draft1.json()['id']}",
         headers=_auth(access1),
-        json={"parts_snapshot": parts},
+        json={"parts_snapshot": parts_for(panel.id)},
     )
     optimized1 = await client.post(
         f"/api/v1/client/cutting-drafts/{draft1.json()['id']}/optimize",
@@ -436,7 +438,7 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
     await client.patch(
         f"/api/v1/client/cutting-drafts/{draft2.json()['id']}",
         headers=_auth(access2),
-        json={"parts_snapshot": parts},
+        json={"parts_snapshot": parts_for(panel2.id)},
     )
     optimized2 = await client.post(
         f"/api/v1/client/cutting-drafts/{draft2.json()['id']}/optimize",
@@ -454,11 +456,23 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
     assert result1["waste_percentage"] != result2["waste_percentage"]
 
 
-async def test_optimize_falls_back_to_platform_defaults_without_a_branch(
+async def test_a_branchless_draft_keeps_platform_defaults_but_cannot_optimize(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    panel = await _big_panel(db_session)
+    """RESHAPED: optimizing without a branch is no longer possible.
+
+    A material *is* a branch's format of a dekor, so a draft with no
+    `preferred_branch_id` has nothing to resolve its parts against and every one
+    of them reports `material_not_found`. The kerf/trim platform defaults still
+    show on the draft — the client can build a parts list before choosing a
+    branch — but the optimize call now demands one.
+
+    (Before the reshape a branch-less draft optimized against the platform-wide
+    material catalog. That browse mode is deleted, deliberately.)
+    """
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel = await _big_panel(db_session, branch_id=branch_id)
     access, _ = await _client_access(db_session, phone="+998901111053", preferred_branch_id=None)
     draft = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
     draft_id = draft.json()["id"]
@@ -466,25 +480,29 @@ async def test_optimize_falls_back_to_platform_defaults_without_a_branch(
         f"/api/v1/client/cutting-drafts/{draft_id}",
         headers=_auth(access),
     )
-    await client.patch(
+    part = {
+        "part_ref": "shelf",
+        "material_id": str(panel.id),
+        "material_source": "shop",
+        "length_mm": 480,
+        "width_mm": 380,
+        "quantity": 1,
+        "edge_top": None,
+        "edge_bottom": None,
+        "edge_left": None,
+        "edge_right": None,
+    }
+    branchless = await client.patch(
         f"/api/v1/client/cutting-drafts/{draft_id}",
         headers=_auth(access),
-        json={
-            "parts_snapshot": [
-                {
-                    "part_ref": "shelf",
-                    "material_id": str(panel.id),
-                    "material_source": "shop",
-                    "length_mm": 480,
-                    "width_mm": 380,
-                    "quantity": 1,
-                    "edge_top": None,
-                    "edge_bottom": None,
-                    "edge_left": None,
-                    "edge_right": None,
-                }
-            ]
-        },
+        json={"parts_snapshot": [part]},
+    )
+
+    # Naming the branch is what makes the very same part resolvable.
+    accepted = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"preferred_branch_id": str(branch_id), "parts_snapshot": [part]},
     )
     optimized = await client.post(
         f"/api/v1/client/cutting-drafts/{draft_id}/optimize",
@@ -496,10 +514,11 @@ async def test_optimize_falls_back_to_platform_defaults_without_a_branch(
     assert draft.json()["edge_trim_mm"] == 5
     assert loaded.json()["kerf_mm"] == 4
     assert loaded.json()["edge_trim_mm"] == 5
+    assert branchless.status_code == 400
+    assert branchless.json()["code"] == "invalid_cutting_parts"
+    assert branchless.json()["details"]["errors"][0]["code"] == "material_not_found"
+    assert accepted.status_code == 200
     assert optimized.status_code == 200
-    result = optimized.json()["results"][0]
-    assert result["kerf_mm"] == 4
-    assert result["edge_trim_mm"] == 5
 
 
 async def test_neutral_parts_edit_keeps_candidate_result_and_refreshes_edges(
@@ -631,11 +650,15 @@ async def test_grained_part_follow_grain_controls_rotation_validation_and_result
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    _, _, grained_panel = await _materials(db_session)
-    access, client_row = await _client_access(db_session, phone="+998901111020")
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    _, _, grained_panel = await _materials(db_session, branch_id=branch_id)
+    access, client_row = await _client_access(
+        db_session, phone="+998901111020", preferred_branch_id=branch_id
+    )
 
     locked_draft = CuttingDraft(
         client_id=client_row.id,
+        preferred_branch_id=branch_id,
         parts_snapshot=[_rotated_only_part(grained_panel.id, follow_grain=True)],
     )
     db_session.add(locked_draft)
@@ -673,11 +696,15 @@ async def test_follow_grain_locks_rotation_on_non_grained_material(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    panel, _, _ = await _materials(db_session)
-    access, client_row = await _client_access(db_session, phone="+998901111021")
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, _, _ = await _materials(db_session, branch_id=branch_id)
+    access, client_row = await _client_access(
+        db_session, phone="+998901111021", preferred_branch_id=branch_id
+    )
 
     locked_draft = CuttingDraft(
         client_id=client_row.id,
+        preferred_branch_id=branch_id,
         parts_snapshot=[_rotated_only_part(panel.id, follow_grain=True)],
     )
     db_session.add(locked_draft)
@@ -929,11 +956,16 @@ async def test_old_cutting_part_snapshots_default_to_follow_grain_true(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    panel, edge, _ = await _materials(db_session)
-    access, client_row = await _client_access(db_session, phone="+998901111021")
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, client_row = await _client_access(
+        db_session, phone="+998901111021", preferred_branch_id=branch_id
+    )
     old_part = _parts(panel.id, edge.id)[0]
     old_part.pop("follow_grain", None)
-    draft = CuttingDraft(client_id=client_row.id, parts_snapshot=[old_part])
+    draft = CuttingDraft(
+        client_id=client_row.id, preferred_branch_id=branch_id, parts_snapshot=[old_part]
+    )
     db_session.add(draft)
     await db_session.flush()
 
@@ -957,8 +989,11 @@ async def test_cutting_draft_ownership_validation_and_limit(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    panel, edge, _ = await _materials(db_session)
-    first_access, first_client = await _client_access(db_session, phone="+998901111001")
+    owner_access, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    first_access, first_client = await _client_access(
+        db_session, phone="+998901111001", preferred_branch_id=branch_id
+    )
     second_access, second_client = await _client_access(db_session, phone="+998901111002")
     draft = await client.post("/api/v1/client/cutting-drafts", headers=_auth(first_access))
     draft_id = draft.json()["id"]
@@ -972,7 +1007,6 @@ async def test_cutting_draft_ownership_validation_and_limit(
         headers=_auth(first_access),
         json={"parts_snapshot": _parts(edge.id, panel.id)},
     )
-    owner_access, _, _, _ = await _workshop_owner_access(db_session)
     workshop_create = await client.post(
         "/api/v1/client/cutting-drafts",
         headers=_auth(owner_access),
@@ -996,8 +1030,11 @@ async def test_cutting_draft_rejects_duplicate_part_refs(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    panel, edge, _ = await _materials(db_session)
-    access, _ = await _client_access(db_session, phone="+998901111010")
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(
+        db_session, phone="+998901111010", preferred_branch_id=branch_id
+    )
     draft = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
     parts = _parts(panel.id, edge.id)
     parts.append({**parts[0]})
@@ -1071,54 +1108,106 @@ async def test_draft_limit_count_excludes_staff_minted_drafts(
     assert capped.json()["code"] == "draft_limit_exceeded"
 
 
-async def test_client_cutting_material_picker_marks_branch_carried_materials(
+async def test_client_cutting_material_picker_is_always_branch_scoped(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    """RESHAPED: `branch_id` is required and `carried_only` is gone.
+
+    A material *is* a branch's format of a dekor, so there is no platform-wide
+    catalog left to browse and nothing to mark as "not carried" — every row the
+    picker returns is carried by construction. The old `branch_carried` flag and
+    the `carried_only=false` browse mode are both deleted.
+
+    An UNPRICED format is dropped for a client (quoting one would produce a free
+    order line) but kept, flagged, for staff — the gap is visible where it is
+    fixable.
+    """
     _, _, branch_id, _ = await _workshop_owner_access(db_session)
-    panel, _, other_panel = await _materials(db_session, branch_id=branch_id)
+    panel, edge, other_panel = await _materials(db_session, branch_id=branch_id)
+    unpriced = await seed_panel_material(
+        db_session, branch_id=branch_id, kod="UNPRICED", nomi="Unpriced", price_tiyin=0
+    )
     access, _ = await _client_access(db_session)
 
-    carried = await client.get(
-        f"/api/v1/client/catalog/materials?kind=panel&branch_id={branch_id}",
+    panels = await client.get(
+        f"/api/v1/client/catalog/materials?branch_id={branch_id}",
         headers=_auth(access),
     )
-    all_catalog = await client.get(
-        f"/api/v1/client/catalog/materials?kind=panel&branch_id={branch_id}&carried_only=false",
+    tapes = await client.get(
+        f"/api/v1/client/catalog/materials?branch_id={branch_id}&tape=true",
+        headers=_auth(access),
+    )
+    branchless = await client.get(
+        "/api/v1/client/catalog/materials",
         headers=_auth(access),
     )
 
-    assert carried.status_code == 200
-    assert [row["id"] for row in carried.json()] == [str(panel.id)]
-    assert carried.json()[0]["branch_carried"] is True
-    assert carried.json()[0]["price_tiyin"] == 250000
-    assert all_catalog.status_code == 200
-    assert {row["id"] for row in all_catalog.json()} == {str(panel.id), str(other_panel.id)}
-    by_id = {row["id"]: row for row in all_catalog.json()}
-    assert by_id[str(other_panel.id)]["branch_carried"] is False
-    assert by_id[str(other_panel.id)]["price_tiyin"] is None
+    assert panels.status_code == 200
+    # `tape=false` (the default) means every panel-shaped dekor, not one `tur`:
+    # the LDSP and the MDF row both belong in a panel picker.
+    assert {row["id"] for row in panels.json()} == {str(panel.id), str(other_panel.id)}
+    by_id = {row["id"]: row for row in panels.json()}
+    assert by_id[str(panel.id)]["price_tiyin"] == 250000
+    assert by_id[str(panel.id)]["price_unset"] is False
+    assert by_id[str(panel.id)]["qalinlik_mm"] == "18"
+    assert by_id[str(panel.id)]["uzunlik_mm"] == 600
+    assert by_id[str(panel.id)]["tur"] == "ldsp"
+    assert by_id[str(other_panel.id)]["tur"] == "mdf"
+    assert by_id[str(other_panel.id)]["tolali"] is True
+    # The unpriced row never reaches a client.
+    assert str(unpriced.id) not in by_id
+    # Kromka is its own shape, and it carries a tape width instead of a size.
+    assert [row["id"] for row in tapes.json()] == [str(edge.id)]
+    assert tapes.json()[0]["kromka_eni_mm"] == 19
+    assert tapes.json()[0]["uzunlik_mm"] is None
+    assert tapes.json()[0]["display_unit"] == "metre"
+    # No branch, no catalog — the parameter is required, not defaulted.
+    assert branchless.status_code == 422
 
 
-async def test_client_catalog_materials_limit_caps_the_no_branch_load(
+async def test_workshop_cutting_picker_shows_the_unpriced_rows_a_client_cannot_see(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    # CB-40: a no-preferred-branch load can be capped so a fresh draft does not pull
-    # the whole catalog; the cap is deterministic (ordered by manufacturer, name).
+    owner_access, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, _, other_panel = await _materials(db_session, branch_id=branch_id)
+    unpriced = await seed_panel_material(
+        db_session, branch_id=branch_id, kod="UNPRICED", nomi="Unpriced", price_tiyin=0
+    )
+
+    staff_view = await client.get(
+        f"/api/v1/workshop/catalog/materials?branch_id={branch_id}",
+        headers=_auth(owner_access),
+    )
+
+    assert staff_view.status_code == 200
+    by_id = {row["id"]: row for row in staff_view.json()}
+    assert set(by_id) == {str(panel.id), str(other_panel.id), str(unpriced.id)}
+    assert by_id[str(unpriced.id)]["price_unset"] is True
+    assert by_id[str(unpriced.id)]["price_tiyin"] == 0
+
+
+async def test_client_catalog_materials_limit_caps_the_branch_load(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # CB-40: a branch's whole shelf can be capped so a fresh draft does not pull
+    # it all; the cap is deterministic (ordered by manufacturer, decor, thickness).
     _, _, branch_id, _ = await _workshop_owner_access(db_session)
     panel, _, other_panel = await _materials(db_session, branch_id=branch_id)
     access, _ = await _client_access(db_session)
 
     uncapped = await client.get(
-        "/api/v1/client/catalog/materials?kind=panel",
+        f"/api/v1/client/catalog/materials?branch_id={branch_id}",
         headers=_auth(access),
     )
     capped = await client.get(
-        "/api/v1/client/catalog/materials?kind=panel&limit=1",
+        f"/api/v1/client/catalog/materials?branch_id={branch_id}&limit=1",
         headers=_auth(access),
     )
     bad_limit = await client.get(
-        "/api/v1/client/catalog/materials?kind=panel&limit=0",
+        f"/api/v1/client/catalog/materials?branch_id={branch_id}&limit=0",
         headers=_auth(access),
     )
 

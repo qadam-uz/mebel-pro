@@ -32,7 +32,7 @@ export const adminRoutes: RouteRecordRaw[] = [
   {
     path: '/admin/catalog',
     name: 'admin-catalog',
-    redirect: '/admin/catalog/materials',
+    redirect: '/admin/catalog/dekorlar',
     meta: { titleKey: 'routes.catalog' },
   },
   {
@@ -42,10 +42,23 @@ export const adminRoutes: RouteRecordRaw[] = [
     meta: { titleKey: 'routes.manufacturers' },
   },
   {
+    path: '/admin/catalog/dekorlar',
+    name: 'admin-catalog-dekorlar',
+    component: () => import('@/shared/views/AdminDekorlarView.vue'),
+    meta: { titleKey: 'routes.dekorlar' },
+  },
+  {
+    path: '/admin/catalog/dekorlar/:dekor_id',
+    name: 'admin-catalog-dekor-detail',
+    component: () => import('@/shared/views/AdminDekorDetailView.vue'),
+    meta: { titleKey: 'routes.dekorDetail' },
+  },
+  // The platform `materials` table was split into dekorlar (identity) and branch
+  // materials (format); the old admin path is bookmarked and linked from older
+  // docs, so it redirects rather than 404s.
+  {
     path: '/admin/catalog/materials',
-    name: 'admin-catalog-materials',
-    component: () => import('@/shared/views/AdminMaterialsView.vue'),
-    meta: { titleKey: 'routes.materials' },
+    redirect: '/admin/catalog/dekorlar',
   },
   {
     path: '/admin/notifications',

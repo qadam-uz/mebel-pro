@@ -94,34 +94,51 @@ async def _staff_access(
 async def _carried_material(
     client: AsyncClient, platform_access: str, owner_access: str, branch_id: uuid.UUID
 ) -> str:
+    """Create a dekor and have the branch carry it in one format.
+
+    Returns the BRANCH material id — the id an invoice line, a stock row and an
+    order item all point at since the reshape.
+    """
     manufacturer = await client.post(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(platform_access),
         json={"name": f"Egger {uuid.uuid4().hex[:6]}", "country": "AT"},
     )
-    material = await client.post(
-        "/api/v1/platform/catalog/materials",
+    dekor = await client.post(
+        "/api/v1/platform/catalog/dekorlar",
         headers=_auth(platform_access),
         json={
-            "kind": "panel",
             "manufacturer_id": manufacturer.json()["id"],
-            "type": "dsp",
-            "thickness_mm": "18",
-            "color": "Sonoma oak",
-            "decor_code": "H1334",
-            "panel_length_mm": 2750,
-            "panel_width_mm": 1830,
-            "grain_direction": True,
+            "tur": "ldsp",
+            "kod": f"H{uuid.uuid4().hex[:4]}",
+            "nomi": "Sonoma oak",
+            "tolali": True,
         },
     )
-    material_id: str = material.json()["id"]
+    assert dekor.status_code == 201, dekor.text
     added = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
-        json={"material_id": material_id, "price_tiyin": 60000000, "min_stock": 0},
+        json={
+            "items": [
+                {
+                    "dekor_id": dekor.json()["id"],
+                    "formats": [
+                        {
+                            "qalinlik_mm": "18",
+                            "uzunlik_mm": 2750,
+                            "eni_mm": 1830,
+                            "price_tiyin": 60_000_000,
+                            "min_stock": 0,
+                        }
+                    ],
+                }
+            ],
+        },
     )
-    assert added.status_code == 201
-    return material_id
+    assert added.status_code == 201, added.text
+    branch_material_id: str = added.json()["created"][0]["id"]
+    return branch_material_id
 
 
 async def test_supplier_debt_fold_statement_and_voids(
@@ -163,7 +180,7 @@ async def test_supplier_debt_fold_statement_and_voids(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(owner_access),
         json={
-            "material_id": material_id,
+            "branch_material_id": material_id,
             "quantity": 20,
             "unit_price_tiyin": 515_000,
             "supplier_id": supplier_id,

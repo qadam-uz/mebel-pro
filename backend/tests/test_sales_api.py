@@ -11,16 +11,15 @@ from app.models.enums import (
     CuttingResultStatus,
     IncomeType,
     LedgerStatus,
-    MaterialKind,
+    MaterialStatus,
     MoneyMethod,
-    PanelMaterialType,
     Permission,
     StockTransactionType,
     UserStatus,
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Dekor, DekorType
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
@@ -32,7 +31,13 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import (
+    MaterialFixture,
+    seed_kromka_material,
+    seed_manufacturer,
+    seed_panel_material,
+    seed_workshop_with_owner,
+)
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -113,59 +118,51 @@ async def _materials(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-) -> tuple[Material, Material]:
-    manufacturer = Manufacturer(name=f"Phase 5 Maker {uuid.uuid4().hex[:6]}", country="UZ")
-    db.add(manufacturer)
-    await db.flush()
-    panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Phase 5 Panel",
-        thickness_mm=Decimal("18"),
-        color="White",
-        decor_code="P5-P",
-        panel_length_mm=900,
-        panel_width_mm=600,
-        grain_direction=False,
+) -> tuple[MaterialFixture, MaterialFixture]:
+    """The branch's carried panel and kromka, each stocked.
+
+    Both share one manufacturer, as they do in real catalogs. `.id` is the
+    BRANCH material id — the id order items, cutting panels and stock all point
+    at since the reshape.
+    """
+    manufacturer = await seed_manufacturer(
+        db, name=f"Phase 5 Maker {uuid.uuid4().hex[:6]}", country="UZ"
     )
-    edge = Material(
-        kind=MaterialKind.EDGE,
-        manufacturer_id=manufacturer.id,
-        name="Phase 5 Edge",
-        thickness_mm=Decimal("2"),
-        color="White",
-        decor_code="P5-E",
-        edge_width_mm=19,
+    panel = await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="P5-P",
+        nomi="White",
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=900,
+        eni_mm=600,
+        price_tiyin=250_000,
+        min_stock=1,
     )
-    db.add_all([panel, edge])
-    await db.flush()
+    edge = await seed_kromka_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod="P5-E",
+        nomi="White",
+        qalinlik_mm=Decimal("2"),
+        kromka_eni_mm=19,
+        price_tiyin=10_000,
+        min_stock=1_000,
+    )
     db.add_all(
         [
-            BranchMaterial(
-                branch_id=branch_id,
-                material_id=panel.id,
-                price_tiyin=250_000,
-                min_stock=1,
-            ),
-            BranchMaterial(
-                branch_id=branch_id,
-                material_id=edge.id,
-                price_tiyin=10_000,
-                min_stock=1_000,
-            ),
             StockItem(
                 branch_id=branch_id,
-                material_id=panel.id,
+                branch_material_id=panel.id,
                 on_hand=3,
-                min_stock=1,
                 updated_at=datetime.now(UTC),
             ),
             StockItem(
                 branch_id=branch_id,
-                material_id=edge.id,
+                branch_material_id=edge.id,
                 on_hand=10_000,
-                min_stock=1_000,
                 updated_at=datetime.now(UTC),
             ),
         ]
@@ -179,8 +176,8 @@ async def _optimized_draft(
     access: str,
     *,
     branch_id: uuid.UUID,
-    panel: Material,
-    edge: Material,
+    panel: MaterialFixture,
+    edge: MaterialFixture,
 ) -> dict[str, object]:
     created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
     assert created.status_code == 201
@@ -665,7 +662,7 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     edge_on_hand = await db_session.scalar(
         select(StockItem.on_hand).where(
             StockItem.branch_id == branch_id,
-            StockItem.material_id == edge_id,
+            StockItem.branch_material_id == edge_id,
         )
     )
     assert edge_on_hand == 9000
@@ -680,7 +677,7 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     edge_restored = await db_session.scalar(
         select(StockItem.on_hand).where(
             StockItem.branch_id == branch_id,
-            StockItem.material_id == edge_id,
+            StockItem.branch_material_id == edge_id,
         )
     )
     assert edge_restored == 10000
@@ -1478,22 +1475,20 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
     order_id = order["id"]
 
     # The two blocking states at once: nothing on the shelf, and the material was
-    # dropped from the branch catalog after the order was placed.
+    # dropped from the branch catalog after the order was placed. Post-reshape
+    # "dropped" means DEACTIVATED — the order item FKs the branch material, so
+    # the row cannot be deleted out from under a live order any more.
     panel_item = await db_session.scalar(
         select(StockItem)
-        .join(Material, Material.id == StockItem.material_id)
-        .where(StockItem.branch_id == branch_id, Material.kind == MaterialKind.PANEL)
+        .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
+        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        .where(StockItem.branch_id == branch_id, Dekor.tur != DekorType.KROMKA)
     )
     assert panel_item is not None
     panel_item.on_hand = 0
-    panel_branch_material = await db_session.scalar(
-        select(BranchMaterial).where(
-            BranchMaterial.branch_id == branch_id,
-            BranchMaterial.material_id == panel_item.material_id,
-        )
-    )
+    panel_branch_material = await db_session.get(BranchMaterial, panel_item.branch_material_id)
     assert panel_branch_material is not None
-    await db_session.delete(panel_branch_material)
+    panel_branch_material.status = MaterialStatus.INACTIVE
     await db_session.flush()
 
     approved = await client.post(
@@ -1527,16 +1522,10 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
     assert cut_done.json()["stock_shortfall"] is True
     await db_session.refresh(panel_item)
     assert panel_item.on_hand == -1
-    # The material is NOT silently re-added to the branch catalog.
-    assert (
-        await db_session.scalar(
-            select(BranchMaterial).where(
-                BranchMaterial.branch_id == branch_id,
-                BranchMaterial.material_id == panel_item.material_id,
-            )
-        )
-        is None
-    )
+    # The material is NOT silently re-listed for clients: what physically moved
+    # and what is offerable are different questions.
+    await db_session.refresh(panel_branch_material)
+    assert panel_branch_material.status is MaterialStatus.INACTIVE
 
     # Recording the arrival afterwards lands the balance on the right number with
     # no manual adjustment: 1 was consumed, 4 arrive, 3 remain.
@@ -1546,22 +1535,14 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
         json={"name": "Late Arrival Supplier"},
     )
     assert supplier.status_code == 201
-    # Stock-in still needs the material in the branch catalog, so put it back the
-    # way a human would — deliberately, through the catalog.
-    db_session.add(
-        BranchMaterial(
-            branch_id=branch_id,
-            material_id=panel_item.material_id,
-            price_tiyin=250_000,
-            min_stock=1,
-        )
-    )
+    # Re-list it the way a human would — deliberately, through the catalog.
+    panel_branch_material.status = MaterialStatus.ACTIVE
     await db_session.flush()
     stock_in = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(owner_access),
         json={
-            "material_id": str(panel_item.material_id),
+            "branch_material_id": str(panel_item.branch_material_id),
             "quantity": 4,
             "unit_price_tiyin": 100_000,
             "supplier_id": supplier.json()["id"],

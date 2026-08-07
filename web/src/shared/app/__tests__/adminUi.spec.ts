@@ -67,15 +67,15 @@ describe('admin UI helpers', () => {
     const metrics = adminNavMetrics({
       workshops: 12,
       manufacturers: 4,
-      materials: 37,
+      dekorlar: 37,
       failedJobs: 2,
       openErrors: 0,
       operators: 3,
     })
 
     expect(metrics.get('/admin/workshops')).toMatchObject({ key: 'workshops', value: 12 })
-    expect(metrics.get('/admin/catalog/materials')).toMatchObject({
-      key: 'materials',
+    expect(metrics.get('/admin/catalog/dekorlar')).toMatchObject({
+      key: 'dekorlar',
       value: 37,
     })
     expect(metrics.get('/admin/platform/jobs')).toMatchObject({
@@ -94,7 +94,7 @@ describe('admin UI helpers', () => {
     const items: NavItem[] = [
       { labelKey: 'nav.item.dashboard', to: '/admin', group: 'platform' },
       { labelKey: 'nav.item.workshops', to: '/admin/workshops', group: 'platform' },
-      { labelKey: 'nav.item.materials', to: '/admin/catalog/materials', group: 'catalog' },
+      { labelKey: 'nav.item.dekorlar', to: '/admin/catalog/dekorlar', group: 'catalog' },
       { labelKey: 'nav.item.audit', to: '/admin/audit', group: 'admin' },
     ]
 

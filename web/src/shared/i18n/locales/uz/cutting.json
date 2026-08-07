@@ -30,8 +30,13 @@
     "right": "O'ng"
   },
   "panelType": {
+    "ldsp": "LDSP",
     "dsp": "LDSP",
     "mdf": "MDF",
+    "fanera": "Fanera",
+    "yogoch": "Yog'och",
+    "kromka": "Kromka",
+    "boshqa": "List",
     "plywood": "Fanera",
     "natural_wood": "Yog'och",
     "other": "List"
@@ -58,7 +63,12 @@
     "grained": "Teksturali material",
     "grainless": "Teksturasiz material",
     "selected": "Tanlangan",
-    "emptyInBranch": "Bu filialda list materiali topilmadi."
+    "emptyInBranch": "Bu filialda list materiali topilmadi.",
+    "priceUnset": "Narx yo'q",
+    "searchLabel": "Material qidirish",
+    "searchPlaceholder": "Dekor nomi yoki kodi — Sonoma, H1145, сонома",
+    "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
+    "pickerEmpty": "Bu filialda material yo‘q."
   },
   "editor": {
     "backToDrafts": "Chizmalar",
@@ -75,7 +85,6 @@
     "revisionGeneric": "Buyurtma tahrirlanmoqda",
     "backToOrder": "Buyurtmaga qaytish",
     "change": "O'zgartirish",
-    "notCarriedMeta": "filialda yo'q",
     "saveSaved": "Chizma saqlandi",
     "saveSaving": "Chizma saqlanmoqda",
     "saveEditing": "Tahrirlanmoqda",
@@ -114,8 +123,6 @@
     "duplicate": "Nusxalash",
     "moveToMaterial": "Boshqa materialga ko'chirish",
     "materialMissing": "Bu qatordagi list materiali endi katalogda yo'q — boshqasini tanlang.",
-    "notCarried": "Bu qator {branch} filialida mavjud bo'lmagan materialdan foydalanadi — boshqa material tanlang yoki filialni o'zgartiring.",
-    "pickAnotherEdge": "Boshqa kromka tanlash",
     "edgeSides": "Kromka: {sides}",
     "noEdge": "Kromkasiz",
     "emptyResult": "Detal yo'q.",
@@ -154,7 +161,6 @@
     "sideAriaCurrent": "{side} tomon — joriy kromka bor, bosib olib tashlang",
     "sideAriaOther": "{side} tomon — boshqa kromka bor, bosib joriy kromkaga almashtiring",
     "sideAriaEmpty": "{side} tomon — joriy kromkani qo'shing",
-    "branchNote": "{branch} filialida {materials} hozir mavjud emas. Boshqa kromka tanlang.",
     "searchPlaceholder": "Kromka nomi yoki dekor kodi",
     "searchAria": "Kromka qidirish",
     "thicknessFilterAria": "Qalinlik filtri",
@@ -206,9 +212,6 @@
     "checking": "Tekshirilmoqda",
     "applyColumns": "Ustunlarni qo'llash",
     "materialsTitle": "Materiallar",
-    "branchCatalogOnly": "Faqat filial katalogi",
-    "showAllCatalog": "Barcha katalogni ko'rsatish",
-    "allCatalog": "Barcha katalog",
     "branchCatalog": "{branch} katalogi · {n} ta list",
     "mapGroupMeta": "fayl nomidan · list {width}×{height} · {n} xil",
     "panelLabel": "List materiali",

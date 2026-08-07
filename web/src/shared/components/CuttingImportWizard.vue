@@ -41,9 +41,7 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     panelChoices: ChoiceOption[]
-    allPanelChoices: ChoiceOption[]
     edgeChoices: ChoiceOption[]
-    allEdgeChoices: ChoiceOption[]
     hasExistingParts: boolean
     currentPieces: number
     currentParts?: number
@@ -70,7 +68,6 @@ const skipRows = ref(0)
 const columnRoles = ref<Record<number, ImportRole>>({})
 const panelPicks = ref<Record<string, string | null>>({})
 const edgePicks = ref<Record<string, string | null>>({})
-const showAllCatalog = ref(false)
 const columnsOpen = ref(false)
 const openDiagnostic = ref<Diagnostic | null>(null)
 const mode = ref<ImportLoadMode>('append')
@@ -113,16 +110,12 @@ const mappingSummary = computed(() =>
   }),
 )
 
-const effectivePanelChoices = computed(() =>
-  props.preferredBranchName && !showAllCatalog.value ? props.panelChoices : props.allPanelChoices,
-)
-const effectiveEdgeChoices = computed(() =>
-  props.preferredBranchName && !showAllCatalog.value ? props.edgeChoices : props.allEdgeChoices,
-)
+// The branch is chosen before the flow ever reaches materials, so the list is
+// always that branch's own catalog — the "browse everything" toggle it used to
+// carry has no state left to switch between.
 const catalogHint = computed(() => {
   if (!props.preferredBranchName) return ''
-  if (showAllCatalog.value) return t('cutting.import.allCatalog')
-  const count = effectivePanelChoices.value.length
+  const count = props.panelChoices.length
   return t('cutting.import.branchCatalog', { branch: props.preferredBranchName, n: count }, count)
 })
 const materialPicksComplete = computed(() =>
@@ -212,7 +205,6 @@ function resetWizard() {
   columnRoles.value = {}
   panelPicks.value = {}
   edgePicks.value = {}
-  showAllCatalog.value = false
   columnsOpen.value = false
   openDiagnostic.value = null
   mode.value = 'append'
@@ -395,7 +387,7 @@ function selectedPanelMatchesMap(key: string): boolean | null {
   const group = mapGroupForKey(key)
   const panel = pickedPanelMaterial(key)
   if (!group || !panel) return null
-  return panel.panel_length_mm === group.width_mm && panel.panel_width_mm === group.height_mm
+  return panel.uzunlik_mm === group.width_mm && panel.eni_mm === group.height_mm
 }
 
 function buildPartsFromParsed() {
@@ -787,18 +779,6 @@ function previewCell(row: (string | null)[], column: number) {
             <h3 class="text-sm font-extrabold uppercase text-ink-muted">
               {{ $t('cutting.import.materialsTitle') }}
             </h3>
-            <button
-              v-if="preferredBranchName"
-              type="button"
-              class="text-sm font-semibold text-accent hover:text-accent-hover"
-              @click="showAllCatalog = !showAllCatalog"
-            >
-              {{
-                showAllCatalog
-                  ? $t('cutting.import.branchCatalogOnly')
-                  : $t('cutting.import.showAllCatalog')
-              }}
-            </button>
           </div>
 
           <div
@@ -842,7 +822,7 @@ function previewCell(row: (string | null)[], column: number) {
               <SearchCombobox
                 :model-value="panelPicks[group.key] ?? null"
                 :label="$t('cutting.import.panelLabel')"
-                :options="effectivePanelChoices"
+                :options="panelChoices"
                 :placeholder="$t('cutting.import.panelPlaceholder')"
                 :hint="catalogHint"
                 @update:model-value="setPanelPick(group.key, $event)"
@@ -885,7 +865,7 @@ function previewCell(row: (string | null)[], column: number) {
             <SearchCombobox
               :model-value="edgePicks[group.key] ?? null"
               :label="$t('cutting.import.edgeLabel')"
-              :options="effectiveEdgeChoices"
+              :options="edgeChoices"
               :placeholder="$t('cutting.edge.placeholder')"
               :hint="catalogHint"
               @update:model-value="setEdgePick(group.key, $event)"

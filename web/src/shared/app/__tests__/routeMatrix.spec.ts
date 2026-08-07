@@ -188,6 +188,8 @@ describe('role route matrix', () => {
       '/workshops',
       '/catalog',
       '/catalog/manufacturers',
+      '/catalog/dekorlar',
+      '/catalog/dekorlar/:dekor_id',
       '/catalog/materials',
       '/notifications',
       '/platform/jobs',
@@ -203,7 +205,7 @@ describe('role route matrix', () => {
       '/',
       '/workshops',
       '/catalog/manufacturers',
-      '/catalog/materials',
+      '/catalog/dekorlar',
       '/platform/jobs',
       '/platform/errors',
       '/audit',
@@ -279,6 +281,8 @@ describe('role route matrix', () => {
       '/admin/workshops',
       '/admin/catalog',
       '/admin/catalog/manufacturers',
+      '/admin/catalog/dekorlar',
+      '/admin/catalog/dekorlar/:dekor_id',
       '/admin/catalog/materials',
       '/admin/notifications',
       '/admin/platform/jobs',
@@ -382,18 +386,32 @@ describe('role route matrix', () => {
         })
         .map((match) => `${file}:${match[0]}`)
     })
-    const materials = readFileSync(
-      join(process.cwd(), 'src', 'shared', 'views', 'AdminMaterialsView.vue'),
+    const dekorlar = readFileSync(
+      join(process.cwd(), 'src', 'shared', 'views', 'AdminDekorlarView.vue'),
       'utf8',
     )
-    const requiredFormSelectIds = ['mat-kind', 'mat-manufacturer', 'mat-type']
+    const requiredFormSelectIds = ['dek-manufacturer']
     const customOffenders = requiredFormSelectIds.filter((id) => {
-      const field = materials.match(new RegExp(`<FormSelect[\\s\\S]*?id="${id}"[\\s\\S]*?/>`))?.[0]
+      const field = dekorlar.match(new RegExp(`<FormSelect[\\s\\S]*?id="${id}"[\\s\\S]*?/>`))?.[0]
       return !field?.includes('required')
     })
 
     expect(nativeOffenders).toEqual([])
     expect(customOffenders).toEqual([])
+  })
+
+  // `tur` is required but renders as a chip group, so it carries no `required`
+  // attribute for the check above to find. Its required-ness moved to form-level
+  // validation — assert that, or the reshape leaves the field guarded by nothing.
+  it('keeps the dekor tur chip group required at form level', () => {
+    const dekorlar = readFileSync(
+      join(process.cwd(), 'src', 'shared', 'views', 'AdminDekorlarView.vue'),
+      'utf8',
+    )
+
+    expect(dekorlar).toContain("set('tur', requiredText(form.tur")
+    expect(dekorlar).toContain('dekorFieldErrors.tur')
+    expect(dekorlar).toContain('dek-tur')
   })
 
   // The workshop order flow REUSES the client cutting editor — there must be

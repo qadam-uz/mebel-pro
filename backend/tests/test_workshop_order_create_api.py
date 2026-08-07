@@ -8,15 +8,13 @@ from app.core.security import hash_password
 from app.models.enums import (
     ActorType,
     AuthenticatedPrincipalType,
-    MaterialKind,
     OrderStatus,
-    PanelMaterialType,
     Permission,
     UserStatus,
 )
 from app.modules.access.api import create_session, find_or_create_client
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.catalog.contracts import BranchPricing
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order, OrderStatusEvent
@@ -26,7 +24,13 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import (
+    MaterialFixture,
+    seed_kromka_material,
+    seed_manufacturer,
+    seed_panel_material,
+    seed_workshop_with_owner,
+)
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -98,53 +102,51 @@ async def _staff_access(
     return tokens.access_token
 
 
-async def _materials(db: AsyncSession, *, branch_id: uuid.UUID) -> tuple[Material, Material]:
-    manufacturer = Manufacturer(name=f"Maker {uuid.uuid4().hex[:6]}", country="UZ")
-    db.add(manufacturer)
-    await db.flush()
-    panel = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Walk-in Panel",
-        thickness_mm=Decimal("18"),
-        color="White",
-        decor_code=f"W-P-{uuid.uuid4().hex[:4]}",
-        panel_length_mm=900,
-        panel_width_mm=600,
-        grain_direction=False,
+async def _materials(
+    db: AsyncSession, *, branch_id: uuid.UUID
+) -> tuple[MaterialFixture, MaterialFixture]:
+    """The branch's carried panel and kromka, each stocked.
+
+    `.id` is the BRANCH material id — what an order item, a cutting panel and a
+    stock row all point at since the reshape.
+    """
+    manufacturer = await seed_manufacturer(db, name=f"Maker {uuid.uuid4().hex[:6]}", country="UZ")
+    panel = await seed_panel_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod=f"W-P-{uuid.uuid4().hex[:4]}",
+        nomi="White",
+        tolali=False,
+        qalinlik_mm=Decimal("18"),
+        uzunlik_mm=900,
+        eni_mm=600,
+        price_tiyin=250_000,
+        min_stock=1,
     )
-    edge = Material(
-        kind=MaterialKind.EDGE,
-        manufacturer_id=manufacturer.id,
-        name="Walk-in Edge",
-        thickness_mm=Decimal("2"),
-        color="White",
-        decor_code=f"W-E-{uuid.uuid4().hex[:4]}",
-        edge_width_mm=19,
+    edge = await seed_kromka_material(
+        db,
+        branch_id=branch_id,
+        manufacturer=manufacturer,
+        kod=f"W-E-{uuid.uuid4().hex[:4]}",
+        nomi="White",
+        qalinlik_mm=Decimal("2"),
+        kromka_eni_mm=19,
+        price_tiyin=10_000,
+        min_stock=1,
     )
-    db.add_all([panel, edge])
-    await db.flush()
     db.add_all(
         [
-            BranchMaterial(
-                branch_id=branch_id, material_id=panel.id, price_tiyin=250_000, min_stock=1
-            ),
-            BranchMaterial(
-                branch_id=branch_id, material_id=edge.id, price_tiyin=10_000, min_stock=1
-            ),
             StockItem(
                 branch_id=branch_id,
-                material_id=panel.id,
+                branch_material_id=panel.id,
                 on_hand=5,
-                min_stock=1,
                 updated_at=datetime.now(UTC),
             ),
             StockItem(
                 branch_id=branch_id,
-                material_id=edge.id,
+                branch_material_id=edge.id,
                 on_hand=10_000,
-                min_stock=1,
                 updated_at=datetime.now(UTC),
             ),
         ]
@@ -169,8 +171,8 @@ async def _optimized_workshop_draft(
     *,
     client_id: str,
     branch_id: uuid.UUID,
-    panel: Material,
-    edge: Material,
+    panel: MaterialFixture,
+    edge: MaterialFixture,
 ) -> str:
     created = await client.post(
         "/api/v1/workshop/cutting-drafts",

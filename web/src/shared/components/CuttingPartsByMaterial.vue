@@ -44,11 +44,14 @@ function materialLabelFor(materialId: string) {
   return snapshotMaterialLabel(props.result.material_snapshots[materialId] ?? {}, materialId)
 }
 
-/** The tape's canonical catalog name — "Kromka Egger H1137 · Kulrang eman ·
- *  2×19 mm" — which the backend generates and the editor's own registry shows.
- *  `snapshotEdgeLabel` rebuilds a shorter variant that drops the "Kromka"
- *  prefix and the width, so it serves only as the fallback for a snapshot that
- *  predates the generated name. */
+/** The tape's label. `name` was the catalog's stored column — "Kromka Egger
+ *  H1137 · Kulrang eman · 2×19 mm" — and it survives only inside pre-reshape
+ *  snapshots, which are frozen history: reading it first is what keeps an old
+ *  order rendering the exact string it always did. Post-reshape snapshots have
+ *  no `name`, so they compose through `snapshotEdgeLabel`, the mirror of the
+ *  backend's `edge_label()`. The two differ slightly (the composed form has no
+ *  "Kromka" prefix), so an old and a new order can show the same tape a little
+ *  differently — the alternative is rewriting history's labels. */
 function edgeLabelFor(materialId: string) {
   const snapshot = props.result.material_snapshots[materialId]
   const name = typeof snapshot?.name === 'string' ? snapshot.name.trim() : ''

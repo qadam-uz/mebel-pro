@@ -167,7 +167,9 @@ describe('shared API client', () => {
   })
 
   it('builds query strings, keeping false/0 but dropping null/undefined/"" (CB-98)', () => {
-    expect(withQuery('/m', { carried_only: false, count: 0 })).toBe('/m?carried_only=false&count=0')
+    // `tape=false` is the live case: it selects the panel-shaped half of a
+    // branch's catalog, so dropping it would silently return tapes instead.
+    expect(withQuery('/m', { tape: false, count: 0 })).toBe('/m?tape=false&count=0')
     expect(withQuery('/m', { a: null, b: undefined, c: '' })).toBe('/m')
     expect(withQuery('/m', { keep: 'yes', drop: null, flag: false })).toBe('/m?keep=yes&flag=false')
     expect(withQuery('/m', {})).toBe('/m')

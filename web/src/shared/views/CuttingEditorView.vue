@@ -13,6 +13,7 @@ import {
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
 import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
+import { formatMm, isTape, snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import {
   deriveEdgeRegistry,
@@ -32,6 +33,7 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -39,7 +41,6 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
   materialLabel,
   partFitError,
-  partNotCarried,
   useCuttingStore,
   type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
@@ -269,46 +270,18 @@ const activeTrimMm = computed(
     fixedBranch.value?.edgeTrimMm ??
     null,
 )
-// Every row's panel picker draws from this branch-filtered catalog; the picker's
-// own search narrows further. With a branch selected only its carried materials show.
-const panelOptions = computed(() =>
-  cutting.panelOptions.filter((material) =>
-    activeBranchId.value ? material.branch_carried : true,
-  ),
-)
+// The catalog endpoint is branch-scoped — a branch is chosen before the flow
+// reaches materials — so every row it returns is one this branch carries. There
+// is no client-side carried filter left and no "not carried" state to annotate.
 function catalogChoice(material: ClientCatalogMaterialOption): ChoiceOption {
   return {
     value: material.id,
     label: materialLabel(material),
-    meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
-      material.branch_carried ? '' : ` · ${t('cutting.editor.notCarriedMeta')}`
-    }`,
+    meta: `${material.nomi}${material.kod ? ` · ${material.kod}` : ''}`,
   }
 }
-const branchPanelChoices = computed<ChoiceOption[]>(() => panelOptions.value.map(catalogChoice))
-const allPanelChoices = computed<ChoiceOption[]>(() => cutting.panelOptions.map(catalogChoice))
-const edgeOptions = computed(() =>
-  cutting.edgeOptions.filter((material) => (activeBranchId.value ? material.branch_carried : true)),
-)
-const edgeChoices = computed<ChoiceOption[]>(() => edgeOptions.value.map(catalogChoice))
-const allEdgeChoices = computed<ChoiceOption[]>(() => cutting.edgeOptions.map(catalogChoice))
-const panelChoices = computed<ChoiceOption[]>(() => {
-  // Always keep a material a row already references in the options, even if the
-  // branch filter would drop it — otherwise the picker shows an empty
-  // "Panel tanlang" for a row that does have a (not-carried) panel, which
-  // reads as "nothing selected" while the not-carried warning fires.
-  const list = [...panelOptions.value]
-  const present = new Set(list.map((material) => material.id))
-  for (const part of parts.value) {
-    if (!part.material_id || present.has(part.material_id)) continue
-    const material = cutting.panelOptions.find((option) => option.id === part.material_id)
-    if (material) {
-      list.push(material)
-      present.add(material.id)
-    }
-  }
-  return list.map(catalogChoice)
-})
+const panelChoices = computed<ChoiceOption[]>(() => cutting.panelOptions.map(catalogChoice))
+const edgeChoices = computed<ChoiceOption[]>(() => cutting.edgeOptions.map(catalogChoice))
 // Do not create or update a draft until it contains at least one fully filled
 // detail. `every()` alone treats an empty list as valid.
 const hasPersistableParts = computed(
@@ -451,7 +424,8 @@ const displayPartIndex = computed(() => {
 })
 
 function edgeRegistryLabel(materialId: string) {
-  return edgeById(materialId)?.name ?? materialId
+  const edge = edgeById(materialId)
+  return edge ? materialLabel(edge) : materialId
 }
 
 function groupEdgeRegistryEntries(group: { parts: Array<{ part: CuttingPart }> }) {
@@ -512,10 +486,10 @@ function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
     )
     if (!usesEdge) continue
     const panel = materialById(part.material_id)
-    const panelThickness = Number(panel?.thickness_mm)
+    const panelThickness = Number(panel?.qalinlik_mm)
     if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
       return t('cutting.edge.narrowWarning', {
-        width: edge.edge_width_mm,
+        width: edge.kromka_eni_mm,
         thickness: panelThickness,
       })
     }
@@ -548,13 +522,9 @@ watch(
   { deep: true, immediate: true },
 )
 
-function rowNotCarried(part: CuttingPart) {
-  return partNotCarried(part, activeBranchId.value, materialById, edgeById)
-}
-
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
-  if (!panel || panel.panel_length_mm == null || panel.panel_width_mm == null) return null
+  if (!panel || panel.uzunlik_mm == null || panel.eni_mm == null) return null
   const trimMm = activeTrimMm.value
   if (trimMm == null) return null
   const code = partFitError(
@@ -565,8 +535,8 @@ function partSizeError(part: CuttingPart): string | null {
     trimMm,
   )
   if (!code) return null
-  const usableLength = panel.panel_length_mm - 2 * trimMm
-  const usableWidth = panel.panel_width_mm - 2 * trimMm
+  const usableLength = panel.uzunlik_mm - 2 * trimMm
+  const usableWidth = panel.eni_mm - 2 * trimMm
   if (code === 'impossible_grain')
     return t('cutting.editor.grainFitError', { length: usableLength, width: usableWidth })
   return t('cutting.editor.sizeFitError', {
@@ -893,15 +863,107 @@ function closeMaterialPicker() {
   materialPickerTarget.value = null
 }
 
-const materialPickerMaterials = computed(() => {
-  const seen = new Set<string>()
-  return panelChoices.value
-    .map((choice) => cutting.panelOptions.find((material) => material.id === choice.value))
-    .filter((material): material is ClientCatalogMaterialOption => {
-      if (!material || seen.has(material.id)) return false
-      seen.add(material.id)
-      return true
+// Server-side search over the branch's own list. It has to be server-side: the
+// backend folds both the stored key and the query through one normalizer
+// (app/core/search_fold.py), so "сонома" finds "Sonoma eman" and "yongok" finds
+// "Yong'oq". Filtering the loaded array here would only ever match the script the
+// dekor happens to be stored in — the exact complaint this replaces.
+const materialPickerSearch = ref('')
+let materialSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(materialPickerTarget, (target) => {
+  // Each open starts from the whole list; a query left over from the previous
+  // open would silently hide materials.
+  if (!target) return
+  if (materialPickerSearch.value === '') return
+  materialPickerSearch.value = ''
+  void reloadPanelOptions('')
+})
+
+watch(materialPickerSearch, (value) => {
+  if (materialSearchTimer) clearTimeout(materialSearchTimer)
+  // 250ms: long enough that a typed word is one request, short enough that the
+  // list feels attached to the keyboard.
+  materialSearchTimer = setTimeout(() => void reloadPanelOptions(value), 250)
+})
+
+onBeforeUnmount(() => {
+  if (materialSearchTimer) clearTimeout(materialSearchTimer)
+})
+
+async function reloadPanelOptions(search: string) {
+  const branchId = activeBranchId.value
+  if (!branchId) return
+  // `force`: the store caches per branch, and a query change must defeat that.
+  await cutting.loadMaterials({ tape: false, branchId, search: search.trim(), force: true })
+}
+
+// The picker reads like the catalog table: one photo + identity line per dekor,
+// its formats listed beneath as the selectable rows. Grouping only changes how
+// the same list is drawn — picking is still one format, one click.
+interface MaterialPickerGroup {
+  key: string
+  imageFileId: string | null
+  title: string
+  grainLabel: string
+  materials: ClientCatalogMaterialOption[]
+}
+
+// `ClientCatalogMaterialOption` carries no `dekor_id`, so the dekor is keyed by
+// the tuple that identifies one: manufacturer + tur + kod/nomi.
+function dekorKey(material: ClientCatalogMaterialOption) {
+  return [material.manufacturer_id, material.tur, material.kod ?? '', material.nomi].join('|')
+}
+
+// The identity half of the canonical label — the same composer the format rows
+// use, handed a snapshot with no dimensions so it stops after «· nomi».
+function dekorTitle(material: ClientCatalogMaterialOption) {
+  return snapshotMaterialLabel(
+    {
+      manufacturer_name: material.manufacturer_name,
+      tur: material.tur,
+      kod: material.kod,
+      nomi: material.nomi,
+    },
+    material.nomi || material.id.slice(0, 8),
+  )
+}
+
+function materialFormatLabel(material: ClientCatalogMaterialOption) {
+  const thickness = formatMm(material.qalinlik_mm)
+  if (isTape(material.tur) && material.kromka_eni_mm != null) {
+    return t('catalog.meta.tapeFormat', { thickness, width: material.kromka_eni_mm })
+  }
+  if (material.uzunlik_mm != null && material.eni_mm != null) {
+    return t('catalog.meta.panelFormat', {
+      length: material.uzunlik_mm,
+      width: material.eni_mm,
+      thickness,
     })
+  }
+  return thickness ? `${thickness} mm` : materialLabel(material)
+}
+
+const materialPickerGroups = computed<MaterialPickerGroup[]>(() => {
+  const groups: MaterialPickerGroup[] = []
+  const indexByKey = new Map<string, number>()
+  for (const material of cutting.panelOptions) {
+    const key = dekorKey(material)
+    let group = groups[indexByKey.get(key) ?? -1]
+    if (!group) {
+      group = {
+        key,
+        imageFileId: material.image_file_id,
+        title: dekorTitle(material),
+        grainLabel: materialPickerGrainLabel(material),
+        materials: [],
+      }
+      indexByKey.set(key, groups.length)
+      groups.push(group)
+    }
+    group.materials.push(material)
+  }
+  return groups
 })
 
 const materialPickerCurrentId = computed(() => {
@@ -962,12 +1024,12 @@ function applyMaterialPicker(materialId: string) {
 }
 
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
-  return material.grain_direction ? t('cutting.material.grained') : t('cutting.material.grainless')
+  return material.tolali ? t('cutting.material.grained') : t('cutting.material.grainless')
 }
 
 function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
   return {
-    background: colorForMaterial(material.color ?? material.name ?? material.id),
+    background: colorForMaterial(material.nomi || material.id),
   }
 }
 
@@ -1350,8 +1412,8 @@ async function loadMaterials() {
     return
   }
   await Promise.all([
-    cutting.loadMaterials({ kind: 'panel', branchId, carriedOnly: false }),
-    cutting.loadMaterials({ kind: 'edge', branchId, carriedOnly: false }),
+    cutting.loadMaterials({ tape: false, branchId }),
+    cutting.loadMaterials({ tape: true, branchId }),
   ])
 }
 
@@ -1949,10 +2011,6 @@ onBeforeRouteLeave(async () => {
                   :size-error="partSizeError(part)"
                   :material-missing="rowMaterialMissing(part)"
                   :optimize-error="rowOptimizeError(part, index)"
-                  :not-carried="rowNotCarried(part)"
-                  :preferred-branch-name="
-                    preferredBranch?.branch_name ?? $t('cutting.branch.fallbackName')
-                  "
                   :edge-registry="edgeRegistry"
                   @toggle-select="toggleSelect(part.part_ref)"
                   @update:name="setPartName(part, $event)"
@@ -2062,10 +2120,8 @@ onBeforeRouteLeave(async () => {
 
     <CuttingImportWizard
       :open="importWizardOpen"
-      :panel-choices="branchPanelChoices"
-      :all-panel-choices="allPanelChoices"
+      :panel-choices="panelChoices"
       :edge-choices="edgeChoices"
-      :all-edge-choices="allEdgeChoices"
       :has-existing-parts="parts.length > 0"
       :current-pieces="totalQuantity"
       :current-parts="parts.length"
@@ -2123,8 +2179,6 @@ onBeforeRouteLeave(async () => {
       :edge-assignment-entries="edgeAssignmentEntries"
       :group-edge-ids="groupEdgeIds(edgePickerPart)"
       :other-group-edge-ids="otherGroupEdgeIds(edgePickerPart)"
-      :preferred-branch-id="activeBranchId"
-      :preferred-branch-name="preferredBranch?.branch_name ?? $t('cutting.branch.fallbackName')"
       @edges-change="onEdgePickerChange"
       @close="closeEdgePicker"
     />
@@ -2169,7 +2223,7 @@ onBeforeRouteLeave(async () => {
         <SearchCombobox
           :model-value="registryPickedEdgeId"
           :label="$t('cutting.edge.label')"
-          :options="allEdgeChoices"
+          :options="edgeChoices"
           :placeholder="$t('cutting.edge.placeholder')"
           @update:model-value="registryPickedEdgeId = $event"
         />
@@ -2220,41 +2274,89 @@ onBeforeRouteLeave(async () => {
             ×
           </button>
         </div>
-        <div class="grid max-h-[52vh] gap-2 overflow-auto p-3">
-          <button
-            v-for="material in materialPickerMaterials"
-            :key="material.id"
-            type="button"
-            class="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
-            :class="
-              material.id === materialPickerCurrentId
-                ? 'border-accent bg-accent-soft/30'
-                : 'border-hairline'
-            "
-            @click="applyMaterialPicker(material.id)"
+        <div class="border-b border-hairline px-5 py-3">
+          <label class="sr-only" for="material-picker-search">
+            {{ $t('cutting.material.searchLabel') }}
+          </label>
+          <input
+            id="material-picker-search"
+            v-model="materialPickerSearch"
+            type="search"
+            class="mp-input w-full"
+            :placeholder="$t('cutting.material.searchPlaceholder')"
+          />
+        </div>
+        <div class="grid max-h-[52vh] gap-3 overflow-auto p-3">
+          <p
+            v-if="materialPickerGroups.length === 0"
+            class="px-2 py-6 text-center text-sm text-ink-muted"
           >
-            <span
-              class="size-[18px] rounded-[5px] shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
-              :style="materialPickerSwatchStyle(material)"
-              aria-hidden="true"
-            ></span>
-            <span class="min-w-0">
-              <span class="block truncate text-sm font-bold text-ink">
-                {{ materialLabel(material) }}
+            {{
+              materialPickerSearch.trim()
+                ? $t('cutting.material.searchEmpty')
+                : $t('cutting.material.pickerEmpty')
+            }}
+          </p>
+          <section
+            v-for="group in materialPickerGroups"
+            :key="group.key"
+            class="grid gap-1.5 rounded-lg border border-hairline bg-elevated p-2"
+          >
+            <header class="flex items-center gap-3 px-1 pt-1">
+              <AuthFileImage
+                v-if="group.imageFileId"
+                :file-id="group.imageFileId"
+                :alt="group.title"
+                class="size-10 shrink-0 rounded-md object-cover shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+              />
+              <span
+                v-else
+                class="size-10 shrink-0 rounded-md shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+                :style="materialPickerSwatchStyle(group.materials[0])"
+                aria-hidden="true"
+              ></span>
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-extrabold text-ink">{{
+                  group.title
+                }}</span>
+                <span class="mt-0.5 block text-xs font-semibold text-ink-muted">
+                  {{ group.grainLabel }}
+                </span>
               </span>
-              <span class="mt-0.5 block text-xs font-semibold text-ink-muted">
-                {{ materialPickerGrainLabel(material) }}
-              </span>
-            </span>
-            <span
-              v-if="material.id === materialPickerCurrentId"
-              class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
-              :aria-label="$t('cutting.material.selected')"
+            </header>
+            <button
+              v-for="material in group.materials"
+              :key="material.id"
+              type="button"
+              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+              :class="
+                material.id === materialPickerCurrentId
+                  ? 'border-accent bg-accent-soft/30'
+                  : 'border-hairline'
+              "
+              @click="applyMaterialPicker(material.id)"
             >
-              <Icon name="check" class="size-3.5" />
-            </span>
-          </button>
-          <p v-if="materialPickerMaterials.length === 0" class="p-4 text-sm text-ink-muted">
+              <span class="flex min-w-0 flex-wrap items-center gap-2">
+                <span class="truncate text-sm font-bold text-ink">
+                  {{ materialFormatLabel(material) }}
+                </span>
+                <span
+                  v-if="material.price_unset"
+                  class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-warning"
+                >
+                  {{ $t('cutting.material.priceUnset') }}
+                </span>
+              </span>
+              <span
+                v-if="material.id === materialPickerCurrentId"
+                class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
+                :aria-label="$t('cutting.material.selected')"
+              >
+                <Icon name="check" class="size-3.5" />
+              </span>
+            </button>
+          </section>
+          <p v-if="materialPickerGroups.length === 0" class="p-4 text-sm text-ink-muted">
             {{ $t('cutting.material.emptyInBranch') }}
           </p>
         </div>
