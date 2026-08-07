@@ -154,7 +154,7 @@ async def _attach(
     return await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(access),
-        json={"dekor_id": dekor_id, "formats": formats},
+        json={"items": [{"dekor_id": dekor_id, "formats": formats}]},
     )
 
 
@@ -1135,6 +1135,93 @@ async def test_branch_catalog_picker_keeps_attached_dekorlar_and_reports_total(
         row for row in after.json()["items"] if row["dekor"]["id"] == first_dekor_id
     )
     assert attached_row["carried_format_count"] == 1
+
+
+async def test_attach_spans_dekorlar_of_different_turlar_in_one_transaction(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The real onboarding shape: many dekorlar, each in its own o'lcham axis.
+
+    87% of carried dekorlar exist in exactly one o'lcham, so a branch registering
+    its supplier list picks many dekorlar at once. A board and its matching kromka
+    have different o'lcham axes (panel size vs tape width) and must still land in
+    one save — that is why the request is a list of per-dekor items.
+    """
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    manufacturer_id = await _create_manufacturer(client, platform_access)
+    panel_a = await _create_dekor(
+        client, platform_access, manufacturer_id=manufacturer_id, kod="P-A", nomi="Oak A"
+    )
+    panel_b = await _create_dekor(
+        client, platform_access, manufacturer_id=manufacturer_id, kod="P-B", nomi="Oak B"
+    )
+    tape = await _create_dekor(
+        client,
+        platform_access,
+        manufacturer_id=manufacturer_id,
+        tur="kromka",
+        kod="P-A",
+        nomi="Oak A",
+        tolali=False,
+    )
+
+    created = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={
+            "items": [
+                {"dekor_id": panel_a, "formats": [dict(PANEL_FORMAT)]},
+                {"dekor_id": panel_b, "formats": [dict(PANEL_FORMAT)]},
+                {"dekor_id": tape, "formats": [dict(KROMKA_FORMAT)]},
+            ]
+        },
+    )
+    assert created.status_code == 201, created.text
+    rows = created.json()["created"]
+    assert len(rows) == 3
+    assert {row["dekor"]["id"] for row in rows} == {panel_a, panel_b, tape}
+    # Each row took the o'lcham axis of its own dekor's tur.
+    by_dekor = {row["dekor"]["id"]: row for row in rows}
+    assert by_dekor[panel_a]["uzunlik_mm"] == 2800
+    assert by_dekor[panel_a]["kromka_eni_mm"] is None
+    assert by_dekor[tape]["kromka_eni_mm"] == 19
+    assert by_dekor[tape]["uzunlik_mm"] is None
+
+    # Atomic across dekorlar: one bad o'lcham anywhere in the batch writes nothing.
+    before = await db_session.scalar(
+        select(func.count(BranchMaterial.id)).where(BranchMaterial.branch_id == branch_id)
+    )
+    rejected = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={
+            "items": [
+                {
+                    "dekor_id": panel_a,
+                    "formats": [{"qalinlik_mm": "16", "uzunlik_mm": 2750, "eni_mm": 1830}],
+                },
+                # A panel dekor given a tape o'lcham — invalid for its tur.
+                {"dekor_id": panel_b, "formats": [dict(KROMKA_FORMAT)]},
+            ]
+        },
+    )
+    assert rejected.status_code == 400, rejected.text
+    after = await db_session.scalar(
+        select(func.count(BranchMaterial.id)).where(BranchMaterial.branch_id == branch_id)
+    )
+    assert after == before
+
+    # A skip names the dekor it belongs to, since a batch spans several.
+    replayed = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={"items": [{"dekor_id": panel_a, "formats": [dict(PANEL_FORMAT)]}]},
+    )
+    assert replayed.status_code == 201
+    assert replayed.json()["created"] == []
+    assert [row["dekor_id"] for row in replayed.json()["skipped"]] == [panel_a]
 
 
 async def test_branch_materials_attach_is_atomic_and_skips_races(

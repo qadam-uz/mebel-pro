@@ -120,14 +120,18 @@ async def _carried_material(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": dekor.json()["id"],
-            "formats": [
+            "items": [
                 {
-                    "qalinlik_mm": "18",
-                    "uzunlik_mm": 2750,
-                    "eni_mm": 1830,
-                    "price_tiyin": 60_000_000,
-                    "min_stock": 0,
+                    "dekor_id": dekor.json()["id"],
+                    "formats": [
+                        {
+                            "qalinlik_mm": "18",
+                            "uzunlik_mm": 2750,
+                            "eni_mm": 1830,
+                            "price_tiyin": 60_000_000,
+                            "min_stock": 0,
+                        }
+                    ],
                 }
             ],
         },

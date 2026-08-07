@@ -29,11 +29,11 @@
   "meta": {
     "panelFormat": "{length}×{width}×{thickness} mm",
     "tapeFormat": "{thickness}×{width} mm",
-    "formatCount": "{n} format"
+    "formatCount": "{n} o'lcham"
   },
   "table": {
     "dekor": "Dekor",
-    "format": "Format",
+    "format": "O'lcham",
     "tur": "Tur",
     "price": "Narx",
     "threshold": "Chegara",
@@ -43,11 +43,11 @@
     "editRow": "{name} — tahrirlash",
     "statusToggle": "{name} holati",
     "rowActions": "{name} amallari",
-    "expandDekor": "{name} formatlari"
+    "expandDekor": "{name} o'lchamlari"
   },
   "empty": {
     "title": "Bu filialga material qo'shilmagan",
-    "body": "Platforma katalogidan dekor tanlab, formatlarini qo'shing.",
+    "body": "Platforma katalogidan dekor tanlab, o'lchamlarini qo'shing.",
     "filteredTitle": "Filtrga mos material topilmadi",
     "filteredBody": "Filtrni o'zgartiring yoki tozalang."
   },
@@ -60,7 +60,7 @@
     "loadingMore": "Yuklanmoqda"
   },
   "form": {
-    "title": "Formatni tahrirlash",
+    "title": "O'lchamni tahrirlash",
     "material": "Material",
     "price": "Narx (so'm)",
     "priceInvalid": "Narxni to'g'ri kiriting — masalan: 350 000",
@@ -100,6 +100,6 @@
   },
   "price": {
     "unset": "Narx yo'q",
-    "unsetHint": "Bu format mijozlarga ko'rinmaydi — narx qo'ying."
+    "unsetHint": "Bu o'lcham mijozlarga ko'rinmaydi — narx qo'ying."
   }
 }

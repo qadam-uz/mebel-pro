@@ -126,14 +126,18 @@ export function carriedFormatKeys(rows: readonly BranchMaterial[], dekorId: stri
 }
 
 /**
- * The distinct facet values a branch already uses for one dekor — the raw input
- * for its "Nostandart · faqat sizda" chips.
+ * The distinct facet values a branch already uses — the raw input for its
+ * "Nostandart · faqat sizda" chips.
+ *
+ * `dekorId === null` means "don't scope by dekor": the caller has already
+ * narrowed `rows` to the set it cares about. The attach sheet uses that form
+ * because its chip axes are shared by every selected dekor of one `tur`.
  */
 export function branchFormatFacets(
   rows: readonly BranchMaterial[],
-  dekorId: string,
+  dekorId: string | null,
 ): StandardFormatSet {
-  const mine = rows.filter((row) => row.dekor_id === dekorId)
+  const mine = dekorId === null ? rows : rows.filter((row) => row.dekor_id === dekorId)
   const qalinliklar = [...new Set(mine.map((row) => normalizeQalinlik(row.qalinlik_mm)))]
     .filter(Boolean)
     .sort((left, right) => Number(left) - Number(right))
@@ -155,14 +159,25 @@ export function branchFormatFacets(
  * The branch's own facets minus the standard ones — the "Nostandart · faqat
  * sizda" group. Empty when the branch only uses standard formats, which is the
  * common case and the reason the group is rendered separately rather than merged.
+ *
+ * Scope follows `dekorId`. Naming one dekor answers "what does this branch use
+ * for *this* dekor"; omitting it answers "what does this branch use for this
+ * **tur**, across every dekor" — which is what the attach sheet needs, because
+ * one chip block now serves many selected dekorlar at once. Scoping to the
+ * selection alone would hide a size the branch demonstrably uses the moment the
+ * operator picks dekorlar it doesn't yet carry — the common case, since picking
+ * many new dekorlar in one carried o'lcham is the whole job.
  */
 export function nonStandardFacets(
   tur: DekorType,
   rows: readonly BranchMaterial[],
-  dekorId: string,
+  dekorId: string | null = null,
 ): StandardFormatSet {
   const standard = standardFormatSet(tur)
-  const mine = branchFormatFacets(rows, dekorId)
+  // Without a dekor to scope by, `tur` is the only thing keeping a kromka row's
+  // tape width out of an LDSP block.
+  const scoped = dekorId === null ? rows.filter((row) => row.dekor.tur === tur) : rows
+  const mine = branchFormatFacets(scoped, dekorId)
   const standardThickness = new Set(standard.qalinliklar.map(normalizeQalinlik))
   const standardSizes = new Set(
     standard.olchamlar.map((size) => `${size.uzunlik_mm}x${size.eni_mm}`),

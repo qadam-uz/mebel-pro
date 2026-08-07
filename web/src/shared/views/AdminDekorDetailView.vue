@@ -179,13 +179,13 @@ onMounted(load)
            reported here and not editable. -->
       <section class="admin-card mt-4">
         <div class="admin-card-h">
-          <h2>Tarmoqdagi formatlar</h2>
-          <span class="sub">Filiallar shu dekorni qaysi qalinlik va o'lchamda olib boradi</span>
+          <h2>Tarmoqdagi o'lchamlar</h2>
+          <span class="sub">Filiallar shu dekorni qanday o'lchamlarda olib boradi</span>
         </div>
         <div class="admin-card-b">
           <p class="text-sm font-bold text-ink-soft">
-            Formatlar kesimi hozircha platforma API'sida ochilmagan — dekor javobida faqat filiallar
-            soni bor. Kerakli endpoint qo'shilgach shu joyga jadval tushadi.
+            O'lchamlar kesimi hozircha platforma API'sida ochilmagan — dekor javobida faqat
+            filiallar soni bor. Kerakli endpoint qo'shilgach shu joyga jadval tushadi.
           </p>
         </div>
       </section>

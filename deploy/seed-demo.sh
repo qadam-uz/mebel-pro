@@ -436,11 +436,13 @@ SUP4="$(sup_id "Mebel Furnitura Savdo" "+998712300040")"
 SUPPLIERS=("$SUP1" "$SUP2" "$SUP3" "$SUP4")
 ok "4 suppliers created"
 
-# One dekor + every format the branch carries of it, in a single all-or-nothing
-# attach — the real flow the workshop UI drives.
+# One dekor + every o'lcham the branch carries of it, in a single all-or-nothing
+# attach — the real flow the workshop UI drives. The endpoint takes a LIST of
+# dekorlar (the UI attaches many at once); seeding one per call keeps the price
+# tables below readable, and the wire shape is identical either way.
 attach() { # branch_id dekor_id formats_json -> response body
   jcall POST "$API/workshop/branches/$1/materials" "$OWNER_TOKEN" \
-    "$(jq -nc --arg d "$2" --argjson f "$3" '{dekor_id:$d,formats:$f}')"
+    "$(jq -nc --arg d "$2" --argjson f "$3" '{items:[{dekor_id:$d,formats:$f}]}')"
 }
 
 # `qalinlik_mm` goes over the wire as a STRING: it is a Decimal server-side, and

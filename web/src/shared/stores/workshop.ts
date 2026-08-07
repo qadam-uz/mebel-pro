@@ -152,14 +152,28 @@ export interface BranchMaterialFormatInput {
   min_stock?: number
 }
 
-/** Attach one dekor in one or more formats — a single server-side transaction. */
-export interface BranchMaterialAttachRequest {
+/** One dekor and the o'lchamlar the branch wants to carry it in. */
+export interface BranchMaterialAttachItem {
   dekor_id: string
   formats: BranchMaterialFormatInput[]
 }
 
-/** Identifies a format within a (branch, dekor) pair. */
+/**
+ * Attach several dekorlar, each in one or more o'lchamlar, in ONE transaction.
+ *
+ * A list rather than a single dekor because that is the shape of the real job:
+ * 87% of carried dekorlar exist in exactly one o'lcham, so a branch registering
+ * its supplier list picks many dekorlar and one o'lcham, not the reverse.
+ * Per-dekor `formats` keeps a mixed batch possible — a board and its matching
+ * kromka have different o'lcham axes and still belong in one save.
+ */
+export interface BranchMaterialAttachRequest {
+  items: BranchMaterialAttachItem[]
+}
+
+/** Identifies one o'lcham of one dekor within a branch. */
 export interface BranchMaterialFormatKey {
+  dekor_id: string
   qalinlik_mm: string
   uzunlik_mm: number | null
   eni_mm: number | null
@@ -559,9 +573,10 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   /**
-   * Attach one dekor in one or more formats. The whole `formats` list lands in a
-   * single server-side transaction, but it is NOT all-or-nothing: a format this
-   * branch already carries comes back under `skipped` instead of failing the call.
+   * Attach several dekorlar, each in one or more o'lchamlar, in one server-side
+   * transaction. The batch is all-or-nothing on *validity* — one malformed
+   * o'lcham writes nothing — but never on duplication: an o'lcham this branch
+   * already carries comes back under `skipped` instead of failing the call.
    * Callers must surface `skipped` as "already carried", never as an error.
    */
   async function attachBranchMaterials(id: string, payload: BranchMaterialAttachRequest) {

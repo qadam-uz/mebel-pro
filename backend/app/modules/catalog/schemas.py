@@ -97,16 +97,30 @@ class BranchMaterialFormatInput(BaseModel):
     min_stock: int = 0
 
 
-class BranchMaterialAttachRequest(BaseModel):
-    """Attach one dekor in one or more formats — all in a single transaction."""
+class BranchMaterialAttachItem(BaseModel):
+    """One dekor and the o'lchamlar the branch wants to carry it in."""
 
     dekor_id: uuid.UUID
     formats: list[BranchMaterialFormatInput]
 
 
-class BranchMaterialFormatKey(APIModel):
-    """Identifies a format within a (branch, dekor) pair."""
+class BranchMaterialAttachRequest(BaseModel):
+    """Attach several dekorlar, each in one or more o'lchamlar, in ONE transaction.
 
+    A list rather than a single dekor because that is the shape of the real job:
+    87% of carried dekorlar exist in exactly one o'lcham, so a branch registering
+    its supplier list is picking many dekorlar and one o'lcham, not the reverse.
+    Per-dekor `formats` keeps the door open for a mixed batch — a board and its
+    matching kromka have different o'lcham axes and still belong in one save.
+    """
+
+    items: list[BranchMaterialAttachItem]
+
+
+class BranchMaterialFormatKey(APIModel):
+    """Identifies one o'lcham of one dekor within a branch."""
+
+    dekor_id: uuid.UUID
     qalinlik_mm: Decimal
     uzunlik_mm: int | None
     eni_mm: int | None

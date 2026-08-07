@@ -298,16 +298,24 @@ async def test_branch_material_label_adds_the_format_the_branch_carries(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": panel.json()["id"],
-            "formats": [{"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830}],
+            "items": [
+                {
+                    "dekor_id": panel.json()["id"],
+                    "formats": [{"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830}],
+                }
+            ],
         },
     )
     kromka_row = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": kromka.json()["id"],
-            "formats": [{"qalinlik_mm": "2", "kromka_eni_mm": 36}],
+            "items": [
+                {
+                    "dekor_id": kromka.json()["id"],
+                    "formats": [{"qalinlik_mm": "2", "kromka_eni_mm": 36}],
+                }
+            ],
         },
     )
 
@@ -342,11 +350,30 @@ async def test_one_dekor_fans_out_to_many_branch_formats(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": dekor.json()["id"],
-            "formats": [
-                {"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830, "price_tiyin": 250_000},
-                {"qalinlik_mm": "16", "uzunlik_mm": 2750, "eni_mm": 1830, "price_tiyin": 220_000},
-                {"qalinlik_mm": "18", "uzunlik_mm": 2800, "eni_mm": 2070, "price_tiyin": 260_000},
+            "items": [
+                {
+                    "dekor_id": dekor.json()["id"],
+                    "formats": [
+                        {
+                            "qalinlik_mm": "18",
+                            "uzunlik_mm": 2750,
+                            "eni_mm": 1830,
+                            "price_tiyin": 250_000,
+                        },
+                        {
+                            "qalinlik_mm": "16",
+                            "uzunlik_mm": 2750,
+                            "eni_mm": 1830,
+                            "price_tiyin": 220_000,
+                        },
+                        {
+                            "qalinlik_mm": "18",
+                            "uzunlik_mm": 2800,
+                            "eni_mm": 2070,
+                            "price_tiyin": 260_000,
+                        },
+                    ],
+                }
             ],
         },
     )
@@ -387,10 +414,14 @@ async def test_branch_material_patch_revalidates_the_merged_format(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": dekor.json()["id"],
-            "formats": [
-                {"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830},
-                {"qalinlik_mm": "16", "uzunlik_mm": 2750, "eni_mm": 1830},
+            "items": [
+                {
+                    "dekor_id": dekor.json()["id"],
+                    "formats": [
+                        {"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830},
+                        {"qalinlik_mm": "16", "uzunlik_mm": 2750, "eni_mm": 1830},
+                    ],
+                }
             ],
         },
     )

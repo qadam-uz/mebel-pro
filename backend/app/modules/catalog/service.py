@@ -83,7 +83,8 @@ class BranchMaterialFormat:
 @dataclass(frozen=True)
 class BranchMaterialAttachResult:
     created: list[BranchMaterialRecord]
-    skipped: list[BranchMaterialFormat]
+    # (dekor_id, o'lcham) — a batch spans dekorlar, so a skip must say which one.
+    skipped: list[tuple[uuid.UUID, BranchMaterialFormat]]
 
 
 @dataclass(frozen=True)
@@ -679,12 +680,13 @@ async def attach_branch_materials(
     branch_id: uuid.UUID,
     payload: BranchMaterialAttachRequest,
 ) -> BranchMaterialAttachResult:
-    """Attach one dekor in one or more formats, in a single transaction.
+    """Attach several dekorlar, each in one or more o'lchamlar, in ONE transaction.
 
-    Every row is validated before anything is written, so an invalid format
-    attaches nothing and the error names the dekor. Formats the branch already
-    carries are skipped rather than rejected — the picker shows what is carried,
-    so a duplicate here is a concurrent attach, not user error.
+    Every row of every dekor is validated before anything is written, so one bad
+    o'lcham attaches nothing and the error names the dekor it came from. An
+    o'lcham the branch already carries is skipped rather than rejected — the
+    picker shows what is carried, so a duplicate here is a concurrent attach, not
+    user error.
     """
 
     _require_workshop_user(principal)
@@ -694,47 +696,54 @@ async def attach_branch_materials(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    if not payload.formats:
+    if not payload.items or not any(item.formats for item in payload.items):
         raise APIError(
             "branch_materials_empty",
-            "No formats selected",
+            "No o'lchamlar selected",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-    record = await _active_dekor_record(db, payload.dekor_id)
-    label = dekor_label(record.dekor, record.manufacturer)
 
     # Validate the whole batch first — nothing is added to the session until every
-    # row passes, so a rejection leaves the transaction untouched.
-    validated: list[tuple[BranchMaterialFormat, int, int]] = []
-    seen: set[BranchMaterialFormat] = set()
-    for item in payload.formats:
-        fmt = _validate_branch_material_format(
-            tur=record.dekor.tur,
-            qalinlik_mm=item.qalinlik_mm,
-            uzunlik_mm=item.uzunlik_mm,
-            eni_mm=item.eni_mm,
-            kromka_eni_mm=item.kromka_eni_mm,
-            label=label,
-        )
-        _validate_branch_material_numbers(item.price_tiyin, item.min_stock, label=label)
-        if fmt in seen:
-            raise APIError(
-                "branch_material_duplicate",
-                f"«{label}» uchun bir xil format ikki marta kiritilgan",
-                status_code=status.HTTP_400_BAD_REQUEST,
+    # row of every dekor passes, so a rejection leaves the transaction untouched.
+    validated: list[tuple[DekorRecord, BranchMaterialFormat, int, int]] = []
+    seen: set[tuple[uuid.UUID, BranchMaterialFormat]] = set()
+    for entry in payload.items:
+        record = await _active_dekor_record(db, entry.dekor_id)
+        label = dekor_label(record.dekor, record.manufacturer)
+        for item in entry.formats:
+            fmt = _validate_branch_material_format(
+                tur=record.dekor.tur,
+                qalinlik_mm=item.qalinlik_mm,
+                uzunlik_mm=item.uzunlik_mm,
+                eni_mm=item.eni_mm,
+                kromka_eni_mm=item.kromka_eni_mm,
+                label=label,
             )
-        seen.add(fmt)
-        validated.append((fmt, item.price_tiyin, item.min_stock))
+            _validate_branch_material_numbers(item.price_tiyin, item.min_stock, label=label)
+            if (record.dekor.id, fmt) in seen:
+                raise APIError(
+                    "branch_material_duplicate",
+                    f"«{label}» uchun bir xil o'lcham ikki marta kiritilgan",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            seen.add((record.dekor.id, fmt))
+            validated.append((record, fmt, item.price_tiyin, item.min_stock))
 
-    existing = await _carried_formats(db, branch_id=scope.branch_id, dekor_id=record.dekor.id)
+    # One carried-set lookup per distinct dekor, not per row.
+    existing: dict[uuid.UUID, set[BranchMaterialFormat]] = {}
+    for record, _fmt, _price, _min in validated:
+        if record.dekor.id not in existing:
+            existing[record.dekor.id] = await _carried_formats(
+                db, branch_id=scope.branch_id, dekor_id=record.dekor.id
+            )
 
     from app.modules.inventory.api import ensure_stock_item_for_branch_material
 
     created: list[BranchMaterialRecord] = []
-    skipped: list[BranchMaterialFormat] = []
-    for fmt, price_tiyin, min_stock in validated:
-        if fmt in existing:
-            skipped.append(fmt)
+    skipped: list[tuple[uuid.UUID, BranchMaterialFormat]] = []
+    for record, fmt, price_tiyin, min_stock in validated:
+        if fmt in existing[record.dekor.id]:
+            skipped.append((record.dekor.id, fmt))
             continue
         row = BranchMaterial(
             branch_id=scope.branch_id,
@@ -762,6 +771,7 @@ async def attach_branch_materials(
             )
         )
     if created:
+        dekor_ids = sorted({str(row.dekor.id) for row in created})
         await record_action(
             db,
             actor=actor_from_principal(principal),
@@ -770,9 +780,9 @@ async def attach_branch_materials(
             entity_id=scope.branch_id,
             workshop_id=scope.workshop_id,
             branch_id=scope.branch_id,
-            summary=f"Added {len(created)} formats of {label} to branch",
+            summary=(f"Added {len(created)} o'lchamlar across {len(dekor_ids)} dekorlar to branch"),
             details={
-                "dekor_id": str(record.dekor.id),
+                "dekor_ids": dekor_ids,
                 "branch_material_ids": [str(row.branch_material.id) for row in created],
             },
         )

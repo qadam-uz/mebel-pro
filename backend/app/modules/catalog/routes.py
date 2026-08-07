@@ -349,7 +349,7 @@ async def workshop_branch_materials_create(
     principal: AccountReadyPrincipal,
     db: Session,
 ) -> BranchMaterialAttachResponse:
-    """Attach one dekor in one or more formats. All-or-nothing."""
+    """Attach several dekorlar, each in one or more o'lchamlar. All-or-nothing."""
 
     result = await attach_branch_materials(
         db, principal=principal, branch_id=branch_id, payload=payload
@@ -358,12 +358,13 @@ async def workshop_branch_materials_create(
         created=[_branch_material_response(row) for row in result.created],
         skipped=[
             BranchMaterialFormatKey(
+                dekor_id=dekor_id,
                 qalinlik_mm=fmt.qalinlik_mm,
                 uzunlik_mm=fmt.uzunlik_mm,
                 eni_mm=fmt.eni_mm,
                 kromka_eni_mm=fmt.kromka_eni_mm,
             )
-            for fmt in result.skipped
+            for dekor_id, fmt in result.skipped
         ],
     )
 

@@ -120,6 +120,38 @@ describe('branch-derived facets', () => {
     expect(custom.olchamlar).toEqual([])
   })
 
+  // The attach sheet's chip axes are shared by every selected dekor of one tur,
+  // so it asks for the branch's facets without naming a dekor. `tur` is then the
+  // only thing keeping one dekor's format out of another's block.
+  it('unions every dekor of a tur when no dekor is named', () => {
+    const mixed = [
+      ...rows,
+      row({
+        id: 'tape',
+        dekor_id: 'dekor-3',
+        dekor: { tur: 'kromka' } as BranchMaterial['dekor'],
+        qalinlik_mm: '2',
+        uzunlik_mm: null,
+        eni_mm: null,
+        kromka_eni_mm: 28,
+      }),
+    ].map((entry) =>
+      entry.dekor_id === 'dekor-3'
+        ? entry
+        : { ...entry, dekor: { tur: 'ldsp' } as BranchMaterial['dekor'] },
+    )
+
+    const panel = nonStandardFacets('ldsp', mixed)
+    // `dekor-2`'s 40 mm now counts — same tur, same branch — and the kromka row
+    // stays out of the panel block entirely.
+    expect(panel.qalinliklar).toEqual(['22', '40'])
+    expect(panel.kromkaEnlar).toEqual([])
+
+    const tape = nonStandardFacets('kromka', mixed)
+    expect(tape.kromkaEnlar).toEqual([28])
+    expect(tape.olchamlar).toEqual([])
+  })
+
   it('lists the keys already carried so the cross product can disable them', () => {
     const keys = carriedFormatKeys(rows, 'dekor-1')
     expect(keys.has(formatKey({ qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070 }))).toBe(true)

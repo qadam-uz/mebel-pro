@@ -88,8 +88,12 @@ async def test_onboarding_status_derives_from_setup_progress(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": str(dekor_id),
-            "formats": [{"qalinlik_mm": "16", "uzunlik_mm": 2800, "eni_mm": 2070}],
+            "items": [
+                {
+                    "dekor_id": str(dekor_id),
+                    "formats": [{"qalinlik_mm": "16", "uzunlik_mm": 2800, "eni_mm": 2070}],
+                }
+            ],
         },
     )
     assert unpriced.status_code == 201
@@ -101,14 +105,18 @@ async def test_onboarding_status_derives_from_setup_progress(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
-            "dekor_id": str(dekor_id),
-            "formats": [
+            "items": [
                 {
-                    "qalinlik_mm": "18",
-                    "uzunlik_mm": 2800,
-                    "eni_mm": 2070,
-                    "price_tiyin": 25500000,
-                    "min_stock": 2,
+                    "dekor_id": str(dekor_id),
+                    "formats": [
+                        {
+                            "qalinlik_mm": "18",
+                            "uzunlik_mm": 2800,
+                            "eni_mm": 2070,
+                            "price_tiyin": 25500000,
+                            "min_stock": 2,
+                        }
+                    ],
                 }
             ],
         },

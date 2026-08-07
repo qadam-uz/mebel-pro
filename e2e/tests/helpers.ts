@@ -267,10 +267,14 @@ export async function createCatalogDekorlar(
 }
 
 /**
- * Attach one dekor to a branch in one or more formats — one transaction, and a
- * format the branch already carries is *skipped* rather than rejected. Returns
- * the created branch materials in request order, so a caller that asks for two
- * formats can name both.
+ * Attach one dekor to a branch in one or more o'lchamlar — one transaction, and
+ * an o'lcham the branch already carries is *skipped* rather than rejected.
+ * Returns the created branch materials in request order, so a caller that asks
+ * for two o'lchamlar can name both.
+ *
+ * The endpoint takes a *batch* (`items`), because the real job is many dekorlar
+ * × one o'lcham; this helper is the one-dekor slice of it, which is what most
+ * of the suite needs for setup.
  */
 export async function carryDekor(
   request: APIRequestContext,
@@ -283,7 +287,7 @@ export async function carryDekor(
     `/api/v1/workshop/branches/${branchId}/materials`,
     {
       headers: { Authorization: `Bearer ${token}` },
-      data: { dekor_id: dekorId, formats },
+      data: { items: [{ dekor_id: dekorId, formats }] },
     },
   );
   await expectOk(response);

@@ -87,17 +87,22 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await page.getByRole("button", { name: "+ Material", exact: true }).first().click();
   await expect(catalogHint).toHaveCount(0);
 
-  // The catalog reshape split identity from format, so attaching is two steps:
-  // pick the dekor, then pick the formats and price them.
+  // The catalog reshape split identity from o'lcham, so attaching is two steps:
+  // tick the dekor (step 1 is multi-select), then pick the o'lchamlar and price
+  // them. The result rows are named by dekor as well as o'lcham.
   const pickStep = page.getByRole("dialog", { name: "Dekor tanlash" });
-  await pickStep.getByRole("button", { name: new RegExp(escapeRegExp(panel.label)) }).click();
+  await pickStep
+    .getByRole("checkbox", { name: new RegExp(escapeRegExp(panel.label)) })
+    .check();
   await pickStep.getByRole("button", { name: "Davom etish" }).click();
 
-  const formatStep = page.getByRole("dialog", { name: "Formatlar va narx" });
+  const formatStep = page.getByRole("dialog", { name: "O'lchamlar va narx" });
   await formatStep.getByRole("button", { name: "18 mm", exact: true }).click();
   await formatStep.getByRole("button", { name: "2800×2070", exact: true }).click();
-  await formatStep.getByLabel("2800×2070×18 mm narxi").fill("250000");
-  await formatStep.getByRole("button", { name: /formatni qo'shish/ }).click();
+  await formatStep
+    .getByLabel(`${panel.label} · 2800×2070×18 mm narxi`)
+    .fill("250000");
+  await formatStep.getByRole("button", { name: /o'lchamni qo'shish/ }).click();
 
   await expect(
     page.getByText("Dastlabki sozlash yakunlandi", { exact: false }),

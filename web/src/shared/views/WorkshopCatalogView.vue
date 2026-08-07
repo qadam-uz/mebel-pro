@@ -109,6 +109,10 @@ const selectedBranchId = computed(() => {
   if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
   return accessibleBranches.value[0]?.id ?? ''
 })
+// The Qoldiq column is stock, and `manage_catalog` alone does not grant it.
+const canReadStock = computed(() =>
+  permissions.canOnBranch(p.manageInventory, selectedBranchId.value),
+)
 // Computed, not a plain array: a `const` built at setup would keep the labels of
 // whatever locale was active when the page mounted.
 const statusOptions = computed<DropdownOption[]>(() => [
@@ -256,7 +260,13 @@ function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
     loadBranchTable(0),
-    workshop.loadStock(selectedBranchId.value).catch(() => undefined),
+    // Stock is a *separate* entitlement: `manage_catalog` lets you read the
+    // catalog but not the branch's stock, so asking anyway is a guaranteed 403
+    // on page load. The Qoldiq column falls back to "—", which is the truth for
+    // someone who may not see stock.
+    canReadStock.value
+      ? workshop.loadStock(selectedBranchId.value).catch(() => undefined)
+      : Promise.resolve(),
   ])
 }
 

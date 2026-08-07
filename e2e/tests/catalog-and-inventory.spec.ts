@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 
 import {
   carryDekor,
+  createCatalogDekorlar,
   createDekor,
   createManufacturer,
   databaseUrl,
@@ -24,9 +25,11 @@ const newPasswordLabel = /^(New password|Yangi parol)/
 const continueButton = /^(Continue|Kirish)$/
 const saveButton = /^(Save|Saqlash|O'zgartirish)$/
 
-// The standard LDSP format this spec attaches through the UI. `×` is U+00D7 —
+// The standard LDSP o'lcham this spec attaches through the UI. `×` is U+00D7 —
 // the same multiplication sign the app prints, not a Latin x.
 const FORMAT_LABEL = '2800×2070×18 mm'
+// A kromka's o'lcham is thickness × tape width — a different axis, same label shape.
+const TAPE_LABEL = '2×19 mm'
 
 function runId(testInfo: { workerIndex: number }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
@@ -201,8 +204,24 @@ async function changeRequiredPassword(page: Page, current: string, next: string)
 }
 
 /**
- * Drive the two-step attach sheet: pick the dekor, then pick the thickness and
- * size chips whose cross product becomes the rows to create.
+ * The result table names every row by its dekor as well as its o'lcham, because
+ * one batch can span dekorlar — so a price/threshold field is addressed by both.
+ */
+function rowLabel(dekor: DekorResponse, format: string) {
+  return `${dekor.label} · ${format}`
+}
+
+/** Tick a dekor in step 1. The cards are checkboxes — attach is multi-select. */
+async function tickDekor(pickStep: Locator, dekor: DekorResponse) {
+  // Narrow to this run's dekor first: the picker lists every active dekor on the
+  // platform, paged, so a parallel worker's rows can push ours off page one.
+  await pickStep.getByLabel('Qidirish').fill(dekor.kod ?? dekor.nomi)
+  await pickStep.getByRole('checkbox', { name: new RegExp(escapeRegExp(dekor.label)) }).check()
+}
+
+/**
+ * Drive the two-step attach sheet for a single dekor: tick it, then pick the
+ * thickness and size chips whose cross product becomes the rows to create.
  */
 async function attachThroughSheet(
   page: Page,
@@ -210,13 +229,10 @@ async function attachThroughSheet(
   formats: Array<{ thickness: string; size: string }>,
 ) {
   const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
-  // Narrow to this run's dekor first: the picker lists every active dekor on the
-  // platform, paged, so a parallel worker's rows can push ours off page one.
-  await pickStep.getByLabel('Qidirish').fill(dekor.kod ?? dekor.nomi)
-  await pickStep.getByRole('button', { name: new RegExp(escapeRegExp(dekor.label)) }).click()
+  await tickDekor(pickStep, dekor)
   await pickStep.getByRole('button', { name: 'Davom etish' }).click()
 
-  const formatStep = page.getByRole('dialog', { name: 'Formatlar va narx' })
+  const formatStep = page.getByRole('dialog', { name: "O'lchamlar va narx" })
   for (const value of new Set(formats.map((format) => format.thickness))) {
     await formatStep.getByRole('button', { name: `${value} mm`, exact: true }).click()
   }
@@ -300,16 +316,17 @@ test('owner adds a branch material and records priced stock movement with prefil
   const formatStep = await attachThroughSheet(page, dekor, [
     { thickness: '18', size: '2800×2070' },
   ])
-  // A panel's low-stock threshold is prefilled at 5 — the old default of 0 meant
-  // the alert only ever fired once stock was already gone.
-  const threshold = formatStep.getByLabel(`${FORMAT_LABEL} kam qoldiq chegarasi`)
-  await expect(threshold).toHaveValue('5')
+  // The threshold prefills at 0 for every tur: a branch registers its o'lcham
+  // list before it knows a threshold, so a non-zero prefill is a number nobody
+  // chose.
+  const threshold = formatStep.getByLabel(`${rowLabel(dekor, FORMAT_LABEL)} kam qoldiq chegarasi`)
+  await expect(threshold).toHaveValue('0')
   await threshold.fill('2')
-  await formatStep.getByLabel(`${FORMAT_LABEL} narxi`).fill('2500')
-  await formatStep.getByRole('button', { name: /formatni qo'shish/ }).click()
+  await formatStep.getByLabel(`${rowLabel(dekor, FORMAT_LABEL)} narxi`).fill('2500')
+  await formatStep.getByRole('button', { name: /o'lchamni qo'shish/ }).click()
 
-  // The table groups by dekor: the identity line once, its formats beneath.
-  await expect(page.getByRole('button', { name: `${dekor.label} formatlari` })).toBeVisible()
+  // The table groups by dekor: the identity line once, its o'lchamlar beneath.
+  await expect(page.getByRole('button', { name: `${dekor.label} o'lchamlari` })).toBeVisible()
   const formatRow = page.getByRole('row').filter({ hasText: FORMAT_LABEL })
   await expect(formatRow).toHaveCount(1)
 
@@ -414,16 +431,18 @@ test('one dekor attached in two formats in a single pass creates two branch mate
     { thickness: '16', size: '2800×2070' },
     { thickness: '18', size: '2800×2070' },
   ])
-  await expect(formatStep.getByLabel('2800×2070×16 mm narxi')).toBeVisible()
-  await expect(formatStep.getByLabel('2800×2070×18 mm narxi')).toBeVisible()
-  await formatStep.getByLabel('2800×2070×16 mm narxi').fill('2400')
-  await formatStep.getByLabel('2800×2070×18 mm narxi').fill('2600')
-  await formatStep.getByRole('button', { name: /^2 ta formatni qo.shish$/ }).click()
+  const price16 = formatStep.getByLabel(`${rowLabel(dekor, '2800×2070×16 mm')} narxi`)
+  const price18 = formatStep.getByLabel(`${rowLabel(dekor, '2800×2070×18 mm')} narxi`)
+  await expect(price16).toBeVisible()
+  await expect(price18).toBeVisible()
+  await price16.fill('2400')
+  await price18.fill('2600')
+  await formatStep.getByRole('button', { name: /^2 ta o.lchamni qo.shish$/ }).click()
 
-  // One dekor group, two format rows under it — not two decor cards.
-  const groupHeader = page.getByRole('button', { name: `${dekor.label} formatlari` })
+  // One dekor group, two o'lcham rows under it — not two dekor cards.
+  const groupHeader = page.getByRole('button', { name: `${dekor.label} o'lchamlari` })
   await expect(groupHeader).toHaveCount(1)
-  await expect(groupHeader).toContainText('2 format')
+  await expect(groupHeader).toContainText("2 o'lcham")
   await expect(page.getByRole('row').filter({ hasText: '2800×2070×16 mm' })).toHaveCount(1)
   await expect(page.getByRole('row').filter({ hasText: '2800×2070×18 mm' })).toHaveCount(1)
 
@@ -432,6 +451,73 @@ test('one dekor attached in two formats in a single pass creates two branch mate
   expect(carried).toHaveLength(2)
   expect(new Set(carried.map((row) => row.dekor_id))).toEqual(new Set([dekor.id]))
   expect(carried.map((row) => Number(row.qalinlik_mm)).sort()).toEqual([16, 18])
+})
+
+test('owner attaches two dekorlar of different turlar in one pass', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p3-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const branchId = setup.branch.id as string
+  // A board and its matching kromka — different o'lcham axes, one save. This is
+  // the job the sheet exists for: many dekorlar, one o'lcham each, one pass.
+  const { panel, edge } = await createCatalogDekorlar(request, adminAccess, id)
+
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
+  await page.goto('/workshop/catalog')
+  await page.getByRole('button', { name: '+ Material', exact: true }).first().click()
+
+  // Step 1 is multi-select, and a selection outlives the search that found it:
+  // each dekor is reached by its own kod, and both stay ticked.
+  const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
+  await tickDekor(pickStep, panel)
+  await tickDekor(pickStep, edge)
+  await expect(pickStep.getByText('2 ta tanlandi')).toBeVisible()
+  await pickStep.getByRole('button', { name: 'Davom etish' }).click()
+
+  // Step 2 gives each tur its own chip block: a tape has no sheet size and a
+  // board has no tape width, so one shared set of chips could not serve both.
+  const formatStep = page.getByRole('dialog', { name: "O'lchamlar va narx" })
+  await expect(formatStep.getByRole('group', { name: 'Qalinlik' })).toHaveCount(2)
+  await expect(formatStep.getByRole('group', { name: "List o'lchami" })).toHaveCount(1)
+  await expect(formatStep.getByRole('group', { name: 'Lenta eni' })).toHaveCount(1)
+
+  // The standard thickness sets are disjoint per tur (LDSP 10/16/18/25, kromka
+  // 0.4/0.8/1/2), so an exact chip name lands in exactly one block. The size
+  // axes are scoped to their own group, whose legend differs per tur.
+  await formatStep.getByRole('button', { name: '18 mm', exact: true }).click()
+  await formatStep
+    .getByRole('group', { name: "List o'lchami" })
+    .getByRole('button', { name: '2800×2070', exact: true })
+    .click()
+  await formatStep.getByRole('button', { name: '2 mm', exact: true }).click()
+  await formatStep
+    .getByRole('group', { name: 'Lenta eni' })
+    .getByRole('button', { name: '19 mm', exact: true })
+    .click()
+
+  // One row per dekor, each named by its own dekor, and the submit count is the
+  // whole batch rather than one dekor's share.
+  await formatStep.getByLabel(`${rowLabel(panel, FORMAT_LABEL)} narxi`).fill('2500')
+  await formatStep.getByLabel(`${rowLabel(edge, TAPE_LABEL)} narxi`).fill('700')
+  await formatStep.getByRole('button', { name: /^2 ta o.lchamni qo.shish$/ }).click()
+
+  // Both branch materials land, each under its own dekor group.
+  await expect(page.getByRole('button', { name: `${panel.label} o'lchamlari` })).toBeVisible()
+  await expect(page.getByRole('button', { name: `${edge.label} o'lchamlari` })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: FORMAT_LABEL })).toHaveCount(1)
+  await expect(page.getByRole('row').filter({ hasText: TAPE_LABEL })).toHaveCount(1)
+
+  // The server agrees with the screen: one transaction, two dekorlar, two turlar.
+  const carried = await branchMaterials(request, ownerAccess, branchId)
+  expect(carried).toHaveLength(2)
+  expect(new Set(carried.map((row) => row.dekor_id))).toEqual(new Set([panel.id, edge.id]))
+  expect(new Set(carried.map((row) => row.dekor.tur))).toEqual(new Set(['ldsp', 'kromka']))
 })
 
 test('an unpriced format warns the workshop and is hidden from the client picker', async ({
@@ -517,7 +603,7 @@ test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({
   const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
   const search = pickStep.getByLabel('Qidirish')
   const option = (dekor: DekorResponse) =>
-    pickStep.getByRole('button', { name: new RegExp(escapeRegExp(dekor.label)) })
+    pickStep.getByRole('checkbox', { name: new RegExp(escapeRegExp(dekor.label)) })
 
   // Cyrillic query finds the Latin-named dekor…
   await search.fill('ёнғоқ')
