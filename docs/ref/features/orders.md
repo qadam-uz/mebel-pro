@@ -368,20 +368,26 @@ the computed subtotal at apply time and is stored as the resolved sum — the or
 absolute tiyin figure, not the percentage.
 
 **Consumed metres.** A banded side eats more tape than its visible edge: the master glues
-it long and trims it flush after — ~3 cm per side (15 mm at each end). So edge metres — the
-single figure behind the edge-material price, the banding labour, the client's tape total,
-**and** the stock decrement — are **consumed**, not geometric:
+it long and trims it flush after. So edge metres — the single figure behind the
+edge-material price, the banding labour, the client's tape total, **and** the stock
+decrement — are **consumed**, not geometric:
 
 > consumed metres (per edge material) = the cutting result's geometric `edge_length_by_material`
-> + a fixed **30 mm trim overhang** × the order's banded `shop` sides for that material
+> + the branch's `edge_overhang_mm` × the order's banded `shop` sides for that material
 
-The 30 mm overhang is a **system constant — the same at every branch** (3 cm per banded side
-is the workshop standard, so it is not branch-configurable). The banded-side count comes from
-the order's own per-side edge picks; `own` sides are neither billed nor decremented, so they
-don't enter the sum. Because the overhang is constant, the consumed figure is known from the
-**cutting result** onward — not just once a branch is chosen — so the client sees real metres
-in the wizard ([`cutting.md`](cutting.md)); only the *price* waits on the branch's rates. One
-figure — no separate geometric-vs-consumed columns downstream.
+The overhang is a **branch setting** — `edge_overhang_mm` on the branch, default 30 mm, set
+by the owner on the branch form ([`workshop.md`](workshop.md)) — because how long a bander
+glues and how much they trim back is a property of that shop floor's machine and habit, not
+of the platform. It is added **once per banded side**, not once per part: a piece banded on
+four sides carries it four times. The banded-side count comes from the order's own per-side
+edge picks; `own` sides are neither billed nor decremented, so they don't enter the sum.
+
+The overhang is resolved from the draft's branch at optimisation time, exactly as kerf and
+edge trim are, so the consumed figure is known from the **cutting result** onward and the
+client sees real metres in the wizard ([`cutting.md`](cutting.md)); only the *price* waits on
+the branch's rates. A draft with no branch chosen yet falls back to the platform default,
+and switching branch re-optimises against the new one. One figure downstream — no separate
+geometric-vs-consumed columns.
 
 **Operational setup gaps fail loudly.** If the branch has no cutting rate set, or has banded
 parts but no edge-banding labour rate set, or doesn't carry an edge material a part uses,

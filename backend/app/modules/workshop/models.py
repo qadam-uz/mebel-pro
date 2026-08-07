@@ -60,6 +60,10 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
         CheckConstraint(
             "edge_trim_mm >= 0 AND edge_trim_mm <= 50", name="ck_branches_edge_trim_mm"
         ),
+        CheckConstraint(
+            "edge_overhang_mm >= 0 AND edge_overhang_mm <= 100",
+            name="ck_branches_edge_overhang_mm",
+        ),
     )
 
     workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
@@ -81,11 +85,15 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     )
     latitude: Mapped[Decimal | None]
     longitude: Mapped[Decimal | None]
-    # Physical properties of this branch's saw — how the cutting optimiser
-    # resolves kerf/trim for every draft scoped to this branch (cutting.md).
-    # Platform defaults: kerf 4 mm, edge trim 5 mm.
+    # Physical properties of this branch's shop floor — how the cutting optimiser
+    # resolves kerf/trim/overhang for every draft scoped to this branch
+    # (cutting.md). Platform defaults: kerf 4 mm, edge trim 5 mm, overhang 30 mm.
     kerf_mm: Mapped[int] = mapped_column(nullable=False, default=4, server_default="4")
     edge_trim_mm: Mapped[int] = mapped_column(nullable=False, default=5, server_default="5")
+    # Glue-and-trim allowance the bander adds to **each** banded side, then cuts
+    # flush by hand — it is what the client is billed and what stock is
+    # decremented by, on top of the geometric edge length (orders.md#pricing).
+    edge_overhang_mm: Mapped[int] = mapped_column(nullable=False, default=30, server_default="30")
     # Whether this branch takes a client's own sheets (catalog-inventory.md).
     # Off until the owner turns it on: accepting client material changes what
     # the shop stores and what has to arrive before the saw can start, so it is

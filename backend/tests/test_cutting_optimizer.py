@@ -6,7 +6,7 @@ from app.models.enums import MaterialSource
 from app.modules.cutting import optimizer as optimizer_module
 from app.modules.cutting.api import (
     DEFAULT_CUT_PARAMS,
-    EDGE_OVERHANG_MM,
+    DEFAULT_EDGE_OVERHANG_MM,
     OPTIMIZATION_TIMEOUT_SECONDS,
     CutParams,
     EdgeBandInput,
@@ -61,7 +61,7 @@ def _part(
 
 @pytest.mark.parametrize(
     "params",
-    [DEFAULT_CUT_PARAMS, CutParams(kerf_mm=3, edge_trim_mm=12)],
+    [DEFAULT_CUT_PARAMS, CutParams(kerf_mm=3, edge_trim_mm=12, edge_overhang_mm=20)],
     ids=["default-params", "alt-branch-params"],
 )
 def test_cutting_engine_places_every_instance_without_overlap(params: CutParams) -> None:
@@ -213,12 +213,61 @@ def test_edge_metrics_split_shop_and_own_with_consumed_overhang() -> None:
     assert result.edge_length_by_material == {str(shop_edge): 200, str(own_edge): 100}
     assert result.edge_length_shop_by_material == {str(shop_edge): 200}
     assert result.edge_length_own_by_material == {str(own_edge): 100}
-    assert result.edge_consumed_shop_by_material == {str(shop_edge): (100 + EDGE_OVERHANG_MM) * 2}
-    assert result.edge_consumed_own_by_material == {str(own_edge): (50 + EDGE_OVERHANG_MM) * 2}
+    assert result.edge_consumed_shop_by_material == {
+        str(shop_edge): (100 + DEFAULT_EDGE_OVERHANG_MM) * 2
+    }
+    assert result.edge_consumed_own_by_material == {
+        str(own_edge): (50 + DEFAULT_EDGE_OVERHANG_MM) * 2
+    }
     assert result.edge_banded_sides_by_material == {
         str(shop_edge): {"shop": 2, "own": 0},
         str(own_edge): {"shop": 0, "own": 2},
     }
+
+
+def test_edge_overhang_is_added_once_per_banded_side_from_branch_params() -> None:
+    # The bander glues each side long and trims it flush by hand, so the
+    # allowance scales with banded sides x quantity — not with parts.
+    panel = _panel()
+    edge = uuid.uuid4()
+    part = _part(
+        material_id=panel.material_id,
+        length=100,
+        width=50,
+        quantity=3,
+        edge_top=EdgeBandInput(material_id=edge, source=MaterialSource.SHOP),
+        edge_left=EdgeBandInput(material_id=edge, source=MaterialSource.SHOP),
+    )
+
+    result = run_optimizer(
+        [part],
+        {panel.material_id: panel},
+        params=CutParams(kerf_mm=4, edge_trim_mm=5, edge_overhang_mm=45),
+    )
+
+    # Geometry is untouched by the allowance: (100 + 50) x 3.
+    assert result.edge_length_by_material == {str(edge): 450}
+    # Consumed adds 45 mm to each of the 6 banded sides (2 sides x 3 pieces).
+    assert result.edge_consumed_shop_by_material == {str(edge): 450 + 45 * 6}
+
+
+def test_zero_edge_overhang_makes_consumed_equal_geometry() -> None:
+    panel = _panel()
+    edge = uuid.uuid4()
+    part = _part(
+        material_id=panel.material_id,
+        length=100,
+        width=50,
+        edge_top=EdgeBandInput(material_id=edge, source=MaterialSource.SHOP),
+    )
+
+    result = run_optimizer(
+        [part],
+        {panel.material_id: panel},
+        params=CutParams(kerf_mm=4, edge_trim_mm=5, edge_overhang_mm=0),
+    )
+
+    assert result.edge_consumed_shop_by_material == result.edge_length_shop_by_material
 
 
 def test_panel_cap_rejects_more_than_twenty_panels_for_one_material() -> None:
@@ -271,10 +320,14 @@ def test_branch_trim_changes_usable_area_and_panel_count() -> None:
     parts = [_part(material_id=panel.material_id, length=480, width=380, quantity=3)]
 
     tight = run_optimizer(
-        parts, {panel.material_id: panel}, params=CutParams(kerf_mm=4, edge_trim_mm=5)
+        parts,
+        {panel.material_id: panel},
+        params=CutParams(kerf_mm=4, edge_trim_mm=5, edge_overhang_mm=30),
     )
     generous_trim = run_optimizer(
-        parts, {panel.material_id: panel}, params=CutParams(kerf_mm=4, edge_trim_mm=200)
+        parts,
+        {panel.material_id: panel},
+        params=CutParams(kerf_mm=4, edge_trim_mm=200, edge_overhang_mm=30),
     )
 
     assert tight.edge_trim_mm == 5

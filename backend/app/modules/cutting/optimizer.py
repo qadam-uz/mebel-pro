@@ -30,7 +30,7 @@ from app.models.enums import MaterialSource
 
 DEFAULT_KERF_MM = 4
 DEFAULT_EDGE_TRIM_MM = 5
-EDGE_OVERHANG_MM = 30
+DEFAULT_EDGE_OVERHANG_MM = 30
 MAX_PARTS_PER_RUN = 300
 MAX_PANELS_PER_MATERIAL = 20
 OPTIMIZATION_TIMEOUT_SECONDS = 10.0
@@ -59,14 +59,20 @@ class OptimizerError(Exception):
 
 @dataclass(frozen=True)
 class CutParams:
-    """Kerf and edge trim for one optimisation run — resolved by the caller from
-    the draft's branch (cutting.md); never read from a module-level constant."""
+    """Kerf, edge trim and edge overhang for one optimisation run — resolved by
+    the caller from the draft's branch (cutting.md); never read from a
+    module-level constant."""
 
     kerf_mm: int
     edge_trim_mm: int
+    edge_overhang_mm: int
 
 
-DEFAULT_CUT_PARAMS = CutParams(kerf_mm=DEFAULT_KERF_MM, edge_trim_mm=DEFAULT_EDGE_TRIM_MM)
+DEFAULT_CUT_PARAMS = CutParams(
+    kerf_mm=DEFAULT_KERF_MM,
+    edge_trim_mm=DEFAULT_EDGE_TRIM_MM,
+    edge_overhang_mm=DEFAULT_EDGE_OVERHANG_MM,
+)
 
 
 @dataclass(frozen=True)
@@ -471,7 +477,7 @@ def _build_result(
         total_waste += panel.waste_area_mm2
         total_usable_area += material.usable_area_mm2(params.edge_trim_mm)
 
-    metrics = edge_metrics(parts)
+    metrics = edge_metrics(parts, edge_overhang_mm=params.edge_overhang_mm)
     waste_percentage = (
         Decimal(total_waste) / Decimal(total_usable_area) if total_usable_area else Decimal("0")
     )
@@ -505,7 +511,15 @@ class _EdgeMetrics:
     edge_banded_sides_by_material: dict[str, dict[str, int]]
 
 
-def edge_metrics(parts: list[PartInput]) -> _EdgeMetrics:
+def edge_metrics(parts: list[PartInput], *, edge_overhang_mm: int) -> _EdgeMetrics:
+    """Geometric and consumed banded length per edge material.
+
+    ``edge_overhang_mm`` is the branch's per-side glue-and-trim allowance: the
+    master glues the tape long and cuts it flush afterwards, so every banded
+    side eats that much more tape than its visible edge. It is added once per
+    banded side, not once per part (workshop.md, orders.md#pricing).
+    """
+
     geometric: dict[str, int] = {}
     shop_geometric: dict[str, int] = {}
     own_geometric: dict[str, int] = {}
@@ -521,7 +535,7 @@ def edge_metrics(parts: list[PartInput]) -> _EdgeMetrics:
             edge_length = part.length_mm if side in {"top", "bottom"} else part.width_mm
             edge_key = str(edge.material_id)
             length = edge_length * part.quantity
-            consumed = (edge_length + EDGE_OVERHANG_MM) * part.quantity
+            consumed = (edge_length + edge_overhang_mm) * part.quantity
             sides = part.quantity
             _add(geometric, edge_key, length)
             source_key = edge.source.value
