@@ -471,7 +471,6 @@ async def test_production_job_sheet_is_sanitized_and_assignment_gated(
     assert denied.status_code == 404
 
 
-
 async def test_cutting_done_survives_an_order_the_client_fully_supplied(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -557,7 +556,6 @@ async def test_cutting_done_survives_an_order_the_client_fully_supplied(
 
     assert reverted.status_code == 200, reverted.text
     assert reverted.json()["status"] == "cutting"
-
 
 
 async def _confirmed_order_for_own_material(
@@ -695,3 +693,113 @@ async def test_client_material_cannot_be_set_once_cutting_started(
 
     assert refused.status_code == 400
     assert refused.json()["code"] == "order_edit_not_allowed"
+
+
+async def test_staff_set_a_unit_price_and_only_that_line_moves(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Counters negotiate the rate, never the plan — the sheet count the
+    optimiser produced has to survive the price change untouched."""
+
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    panel_before = next(line for line in order["price_lines"] if line["kind"] == "panel")
+    sheets = panel_before["panels_used"]
+    assert sheets > 0
+
+    updated = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "material_prices": {panel_id: 111_000}},
+    )
+
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    panel_after = next(line for line in body["price_lines"] if line["kind"] == "panel")
+    assert panel_after["unit_price_tiyin"] == 111_000
+    assert panel_after["panels_used"] == sheets
+    assert panel_after["line_total_tiyin"] == 111_000 * sheets
+    assert body["subtotal_materials_tiyin"] == 111_000 * sheets
+
+
+async def test_a_service_rate_is_editable_too(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, _ = await _confirmed_order_for_own_material(client, db_session)
+    panels = sum(int(v) for v in order["cutting_result"]["panels_used_by_material"].values())
+
+    updated = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "cutting_rate_tiyin": 7_000},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["cutting_rate_tiyin"] == 7_000
+    assert updated.json()["subtotal_cutting_tiyin"] == 7_000 * panels
+
+
+async def test_an_agreed_price_survives_a_later_own_material_change(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The order re-prices for other reasons too. Without a home on the order,
+    the next re-price would quietly restore the branch's list price."""
+
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    priced = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "material_prices": {panel_id: 111_000}},
+    )
+
+    after_own = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/own-material",
+        headers=_auth(owner_access),
+        json={"version": priced.json()["version"], "own_panel_counts": {panel_id: 1}},
+    )
+
+    assert after_own.status_code == 200
+    panel = next(line for line in after_own.json()["price_lines"] if line["kind"] == "panel")
+    assert panel["unit_price_tiyin"] == 111_000
+    assert panel["own_panels"] == 1
+
+
+async def test_clearing_an_agreed_price_returns_to_the_branch_card(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    listed_total = order["total_tiyin"]
+    priced = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "material_prices": {panel_id: 111_000}},
+    )
+    assert priced.json()["total_tiyin"] != listed_total
+
+    # The request is the whole agreement, so an empty one drops it entirely.
+    cleared = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": priced.json()["version"]},
+    )
+
+    assert cleared.status_code == 200
+    assert cleared.json()["total_tiyin"] == listed_total
+
+
+async def test_a_negative_price_is_refused(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+
+    refused = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "material_prices": {panel_id: -1}},
+    )
+
+    assert refused.status_code == 422

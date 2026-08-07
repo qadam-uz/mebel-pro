@@ -30,6 +30,7 @@ import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.v
 import FormSelect from '@/shared/components/FormSelect.vue'
 import OrderOwnMaterialModal from '@/shared/components/OrderOwnMaterialModal.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
+import OrderPricesModal from '@/shared/components/OrderPricesModal.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -375,17 +376,16 @@ const panelLines = computed<OrderPriceLine[]>(
 const edgeLines = computed<OrderPriceLine[]>(
   () => order.value?.price_lines.filter((line) => line.kind === 'edge') ?? [],
 )
-
 // What the client owes the shop floor. Sits in the production card, not the
 // receipt: it is a precondition for starting work, not a line of the bill.
 const ownRows = computed(() => ownMaterialRows(order.value?.price_lines ?? []))
 // Staff may arrange client-supplied sheets whatever the branch's self-serve
 // policy says — that setting governs the client app, not the counter.
-function edgeMaterialTotal(current: OrderDetail) {
-  return current.items.reduce((sum, item) => sum + item.edge_cost_tiyin, 0)
-}
-
-// The kromka material share comes from price_lines when present — the per-item
+const pricesOpen = ref(false)
+const pricesSubmitError = ref<string | null>(null)
+// Every millimetre the order bands, whoever supplies the tape — the figure the
+// banding rate multiplies, so the editor can show what it is changing.
+const bandedMm = computed(() => {
   const current = result.value
   if (!current) return 0
   return (
@@ -393,12 +393,56 @@ function edgeMaterialTotal(current: OrderDetail) {
     Object.values(current.edge_consumed_own_by_material).reduce((sum, v) => sum + v, 0)
   )
 })
-// edge_cost sum floors per side and can drift a few tiyin, which would keep the
+const panelsUsed = computed(() =>
   result.value
     ? Object.values(result.value.panels_used_by_material).reduce((sum, v) => sum + v, 0)
     : 0,
 )
 
+async function savePrices(payload: {
+  cutting_rate_tiyin: number | null
+  edge_banding_rate_tiyin: number | null
+  material_prices: Record<string, number>
+}) {
+  const current = order.value
+  if (!current) return
+  pricesSubmitError.value = null
+  try {
+    await orders.setPrices(current.id, { version: current.version, ...payload })
+  } catch {
+    pricesSubmitError.value = t('orders.prices.saveFailed')
+    return
+  }
+  pricesOpen.value = false
+  toast.success(t('orders.prices.saved'))
+}
+
+const ownEditOpen = ref(false)
+const ownSubmitError = ref<string | null>(null)
+
+async function saveOwnMaterial(ownPanelCounts: Record<string, number>) {
+  const current = order.value
+  if (!current) return
+  ownSubmitError.value = null
+  try {
+    await orders.setOwnMaterial(current.id, {
+      version: current.version,
+      own_panel_counts: ownPanelCounts,
+    })
+  } catch {
+    ownSubmitError.value = t('orders.own.saveFailed')
+    return
+  }
+  ownEditOpen.value = false
+  toast.success(t('orders.own.saved'))
+}
+
+function edgeMaterialTotal(current: OrderDetail) {
+  return current.items.reduce((sum, item) => sum + item.edge_cost_tiyin, 0)
+}
+
+// The kromka material share comes from price_lines when present — the per-item
+// edge_cost sum floors per side and can drift a few tiyin, which would keep the
 // breakdown from summing exactly to Jami.
 function edgeServiceTotal(current: OrderDetail) {
   const materialShare =
@@ -420,22 +464,6 @@ function workerName(id: string | null) {
     orders.workerOptions.find((worker) => worker.id === id)?.full_name ??
     t('orders.detail.unknownWorker')
   )
-async function saveOwnMaterial(ownPanelCounts: Record<string, number>) {
-  const current = order.value
-  if (!current) return
-  ownSubmitError.value = null
-  try {
-    await orders.setOwnMaterial(current.id, {
-      version: current.version,
-      own_panel_counts: ownPanelCounts,
-    })
-  } catch {
-    ownSubmitError.value = t('orders.own.saveFailed')
-    return
-  }
-  ownEditOpen.value = false
-  toast.success(t('orders.own.saved'))
-}
 }
 
 function timelineProductionDetails(event: OrderEvent) {
@@ -1111,34 +1139,6 @@ onBeforeUnmount(() => {
                button pins to the bottom edge as a footer (mt-auto) so the
                free height collects in one deliberate gap, not between items. -->
           <div class="card-b flex min-h-0 flex-col !pb-0">
-            <div class="flex flex-col gap-1 py-4">
-              <FormSelect
-                v-if="canAssignCutter"
-                v-model="cutterId"
-                :label="$t('orders.detail.cutter')"
-                :options="workerOptions"
-                :disabled="workerOptions.length === 0 || orders.actionLoading"
-                @update:model-value="applyCutter"
-              />
-              <template v-else>
-                <span class="form-select-label block text-sm font-bold text-ink">{{
-                  $t('orders.detail.cutter')
-                }}</span>
-                <div
-                  class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
-                >
-                  {{ workerName(order.cutter_user_id ?? order.assigned_cutter_user_id) }}
-                </div>
-              </template>
-              <p
-                v-if="cutterSub"
-                class="text-xs"
-                :class="cutterSub.kind === 'done' ? 'text-ink-soft' : 'text-ink-muted'"
-              >
-                <template v-if="cutterSub.kind === 'done'"
-                  ><span class="font-bold text-success">{{ $t('orders.detail.completedBy') }}</span>
-                  ·
-                </template>
             <!-- Before the assignment controls: the shop cannot start until
                  this arrives, so it has to be read before a cutter is picked. -->
             <div v-if="ownRows.length > 0" class="banner warn mt-4 mb-1">
@@ -1172,6 +1172,34 @@ onBeforeUnmount(() => {
             >
               {{ $t('orders.own.edit') }}
             </button>
+            <div class="flex flex-col gap-1 py-4">
+              <FormSelect
+                v-if="canAssignCutter"
+                v-model="cutterId"
+                :label="$t('orders.detail.cutter')"
+                :options="workerOptions"
+                :disabled="workerOptions.length === 0 || orders.actionLoading"
+                @update:model-value="applyCutter"
+              />
+              <template v-else>
+                <span class="form-select-label block text-sm font-bold text-ink">{{
+                  $t('orders.detail.cutter')
+                }}</span>
+                <div
+                  class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
+                >
+                  {{ workerName(order.cutter_user_id ?? order.assigned_cutter_user_id) }}
+                </div>
+              </template>
+              <p
+                v-if="cutterSub"
+                class="text-xs"
+                :class="cutterSub.kind === 'done' ? 'text-ink-soft' : 'text-ink-muted'"
+              >
+                <template v-if="cutterSub.kind === 'done'"
+                  ><span class="font-bold text-success">{{ $t('orders.detail.completedBy') }}</span>
+                  ·
+                </template>
                 {{ cutterSub.text }}
               </p>
             </div>
@@ -1306,6 +1334,14 @@ onBeforeUnmount(() => {
                       formatTiyin(line.line_total_tiyin)
                     }}</span>
                   </div>
+                  <button
+                    v-if="canEditOrder"
+                    type="button"
+                    class="mp-button mt-1 min-h-11 self-start"
+                    @click="pricesOpen = true"
+                  >
+                    {{ $t('orders.prices.open') }}
+                  </button>
                 </template>
                 <template v-else>
                   <!-- Snapshot lines missing (no cutting result) — aggregate rows. -->
@@ -1334,14 +1370,8 @@ onBeforeUnmount(() => {
               <div class="mt-3 font-bold text-ink">{{ $t('orders.detail.services') }}</div>
               <div class="mt-2 grid gap-2.5">
                 <div class="flex items-baseline justify-between gap-3">
-                  <button
-                    v-if="canEditOrder"
-                    type="button"
-                    class="mp-button mt-1 min-h-11 self-start"
                   <span class="min-w-0 text-ink"
-                  >
                     >{{ $t('orders.detail.cutting')
-                  </button>
                     }}<small v-if="totalPanels > 0" class="block text-xs text-ink-muted">{{
                       $t('orders.unit.sheets', { n: totalPanels }, totalPanels)
                     }}</small></span
@@ -1629,6 +1659,30 @@ onBeforeUnmount(() => {
       </div>
     </AppModal>
 
+    <OrderPricesModal
+      v-if="order"
+      :open="pricesOpen"
+      :price-lines="order.price_lines"
+      :cutting-rate-tiyin="order.cutting_rate_tiyin"
+      :edge-banding-rate-tiyin="order.edge_banding_rate_tiyin"
+      :panels-used="panelsUsed"
+      :banded-mm="bandedMm"
+      :busy="orders.actionLoading"
+      :submit-error="pricesSubmitError"
+      @save="savePrices"
+      @close="pricesOpen = false"
+    />
+
+    <OrderOwnMaterialModal
+      v-if="order"
+      :open="ownEditOpen"
+      :panel-lines="panelLines"
+      :busy="orders.actionLoading"
+      :submit-error="ownSubmitError"
+      @save="saveOwnMaterial"
+      @close="ownEditOpen = false"
+    />
+
     <OrderPriceAdjustmentModal
       v-if="order"
       :open="discountOpen"
@@ -1660,29 +1714,14 @@ onBeforeUnmount(() => {
       :current-tiyin="order.surcharge_tiyin"
       :current-reason="order.surcharge_reason"
       :apply-label="surchargeButtonLabel"
-      v-if="order"
       :remove-label="$t('orders.detail.surchargeRemove')"
-      :price-lines="order.price_lines"
       :busy="orders.actionLoading"
       :pending="
         pendingAction === 'surcharge'
           ? 'apply'
-      :busy="orders.actionLoading"
           : pendingAction === 'removeSurcharge'
             ? 'remove'
             : null
-    />
-
-    <OrderOwnMaterialModal
-      v-if="order"
-      :open="ownEditOpen"
-      :panel-lines="panelLines"
-      :busy="orders.actionLoading"
-      :submit-error="ownSubmitError"
-      @save="saveOwnMaterial"
-      @close="ownEditOpen = false"
-    />
-
       "
       :submit-error="surchargeSubmitError"
       @apply="applySurcharge"

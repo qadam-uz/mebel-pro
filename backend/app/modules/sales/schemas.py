@@ -137,12 +137,12 @@ class WorkshopOrderAdjustmentRequest(VersionedRequest):
     reason: str
 
 
-class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
+class WorkshopOrderPricesRequest(VersionedRequest):
     """Unit prices staff agreed for one order, replacing the branch rate card.
 
     Every field is optional and `null` means "drop the agreement, go back to the
     branch's price" — so a request is read as the whole agreement, not a patch:
-    pass
+    a material left out of `material_prices` is billed at the branch's price.
 
     Quantities are never in here. What is negotiated at the counter is the price
     per sheet or per metre; how many sheets a layout needs is the optimiser's
@@ -150,20 +150,20 @@ class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
     out of step.
     """
 
+    cutting_rate_tiyin: int | None = None
+    edge_banding_rate_tiyin: int | None = None
+    material_prices: dict[uuid.UUID, int] = Field(default_factory=dict)
 
-
-class WorkshopOrderSurchargeRequest(WorkshopOrderAdjustmentRequest):
-
-    pass
+    @field_validator("cutting_rate_tiyin", "edge_banding_rate_tiyin")
     @classmethod
-
+    def reject_negative_rate(cls, value: int | None) -> int | None:
         if value is not None and value < 0:
             raise ValueError("rate must be non-negative")
         return value
 
-
+    @field_validator("material_prices")
     @classmethod
-class WorkshopOrderNoteRequest(BaseModel):
+    def reject_negative_prices(cls, value: dict[uuid.UUID, int]) -> dict[uuid.UUID, int]:
         if any(price < 0 for price in value.values()):
             raise ValueError("material prices must be non-negative")
         return value
@@ -192,6 +192,15 @@ class WorkshopOrderOwnMaterialRequest(VersionedRequest):
         return value
 
 
+class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
+    pass
+
+
+class WorkshopOrderSurchargeRequest(WorkshopOrderAdjustmentRequest):
+    pass
+
+
+class WorkshopOrderNoteRequest(BaseModel):
     note_workshop: str | None = None
 
 
@@ -324,6 +333,11 @@ class OrderSummaryResponse(APIModel):
     subtotal_cutting_tiyin: int
     subtotal_materials_tiyin: int
     subtotal_edge_banding_tiyin: int
+    # The service rates this order is billed at — the branch's, or the ones
+    # staff agreed for it, so the receipt can print the multiplication it
+    # charges instead of a total the reader has to take on trust.
+    cutting_rate_tiyin: int = 0
+    edge_banding_rate_tiyin: int = 0
     discount_tiyin: int
     discount_reason: str | None
     discount_applied_by_user_id: uuid.UUID | None
@@ -333,9 +347,6 @@ class OrderSummaryResponse(APIModel):
     total_tiyin: int
     currency: Currency
     assigned_cutter_user_id: uuid.UUID | None
-    # The service rates this order is billed at — the branch's, or the ones
-    # staff agreed for it, so the receipt can print the multiplication it
-    # charges instead of a total the reader has to take on trust.
     assigned_edger_user_id: uuid.UUID | None
     cutter_assigned_at: datetime | None
     edger_assigned_at: datetime | None

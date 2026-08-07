@@ -61,6 +61,7 @@ post-placement modification, so it is never re-priced)
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
 | `surcharge_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; no cap (reason + audit are the control) |
 | `surcharge_reason` / `surcharge_applied_by_user_id` | text? / UUID? | required if `surcharge_tiyin > 0` |
+| `price_overrides` | json | unit prices staff agreed for this order, replacing the branch rate card: `{cutting_rate_tiyin, edge_banding_rate_tiyin, material_prices: {<branch_material_id>: tiyin}}`. Absent keys mean "use the branch's price". Kept on the order because it re-prices for other reasons too (a revision, a change of who supplies the sheets) and would otherwise fall back to the list price; a revision clears it along with the discount ([`orders.md`](../features/orders.md#pricing)) |
 | `total_tiyin` | bigint | `cutting + materials + edge banding − discount + surcharge`; ≥ 0 |
 | `currency` | enum | `UZS` (only value in v1) |
 

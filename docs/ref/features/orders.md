@@ -272,20 +272,20 @@ Driven entirely by this state machine; the mechanics live in
   marked (one inventory transaction per edge material the order's `edge_length_snapshot`
   carries with shop millimetres — these are **consumed** metres when displayed/priced, see *Pricing*). A
   revert re-increments exactly what its step decremented.
-- **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
-  and no `shop` edge sides skips this seam entirely. A material the client supplies **every**
-  sheet of nets to a zero demand rather than disappearing — pricing still has to check the
-  branch carries it — and a zero demand is skipped at the seam rather than written as a
-  no-op movement.
-- **After decrement, material is spent.** Cancelling an order whose panels/edges were
-  already decremented does **not** restore them (they were physically cut); the loss is
-  the workshop's, recorded offline.
-
-## The money seam
-
-The order **never holds payments or refunds**. All money lives in the finance module
-([`finance.md`](finance.md)): an accountant (`manage_finance`) records an *income* against
-the order — the amount the client actually paid (full or partial) and the date — at the
+- **Staff set the unit prices, up to production.** A counter negotiates the *rate* — "these
+  sheets at 250 000, not 300 000" — so `manage_orders` may replace the branch rate card for
+  one order while it is `new` or `confirmed`: the per-sheet price of each panel material, the
+  per-metre price of each tape, the cutting rate and the banding rate. **Quantities are never
+  editable**: how many sheets a layout needs is the optimiser's answer, and retyping it would
+  put the bill and the cutting plan out of step. A discount can reach the same total, but only
+  as one lump on the bottom line; the receipt has to show the price the client was quoted per
+  sheet, which is why this is its own action rather than a bigger discount.
+  The agreement is stored on the order, not only in the item snapshots, because the order
+  re-prices for other reasons too — without a home there, the next re-price would quietly
+  restore the branch's list price under the agreed one. A **revision** does clear it: that
+  re-prices the whole snapshot at current rates by definition, the same rule that already
+  clears the discount and the surcharge. Every change appends a same-status event carrying the
+  old and new agreement and the old and new total.
 - **Staff set it on the order, up to production.** The counter usually hears "I'll bring my
   own" while reading the order back at approval, so `manage_orders` may set the client's
   sheet counts on a `new` or `confirmed` order — the same window as a discount. The layout
@@ -302,6 +302,20 @@ the order — the amount the client actually paid (full or partial) and the date
   `0 sheets` line. Both order screens surface the list before anything else: the workshop's
   in the production card, above the cutter picker, because the shop cannot start without it;
   the client's above the tabs, because it is the only thing on that page they must act on.
+- **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
+  and no `shop` edge sides skips this seam entirely. A material the client supplies **every**
+  sheet of nets to a zero demand rather than disappearing — pricing still has to check the
+  branch carries it — and a zero demand is skipped at the seam rather than written as a
+  no-op movement.
+- **After decrement, material is spent.** Cancelling an order whose panels/edges were
+  already decremented does **not** restore them (they were physically cut); the loss is
+  the workshop's, recorded offline.
+
+## The money seam
+
+The order **never holds payments or refunds**. All money lives in the finance module
+([`finance.md`](finance.md)): an accountant (`manage_finance`) records an *income* against
+the order — the amount the client actually paid (full or partial) and the date — at the
 counter. No in-system payment, no gateway, no payment-driven status.
 
 - **One disclosure rule.** Split the order's money into two parts and gate them

@@ -100,6 +100,19 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
     surcharge_applied_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workshop_users.id")
     )
+    # Unit prices staff agreed for THIS order, replacing the branch rate card:
+    # `{"cutting_rate_tiyin": n, "edge_banding_rate_tiyin": n,
+    #   "material_prices": {"<branch_material_id>": n}}`. Absent keys mean "use
+    # the branch's price". It lives here, not only in the item snapshots,
+    # because the order re-prices for other reasons too (a revision, a change of
+    # who supplies the sheets) and would otherwise silently fall back to the
+    # list price under the agreed one (orders.md#pricing).
+    price_overrides: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default="{}",
+    )
     total_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     currency: Mapped[Currency] = mapped_column(
         enum_type(Currency, "currency"), default=Currency.UZS, nullable=False

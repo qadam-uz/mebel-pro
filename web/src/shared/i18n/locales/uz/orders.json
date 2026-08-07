@@ -64,6 +64,19 @@
     "panels": "{n} panel",
     "cuts": "{n} kesim"
   },
+  "prices": {
+    "open": "Narxlarni o'zgartirish",
+    "title": "Buyurtma narxlari",
+    "body": "Har bir qatorning birlik narxini o'zgartiring. Miqdorlar chizmadan keladi va o'zgarmaydi.",
+    "perSheet": "{n} list uchun · bir list narxi",
+    "perMetre": "{m} m uchun · bir metr narxi",
+    "cutting": "Kesish (bir list)",
+    "banding": "Kromka yopishtirish (bir metr)",
+    "blankHint": "Bo'sh qoldirilgan maydon filial narxiga qaytadi.",
+    "invalid": "Narxni to'g'ri kiriting — masalan: 300 000.",
+    "saved": "Narxlar yangilandi.",
+    "saveFailed": "Narxlar saqlanmadi. Qayta urinib ko'ring."
+  },
   "own": {
     "title": "Mijoz olib keladi",
     "clientTitle": "Siz olib kelasiz",

@@ -208,6 +208,8 @@ export interface OrderSummary {
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
   /** The service rates this order is billed at (branch's, or agreed). */
+  cutting_rate_tiyin: number
+  edge_banding_rate_tiyin: number
   discount_tiyin: number
   discount_reason: string | null
   discount_applied_by_user_id: string | null
@@ -616,22 +618,20 @@ export const useOrdersStore = defineStore('orders', () => {
     return await api.get<OrderDetail>(`/workshop/orders/${id}`, authInit())
   }
 
-  async function discount(id: string, payload: unknown) {
-    return await mutate(`/workshop/orders/${id}/discount`, payload)
   /** What the client supplies, set at the counter. The whole claim, not a
    *  delta — an omitted material means the client brings none of it. */
   /** The unit prices this order is billed at. The whole agreement, not a
    *  patch: an omitted material goes back to the branch's price. */
-  }
+  async function setPrices(
     id: string,
     payload: {
       version: number
-
-  async function surcharge(id: string, payload: unknown) {
-    return await mutate(`/workshop/orders/${id}/surcharge`, payload)
+      cutting_rate_tiyin?: number | null
+      edge_banding_rate_tiyin?: number | null
+      material_prices?: Record<string, number>
     },
   ) {
-  }
+    return await mutate(`/workshop/orders/${id}/prices`, payload)
   }
 
   async function setOwnMaterial(
@@ -641,6 +641,13 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/own-material`, payload)
   }
 
+  async function discount(id: string, payload: unknown) {
+    return await mutate(`/workshop/orders/${id}/discount`, payload)
+  }
+
+  async function surcharge(id: string, payload: unknown) {
+    return await mutate(`/workshop/orders/${id}/surcharge`, payload)
+  }
 
   async function updateNote(id: string, note: string | null) {
     return await mutate(`/workshop/orders/${id}/note`, { note_workshop: note }, 'patch')
@@ -818,6 +825,8 @@ export const useOrdersStore = defineStore('orders', () => {
     beginRevision,
     applyRevision,
     fetchWorkshopOrder,
+    setPrices,
+    setOwnMaterial,
     discount,
     surcharge,
     updateNote,
@@ -826,4 +835,3 @@ export const useOrdersStore = defineStore('orders', () => {
     reset,
   }
 })
-    setOwnMaterial,
