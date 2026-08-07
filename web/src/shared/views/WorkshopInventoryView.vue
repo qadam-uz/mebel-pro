@@ -215,12 +215,10 @@ const txMaterialOptions = computed<DropdownOption[]>(() => [
     label: item.material.label,
   })),
 ])
+// Real suppliers first, "Yangi ta'minotchi" last behind a divider: it is the
+// rare path, and at the top it sat where the eye lands and read like the
+// default. `separator` draws the rule — see FormSelect.
 const activeSupplierOptions = computed(() => [
-  {
-    value: 'inline',
-    label: t('inventory.supplier.inlineOption'),
-    meta: t('inventory.supplier.inlineOptionMeta'),
-  },
   ...workshop.suppliers
     .filter((supplier) => supplier.status === 'active')
     .map((supplier) => ({
@@ -228,6 +226,12 @@ const activeSupplierOptions = computed(() => [
       label: supplier.name,
       meta: supplier.phone ?? t('inventory.supplier.activeMeta'),
     })),
+  {
+    value: 'inline',
+    label: t('inventory.supplier.inlineOption'),
+    meta: t('inventory.supplier.inlineOptionMeta'),
+    separator: true,
+  },
 ])
 const selectedAdjustmentItem = computed(() => stockItemByMaterial(adjustmentForm.materialId))
 // The signed field is incomplete (not wrong) until the required prefix arrives —
@@ -998,7 +1002,7 @@ onBeforeUnmount(() => {
       >
         <form class="grid gap-4" @submit.prevent="saveInvoice(false)">
           <!-- Header: who delivered, when, and the number the document will get. -->
-          <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div class="grid gap-3 md:grid-cols-2">
             <FormSelect
               v-model="invoiceForm.supplierId"
               :label="$t('inventory.invoice.supplier')"
@@ -1013,18 +1017,6 @@ onBeforeUnmount(() => {
                    28/07/2026 here and 07/28/2026 on an en-US machine. -->
               <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
             </label>
-            <!-- Not a field: the number is assigned by the server on save. It was
-                 drawn as a disabled input, which reads as "something you could
-                 have typed but can't" — a plain caption says the same thing
-                 without pretending to be a control. -->
-            <div class="self-end pb-2.5">
-              <span class="block text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-                {{ $t('inventory.invoice.number') }}
-              </span>
-              <span class="num text-sm font-bold text-ink-soft">
-                {{ $t('inventory.invoice.numberAuto') }}
-              </span>
-            </div>
           </div>
           <!-- The error belongs on the field that is wrong. Both supplier failures
                used to write to the select's `:error`, so "type the new supplier's

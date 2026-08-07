@@ -16,6 +16,11 @@ function mountCombobox(props: Record<string, unknown> = {}) {
   return mount(SearchCombobox, {
     props: { label: 'Buyurtma', modelValue: null, options, ...props },
     attachTo: document.body,
+    // The listbox teleports to <body> in production so it escapes `.table-wrap`,
+    // which clips on both axes. Stubbing the teleport renders it in place so
+    // these assertions keep querying through the wrapper — the behaviour under
+    // test is the list's, not the portal's.
+    global: { stubs: { teleport: true } },
   })
 }
 
@@ -235,13 +240,15 @@ describe('SearchCombobox rejected input', () => {
     const message = document.getElementById(describedBy)
 
     expect(message).not.toBeNull()
-    // jsdom has no layout, so occlusion is pinned structurally: the list is
-    // absolutely positioned against the box that *contains* the message and
-    // opens below it (`top-full`). An overlay anchored there has nowhere to
-    // cover the words from — which is the whole bug (an open list sat on the
-    // message and the operator never read it).
-    expect(list.element.parentElement).toBe(message?.parentElement)
-    expect(message?.compareDocumentPosition(list.element)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(list.classes()).toContain('top-full')
+    // jsdom has no layout, so occlusion is pinned structurally. The list is now
+    // fixed-positioned and teleported (it has to escape `.table-wrap`, which
+    // clips on both axes), so "opens below the message" is no longer a DOM
+    // relationship — it is whichever element the placement measures. Anchoring
+    // to the bare input would put the panel straight over the error text, so the
+    // guarantee is that the anchor CONTAINS the message.
+    const anchor = wrapper.get('[data-placement-anchor]')
+    expect(message).not.toBeNull()
+    expect(anchor.element.contains(message)).toBe(true)
+    expect(list.attributes('class')).toContain('fixed')
   })
 })
