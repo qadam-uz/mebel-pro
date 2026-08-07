@@ -92,6 +92,9 @@ export interface CuttingResult {
   kerf_mm: number
   edge_trim_mm: number
   panels_used_by_material: Record<string, number>
+  /** How many of those sheets the client supplies, per panel material —
+   *  clamped to this layout and frozen once the order is placed. */
+  own_panel_counts: Record<string, number>
   waste_percentage: string
   total_cut_length_mm: number
   total_edge_length_mm: number

@@ -12,6 +12,7 @@ import {
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import { traceSuffix } from '@/shared/app/errorTrace'
+import { ownMaterialRows } from '@/shared/app/ownMaterial'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -61,6 +62,8 @@ const totalEdge = computed(() => {
     Object.values(current.edge_consumed_own_by_material).reduce((sum, value) => sum + value, 0)
   )
 })
+// What this order still expects the client to hand over.
+const ownRows = computed(() => ownMaterialRows(order.value?.price_lines ?? []))
 const edgeCostSplit = computed(() => {
   // No backend material/service split yet — use a 45/55 materials/service fallback.
   const total = order.value?.subtotal_edge_banding_tiyin ?? 0
@@ -279,6 +282,21 @@ onMounted(() => {
           >.<span v-if="cancelledReason">
             {{ $t('client.orderDetail.reasonLabel') }} <b>{{ cancelledReason }}</b></span
           >
+        </span>
+      </div>
+
+      <!-- Above the tabs, not inside one: this is the only thing on the page
+           the client has to act on, and it is unreadable if it is one tab away
+           behind a receipt. Drops out entirely on an ordinary order. -->
+      <div v-if="ownRows.length > 0" class="client-banner warn">
+        <span class="font-bold">!</span>
+        <span>
+          <b>{{ $t('orders.own.clientTitle') }}</b>
+          <span v-for="(row, index) in ownRows" :key="row.materialId">
+            <span v-if="index > 0"> · </span>
+            {{ row.materialName }} — <b>{{ row.amount }}</b>
+          </span>
+          <span class="mt-1 block opacity-80">{{ $t('orders.own.clientBody') }}</span>
         </span>
       </div>
 

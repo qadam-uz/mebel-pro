@@ -41,6 +41,7 @@ function result(overrides: Partial<CuttingResult> = {}): CuttingResult {
     kerf_mm: 4,
     edge_trim_mm: 5,
     panels_used_by_material: { 'panel-a': 1 },
+    own_panel_counts: {},
     waste_percentage: '0.12',
     total_cut_length_mm: 0,
     total_edge_length_mm: 0,

@@ -41,6 +41,7 @@ const result = {
     },
   },
   panels_used_by_material: { 'mat-1': 1 },
+  own_panel_counts: {},
   total_cut_length_mm: 0,
   total_edge_length_mm: 0,
   waste_percentage: '0',

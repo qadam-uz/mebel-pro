@@ -190,6 +190,11 @@ class CuttingResultResponse(APIModel):
     kerf_mm: int
     edge_trim_mm: int
     panels_used_by_material: dict[str, int]
+    # How many of those sheets the client supplies, per panel branch material —
+    # already clamped to this layout and frozen once confirmed. The edge
+    # equivalents below have always been serialized; sheets were the asymmetry,
+    # which left every order surface unable to say what the client must bring.
+    own_panel_counts: dict[str, int] = Field(default_factory=dict)
     waste_percentage: Decimal
     total_cut_length_mm: int
     total_edge_length_mm: int

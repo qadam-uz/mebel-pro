@@ -38,6 +38,7 @@ from app.modules.sales.api import (
     quote_client_order_batch,
     quote_workshop_order,
     revert_order,
+    set_order_own_material,
     start_banding,
     start_cutting,
     update_workshop_note,
@@ -61,6 +62,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
     WorkshopOrderSurchargeRequest,
+    WorkshopOrderOwnMaterialRequest,
     WorkshopWorkerOption,
 )
 
@@ -412,8 +414,25 @@ async def workshop_orders_revision_apply(
 @router.post("/workshop/orders/{order_id}/discount", response_model=OrderDetailResponse)
 async def workshop_orders_discount(
     order_id: uuid.UUID,
+async def workshop_orders_prices(
+    order_id: uuid.UUID,
     payload: WorkshopOrderDiscountRequest,
     principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    principal: AccountReadyPrincipal,
+
+
+@router.post("/workshop/orders/{order_id}/own-material", response_model=OrderDetailResponse)
+async def workshop_orders_own_material(
+    order_id: uuid.UUID,
+    payload: WorkshopOrderOwnMaterialRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await set_order_own_material(db, principal=principal, order_id=order_id, payload=payload)
+
+
     db: Session,
 ) -> OrderDetailResponse:
     return await apply_discount(db, principal=principal, order_id=order_id, payload=payload)

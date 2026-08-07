@@ -557,3 +557,141 @@ async def test_cutting_done_survives_an_order_the_client_fully_supplied(
 
     assert reverted.status_code == 200, reverted.text
     assert reverted.json()["status"] == "cutting"
+
+
+
+async def _confirmed_order_for_own_material(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> tuple[str, dict[str, object], str]:
+    """A placed order on a branch that does NOT let clients claim own material.
+
+    The branch setting is deliberately left off: staff arranging it at the
+    counter must not depend on the client-facing policy.
+    """
+
+    owner_access, _, branch_id, _ = await _workshop_setup(db_session)
+    branch = await db_session.get(Branch, branch_id)
+    assert branch is not None
+    assert branch.own_material_allowed is False
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    client_access, _ = await _client_access(
+        db_session, phone=f"+99890{uuid.uuid4().int % 10**7:07d}"
+    )
+    draft = await _optimized_draft(
+        client, client_access, branch_id=branch_id, panel=panel, edge=edge
+    )
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": draft["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Counter Client",
+            "contact_phone": "+998901112266",
+        },
+    )
+    assert placed.status_code == 201
+    return owner_access, placed.json(), str(panel.id)
+
+
+async def test_staff_set_client_material_on_an_order_and_it_reprices(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    before = order["total_tiyin"]
+
+    updated = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/own-material",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "own_panel_counts": {panel_id: 1}},
+    )
+
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    # The sheet the client brings stops being charged for.
+    assert body["total_tiyin"] < before
+    panel_line = next(line for line in body["price_lines"] if line["kind"] == "panel")
+    assert panel_line["own_panels"] == 1
+    assert body["cutting_result"]["own_panel_counts"] == {panel_id: 1}
+
+
+async def test_an_over_claim_is_clamped_to_what_the_layout_uses(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    used = sum(int(v) for v in order["cutting_result"]["panels_used_by_material"].values())
+
+    updated = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/own-material",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "own_panel_counts": {panel_id: 99}},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["cutting_result"]["own_panel_counts"] == {panel_id: used}
+
+
+async def test_clearing_the_claim_puts_the_price_back(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    before = order["total_tiyin"]
+    claimed = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/own-material",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "own_panel_counts": {panel_id: 1}},
+    )
+
+    # An absent material means "brings none of it" — clearing is the same call.
+    cleared = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/own-material",
+        headers=_auth(owner_access),
+        json={"version": claimed.json()["version"], "own_panel_counts": {}},
+    )
+
+    assert cleared.status_code == 200
+    assert cleared.json()["cutting_result"]["own_panel_counts"] == {}
+    assert cleared.json()["total_tiyin"] == before
+
+
+async def test_client_material_cannot_be_set_once_cutting_started(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Past `confirmed` the sheets may already be cut and the stock seam has run
+    against the old split — moving it then would silently misstate both."""
+
+    owner_access, order, panel_id = await _confirmed_order_for_own_material(client, db_session)
+    order_id = order["id"]
+    workshop_id = uuid.UUID(str(order["workshop_id"]))
+    branch_id = uuid.UUID(str(order["branch_id"]))
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": approved.json()["version"], "cutter_user_id": str(worker.id)},
+    )
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    assert started.json()["status"] == "cutting"
+
+    refused = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/own-material",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "own_panel_counts": {panel_id: 1}},
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "order_edit_not_allowed"

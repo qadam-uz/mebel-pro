@@ -64,6 +64,25 @@
     "panels": "{n} panel",
     "cuts": "{n} kesim"
   },
+  "own": {
+    "title": "Mijoz olib keladi",
+    "clientTitle": "Siz olib kelasiz",
+    "body": "Ish boshlanishidan oldin ustaxonaga topshirilishi kerak.",
+    "clientBody": "Kesish boshlanishidan oldin filialga olib boring.",
+    "sheetsSplit": "{own} mijozniki · {shop} ustaxonadan",
+    "tapeOwn": "shundan {metres} mijozniki",
+    "summary": "{count} ta material mijozniki",
+    "chip": "O'z materiali bilan",
+    "edit": "Mijoz materialini belgilash",
+    "editTitle": "Mijoz nimani olib keladi",
+    "editBody": "Mijoz o'zi olib keladigan listlar sonini belgilang. Ular material narxidan chiqariladi — kesish va kromka xizmati baribir hisoblanadi.",
+    "decrease": "Bir list kam",
+    "increase": "Bir list ko'p",
+    "ofTotal": "jami {total} list kerak",
+    "noPanels": "Bu buyurtmada list materiali yo'q.",
+    "saved": "Mijoz materiali yangilandi.",
+    "saveFailed": "Saqlanmadi. Qayta urinib ko'ring."
+  },
   "action": {
     "approve": "Tasdiqlash",
     "cancel": "Bekor qilish",

@@ -130,8 +130,16 @@ export interface OrderPriceLine {
   material_id: string
   material_name: string
   kind: 'panel' | 'edge'
+  /** What the workshop supplies, and therefore charges for. */
   panels_used: number | null
   consumed_mm: number | null
+  /** Price per sheet (panel) or per metre (edge) this order is billed at —
+   *  the branch's, or whatever staff agreed for this order. */
+  unit_price_tiyin: number
+  /** What the client brings alongside it — kept separate so a fully
+   *  client-supplied material does not read as a free `0 sheets` line. */
+  own_panels: number
+  own_mm: number
   line_total_tiyin: number
 }
 
@@ -199,6 +207,7 @@ export interface OrderSummary {
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
+  /** The service rates this order is billed at (branch's, or agreed). */
   discount_tiyin: number
   discount_reason: string | null
   discount_applied_by_user_id: string | null
@@ -609,11 +618,29 @@ export const useOrdersStore = defineStore('orders', () => {
 
   async function discount(id: string, payload: unknown) {
     return await mutate(`/workshop/orders/${id}/discount`, payload)
+  /** What the client supplies, set at the counter. The whole claim, not a
+   *  delta — an omitted material means the client brings none of it. */
+  /** The unit prices this order is billed at. The whole agreement, not a
+   *  patch: an omitted material goes back to the branch's price. */
   }
+    id: string,
+    payload: {
+      version: number
 
   async function surcharge(id: string, payload: unknown) {
     return await mutate(`/workshop/orders/${id}/surcharge`, payload)
+    },
+  ) {
   }
+  }
+
+  async function setOwnMaterial(
+    id: string,
+    payload: { version: number; own_panel_counts: Record<string, number> },
+  ) {
+    return await mutate(`/workshop/orders/${id}/own-material`, payload)
+  }
+
 
   async function updateNote(id: string, note: string | null) {
     return await mutate(`/workshop/orders/${id}/note`, { note_workshop: note }, 'patch')
@@ -799,3 +826,4 @@ export const useOrdersStore = defineStore('orders', () => {
     reset,
   }
 })
+    setOwnMaterial,

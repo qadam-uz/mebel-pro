@@ -23,6 +23,7 @@ from app.modules.cutting.optimizer import (
 from app.modules.cutting.pdf_document import PdfContext, render_cutting_pdf
 from app.modules.cutting.service import (
     choose_result,
+    clamp_own_claim,
     client_catalog_materials,
     commit_imported_map,
     create_draft,
@@ -68,6 +69,7 @@ __all__ = [
     "PlacementResult",
     "choose_result",
     "choose_workshop_result",
+    "clamp_own_claim",
     "client_catalog_materials",
     "commit_imported_map",
     "commit_workshop_imported_map",

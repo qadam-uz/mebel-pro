@@ -38,6 +38,7 @@ from app.modules.sales.service import (
     quote_client_order_batch,
     quote_workshop_order,
     revert_order,
+    set_order_own_material,
     start_banding,
     start_cutting,
     update_workshop_note,
@@ -82,6 +83,7 @@ __all__ = [
     "quote_workshop_order",
     "revert_order",
     "start_banding",
+    "set_order_own_material",
     "start_cutting",
     "update_workshop_note",
 ]

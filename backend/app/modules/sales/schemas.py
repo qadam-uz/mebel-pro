@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import ActorType, Currency, MaterialSource, OrderStatus
 from app.modules.cutting.schemas import CuttingResultResponse
@@ -138,14 +138,60 @@ class WorkshopOrderAdjustmentRequest(VersionedRequest):
 
 
 class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
+    """Unit prices staff agreed for one order, replacing the branch rate card.
+
+    Every field is optional and `null` means "drop the agreement, go back to the
+    branch's price" — so a request is read as the whole agreement, not a patch:
     pass
+
+    Quantities are never in here. What is negotiated at the counter is the price
+    per sheet or per metre; how many sheets a layout needs is the optimiser's
+    answer, and letting staff retype it would put the bill and the cutting plan
+    out of step.
+    """
+
 
 
 class WorkshopOrderSurchargeRequest(WorkshopOrderAdjustmentRequest):
+
     pass
+    @classmethod
+
+        if value is not None and value < 0:
+            raise ValueError("rate must be non-negative")
+        return value
 
 
+    @classmethod
 class WorkshopOrderNoteRequest(BaseModel):
+        if any(price < 0 for price in value.values()):
+            raise ValueError("material prices must be non-negative")
+        return value
+
+
+class WorkshopOrderOwnMaterialRequest(VersionedRequest):
+    """What the client supplies, set by staff on a placed order.
+
+    The whole claim, not a delta — an absent material means the client brings
+    none of it, so clearing is the same call with the entry dropped. Counts are
+    clamped to what the order's layout actually uses, so an over-claim is
+    harmless rather than an error the counter has to reason about.
+
+    Unlike the client's own path this is **not** gated by the branch's
+    `own_material_allowed`: that setting is about what a client may arrange
+    unattended in the app (workshop.md), and staff at the counter always may.
+    """
+
+    own_panel_counts: dict[uuid.UUID, int] = Field(default_factory=dict)
+
+    @field_validator("own_panel_counts")
+    @classmethod
+    def reject_negative_counts(cls, value: dict[uuid.UUID, int]) -> dict[uuid.UUID, int]:
+        if any(count < 0 for count in value.values()):
+            raise ValueError("own panel counts must be non-negative")
+        return value
+
+
     note_workshop: str | None = None
 
 
@@ -218,8 +264,19 @@ class OrderPriceLine(APIModel):
     material_id: uuid.UUID
     material_name: str
     kind: Literal["panel", "edge"]
+    # What the workshop supplies and therefore charges for.
     panels_used: int | None = None
     consumed_mm: int | None = None
+    # The price this order is billed at per sheet (panel) or per metre (edge) —
+    # the branch's, or whatever staff agreed for this order. It is the number
+    # the receipt multiplies, so it is also the number staff edit.
+    unit_price_tiyin: int = 0
+    # What the client brings, alongside it. Kept as its own number rather than
+    # folded into the one above: the charged figure has to keep reconciling with
+    # the stored subtotals, while a fully client-supplied material otherwise
+    # renders as `0 sheets, 0 so'm` — which reads as free, not as "you bring it".
+    own_panels: int = 0
+    own_mm: int = 0
     line_total_tiyin: int
 
 
@@ -276,6 +333,9 @@ class OrderSummaryResponse(APIModel):
     total_tiyin: int
     currency: Currency
     assigned_cutter_user_id: uuid.UUID | None
+    # The service rates this order is billed at — the branch's, or the ones
+    # staff agreed for it, so the receipt can print the multiplication it
+    # charges instead of a total the reader has to take on trust.
     assigned_edger_user_id: uuid.UUID | None
     cutter_assigned_at: datetime | None
     edger_assigned_at: datetime | None

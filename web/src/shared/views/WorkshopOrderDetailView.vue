@@ -14,6 +14,7 @@ import {
   revisionTimelineDetails,
   type WorkshopAdjustmentKind,
 } from '@/shared/app/workshopOrderDetail'
+import { ownMaterialRows } from '@/shared/app/ownMaterial'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   orderPillClass,
@@ -27,6 +28,7 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import OrderOwnMaterialModal from '@/shared/components/OrderOwnMaterialModal.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
@@ -374,12 +376,29 @@ const edgeLines = computed<OrderPriceLine[]>(
   () => order.value?.price_lines.filter((line) => line.kind === 'edge') ?? [],
 )
 
+// What the client owes the shop floor. Sits in the production card, not the
+// receipt: it is a precondition for starting work, not a line of the bill.
+const ownRows = computed(() => ownMaterialRows(order.value?.price_lines ?? []))
+// Staff may arrange client-supplied sheets whatever the branch's self-serve
+// policy says — that setting governs the client app, not the counter.
 function edgeMaterialTotal(current: OrderDetail) {
   return current.items.reduce((sum, item) => sum + item.edge_cost_tiyin, 0)
 }
 
 // The kromka material share comes from price_lines when present — the per-item
+  const current = result.value
+  if (!current) return 0
+  return (
+    Object.values(current.edge_consumed_shop_by_material).reduce((sum, v) => sum + v, 0) +
+    Object.values(current.edge_consumed_own_by_material).reduce((sum, v) => sum + v, 0)
+  )
+})
 // edge_cost sum floors per side and can drift a few tiyin, which would keep the
+  result.value
+    ? Object.values(result.value.panels_used_by_material).reduce((sum, v) => sum + v, 0)
+    : 0,
+)
+
 // breakdown from summing exactly to Jami.
 function edgeServiceTotal(current: OrderDetail) {
   const materialShare =
@@ -401,6 +420,22 @@ function workerName(id: string | null) {
     orders.workerOptions.find((worker) => worker.id === id)?.full_name ??
     t('orders.detail.unknownWorker')
   )
+async function saveOwnMaterial(ownPanelCounts: Record<string, number>) {
+  const current = order.value
+  if (!current) return
+  ownSubmitError.value = null
+  try {
+    await orders.setOwnMaterial(current.id, {
+      version: current.version,
+      own_panel_counts: ownPanelCounts,
+    })
+  } catch {
+    ownSubmitError.value = t('orders.own.saveFailed')
+    return
+  }
+  ownEditOpen.value = false
+  toast.success(t('orders.own.saved'))
+}
 }
 
 function timelineProductionDetails(event: OrderEvent) {
@@ -1104,6 +1139,39 @@ onBeforeUnmount(() => {
                   ><span class="font-bold text-success">{{ $t('orders.detail.completedBy') }}</span>
                   ·
                 </template>
+            <!-- Before the assignment controls: the shop cannot start until
+                 this arrives, so it has to be read before a cutter is picked. -->
+            <div v-if="ownRows.length > 0" class="banner warn mt-4 mb-1">
+              <div class="grow">
+                <b>{{ $t('orders.own.title') }}</b>
+                <ul class="mt-1 grid gap-0.5">
+                  <li v-for="row in ownRows" :key="row.materialId" class="text-sm">
+                    {{ row.materialName }} —
+                    <span class="font-mono font-bold">{{ row.amount }}</span>
+                  </li>
+                </ul>
+                <small class="mt-1 block text-ink-muted">{{ $t('orders.own.body') }}</small>
+                <button
+                  v-if="canEditOrder"
+                  type="button"
+                  class="mp-button mt-2 min-h-11"
+                  @click="ownEditOpen = true"
+                >
+                  {{ $t('orders.own.edit') }}
+                </button>
+              </div>
+            </div>
+            <!-- The counter usually hears "I'll bring my own" at approval, so
+                 the entry point has to exist before any claim does — not only
+                 as an edit on a banner that isn't there yet. -->
+            <button
+              v-else-if="canEditOrder"
+              type="button"
+              class="mp-button mt-4 mb-1 min-h-11 self-start"
+              @click="ownEditOpen = true"
+            >
+              {{ $t('orders.own.edit') }}
+            </button>
                 {{ cutterSub.text }}
               </p>
             </div>
@@ -1191,13 +1259,27 @@ onBeforeUnmount(() => {
                   >
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
-                      }}<small class="block text-xs text-ink-muted">{{
-                        $t(
-                          'orders.unit.sheets',
-                          { n: line.panels_used ?? 0 },
-                          line.panels_used ?? 0,
-                        )
-                      }}</small></span
+                      }}<small class="block text-xs text-ink-muted">
+                        <!-- With an own claim the charged count alone is
+                             misleading — a fully client-supplied material would
+                             read as `0 list` for free. Name both halves. -->
+                        <template v-if="line.own_panels > 0">{{
+                          $t('orders.own.sheetsSplit', {
+                            own: line.own_panels,
+                            shop: line.panels_used ?? 0,
+                          })
+                        }}</template>
+                        <template v-else>{{
+                          $t(
+                            'orders.unit.sheets',
+                            { n: line.panels_used ?? 0 },
+                            line.panels_used ?? 0,
+                          )
+                        }}</template>
+                        <template v-if="line.unit_price_tiyin > 0">
+                          × {{ formatTiyin(line.unit_price_tiyin) }}
+                        </template>
+                      </small></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
@@ -1210,9 +1292,15 @@ onBeforeUnmount(() => {
                   >
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
-                      }}<small class="block text-xs text-ink-muted">{{
-                        metres(line.consumed_mm ?? 0)
-                      }}</small></span
+                      }}<small class="block text-xs text-ink-muted">
+                        {{ metres(line.consumed_mm ?? 0) }}
+                        <template v-if="line.unit_price_tiyin > 0">
+                          × {{ formatTiyin(line.unit_price_tiyin) }}
+                        </template>
+                        <template v-if="line.own_mm > 0">
+                          · {{ $t('orders.own.tapeOwn', { metres: metres(line.own_mm) }) }}
+                        </template>
+                      </small></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
@@ -1246,8 +1334,14 @@ onBeforeUnmount(() => {
               <div class="mt-3 font-bold text-ink">{{ $t('orders.detail.services') }}</div>
               <div class="mt-2 grid gap-2.5">
                 <div class="flex items-baseline justify-between gap-3">
+                  <button
+                    v-if="canEditOrder"
+                    type="button"
+                    class="mp-button mt-1 min-h-11 self-start"
                   <span class="min-w-0 text-ink"
+                  >
                     >{{ $t('orders.detail.cutting')
+                  </button>
                     }}<small v-if="totalPanels > 0" class="block text-xs text-ink-muted">{{
                       $t('orders.unit.sheets', { n: totalPanels }, totalPanels)
                     }}</small></span
@@ -1566,14 +1660,29 @@ onBeforeUnmount(() => {
       :current-tiyin="order.surcharge_tiyin"
       :current-reason="order.surcharge_reason"
       :apply-label="surchargeButtonLabel"
+      v-if="order"
       :remove-label="$t('orders.detail.surchargeRemove')"
+      :price-lines="order.price_lines"
       :busy="orders.actionLoading"
       :pending="
         pendingAction === 'surcharge'
           ? 'apply'
+      :busy="orders.actionLoading"
           : pendingAction === 'removeSurcharge'
             ? 'remove'
             : null
+    />
+
+    <OrderOwnMaterialModal
+      v-if="order"
+      :open="ownEditOpen"
+      :panel-lines="panelLines"
+      :busy="orders.actionLoading"
+      :submit-error="ownSubmitError"
+      @save="saveOwnMaterial"
+      @close="ownEditOpen = false"
+    />
+
       "
       :submit-error="surchargeSubmitError"
       @apply="applySurcharge"

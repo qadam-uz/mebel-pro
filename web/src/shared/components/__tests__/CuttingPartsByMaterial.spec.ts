@@ -63,6 +63,7 @@ function result(parts: CuttingPart[]): CuttingResult {
     },
     panels: [],
     panels_used_by_material: {},
+    own_panel_counts: {},
     edge_consumed_shop_by_material: {},
     edge_consumed_own_by_material: {},
     edge_length_by_material: {},

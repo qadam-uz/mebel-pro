@@ -286,6 +286,22 @@ Driven entirely by this state machine; the mechanics live in
 The order **never holds payments or refunds**. All money lives in the finance module
 ([`finance.md`](finance.md)): an accountant (`manage_finance`) records an *income* against
 the order — the amount the client actually paid (full or partial) and the date — at the
+- **Staff set it on the order, up to production.** The counter usually hears "I'll bring my
+  own" while reading the order back at approval, so `manage_orders` may set the client's
+  sheet counts on a `new` or `confirmed` order — the same window as a discount. The layout
+  does not move; only who pays for the sheets it uses, so the order re-prices in the same
+  transaction and appends a same-status event. A negotiated discount survives, clamped only
+  if the smaller subtotal can no longer carry it. Past `confirmed` the sheets may be cut and
+  the stock seam has already run, so the claim is frozen with them. **The branch's
+  `own_material_allowed` does not gate this** — that setting is about what a client may
+  arrange unattended in the app ([`workshop.md`](workshop.md)), not what the shop can take
+  in at the counter.
+- **The order names what the client owes.** Each price line carries the client's share
+  (`own_panels` / `own_mm`) beside the charged figure rather than folded into it, so a
+  material the client supplies entirely reads as "you bring 4 sheets" instead of a free
+  `0 sheets` line. Both order screens surface the list before anything else: the workshop's
+  in the production card, above the cutter picker, because the shop cannot start without it;
+  the client's above the tabs, because it is the only thing on that page they must act on.
 counter. No in-system payment, no gateway, no payment-driven status.
 
 - **One disclosure rule.** Split the order's money into two parts and gate them

@@ -1635,6 +1635,7 @@ async def _result_response(
         kerf_mm=result.kerf_mm,
         edge_trim_mm=result.edge_trim_mm,
         panels_used_by_material=result.panels_used_by_material,
+        own_panel_counts=result.own_panel_counts,
         waste_percentage=result.waste_percentage,
         total_cut_length_mm=result.total_cut_length_mm,
         total_edge_length_mm=result.total_edge_length_mm,
