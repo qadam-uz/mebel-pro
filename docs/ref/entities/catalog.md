@@ -104,7 +104,7 @@ formats; the branch's [`stock_item`](inventory.md#stock-item) is created alongsi
 | `uzunlik_mm` / `eni_mm` | int? / int? | **panel-shaped only**, both required there; `uzunlik ≥ eni` (long side = grain direction); null for `kromka` |
 | `kromka_eni_mm` | int? | **`kromka` only**, required there; tape width in millimetres; null for panel-shaped |
 | `price_tiyin` | bigint | per sell unit (per **sheet** for panel-shaped, per **metre** for `kromka`), integer tiyin, ≥ 0. Default `0` — see *Price 0 means unpriced* |
-| `min_stock` | int | low-stock alert threshold for the branch's stock item, in the material's stock unit (sheet count or tape millimetres); ≥ 0; default `0` |
+| `min_stock` | int | low-stock alert threshold, in the material's stock unit (sheet count or tape millimetres); ≥ 0; default `0`. **The only home of the threshold** — [`stock_item`](inventory.md#stock-item) carries no copy |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 

@@ -2600,7 +2600,9 @@ def _stock_warnings_from_demands(
         item = stock_by_branch_material.get(branch_material_id)
         material = materials.get(branch_material_id)
         on_hand = item.on_hand if item is not None else 0
-        min_stock = item.min_stock if item is not None else 0
+        # The threshold is the branch material's, not the balance row's — a
+        # material the branch stopped carrying has no threshold to warn against.
+        min_stock = material[0].min_stock if material is not None else 0
         projected = on_hand - required
         if projected >= 0 and projected > min_stock:
             continue

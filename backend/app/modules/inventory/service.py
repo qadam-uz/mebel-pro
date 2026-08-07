@@ -102,49 +102,32 @@ async def ensure_stock_item_for_branch_material(
     *,
     branch_id: uuid.UUID,
     branch_material_id: uuid.UUID,
-    min_stock: int,
 ) -> StockItem:
-    """The branch's stock row for one branch material, created at zero if absent.
+    """The branch's balance row for one branch material, created at zero if absent.
 
     `branch_id` is the denormalized scoping column on `stock_items`: callers must
     pass the branch material's own branch, never an unrelated one (see the note
     on `StockItem`). The row itself is keyed by `branch_material_id` alone, which
     is what the unique index enforces.
+
+    Idempotent, and it no longer carries a threshold: the low-stock threshold is
+    read from `branch_materials.min_stock` wherever it is needed, so there is
+    nothing here left to keep in sync.
     """
 
     row = await db.scalar(
         select(StockItem).where(StockItem.branch_material_id == branch_material_id)
     )
-    now = datetime.now(UTC)
-    if row is None:
-        row = StockItem(
-            branch_id=branch_id,
-            branch_material_id=branch_material_id,
-            on_hand=0,
-            min_stock=min_stock,
-            updated_at=now,
-        )
-        db.add(row)
-    else:
-        row.min_stock = min_stock
-        row.updated_at = now
-    await db.flush()
-    return row
-
-
-async def sync_stock_item_min_stock(
-    db: AsyncSession,
-    *,
-    branch_id: uuid.UUID,
-    branch_material_id: uuid.UUID,
-    min_stock: int,
-) -> StockItem:
-    row = await ensure_stock_item_for_branch_material(
-        db,
+    if row is not None:
+        return row
+    row = StockItem(
         branch_id=branch_id,
         branch_material_id=branch_material_id,
-        min_stock=min_stock,
+        on_hand=0,
+        updated_at=datetime.now(UTC),
     )
+    db.add(row)
+    await db.flush()
     return row
 
 
@@ -178,7 +161,9 @@ async def list_stock(
         # and apostrophe-insensitively (see app/core/search_fold.py).
         query = query.where(Dekor.search_key.ilike(f"%{folded}%"))
     if low_stock_only:
-        query = query.where(StockItem.on_hand <= StockItem.min_stock)
+        # The threshold lives on the branch material, which `_material_join` has
+        # already joined — so the single source of truth costs nothing here.
+        query = query.where(StockItem.on_hand <= BranchMaterial.min_stock)
     return [
         StockRecord(
             stock_item=item,
@@ -676,7 +661,6 @@ async def _stock_item_for_movement(
             db,
             branch_id=branch_material.branch_id,
             branch_material_id=branch_material.id,
-            min_stock=branch_material.min_stock,
         )
     return item, material
 
@@ -842,7 +826,7 @@ async def _notify_inventory_holders(
                     "branch_material_id": str(material.branch_material.id),
                     "material_name": material_name,
                     "on_hand": stock_item.on_hand,
-                    "min_stock": stock_item.min_stock,
+                    "min_stock": material.branch_material.min_stock,
                 },
                 created_at=now,
             )

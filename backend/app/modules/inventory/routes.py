@@ -244,8 +244,8 @@ def _stock_response(row: StockRecord) -> StockItemResponse:
         stock_unit=stock_unit(row.dekor.tur),
         display_unit=display_unit(row.dekor.tur),
         on_hand=item.on_hand,
-        min_stock=item.min_stock,
-        is_low_stock=item.on_hand <= item.min_stock,
+        min_stock=row.branch_material.min_stock,
+        is_low_stock=item.on_hand <= row.branch_material.min_stock,
         updated_at=item.updated_at,
     )
 

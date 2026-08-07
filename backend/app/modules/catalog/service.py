@@ -753,7 +753,6 @@ async def attach_branch_materials(
             db,
             branch_id=scope.branch_id,
             branch_material_id=row.id,
-            min_stock=min_stock,
         )
         created.append(
             BranchMaterialRecord(
@@ -826,16 +825,10 @@ async def update_branch_material(
         _validate_nonnegative(payload.price_tiyin, "invalid_price")
         row.price_tiyin = payload.price_tiyin
     if payload.min_stock is not None:
+        # No mirror to update: `branch_materials.min_stock` is the only home of
+        # the low-stock threshold, and every reader joins to it.
         _validate_nonnegative(payload.min_stock, "invalid_min_stock")
         row.min_stock = payload.min_stock
-        from app.modules.inventory.api import sync_stock_item_min_stock
-
-        await sync_stock_item_min_stock(
-            db,
-            branch_id=scope.branch_id,
-            branch_material_id=row.id,
-            min_stock=row.min_stock,
-        )
     updated_label = branch_material_label(row, record.dekor, record.manufacturer)
     await record_action(
         db,

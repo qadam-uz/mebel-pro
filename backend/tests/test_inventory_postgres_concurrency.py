@@ -115,7 +115,6 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
                 branch_id=branch.id,
                 branch_material_id=material.id,
                 on_hand=10,
-                min_stock=0,
                 updated_at=datetime.now(UTC),
             )
             setup.add(stock_item)
@@ -248,7 +247,6 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
                     branch_id=branch.id,
                     branch_material_id=material.id,
                     on_hand=0,
-                    min_stock=0,
                     updated_at=datetime.now(UTC),
                 )
             )

@@ -185,7 +185,7 @@ async def _attach_one(
     return row
 
 
-async def test_platform_catalog_crud_and_branch_material_stock_sync(
+async def test_platform_catalog_crud_and_branch_material_stock_row(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -232,7 +232,10 @@ async def test_platform_catalog_crud_and_branch_material_stock_sync(
     )
     assert stock_item is not None
     assert stock_item.on_hand == 0
-    assert stock_item.min_stock == 2
+    # The threshold is NOT mirrored here — `stock_items` is only the balance.
+    # The value the operator typed lives once, on the branch material.
+    assert not hasattr(stock_item, "min_stock")
+    assert branch_material["min_stock"] == 2
 
     edited = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{branch_material['id']}",
@@ -259,7 +262,9 @@ async def test_platform_catalog_crud_and_branch_material_stock_sync(
     assert second_branch_material.status_code == 201
     assert branch_material["min_stock"] == 2
     assert edited.status_code == 200
-    assert stock_item.min_stock == 4
+    # Editing the threshold is a single write to the branch material — there is
+    # no second copy to propagate to, which is the point of dropping the mirror.
+    assert edited.json()["min_stock"] == 4
     assert manufacturer_filter.status_code == 200
     assert [row["dekor"]["id"] for row in manufacturer_filter.json()] == [dekor_id]
     assert tur_filter.status_code == 200
@@ -1181,14 +1186,16 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         ("16", 2800),
         ("18", 2750),
     }
-    # Each attach creates the branch's stock item carrying the same threshold.
+    # Each attach opens the branch's stock row at zero. The threshold is the
+    # branch material's alone, so there is nothing on the stock row to compare.
     thin = next(row for row in rows if row["qalinlik_mm"] == "16")
     thin_stock = await db_session.scalar(
         select(StockItem).where(StockItem.branch_material_id == uuid.UUID(str(thin["id"])))
     )
     assert thin_stock is not None
-    assert thin_stock.min_stock == 50_000
+    assert thin_stock.on_hand == 0
     assert thin_stock.branch_id == branch_id
+    assert thin["min_stock"] == 50_000
 
     # A format a concurrent attach already registered is skipped, not an error,
     # and the existing row keeps its price.

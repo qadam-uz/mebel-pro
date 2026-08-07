@@ -27,8 +27,15 @@ metres. One per branch material, so 16 mm and 18 mm of the same decor are separa
 | `branch_id` | UUID | required |
 | `branch_material_id` | UUID | required; unique — one stock row per branch material. Kept alongside `branch_id` because every inventory read is branch-scoped |
 | `on_hand` | int | the branch's book balance for the material, in its stock unit; **may be negative** — see below |
-| `min_stock` | int | low-stock alert threshold in the same unit; ≥ 0 |
 | `updated_at` | timestamp | |
+
+There is deliberately **no `min_stock` here**. The low-stock threshold is a property of
+what the branch carries, so it lives once on
+[`branch_material.min_stock`](catalog.md#branch-material) and every reader joins to it.
+It used to be mirrored onto this row so the low-stock filter could be a single-table
+predicate, kept in step by an explicit sync call — which is how two copies drift: a write
+path that forgets the call leaves the alert comparing against a stale number, silently.
+`stock_item` is only the balance.
 
 Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
 
@@ -52,7 +59,7 @@ balance are always allowed, so a revert works from below zero too.
 Invariants: `branch_material_id` unique; stock changes only via the inventory
 module's operations (never raw SQL from elsewhere); `consume` / `restore` carry the
 `order_id` and no actor (system); `stock_in` / `adjust` carry an actor. When
-`on_hand ≤ min_stock` after a change, a low-stock notification fires to the branch's
+`on_hand ≤ branch_material.min_stock` after a change, a low-stock notification fires to the branch's
 `manage_inventory` grantees and the owner — a balance that ran *past* the threshold into
 negative still qualifies, so the alert never goes quiet. A `consume` that leaves `on_hand`
 below zero additionally fires a negative-balance notification to the same recipients.

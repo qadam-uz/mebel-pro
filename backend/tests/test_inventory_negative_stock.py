@@ -54,7 +54,6 @@ async def _stock_item(
         branch_id=branch_id,
         branch_material_id=branch_material_id,
         on_hand=on_hand,
-        min_stock=min_stock,
         updated_at=datetime.now(UTC),
     )
     db.add(item)

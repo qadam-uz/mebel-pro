@@ -141,14 +141,12 @@ async def _materials(
                 branch_id=branch_id,
                 branch_material_id=panel.id,
                 on_hand=5,
-                min_stock=1,
                 updated_at=datetime.now(UTC),
             ),
             StockItem(
                 branch_id=branch_id,
                 branch_material_id=edge.id,
                 on_hand=10_000,
-                min_stock=1,
                 updated_at=datetime.now(UTC),
             ),
         ]
