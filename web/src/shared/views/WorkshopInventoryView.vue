@@ -88,6 +88,9 @@ const supplierSaving = ref(false)
 const movementError = ref<string | null>(null)
 const supplierError = ref<string | null>(null)
 const invoiceSupplierError = ref<string | null>(null)
+// Separate from the select's error: the inline-name failure is about the text
+// input below it, and a message shown against the wrong control is invisible.
+const invoiceInlineSupplierError = ref<string | null>(null)
 const invoiceLinesError = ref<string | null>(null)
 const invoiceDiscountError = ref<string | null>(null)
 const adjustmentMaterialError = ref<string | null>(null)
@@ -371,6 +374,17 @@ function onLineMaterialChange(line: InvoiceLineDraft) {
   void refreshLineLastPrice(line)
 }
 
+/** The picked material's full label, for the resolved (non-input) cell. */
+function lineMaterialLabel(line: InvoiceLineDraft): string {
+  return stockOptions.value.find((option) => option.value === line.materialId)?.label ?? ''
+}
+
+/** Back to the picker. Clearing the material must clear what belonged to it. */
+function clearInvoiceLineMaterial(line: InvoiceLineDraft) {
+  line.materialId = ''
+  onLineMaterialChange(line)
+}
+
 function addInvoiceLine() {
   invoiceLines.value = [...invoiceLines.value, blankLine()]
 }
@@ -576,6 +590,7 @@ async function saveInvoice(withExpense = false) {
   movementSaving.value = true
   movementError.value = null
   invoiceSupplierError.value = null
+  invoiceInlineSupplierError.value = null
   invoiceLinesError.value = null
   invoiceDiscountError.value = null
 
@@ -585,7 +600,7 @@ async function saveInvoice(withExpense = false) {
     return
   }
   if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
-    invoiceSupplierError.value = t('inventory.invoice.inlineSupplierRequired')
+    invoiceInlineSupplierError.value = t('inventory.invoice.inlineSupplierRequired')
     movementSaving.value = false
     return
   }
@@ -776,6 +791,7 @@ function resetInvoiceForm() {
   invoiceForm.note = ''
   invoiceLines.value = [blankLine()]
   invoiceSupplierError.value = null
+  invoiceInlineSupplierError.value = null
   invoiceLinesError.value = null
   invoiceDiscountError.value = null
 }
@@ -997,101 +1013,154 @@ onBeforeUnmount(() => {
                    28/07/2026 here and 07/28/2026 on an en-US machine. -->
               <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
             </label>
-            <div class="field">
-              <span>{{ $t('inventory.invoice.number') }}</span>
-              <span
-                class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 font-mono text-sm font-bold text-ink-muted"
-              >
+            <!-- Not a field: the number is assigned by the server on save. It was
+                 drawn as a disabled input, which reads as "something you could
+                 have typed but can't" — a plain caption says the same thing
+                 without pretending to be a control. -->
+            <div class="self-end pb-2.5">
+              <span class="block text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+                {{ $t('inventory.invoice.number') }}
+              </span>
+              <span class="num text-sm font-bold text-ink-soft">
                 {{ $t('inventory.invoice.numberAuto') }}
               </span>
             </div>
           </div>
+          <!-- The error belongs on the field that is wrong. Both supplier failures
+               used to write to the select's `:error`, so "type the new supplier's
+               name" was rendered against the dropdown — which already had a value —
+               and the operator saw nothing at all next to the empty input. -->
           <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
             <span>{{ $t('inventory.invoice.inlineSupplierName') }}</span>
-            <input v-model="invoiceForm.inlineSupplierName" class="mp-input" required />
+            <input
+              v-model="invoiceForm.inlineSupplierName"
+              class="mp-input"
+              :aria-invalid="invoiceInlineSupplierError ? 'true' : undefined"
+              aria-describedby="invoice-inline-supplier-error"
+              required
+            />
+            <small
+              v-if="invoiceInlineSupplierError"
+              id="invoice-inline-supplier-error"
+              class="mp-field-error"
+            >
+              {{ invoiceInlineSupplierError }}
+            </small>
           </label>
 
           <div class="grid gap-2">
             <div class="table-wrap">
               <table class="tbl">
                 <thead>
+                  <!-- Explicit widths: `auto` layout gave the material the same
+                       share as a two-digit quantity, so a 47-character label was
+                       clipped to 24 while three numeric columns sat half empty. -->
                   <tr>
-                    <th>{{ $t('inventory.invoice.columnMaterial') }}</th>
-                    <th class="right">{{ $t('inventory.invoice.columnQuantity') }}</th>
-                    <th class="right">{{ $t('inventory.invoice.columnPrice') }}</th>
-                    <th class="right">{{ $t('inventory.invoice.columnAmount') }}</th>
-                    <th></th>
+                    <th class="w-[29%]">{{ $t('inventory.invoice.columnMaterial') }}</th>
+                    <th class="right w-[19%]">{{ $t('inventory.invoice.columnQuantity') }}</th>
+                    <th class="right w-[24%]">{{ $t('inventory.invoice.columnPrice') }}</th>
+                    <th class="right w-[21%]">{{ $t('inventory.invoice.columnAmount') }}</th>
+                    <th class="w-[7%]"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="line in invoiceLines" :key="line.key">
-                    <td class="min-w-52">
-                      <!-- The column header carries the label on screen; the
-                           bound one stays for screen readers. -->
-                      <SearchCombobox
-                        v-model="line.materialId"
-                        :label="$t('inventory.invoice.columnMaterial')"
-                        label-class="sr-only"
-                        :options="stockOptions"
-                        compact
-                        @update:model-value="onLineMaterialChange(line)"
-                      />
-                    </td>
-                    <td class="min-w-28">
-                      <span class="mp-unit-field">
-                        <input
-                          v-model="line.quantity"
-                          class="mp-input text-right"
-                          inputmode="decimal"
-                          :aria-label="
-                            $t('inventory.invoice.quantityAria', { unit: lineQuantityUnit(line) })
-                          "
-                          placeholder="0"
+                  <template v-for="line in invoiceLines" :key="line.key">
+                    <tr>
+                      <td class="align-top">
+                        <!-- Once picked, the material stops being an input and
+                             becomes wrapping text. A material label runs to ~371px
+                             ("LDSP Egger H1145 · Sonoma eman · 2800×2070×18 mm") and
+                             no single-line input in this modal can hold it — it was
+                             clipped to "LDSP Egger H1145 · Sonor", so the operator
+                             could not read what they had just chosen. Text wraps;
+                             an input never can.
+                             The column header carries the label on screen; the bound
+                             one stays for screen readers. -->
+                        <!-- The label IS the control: a separate "O'zgartirish"
+                             button took 81px of a 228px cell and squeezed the text
+                             to four lines. Clicking the name returns to the picker,
+                             so the full width goes to the thing being read. -->
+                        <button
+                          v-if="line.materialId"
+                          type="button"
+                          class="w-full text-left text-sm font-bold leading-snug text-ink hover:underline"
+                          :title="$t('inventory.invoice.changeMaterial')"
+                          @click="clearInvoiceLineMaterial(line)"
+                        >
+                          {{ lineMaterialLabel(line) }}
+                        </button>
+                        <SearchCombobox
+                          v-else
+                          v-model="line.materialId"
+                          :label="$t('inventory.invoice.columnMaterial')"
+                          label-class="sr-only"
+                          :options="stockOptions"
+                          compact
+                          @update:model-value="onLineMaterialChange(line)"
                         />
-                        <span class="mp-unit-suffix" aria-hidden="true">{{
-                          lineQuantityUnit(line)
-                        }}</span>
-                      </span>
-                    </td>
-                    <td class="min-w-32">
-                      <span class="mp-unit-field">
-                        <input
-                          v-model="line.unitPrice"
-                          class="mp-input text-right"
-                          inputmode="decimal"
-                          :aria-label="
-                            $t('inventory.invoice.priceAria', { unit: linePriceUnit(line) })
-                          "
-                          placeholder="0"
-                          @input="line.priceEdited = true"
-                        />
-                        <span class="mp-unit-suffix" aria-hidden="true">{{
-                          linePriceUnit(line)
-                        }}</span>
-                      </span>
-                      <small
-                        v-if="lineLastPriceHint(line)"
-                        class="block text-[11px] text-ink-muted"
-                      >
+                      </td>
+                      <td class="align-top">
+                        <span class="mp-unit-field">
+                          <!-- No `placeholder="0"`: an untouched row read as a real
+                             `0 × 0` line rather than an empty one. The column
+                             header and the unit suffix already say what goes here. -->
+                          <input
+                            v-model="line.quantity"
+                            class="mp-input text-right"
+                            inputmode="decimal"
+                            :aria-label="
+                              $t('inventory.invoice.quantityAria', { unit: lineQuantityUnit(line) })
+                            "
+                          />
+                          <span class="mp-unit-suffix" aria-hidden="true">{{
+                            lineQuantityUnit(line)
+                          }}</span>
+                        </span>
+                      </td>
+                      <td class="align-top">
+                        <span class="mp-unit-field">
+                          <input
+                            v-model="line.unitPrice"
+                            class="mp-input text-right"
+                            inputmode="decimal"
+                            :aria-label="
+                              $t('inventory.invoice.priceAria', { unit: linePriceUnit(line) })
+                            "
+                            @input="line.priceEdited = true"
+                          />
+                          <span class="mp-unit-suffix" aria-hidden="true">{{
+                            linePriceUnit(line)
+                          }}</span>
+                        </span>
+                      </td>
+                      <td class="amt whitespace-nowrap align-top">
+                        {{
+                          lineTotalTiyin(line) !== null
+                            ? formatTiyin(lineTotalTiyin(line) ?? 0)
+                            : '—'
+                        }}
+                      </td>
+                      <td class="right align-top">
+                        <button
+                          type="button"
+                          class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                          :aria-label="$t('inventory.invoice.removeLineAria')"
+                          @click="removeInvoiceLine(line.key)"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                    <!-- The last-price provenance sits UNDER the line, not inside the
+                       price cell. In the cell it wrapped to three lines, drove the
+                       row to 104px, and pushed the three inputs onto three
+                       different baselines. -->
+                    <tr v-if="lineLastPriceHint(line)" class="hint-row">
+                      <td colspan="5" class="pt-0 text-[11px] text-ink-muted">
                         {{ lineLastPriceHint(line) }}
-                      </small>
-                    </td>
-                    <td class="amt">
-                      {{
-                        lineTotalTiyin(line) !== null ? formatTiyin(lineTotalTiyin(line) ?? 0) : '—'
-                      }}
-                    </td>
-                    <td class="right">
-                      <button
-                        type="button"
-                        class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                        :aria-label="$t('inventory.invoice.removeLineAria')"
-                        @click="removeInvoiceLine(line.key)"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -1118,37 +1187,43 @@ onBeforeUnmount(() => {
                 :placeholder="$t('inventory.invoice.notePlaceholder')"
               />
             </label>
-            <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="text-ink-soft">{{ $t('inventory.invoice.subtotal') }}</span>
-                <span class="num font-bold">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
+            <!-- Chegirma and Ustama are the operator's to type; Oraliq jami and
+                 Jami are computed. They used to share one sunk panel, so two live
+                 inputs read as readouts. Editable fields sit on the page surface;
+                 only the derived numbers keep the summary treatment. -->
+            <div class="grid gap-3">
+              <div class="grid grid-cols-2 gap-3">
+                <label class="field !mb-0">
+                  <span>{{ $t('inventory.invoice.discount') }}</span>
+                  <input
+                    v-model="invoiceForm.discount"
+                    class="mp-input text-right"
+                    inputmode="numeric"
+                  />
+                </label>
+                <label class="field !mb-0">
+                  <span>{{ $t('inventory.invoice.surcharge') }}</span>
+                  <input
+                    v-model="invoiceForm.surcharge"
+                    class="mp-input text-right"
+                    inputmode="numeric"
+                  />
+                </label>
               </div>
-              <label class="flex items-center justify-between gap-3">
-                <span class="text-ink-soft">{{ $t('inventory.invoice.discount') }}</span>
-                <input
-                  v-model="invoiceForm.discount"
-                  class="mp-input max-w-40 text-right"
-                  inputmode="numeric"
-                  placeholder="0"
-                />
-              </label>
-              <label class="flex items-center justify-between gap-3">
-                <span class="text-ink-soft">{{ $t('inventory.invoice.surcharge') }}</span>
-                <input
-                  v-model="invoiceForm.surcharge"
-                  class="mp-input max-w-40 text-right"
-                  inputmode="numeric"
-                  placeholder="0"
-                />
-              </label>
               <small v-if="invoiceDiscountError" class="mp-field-error">
                 {{ invoiceDiscountError }}
               </small>
-              <div
-                class="flex items-center justify-between border-t border-hairline-strong pt-2 font-bold"
-              >
-                <span>{{ $t('inventory.invoice.total') }}</span>
-                <span class="num">{{ formatTiyin(invoiceTotalTiyin) }}</span>
+              <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-ink-soft">{{ $t('inventory.invoice.subtotal') }}</span>
+                  <span class="num">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
+                </div>
+                <div
+                  class="flex items-center justify-between border-t border-hairline-strong pt-2 text-base font-bold"
+                >
+                  <span>{{ $t('inventory.invoice.total') }}</span>
+                  <span class="num">{{ formatTiyin(invoiceTotalTiyin) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1163,9 +1238,17 @@ onBeforeUnmount(() => {
                 : $t('inventory.error.invoice_save_failed')
             }}
           </p>
-          <div class="flex flex-wrap items-center gap-2">
-            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-              {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
+          <!-- The two save actions group right; Bekor is pushed to the far left so
+               it stops competing with them. Three same-weight buttons in a row
+               gave equal billing to "cancel" and "save". DESIGN.md — one primary
+               action per screen. -->
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              class="mp-button mp-button-outline mr-auto"
+              @click="invoiceOpen = false"
+            >
+              {{ $t('inventory.action.cancel') }}
             </button>
             <button
               v-if="canSeeDebts"
@@ -1176,8 +1259,8 @@ onBeforeUnmount(() => {
             >
               {{ $t('inventory.invoice.saveWithExpense') }}
             </button>
-            <button type="button" class="mp-button mp-button-outline" @click="invoiceOpen = false">
-              {{ $t('inventory.action.cancel') }}
+            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
+              {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
             </button>
           </div>
         </form>

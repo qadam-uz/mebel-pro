@@ -80,7 +80,8 @@
     "inlineSupplierRequired": "Укажите название нового поставщика.",
     "linesInvalid": "В каждой строке нужны материал, положительное количество и цена.",
     "discountTooBig": "Скидка не может превышать промежуточный итог.",
-    "saved": "Приход {number} записан."
+    "saved": "Приход {number} записан.",
+    "changeMaterial": "Изменить"
   },
   "invoices": {
     "searchLabel": "Поиск",

@@ -3018,6 +3018,13 @@
     border-bottom: 0;
   }
 
+  /* A `.hint-row` is a continuation of the row above it — a provenance note that
+     is too wide to live inside one cell. Dropping the preceding row's rule keeps
+     the pair reading as one line item instead of two. */
+  .tbl tr:has(+ .hint-row) td {
+    border-bottom: 0;
+  }
+
   .tbl tr.clickable {
     cursor: pointer;
   }

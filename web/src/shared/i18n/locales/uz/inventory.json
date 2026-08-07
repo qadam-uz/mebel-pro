@@ -80,7 +80,8 @@
     "inlineSupplierRequired": "Yangi ta'minotchi nomini kiriting.",
     "linesInvalid": "Har bir qatorda material, musbat miqdor va narx bo'lishi kerak.",
     "discountTooBig": "Chegirma oraliq jamidan katta bo'la olmaydi.",
-    "saved": "Kirim {number} yozildi."
+    "saved": "Kirim {number} yozildi.",
+    "changeMaterial": "O'zgartirish"
   },
   "invoices": {
     "searchLabel": "Qidirish",
