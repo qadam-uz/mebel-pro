@@ -38,12 +38,12 @@
 
 	handle / {
 		rewrite * /landing/index.html
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 
 	@landing_public path /landing/* /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @landing_public {
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 
 	handle {
@@ -61,12 +61,12 @@ app.{$BASE_DOMAIN} {
 
 	@client_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @client_public {
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 
 	handle {
 		rewrite * /client/index.html
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 }
 
@@ -80,12 +80,12 @@ workshop.{$BASE_DOMAIN} {
 
 	@workshop_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @workshop_public {
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 
 	handle {
 		rewrite * /workshop/index.html
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 }
 
@@ -111,11 +111,11 @@ admin.{$BASE_DOMAIN} {
 
 	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @admin_public {
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 
 	handle {
 		rewrite * /admin/index.html
-		reverse_proxy web:80
+		reverse_proxy mebel-web:80
 	}
 }

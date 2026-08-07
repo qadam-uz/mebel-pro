@@ -101,6 +101,15 @@ services:
       - backend
     expose:
       - "80"
+    # Unique alias. The edge joined `infra-net` to reach taqsim, and a bare
+    # `web` is ambiguous the moment any neighbour on that network also has one —
+    # Docker resolved it to theirs and every mebel-pro SPA served taqsim's
+    # frontend. `/api/*` kept working only because `backend` happened to be
+    # unique. Project-specific names on a shared network, always.
+    networks:
+      default:
+        aliases:
+          - mebel-web
     logging:
       driver: json-file
       options:
