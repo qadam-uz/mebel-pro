@@ -121,7 +121,6 @@ const selectAllPending = ref(false)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 const saveTraceId = ref<string | null>(null)
-const bulkFill = reactive({ price: '', threshold: '' })
 
 // Dekor ids matching the current filter. Until "Filtrdagi hammasi" pages through
 // the rest, only the loaded page is known — `filterComplete` says which it is, so
@@ -606,26 +605,8 @@ function resetPicks() {
   thresholdByKey.value = {}
   priceErrorKeys.value = new Set()
   thresholdErrorKeys.value = new Set()
-  bulkFill.price = ''
-  bulkFill.threshold = ''
   saveError.value = null
   saveTraceId.value = null
-}
-
-function applyBulkFill() {
-  const price = bulkFill.price.trim()
-  const threshold = bulkFill.threshold.trim()
-  const nextPrice = { ...priceByKey.value }
-  const nextThreshold = { ...thresholdByKey.value }
-  // Every pending row across every dekor — that is what "Hammasiga" says.
-  for (const row of pendingRows.value) {
-    if (price) nextPrice[row.key] = price
-    if (threshold) nextThreshold[row.key] = threshold
-  }
-  priceByKey.value = nextPrice
-  thresholdByKey.value = nextThreshold
-  priceErrorKeys.value = new Set()
-  thresholdErrorKeys.value = new Set()
 }
 
 function apiMessage(error: unknown): string | null {
@@ -725,21 +706,6 @@ watch(search, () => {
   searchTimer = window.setTimeout(() => void loadOptions(), SEARCH_DEBOUNCE_MS)
 })
 watch([manufacturerFilter, turFilter], () => void loadOptions())
-
-watch(
-  () => bulkFill.price,
-  (value) => {
-    const clean = sanitizeMoneyInput(value)
-    if (clean !== value) bulkFill.price = clean
-  },
-)
-watch(
-  () => bulkFill.threshold,
-  (value) => {
-    const clean = sanitizeQuantityInput(value)
-    if (clean !== value) bulkFill.threshold = clean
-  },
-)
 
 watch(
   () => props.open,
@@ -1166,33 +1132,6 @@ watch(
       </div>
 
       <template v-else>
-        <div class="grid gap-2 rounded-md border border-hairline bg-sunk px-3 py-3">
-          <div class="flex flex-wrap items-end gap-2">
-            <span class="self-center text-sm font-bold text-ink">
-              {{ $t('inventory.attach.bulkAll') }}
-            </span>
-            <label class="grid min-w-0 flex-1 basis-40 gap-1">
-              <span class="text-xs font-bold text-ink-muted">
-                {{ $t('inventory.attach.priceLabel') }}
-              </span>
-              <input v-model="bulkFill.price" class="mp-input" inputmode="numeric" />
-            </label>
-            <label class="grid min-w-0 flex-1 basis-32 gap-1">
-              <span class="text-xs font-bold text-ink-muted">{{ lowStockThresholdColumn() }}</span>
-              <input v-model="bulkFill.threshold" class="mp-input" inputmode="decimal" />
-            </label>
-            <button
-              type="button"
-              class="mp-button mp-button-outline"
-              :disabled="!bulkFill.price.trim() && !bulkFill.threshold.trim()"
-              @click="applyBulkFill"
-            >
-              {{ $t('inventory.attach.apply') }}
-            </button>
-          </div>
-          <small class="text-ink-muted">{{ $t('inventory.attach.bulkHint') }}</small>
-        </div>
-
         <div class="table-wrap">
           <table class="tbl tbl-fluid">
             <thead>
