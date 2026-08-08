@@ -419,8 +419,12 @@
       min-height: calc(44px / var(--app-zoom, 1));
     }
 
+    /* `min-width`, not `width`: this block sits far above the base rules, so a
+       plain `width` here loses the source-order tie to `.workshop-mobile-button`'s
+       own `width: 38px` and the button grows tall but stays narrow. A minimum
+       beats a fixed size wherever it is declared. */
     .workshop-mobile-button {
-      width: calc(44px / var(--app-zoom, 1));
+      min-width: calc(44px / var(--app-zoom, 1));
     }
 
     .workshop-bell,
@@ -1748,13 +1752,13 @@
     text-decoration: none;
   }
 
-  /* The wordmark is markup, not an SVG (DESIGN.md, Brand): a graphite tile with
-     two Display 800 letters around a 2px `signal` bar — the cut in the name. */
   /* The product mark, shared by all three shells and the three login screens
-     (`BrandMark.vue`). Size-agnostic on purpose: the box, the type size and the
-     cut all come from the component's `size` prop as inline styles, so one set
-     of rules serves 24px and 40px. `/favicon.svg` is the cut-only form and stays
-     out of the app — see the component's own note. */
+     (`BrandMark.vue`): a graphite tile with two Display 800 letters around a
+     `signal` bar — the cut in the name. Size-agnostic on purpose: the box, the
+     type size and the cut all come from the component's `size` prop as inline
+     styles, so one set of rules serves 24px and 40px. The icon FILE
+     (`/favicon.svg` and the rasters) draws the same lockup from outlines and
+     stays out of the app — see the component's own note. */
   .mp-brand-mark {
     display: grid;
     flex: none;
@@ -3420,16 +3424,16 @@
     padding: 14px 16px;
     text-align: left;
     text-decoration: none;
-    transition: background 140ms ease;
   }
 
   .station-row + .station-row {
     margin-top: 10px;
   }
 
-  .station-row:hover {
-    background: var(--color-track);
-  }
+  /* No hover, no transition, no pointer: the station rows REPORT the load and go
+     nowhere — the panel's «Navbatlar» link is the only control here. A hover fill
+     on a row that cannot be clicked is the cursor-honesty rule broken
+     (DESIGN.md, Components). */
 
   .station-icon {
     display: grid;

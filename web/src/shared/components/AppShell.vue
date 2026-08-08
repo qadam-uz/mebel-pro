@@ -445,6 +445,11 @@ function closeWorkshopSearch() {
 
 function focusWorkshopSearch() {
   if (config.role !== 'workshop' || isAuthRoute.value) return
+  // The search field lives in the topbar, which the drawer covers. Honouring ⌘K
+  // there would move focus outside an `aria-modal` dialog — and the drawer's own
+  // focus guard would immediately pull it back, leaving the keypress looking
+  // broken. The drawer is modal: it owns the keyboard until it closes.
+  if (mobileNavOpen.value) return
   workshopSearchOpen.value = true
   void nextTick(() => {
     workshopSearchInputRef.value?.focus()
@@ -538,25 +543,30 @@ function reloadNewOrderCount() {
 // replaces the loading skip: it collapses a repeat of the same question without
 // swallowing a different one. `undefined` means "not asked yet", distinct from a
 // null (all-branches) context.
-let requestedProductionBranch: string | null | undefined
+let requestedProductionBranch: string | undefined
 const onStationPage = computed(
   () =>
     route.path === rolePath('/workshop/cutting') || route.path === rolePath('/workshop/banding'),
 )
 
 function reloadProductionCounts(force = false) {
-  if (
-    config.role !== 'workshop' ||
-    !canLoadWorkshopContext.value ||
-    !canSeeProductionNav.value ||
-    onStationPage.value
-  ) {
+  if (config.role !== 'workshop' || !canLoadWorkshopContext.value || !canSeeProductionNav.value) {
     return
   }
-  const branchId = selectedWorkshopBranch.value?.id ?? null
-  if (!force && requestedProductionBranch === branchId) return
-  requestedProductionBranch = branchId
-  void production.loadQueues(['cutting', 'banding'], branchId)
+  if (onStationPage.value) {
+    // Forget what we asked for while the page owns the store, so stepping back
+    // onto Asosiy always re-asks. Skipping without clearing the key left the
+    // badge frozen at whatever the station page happened to leave behind.
+    requestedProductionBranch = undefined
+    return
+  }
+  // Keyed by principal as well as branch: `AppShell` is never remounted across a
+  // logout, so a plain branch key would tell the next user's identical branch
+  // that the question had already been asked.
+  const key = `${auth.me?.principal_id ?? ''}:${selectedWorkshopBranch.value?.id ?? ''}`
+  if (!force && requestedProductionBranch === key) return
+  requestedProductionBranch = key
+  void production.loadQueues(['cutting', 'banding'], selectedWorkshopBranch.value?.id ?? null)
 }
 
 function onVisibilityChange() {

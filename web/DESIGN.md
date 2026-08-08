@@ -208,8 +208,10 @@ from the specified value; none of them changes the design.
   that tightening *is* the voice. Never use it for controls, tables, or labels.
 - **Numbers are the Text face's tabular figures.** `font-variant-numeric: tabular-nums` is set
   on `body`, so every digit in the app lines up by default and no column needs a second family.
-  No call site writes `font-mono` any more; the `@theme` alias is kept only so a stray one cannot
-  silently fall through to the browser's monospace default. **Money stays compactly scaled** (`formatTiyinParts` / `formatTiyinRow`): a KPI row
+  No call site writes `font-mono` any more, but `--font-mono` is **not** an alias of the text
+  face — it stays a real monospace stack, because Tailwind's Preflight resolves
+  `code, kbd, samp, pre` through it and the superadmin's stack traces and JSON dumps have to keep
+  their columns. **Money stays compactly scaled** (`formatTiyinParts` / `formatTiyinRow`): a KPI row
   reads on one ruler — `4,12 mln so'm`, not `4 120 000` beside `540 855` — and the exact figure
   lives on the element's `title`.
 - **Weight carries meaning**: form input *values* render semibold (600) with placeholders pinned

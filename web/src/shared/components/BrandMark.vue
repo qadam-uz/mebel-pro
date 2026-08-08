@@ -2,13 +2,14 @@
 /**
  * The product mark: a graphite tile with `M`, the orange cut, `P`.
  *
- * It is MARKUP rather than an `<img>` of `/favicon.svg`, because the letters are
- * Wix Madefor Display 800 and an SVG cannot carry a webfont. `/favicon.svg` is
- * the same tile with the cut alone — the form the mark takes where the letters
- * would smear (a browser tab, an app icon) — so rendering that file inside the
- * app put two different logos on one product: the workshop sidebar showed the
- * lockup while the client header, the admin sidebar and all three login screens
- * showed a bare orange bar. Every in-app mark comes from here now.
+ * It is MARKUP rather than an `<img>` of `/favicon.svg`, because here the letters
+ * can be type: the webfont is loaded, so the mark stays in step with the wordmark
+ * beside it at any size. The icon FILE draws the same lockup from outlines,
+ * because an SVG used as an icon renders with no webfont — see DESIGN.md, Brand.
+ * Both must keep saying the same thing: rendering the file inside the app is what
+ * once put two different logos on one product, the sidebar showing the lockup
+ * while every other shell and login screen showed a bare bar. Every in-app mark
+ * comes from here now.
  *
  * `size` is the tile's edge in px; everything inside scales from it, so the
  * proportions hold at 24px and at 40px. The tile is decorative — the host names
