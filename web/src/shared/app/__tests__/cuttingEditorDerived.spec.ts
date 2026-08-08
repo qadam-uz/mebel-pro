@@ -13,6 +13,23 @@ import {
 } from '@/shared/app/cuttingEditorDerived'
 import type { ClientCatalogMaterialOption, CuttingPart } from '@/shared/stores/cutting'
 
+// WCAG 2.x relative luminance and contrast, on `#rrggbb` only — the ramp's fixed
+// entries are all hex, and the generated ones are asserted by value, not ratio.
+function relativeLuminance(hex: string): number {
+  const channels = [1, 3, 5].map((offset) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }) as [number, number, number]
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const [light, dark] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+    (a, b) => b - a,
+  ) as [number, number]
+  return (light + 0.05) / (dark + 0.05)
+}
+
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
     part_ref: overrides.part_ref ?? `part-${Math.random()}`,
@@ -208,8 +225,37 @@ describe('cuttingEditorDerived', () => {
   })
 
   it('uses fixed registry colours first and generated colours after ten entries', () => {
+    expect(registryColorStyle(1).bg).toBe('#49740e')
     expect(registryColorStyle(2).bg).toBe('#D85A30')
     expect(registryColorStyle(11).bg).toMatch(/^hsl\(/)
+  })
+
+  it('never paints a chip with the retired brand blue', () => {
+    for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 25]) {
+      expect(registryColorStyle(number).bg.toLowerCase()).not.toBe('#4341c6')
+    }
+  })
+
+  // The chip number renders at 12px on the fill, so it owes the full 4.5:1. Bone
+  // (`--color-on-accent`) is specified for text on GRAPHITE — on a saturated
+  // mid-tone it only costs contrast, and it took the green and the ochre under
+  // the floor. This asserts the pairing rather than trusting the eye, because a
+  // token swap in either direction passes every other gate.
+  it('pairs a filled chip with white, never the bone on-accent', () => {
+    for (const number of [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 25]) {
+      expect(registryColorStyle(number).fg).toBe('#ffffff')
+    }
+    // The one fill light enough to fail with any near-white takes ink instead.
+    expect(registryColorStyle(5)).toMatchObject({ bg: '#ca8a04', fg: '#111827' })
+  })
+
+  it('clears 4.5:1 on the two fills the bone pairing had pushed under it', () => {
+    const BONE = '#f4f2ee'
+    for (const number of [8, 10]) {
+      const style = registryColorStyle(number)
+      expect(contrastRatio(style.fg, style.bg)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(BONE, style.bg)).toBeLessThan(4.5)
+    }
   })
 })
 

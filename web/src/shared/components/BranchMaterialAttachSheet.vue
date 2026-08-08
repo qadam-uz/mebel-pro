@@ -811,7 +811,7 @@ watch(
               class="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors"
               :class="
                 selected.has(option.dekor.id)
-                  ? 'border-accent bg-accent-soft'
+                  ? 'border-accent-tint bg-accent-soft'
                   : 'border-hairline bg-elevated hover:border-accent'
               "
             >
@@ -906,7 +906,7 @@ watch(
               class="inline-flex min-h-10 items-center rounded-full border px-4 text-sm font-extrabold transition-colors"
               :class="
                 picks(turValue).qalinliklar.includes(value)
-                  ? 'border-accent bg-accent-soft text-accent'
+                  ? 'border-accent-tint bg-accent-soft text-accent-strong'
                   : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
               "
               :aria-pressed="picks(turValue).qalinliklar.includes(value)"
@@ -916,7 +916,7 @@ watch(
             </button>
             <button
               type="button"
-              class="inline-flex min-h-10 items-center rounded-full border border-dashed border-hairline-strong px-4 text-sm font-extrabold text-ink-soft transition-colors hover:border-accent hover:text-accent"
+              class="inline-flex min-h-10 items-center rounded-full border border-dashed border-hairline-strong px-4 text-sm font-extrabold text-ink-soft transition-colors hover:border-accent hover:text-ink"
               :aria-expanded="isCustomOpen(turValue, 'thickness')"
               @click="openCustom(turValue, 'thickness')"
             >
@@ -938,7 +938,7 @@ watch(
                 class="inline-flex min-h-10 items-center rounded-full border border-dashed px-4 text-sm font-extrabold transition-colors"
                 :class="
                   picks(turValue).qalinliklar.includes(value)
-                    ? 'border-accent bg-accent-soft text-accent'
+                    ? 'border-accent-tint bg-accent-soft text-accent-strong'
                     : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
                 "
                 :aria-pressed="picks(turValue).qalinliklar.includes(value)"
@@ -991,7 +991,7 @@ watch(
                 class="inline-flex min-h-10 items-center rounded-full border px-4 text-sm font-extrabold transition-colors"
                 :class="
                   picks(turValue).tapeWidths.includes(value)
-                    ? 'border-accent bg-accent-soft text-accent'
+                    ? 'border-accent-tint bg-accent-soft text-accent-strong'
                     : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
                 "
                 :aria-pressed="picks(turValue).tapeWidths.includes(value)"
@@ -1008,7 +1008,7 @@ watch(
                 class="inline-flex min-h-10 items-center rounded-full border px-4 text-sm font-extrabold transition-colors"
                 :class="
                   picks(turValue).sizeKeys.includes(sizeKey(size))
-                    ? 'border-accent bg-accent-soft text-accent'
+                    ? 'border-accent-tint bg-accent-soft text-accent-strong'
                     : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
                 "
                 :aria-pressed="picks(turValue).sizeKeys.includes(sizeKey(size))"
@@ -1019,7 +1019,7 @@ watch(
             </template>
             <button
               type="button"
-              class="inline-flex min-h-10 items-center rounded-full border border-dashed border-hairline-strong px-4 text-sm font-extrabold text-ink-soft transition-colors hover:border-accent hover:text-accent"
+              class="inline-flex min-h-10 items-center rounded-full border border-dashed border-hairline-strong px-4 text-sm font-extrabold text-ink-soft transition-colors hover:border-accent hover:text-ink"
               :aria-expanded="isCustomOpen(turValue, isTape(turValue) ? 'tape' : 'size')"
               @click="openCustom(turValue, isTape(turValue) ? 'tape' : 'size')"
             >
@@ -1046,7 +1046,7 @@ watch(
                   class="inline-flex min-h-10 items-center rounded-full border border-dashed px-4 text-sm font-extrabold transition-colors"
                   :class="
                     picks(turValue).tapeWidths.includes(value)
-                      ? 'border-accent bg-accent-soft text-accent'
+                      ? 'border-accent-tint bg-accent-soft text-accent-strong'
                       : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
                   "
                   :aria-pressed="picks(turValue).tapeWidths.includes(value)"
@@ -1063,7 +1063,7 @@ watch(
                   class="inline-flex min-h-10 items-center rounded-full border border-dashed px-4 text-sm font-extrabold transition-colors"
                   :class="
                     picks(turValue).sizeKeys.includes(sizeKey(size))
-                      ? 'border-accent bg-accent-soft text-accent'
+                      ? 'border-accent-tint bg-accent-soft text-accent-strong'
                       : 'border-hairline-strong bg-elevated text-ink-soft hover:border-accent'
                   "
                   :aria-pressed="picks(turValue).sizeKeys.includes(sizeKey(size))"

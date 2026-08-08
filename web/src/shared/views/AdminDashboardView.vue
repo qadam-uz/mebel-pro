@@ -382,7 +382,7 @@ onMounted(loadAll)
                   {{ errorStatusLabel(record.status) }}
                 </span>
                 <span class="min-w-0">
-                  <b class="block truncate font-mono text-xs">{{ record.code }}</b>
+                  <b class="block truncate text-xs">{{ record.code }}</b>
                   <small class="block truncate text-ink-muted">{{ record.module }}</small>
                 </span>
                 <span class="admin-mono font-bold">{{ record.count_24h }}</span>

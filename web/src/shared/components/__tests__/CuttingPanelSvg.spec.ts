@@ -147,7 +147,8 @@ describe('CuttingPanelSvg edge banding', () => {
     const lines = lineOrientations(wrapper)
     expect(lines).toHaveLength(2)
     expect(lines.every((line) => line.horizontal)).toBe(true)
-    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#4341c6')
+    // the tape's own registry colour — EDGE_REGISTRY_COLOR_STYLES[0].bg
+    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#49740e')
   })
 
   it('draws one vertical band line per banded short side (left/right)', () => {

@@ -308,8 +308,10 @@ cover this order raises a **warning** so they can prompt the warehouseman — it
 
 **Low-stock and negative balances.** Low stock is a **state on the row, not an event**: the
 Ombor row marks itself and the «Kam qolgan materiallar» filter collects them, and the Asosiy
-dashboard counts them. It raises no notification — the alert fired on every movement past the
-threshold and read as noise rather than news, so the workshop asked for it gone (QAD-182).
+home counts them on its *Kam qolgan material* card, which calls out how many of them are
+**negative** rather than merely low. It raises no notification — the alert fired on every
+movement past the threshold and read as noise rather than news, so the workshop asked for it
+gone (QAD-182).
 
 Going **negative** is different: it is a discrete thing that happened, not a level. A `consume`
 that drives the balance below zero fires a notification to the branch's `manage_inventory`
@@ -317,7 +319,7 @@ grantees and the owner — nobody is blocked, but the books going negative must 
 
 ## UX (workshop app)
 
-The active branch comes from the topbar context picker (shared across the
+The active branch comes from the sidebar's branch picker (shared across the
 workshop app) — there is no per-page branch filter, and the table drops the
 now-redundant branch column:
 
@@ -375,9 +377,10 @@ now-redundant branch column:
   balance-after, unit price and total (stock-in rows only), order link (for
   consume/restore), supplier (for stock_in), actor, note, date-time; filtered by the
   shared date-range picker and a **material filter** — one material's stock-in rows
-  read as its purchase-price history; read-only. The dashboard shows an
-  **Ombor qiymati** tile: on-hand valued at each material's latest purchase price
-  (tape: mm × per-metre), derived at read time, summed over the branches in view.
+  read as its purchase-price history; read-only. The same read derives **Ombor qiymati** —
+  on-hand valued at each material's latest purchase price (tape: mm × per-metre), summed over
+  the branches in view. That figure reaches no screen today: Asosiy's KPI row carries four
+  cards and this is not one of them.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
   add / edit in a modal dialog · block (reversible). Mostly reached inline from the arrival form.
   The list itself is a shared lookup that `manage_finance` may also **read**, because the

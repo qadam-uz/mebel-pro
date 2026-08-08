@@ -30,7 +30,7 @@ const mapUrl = computed(() => yandexMapUrl(props.latitude, props.longitude))
         v-for="phone in phones"
         :key="phone"
         :href="`tel:${phone}`"
-        class="inline-flex min-h-11 items-center font-mono text-xs font-bold text-accent underline underline-offset-2"
+        class="inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
       >
         {{ formatPhone(phone) }}
       </a>
@@ -43,7 +43,7 @@ const mapUrl = computed(() => yandexMapUrl(props.latitude, props.longitude))
         :href="mapUrl"
         target="_blank"
         rel="noopener noreferrer"
-        class="grid size-11 place-items-center rounded-md border border-hairline text-accent transition hover:border-accent hover:bg-accent-soft"
+        class="grid size-11 place-items-center rounded-md border border-hairline text-accent-deep transition hover:border-hairline-strong hover:bg-sunk"
         :title="$t('client.branches.openMap')"
         :aria-label="$t('client.branches.openMap')"
       >

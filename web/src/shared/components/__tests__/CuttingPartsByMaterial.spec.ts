@@ -139,7 +139,7 @@ describe('CuttingPartsByMaterial', () => {
 
     const glyphs = wrapper.findAll('span.grid > icon-stub')
     expect(glyphs[0].attributes('name')).toBe('grain')
-    expect(glyphs[0].classes()).toContain('text-accent')
+    expect(glyphs[0].classes()).toContain('text-signal')
     expect(glyphs[1].attributes('name')).toBe('rotate')
     expect(glyphs[1].classes()).toContain('text-ink-muted')
   })

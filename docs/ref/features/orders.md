@@ -61,9 +61,11 @@ A walk-in customer at the counter has no app and no OTP session. Staff holding
 editor the client app uses** ([`cutting.md`](cutting.md#workshop-side)) — the walk-in flow
 parameterizes the client flow, it doesn't fork it. The flow:
 
-1. **Entry** — a **+ New order** action on the Orders screen, enabled only when the staffer
-   holds `manage_orders` on the **current topbar branch** and that branch is `active`;
-   otherwise it's disabled with a hint to switch branch.
+1. **Entry** — the shell's **+ Yangi buyurtma** action in the workshop sidebar, enabled only
+   when the staffer holds `manage_orders` on the **currently selected branch** and that branch
+   is `active`; otherwise it renders disabled with a hint to switch branch. It lives in the
+   sidebar rather than on the Orders screen because it is the app's most-run task and belongs
+   to no single list.
 2. **Walk-in resolve** — phone-first find-or-create: the staffer enters the client's phone;
    an existing client's registered name comes back and must be explicitly **confirmed**
    before continuing; the name is asked only when the number is new; a blocked client is
@@ -467,13 +469,16 @@ chosen at placement, against a specific cutting — defaulted from the draft's
 Permission names below are the per-branch grants from
 [`access-management.md`](access-management.md); a single user may hold all of them.
 
-- **New-order badge** (`manage_orders`) — the sidebar's **Orders** item carries a red `+N`
-  pill: how many orders sit in `new` for the selected branch, so an arrival is visible from
-  any screen. It is a live count, not an unread marker — no read state, no per-user
-  tracking; it falls on its own as staff confirm. Hidden entirely at zero, `99+` above 99,
-  and branch-scoped so it always agrees with the list it links to. Refreshes on shell load,
-  on a branch switch, when the tab returns to the foreground, and after any order mutation;
-  a failed count renders no badge and never disturbs the shell.
+- **Nav counters** (`manage_orders`, `process_production`) — the sidebar's **Buyurtmalar** item
+  carries a graphite `+N` pill with bone text: how many orders sit in `new` for the selected
+  branch, so an arrival is visible from any screen. It is a live count, not an unread marker —
+  no read state, no per-user tracking; it falls on its own as staff confirm. Hidden entirely at
+  zero, `99+` above 99, and branch-scoped so it always agrees with the list it links to.
+  Refreshes on shell load, on a branch switch, when the tab returns to the foreground, and
+  after any order mutation; a failed count renders no badge and never disturbs the shell.
+  **Kesish** and **Krom** carry the same counter over the signed-in user's **own** queue at that
+  station — the number their station page shows, not a branch-wide backlog, because the queue is
+  personal for everyone, owner included.
 - **Orders** (`/workshop/orders`, `manage_orders`; a `view_orders` holder reads individual
   orders by link or search, not this board) —
   branch-scoped, two modes:
@@ -489,14 +494,16 @@ Permission names below are the per-branch grants from
     date-range picker (preset shortcuts + a calendar for custom spans), and a **client
     phone** field — digits-contains against the order's contact phone, so a partial tail
     or a formatted number both match (non-digits in the input are ignored); branch and
-    search come from the topbar. The filters apply to both modes.
+    search come from the shell — the sidebar's branch picker and the header's search field.
+    The filters apply to both modes.
     Empty: "No orders — nothing matches the selected filters." Zero branches: "No branches
     assigned — ask your workshop owner."
-- **New order — walk-in flow** (`manage_orders`) — the **+ New order** button on the Orders
-  screen starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's
-  enabled per the entry gate there, disabled with a "switch branch" hint otherwise. Screens:
+- **New order — walk-in flow** (`manage_orders`) — the sidebar's **+ Yangi buyurtma** action
+  starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's enabled per the
+  entry gate there, disabled with a "switch branch" hint otherwise, and the Orders screen does
+  not repeat it. Screens:
   - `/workshop/orders/new` — walk-in resolve: a phone field; on a match, a confirm card with
-    the registered name; on a new number, a name field; the target (topbar) branch named
+    the registered name; on a new number, a name field; the target (selected) branch named
     throughout.
   - `/workshop/orders/new/cutting?client=` — the shared editor, new-draft mode.
   - `/workshop/orders/cutting/:id` — the shared editor on a saved walk-in draft.
@@ -573,7 +580,7 @@ Permission names below are the per-branch grants from
   never show prices, discounts, or client phone numbers; the payload is
   **server-trimmed**, not hidden client-side. The queue is
   **personal for everyone, owner included**: only jobs assigned to the signed-in user,
-  scoped to the topbar branch picker, and "completed today" is the caller's own tally —
+  scoped to the sidebar's branch picker, and "completed today" is the caller's own tally —
   the server enforces the scope. Owners / `manage_orders` users manage statuses
   **on-behalf from the office order page**, not at the station. **Boshlash** on a queued
   card starts the job and opens its Chizma sheet in one tap. Empty: "Nothing assigned —
@@ -589,7 +596,7 @@ Permission names below are the per-branch grants from
   their own cut checkpoints (stored on the tablet only, never synced; marking a panel
   advances the drawing to the next unmarked one — the banding view shows the rail
   without marks), the parts list under it (part **names**, never refs; dimensions in
-  large mono type; a per-part edge glyph marking which sides get banding), and a sticky
+  large tabular figures; a per-part edge glyph marking which sides get banding), and a sticky
   action bar with the single state-appropriate action (**Boshlash** / **Tugatdim**),
   shown **to the assignee only**. The sheet stays fresh like the queues and re-fetches
   right before start / complete so a stale version can't conflict. The PDF lives on the

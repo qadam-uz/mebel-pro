@@ -1,17 +1,22 @@
 <svg viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!--
     Workshop scene for the staff login brand panel. Flat editorial illustration,
-    drawn in the brand indigo ramp + warm wood tones; sits on the accent color
-    field (#4341c6) as a bottom-anchored band (aspect locked, never cropped).
+    drawn in the graphite → cool-grey ramp + warm wood tones; sits on the graphite
+    accent field (#22252a) as a bottom-anchored band (aspect locked, never
+    cropped). Every value runs LIGHTER than that field so the drawing separates
+    from it — only the contact shadows go darker. The retired ultramarine ramp was
+    remapped step for step with its value order intact, so the reading is unchanged.
+    Signal orange (#ff5a1f) is spent on the cut and nothing else: the marked lines
+    on the pinned cutting map, and the saw's line across the sheet.
     Motifs: panel rack → saw cut with a marked cutting map → finished parts.
   -->
 
   <!-- floor -->
-  <rect x="-4" y="376" width="1208" height="48" fill="#2c2a8c" />
-  <rect x="-4" y="374.5" width="1208" height="2" fill="#6b69dd" opacity="0.35" />
+  <rect x="-4" y="376" width="1208" height="48" fill="#3d424a" />
+  <rect x="-4" y="374.5" width="1208" height="2" fill="#7b8391" opacity="0.35" />
 
   <!-- ground shadows -->
-  <g fill="#232065" opacity="0.5">
+  <g fill="#20232a" opacity="0.5">
     <ellipse cx="120" cy="381" rx="86" ry="8" />
     <ellipse cx="252" cy="382" rx="80" ry="9" />
     <ellipse cx="605" cy="384" rx="200" ry="11" />
@@ -20,8 +25,8 @@
 
   <!-- panel rack: A-frame with leaning sheets -->
   <g>
-    <rect x="52" y="360" width="150" height="14" rx="4" fill="#322f96" />
-    <rect x="164" y="238" width="10" height="130" rx="4" fill="#262375" transform="rotate(10 169 368)" />
+    <rect x="52" y="360" width="150" height="14" rx="4" fill="#43484f" />
+    <rect x="164" y="238" width="10" height="130" rx="4" fill="#2f333a" transform="rotate(10 169 368)" />
     <rect x="62" y="212" width="26" height="166" rx="4" fill="#d9a968" transform="rotate(-13 75 378)" />
     <rect x="90" y="198" width="26" height="180" rx="4" fill="#e9c493" transform="rotate(-9.5 103 378)" />
     <rect x="90" y="198" width="26" height="8" rx="4" fill="#f6e6cd" transform="rotate(-9.5 103 378)" />
@@ -30,47 +35,47 @@
 
   <!-- finished wardrobe -->
   <g>
-    <rect x="214" y="162" width="137" height="14" rx="5" fill="#514fd0" />
-    <rect x="220" y="170" width="125" height="208" rx="8" fill="#322f96" />
-    <line x1="282.5" y1="186" x2="282.5" y2="362" stroke="#262375" stroke-width="2.5" />
-    <rect x="232" y="190" width="40" height="150" rx="4" stroke="#514fd0" stroke-width="2" opacity="0.8" />
-    <rect x="293" y="190" width="40" height="150" rx="4" stroke="#514fd0" stroke-width="2" opacity="0.8" />
+    <rect x="214" y="162" width="137" height="14" rx="5" fill="#565c66" />
+    <rect x="220" y="170" width="125" height="208" rx="8" fill="#43484f" />
+    <line x1="282.5" y1="186" x2="282.5" y2="362" stroke="#2f333a" stroke-width="2.5" />
+    <rect x="232" y="190" width="40" height="150" rx="4" stroke="#565c66" stroke-width="2" opacity="0.8" />
+    <rect x="293" y="190" width="40" height="150" rx="4" stroke="#565c66" stroke-width="2" opacity="0.8" />
     <rect x="274" y="256" width="4.5" height="18" rx="2.25" fill="#f6e6cd" />
     <rect x="287" y="256" width="4.5" height="18" rx="2.25" fill="#f6e6cd" />
   </g>
 
   <!-- cutting map, pinned above the saw station -->
   <g>
-    <line x1="906" y1="0" x2="906" y2="52" stroke="#2b2985" stroke-width="3" />
-    <line x1="1030" y1="0" x2="1030" y2="52" stroke="#2b2985" stroke-width="3" />
+    <line x1="906" y1="0" x2="906" y2="52" stroke="#3a3f47" stroke-width="3" />
+    <line x1="1030" y1="0" x2="1030" y2="52" stroke="#3a3f47" stroke-width="3" />
     <rect x="886" y="50" width="164" height="118" rx="8" fill="#f6e6cd" />
-    <rect x="886" y="50" width="164" height="118" rx="8" stroke="#232065" stroke-width="3" opacity="0.35" />
-    <g stroke="#4341c6" stroke-width="3">
+    <rect x="886" y="50" width="164" height="118" rx="8" stroke="#20232a" stroke-width="3" opacity="0.35" />
+    <g stroke="#ff5a1f" stroke-width="3">
       <line x1="940" y1="62" x2="940" y2="156" />
       <line x1="940" y1="109" x2="1038" y2="109" />
       <line x1="998" y1="62" x2="998" y2="109" />
       <line x1="898" y1="132" x2="940" y2="132" />
     </g>
     <rect x="901" y="66" width="30" height="18" rx="2" stroke="#b97f45" stroke-width="2" opacity="0.7" />
-    <circle cx="968" cy="52" r="5" fill="#232065" opacity="0.55" />
+    <circle cx="968" cy="52" r="5" fill="#20232a" opacity="0.55" />
   </g>
 
   <!-- master: legs (behind the saw table) -->
   <g>
-    <rect x="455" y="292" width="20" height="76" rx="6" fill="#262375" />
-    <rect x="483" y="292" width="20" height="76" rx="6" fill="#262375" />
-    <rect x="451" y="366" width="28" height="10" rx="5" fill="#1d1b5e" />
-    <rect x="480" y="366" width="28" height="10" rx="5" fill="#1d1b5e" />
+    <rect x="455" y="292" width="20" height="76" rx="6" fill="#2f333a" />
+    <rect x="483" y="292" width="20" height="76" rx="6" fill="#2f333a" />
+    <rect x="451" y="366" width="28" height="10" rx="5" fill="#191b1f" />
+    <rect x="480" y="366" width="28" height="10" rx="5" fill="#191b1f" />
   </g>
 
   <!-- master: torso, head, rear arm -->
   <g>
-    <rect x="447" y="210" width="58" height="96" rx="18" fill="#7472e4" />
-    <rect x="462" y="214" width="28" height="32" rx="6" fill="#322f96" />
-    <rect x="452" y="244" width="48" height="62" rx="8" fill="#322f96" />
-    <rect x="452" y="246" width="48" height="5" fill="#232065" />
+    <rect x="447" y="210" width="58" height="96" rx="18" fill="#868e9b" />
+    <rect x="462" y="214" width="28" height="32" rx="6" fill="#43484f" />
+    <rect x="452" y="244" width="48" height="62" rx="8" fill="#43484f" />
+    <rect x="452" y="246" width="48" height="5" fill="#20232a" />
     <!-- rear arm (far side) -->
-    <rect x="492" y="226" width="36" height="16" rx="8" fill="#5f5dd0" transform="rotate(18 492 234)" />
+    <rect x="492" y="226" width="36" height="16" rx="8" fill="#666d79" transform="rotate(18 492 234)" />
     <rect x="518" y="238" width="42" height="13" rx="6.5" fill="#d9a071" transform="rotate(14 518 244)" />
     <!-- neck + head -->
     <rect x="462" y="196" width="18" height="16" rx="4" fill="#eab68b" />
@@ -78,38 +83,38 @@
     <circle cx="473" cy="180" r="25" fill="#eab68b" />
     <circle cx="455" cy="184" r="5" fill="#d9a071" />
     <!-- safety glasses -->
-    <rect x="462" y="170" width="34" height="13" rx="6.5" fill="#e7e9ff" opacity="0.92" />
-    <rect x="462" y="170" width="34" height="13" rx="6.5" stroke="#232065" stroke-width="2.5" />
-    <line x1="458" y1="176" x2="462" y2="176" stroke="#232065" stroke-width="2.5" stroke-linecap="round" />
+    <rect x="462" y="170" width="34" height="13" rx="6.5" fill="#e9ebef" opacity="0.92" />
+    <rect x="462" y="170" width="34" height="13" rx="6.5" stroke="#20232a" stroke-width="2.5" />
+    <line x1="458" y1="176" x2="462" y2="176" stroke="#20232a" stroke-width="2.5" stroke-linecap="round" />
     <!-- neutral mouth -->
     <rect x="482" y="193" width="12" height="2.6" rx="1.3" fill="#b98d55" />
     <!-- plain work cap -->
-    <path d="M 446 168 A 27 27 0 0 1 498 160 L 499 168 L 446 176 Z" fill="#322f96" />
-    <rect x="493" y="159" width="26" height="7" rx="3.5" fill="#262375" />
+    <path d="M 446 168 A 27 27 0 0 1 498 160 L 499 168 L 446 176 Z" fill="#43484f" />
+    <rect x="493" y="159" width="26" height="7" rx="3.5" fill="#2f333a" />
   </g>
 
   <!-- saw table -->
   <g>
-    <rect x="462" y="310" width="16" height="66" rx="3" fill="#262375" />
-    <rect x="732" y="310" width="16" height="66" rx="3" fill="#262375" />
-    <rect x="478" y="344" width="254" height="8" rx="4" fill="#2a2879" />
-    <rect x="440" y="292" width="330" height="18" rx="6" fill="#514fd0" />
-    <rect x="440" y="301" width="330" height="9" rx="4.5" fill="#3c3ab2" />
+    <rect x="462" y="310" width="16" height="66" rx="3" fill="#2f333a" />
+    <rect x="732" y="310" width="16" height="66" rx="3" fill="#2f333a" />
+    <rect x="478" y="344" width="254" height="8" rx="4" fill="#343941" />
+    <rect x="440" y="292" width="330" height="18" rx="6" fill="#565c66" />
+    <rect x="440" y="301" width="330" height="9" rx="4.5" fill="#4a5058" />
   </g>
 
   <!-- saw blade (emerges through the sheet) -->
   <g>
-    <circle cx="690" cy="246" r="34" fill="#e7e9ff" />
+    <circle cx="690" cy="246" r="34" fill="#e9ebef" />
     <circle cx="690" cy="246" r="35" stroke="#ffffff" stroke-width="6" stroke-dasharray="5 7" opacity="0.9" />
-    <circle cx="690" cy="246" r="14" stroke="#b9bce0" stroke-width="2.5" opacity="0.8" />
-    <circle cx="690" cy="246" r="5" fill="#9a98ee" />
+    <circle cx="690" cy="246" r="14" stroke="#c3c8d0" stroke-width="2.5" opacity="0.8" />
+    <circle cx="690" cy="246" r="5" fill="#adb4bf" />
   </g>
 
   <!-- chipboard sheet being cut, with marked cut lines -->
   <g>
     <rect x="505" y="264" width="330" height="28" rx="4" fill="#f0d9b4" />
     <rect x="505" y="281" width="330" height="11" rx="4" fill="#dcb27c" />
-    <g stroke="#b98d55" stroke-width="2.5" stroke-dasharray="6 5" opacity="0.9">
+    <g stroke="#ff5a1f" stroke-width="2.5" stroke-dasharray="6 5" opacity="0.9">
       <line x1="598" y1="266" x2="598" y2="290" />
       <line x1="690" y1="266" x2="690" y2="290" />
       <line x1="772" y1="266" x2="772" y2="290" />
@@ -118,7 +123,7 @@
 
   <!-- master: front arm over the sheet -->
   <g>
-    <rect x="488" y="236" width="38" height="17" rx="8.5" fill="#8583ea" transform="rotate(22 490 244)" />
+    <rect x="488" y="236" width="38" height="17" rx="8.5" fill="#98a0ac" transform="rotate(22 490 244)" />
     <rect x="514" y="248" width="44" height="14" rx="7" fill="#eab68b" transform="rotate(10 516 254)" />
     <circle cx="560" cy="257" r="8" fill="#eab68b" />
     <circle cx="584" cy="254" r="7.5" fill="#d9a071" />
@@ -136,12 +141,12 @@
 
   <!-- parts cart with cut pieces -->
   <g>
-    <rect x="1042" y="296" width="8" height="46" rx="4" fill="#322f96" />
-    <rect x="880" y="336" width="170" height="12" rx="4" fill="#322f96" />
-    <circle cx="910" cy="362" r="13" fill="#262375" />
-    <circle cx="910" cy="362" r="4.5" fill="#6b69dd" />
-    <circle cx="1020" cy="362" r="13" fill="#262375" />
-    <circle cx="1020" cy="362" r="4.5" fill="#6b69dd" />
+    <rect x="1042" y="296" width="8" height="46" rx="4" fill="#43484f" />
+    <rect x="880" y="336" width="170" height="12" rx="4" fill="#43484f" />
+    <circle cx="910" cy="362" r="13" fill="#2f333a" />
+    <circle cx="910" cy="362" r="4.5" fill="#7b8391" />
+    <circle cx="1020" cy="362" r="13" fill="#2f333a" />
+    <circle cx="1020" cy="362" r="4.5" fill="#7b8391" />
     <rect x="892" y="322" width="150" height="14" rx="3" fill="#d9a968" />
     <rect x="898" y="309" width="138" height="13" rx="3" fill="#f0d9b4" />
     <rect x="890" y="296" width="148" height="13" rx="3" fill="#c78d51" />

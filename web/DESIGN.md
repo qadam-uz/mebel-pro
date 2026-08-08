@@ -3,65 +3,100 @@ version: alpha
 name: Mebel Pro
 description: >-
   Design system for the three Vue SPAs (client, workshop, superadmin) — a dense,
-  utilitarian back-office language on a warm paper canvas with an ultramarine
-  accent. Realized as @theme tokens in src/assets/main.css and shared primitives
-  under src/shared/components/.
+  utilitarian back-office language on a cool neutral canvas: graphite carries every
+  action, one orange signal marks what needs attention. Realized as @theme tokens in
+  src/assets/main.css and shared primitives under src/shared/components/.
 colors:
-  bg: "#f5f4ef"
+  bg: "#f1f2f4"
   elevated: "#ffffff"
-  sunk: "#edebe2"
-  deep: "#211f19"
-  ink: "#23221c"
-  ink-strong: "#3b382e"
-  ink-soft: "#57544a"
-  ink-muted: "#68645a"
-  hairline: "#e7e4da"
-  hairline-strong: "#d5d1c3"
-  accent: "#4341c6"
-  accent-hover: "#4f4dd3"
-  accent-soft: "#edecfa"
-  accent-tint: "#d9d8f5"
-  accent-deep: "#322f96"
-  success: "#217a3c"
-  success-soft: "#eaf5eb"
-  success-border: "#cfe7d2"
-  warning: "#96490a"
-  warning-soft: "#faf1de"
-  warning-border: "#eedfba"
-  danger: "#b5372a"
-  danger-soft: "#fbedea"
-  danger-border: "#f2d3cb"
+  sunk: "#f6f7f9"
+  track: "#e6e8ec"
+  deep: "#22252a"
+  ink: "#0f1115"
+  ink-strong: "#0f1115"
+  ink-nav: "#4a5058"
+  ink-soft: "#565c66"
+  ink-muted: "#666d79"
+  divider: "#f0f1f4"
+  hairline-soft: "#e9ebef"
+  hairline: "#e4e6ea"
+  hairline-strong: "#c3c8d0"
+  accent: "#22252a"
+  accent-hover: "#34383f"
+  on-accent: "#f4f2ee"
+  signal: "#ff5a1f"
+  accent-soft: "#ffe9e0"
+  accent-tint: "#ffd8c9"
+  accent-deep: "#c53d0c"
+  accent-strong: "#a83408"
+  success: "#067a4b"
+  success-soft: "#e7f5ee"
+  success-border: "#cbe8da"
+  warning: "#a15c00"
+  warning-soft: "#fcf2e2"
+  warning-border: "#f2e2bf"
+  danger: "#c9302a"
+  danger-soft: "#fdecea"
+  danger-border: "#f7d3cf"
   info: "#0b6e8d"
-  info-soft: "#e6f2f7"
+  info-soft: "#e8f2f7"
   info-border: "#c9e2eb"
+  neutral-soft: "#eef0f3"
+  taupe: "#6b5647"
+  taupe-soft: "#f3f0ec"
 typography:
-  headline-lg:
-    fontFamily: "'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif"
-    fontSize: 32px
-    fontWeight: 600
-  brand:
-    fontFamily: "'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif"
+  page-title:
+    fontFamily: "{fonts.display}"
+    fontSize: 34px
+    lineHeight: 1.1
+    fontWeight: 700
+    letterSpacing: -0.028em
+  panel-title:
+    fontFamily: "{fonts.display}"
     fontSize: 19px
+    fontWeight: 700
+    letterSpacing: -0.02em
+  figure-lg:
+    fontFamily: "{fonts.display}"
+    fontSize: clamp(24px, 2.3vw, 32px)
+    lineHeight: 1
+    fontWeight: 700
+    letterSpacing: -0.03em
+  brand:
+    fontFamily: "{fonts.display}"
+    fontSize: 17px
+    fontWeight: 700
+    letterSpacing: -0.015em
+  row-title:
+    fontFamily: "{fonts.sans}"
+    fontSize: 15px
     fontWeight: 600
   body-md:
-    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "{fonts.sans}"
     fontSize: 14px
     lineHeight: 1.5
   label-md:
-    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-    fontSize: 13px
+    fontFamily: "{fonts.sans}"
+    fontSize: 13.5px
   label-sm:
-    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-    fontSize: 11px
-  numeric-md:
-    fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
-    fontSize: 13px
+    fontFamily: "{fonts.sans}"
+    fontSize: 12.5px
+    fontWeight: 500
+fonts:
+  sans: "'Wix Madefor Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+  display: "'Wix Madefor Display', 'Wix Madefor Text', system-ui, sans-serif"
 rounded:
-  sm: 6px
-  md: 8px
-  lg: 12px
-  xl: 16px
+  xs: 6px
+  sm: 8px
+  md: 10px
+  lg: 11px
+  xl: 14px
+  2xl: 18px
   full: 999px
+shadow:
+  panel: "0 1px 2px {ink}/4%, 0 10px 28px -22px {ink}/50%"
+  card: "0 1px 2px {ink}/5%, 0 8px 22px -18px {ink}/50%"
+  lifted: "0 1px 2px {ink}/6%, 0 14px 32px -20px {ink}/60%"
 spacing:
   xs: 4px
   sm: 8px
@@ -72,12 +107,14 @@ spacing:
 components:
   button:
     minHeight: 40px
-    radius: "{rounded.sm}"
-    fontWeight: 700
+    radius: "{rounded.lg}"
+    fontWeight: 600
     padding: 10px 16px
     background: "{colors.accent}"
+    color: "{colors.on-accent}"
   input:
-    height: 40px
+    minHeight: 44px
+    radius: "{rounded.lg}"
     valueWeight: 600
     labelPosition: outside-persistent
   popover:
@@ -99,120 +136,190 @@ has to clear before it ships, are working instructions and live in
 
 The frontmatter tokens are the machine-readable source; they mirror `@theme` in
 `src/assets/main.css` one-to-one (`colors.accent` → `--color-accent`). Change a value there and
-here together. Shared primitives live under `src/shared/components/`. The static landing
-(`web/landing/`) styles itself and is out of scope.
+here together. Shared primitives live under `src/shared/components/`.
 
 ## Overview
 
 A working tool for furniture workshops in Uzbekistan — operators, workshop staff, and clients
 who cut panels, move stock, and track money all day. The language is **dense, calm, and
-utilitarian**: data-first tables, compact 40px controls, one clear action per screen. Serif
-display type gives the brand a human voice; everything operational is a plain sans. Uzbek is
-the only shipped locale — copy is concise and specific, never vague. Nothing decorates:
-every color, weight, and elevation step encodes state or hierarchy.
+utilitarian**: data-first tables, compact controls (a 40px button, a 44px form field), one clear
+action per screen.
+
+The surface is a **cool neutral** — near-white panels floating on a light grey canvas, separated
+by whitespace and a soft shadow rather than by ruled lines. Everything a person can *do* is
+**graphite**; a single **orange signal** marks the one thing that wants attention. Nothing
+decorates: every colour, weight, and elevation step encodes state or hierarchy.
 
 ## Colors
 
 One light theme; there is no dark mode. Never hardcode hex in components — always the
 semantic `--color-*` tokens.
 
-- **Canvas & surfaces** — `bg` is the warm limestone-paper page canvas; `elevated` (white)
-  is cards, popovers, modals; `sunk` is inset wells (table headers, disabled fields); `deep`
-  is the dark brand surface (shell chrome). The whole neutral ramp is warm-cast — it sits
-  with the wood-tone material content instead of fighting it.
-- **Text** — `ink` (warm graphite) for body, `ink-strong` for emphasis, `ink-soft`/
-  `ink-muted` for secondary and captions. `::selection` inverts to accent/white.
-- **Borders** — `hairline` for resting dividers, `hairline-strong` where separation must
-  survive on `sunk` surfaces.
-- **Accent** — ultramarine `accent` is the single brand/action color: primary buttons, focus
-  rings, active nav, links. `accent-hover` on hover, `accent-soft`/`accent-tint` for
-  selected and tinted fills, `accent-deep` for gradient depth and text on `accent-tint`.
-  Use it sparingly — one primary action per screen.
-- **Status** — `success` / `warning` / `danger` / `info`, each with a `-soft` fill for pills
-  and banners and a `-border` tint for their outlines. Status color is never the only
-  signal: pair it with the state's word or an icon. Colored dot prefixes are reserved for
-  status filters, mapped from the status-pill palette.
-- **Derived values** — shadows/scrims tint from `ink`, glows and focus rings from `accent`,
-  via `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a
-  retheme must stay a token-file change.
+- **Canvas & surfaces** — `bg` is the cool grey page canvas; `elevated` (white) is panels,
+  cards, popovers, modals; `sunk` is the secondary block *inside* a panel (an inset row, a
+  station tile, a well); `track` is the trough a segmented control sits in; `deep` is the
+  graphite brand surface.
+- **Text** — `ink` for body and headings, `ink-soft` for descriptions and labels, `ink-muted`
+  for third-level captions, `ink-nav` for a resting sidebar item. `ink-strong` is a legacy alias
+  of `ink`; new code writes `ink`.
+- **Lines** — three weights, and they are not interchangeable: `divider` for a row separator
+  inside a card, `hairline-soft` for a panel edge (the sidebar's right edge), `hairline` for
+  input and button borders. `hairline-strong` is the line that must survive on `sunk`, and it
+  doubles as the chart's period-max bar.
+- **Action — graphite.** `accent` is the single action colour: primary buttons, the focus ring,
+  icon tiles, a selected state, `::selection`. `accent-hover` on hover. Text on it is
+  `on-accent` — **bone, not white**; pure white on graphite reads as a screen glare.
+- **Signal — orange.** `signal` (`#ff5a1f`) is an **accent, not a fill**: the notification dot,
+  today's column in a chart, the banding ticks on a job sheet, the cut mark in the logo, a 2px
+  rule, a spotlight ring. It gives only **3.1:1 under white text**, so it is never a button
+  background and never sits under text. When orange has to carry words it steps down — to
+  `accent-deep` on a neutral surface (a text link, a text button), and to `accent-strong` on
+  either orange tint. Its tints are the app's *selected* fills: `accent-soft` for an active nav
+  item or a chip, `accent-tint` one step stronger.
+- **Status** — `success` / `warning` / `danger` / `info`, each with a `-soft` fill for pills and
+  banners and a `-border` tint for their outlines. Status colour is never the only signal: pair
+  it with the state's word or an icon.
+- **Order stages** warm as the work advances — `Yangi` (`neutral-soft` / `ink-nav`) →
+  `Tasdiqlangan` (`taupe-soft` / `taupe`) → `Kesilmoqda` (`accent-soft` / `accent-strong`) →
+  `Kromkada` (`accent-tint` / `accent-strong`) → `Tayyor` (`success-soft` / `success`), with
+  `Tugatilgan` (`neutral-soft` / `ink-soft`) and `Bekor qilingan` (`danger-soft` / `danger`) off
+  to the side. The chip always carries the stage's word.
+- **Derived values** — shadows/scrims tint from `ink`, focus rings from `accent`, via
+  `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a retheme must
+  stay a token-file change.
+
+**Three values sit a shade off the handoff, and deliberately.** `AGENTS.md` sets a hard 4.5:1
+floor for text, and the handoff's own numbers miss it in three places: `ink-muted` is `#666d79`
+rather than `#6b7280` (which gives 4.32:1 on the canvas), `danger` is `#c9302a` rather than
+`#d0342c` (4.36:1 on `danger-soft`), and text on **either** orange tint is `accent-strong`
+rather than `accent-deep` (4.44:1 on `accent-soft`). All three are visually indistinguishable
+from the specified value; none of them changes the design.
 
 ## Typography
 
-- **Sans (Hanken Grotesk)** is the workhorse. Base body is **14px / 1.5** — this is a dense
-  back-office, not a marketing site. Table and control text runs 12–13.5px; micro-captions
-  bottom out at 10.5–11px, never smaller.
-- **Serif (Source Serif 4)** is reserved for identity: the brand wordmark (19px/600) and
-  page-head display (`headline-lg`, 32px/600 in the client app). Don't use serif for
-  controls, tables, or labels.
-- **Mono (JetBrains Mono)** for numeric table columns — money and quantities right-aligned
-  so digits line up for comparison, with the unit on a small muted second line.
-- **Weight carries meaning**: form input *values* render semibold (600) with placeholders
-  pinned to regular — a filled field must read as data, a hint must not. This spans all
-  three apps and the composed controls (PhoneInput, FormSelect, SearchCombobox selected
-  values); `textarea.mp-input` reason fields stay regular. Buttons are 700.
-- **Cyrillic locales swap the sans, not the design.** Hanken Grotesk has no Cyrillic —
-  Google serves it no `cyrillic` subset at all — so under `ru` and `uz-Cyrl` the
-  `--font-sans` token becomes **Manrope**, the nearest geometric grotesk carrying both
-  scripts at 400–800. The swap is whole-locale on `html[data-locale]`, never per-glyph
-  fallback: a browser mixing two families inside one word is visible in a way a different
-  family across a whole screen is not. Serif and mono already carry Cyrillic and stay put.
+**Two families, and that is the whole system.** `Wix Madefor Display` for headings and figures,
+`Wix Madefor Text` for everything else. There is **no serif and no mono**.
+
+- **Text** is the workhorse. Base body is **14px / 1.5** — a dense back-office, not a marketing
+  site. Secondary text 13.5px, captions 12.5px, and 12.5px is the floor.
+- **Display** carries identity and magnitude, nothing else: the page title (34px/700/−0.028em),
+  a panel title (19px/700/−0.02em), the brand wordmark (17px/700/−0.015em), and a headline
+  figure (`clamp(24px, 2.3vw, 32px)`/700/−0.03em). Display is negatively tracked at every size —
+  that tightening *is* the voice. Never use it for controls, tables, or labels.
+- **Numbers are the Text face's tabular figures.** `font-variant-numeric: tabular-nums` is set
+  on `body`, so every digit in the app lines up by default and no column needs a second family.
+  No call site writes `font-mono` any more, but `--font-mono` is **not** an alias of the text
+  face — it stays a real monospace stack, because Tailwind's Preflight resolves
+  `code, kbd, samp, pre` through it and the superadmin's stack traces and JSON dumps have to keep
+  their columns. **Money stays compactly scaled** (`formatTiyinParts` / `formatTiyinRow`): a KPI row
+  reads on one ruler — `4,12 mln so'm`, not `4 120 000` beside `540 855` — and the exact figure
+  lives on the element's `title`.
+- **Weight carries meaning**: form input *values* render semibold (600) with placeholders pinned
+  to regular — a filled field must read as data, a hint must not. This spans all three apps and
+  the composed controls (PhoneInput, FormSelect, SearchCombobox selected values);
+  `textarea.mp-input` reason fields stay regular. Buttons are 600.
+- **Labels are sentence case in grey**, at normal-to-semibold weight. The old uppercase,
+  wide-tracked label is gone from the system — small caps at 11px with 0.08em tracking read as a
+  systems console, not as a calm tool.
+- **All three locales use the same two families.** Wix Madefor ships a real `cyrillic` subset in
+  both, so `ru` and `uz-Cyrl` need no font swap — there is no per-locale `--font-sans` override
+  any more, and no risk of a browser mixing two faces inside one word.
 
 ## Layout
 
 - **Spacing is a 4px scale** (4 / 8 / 12 / 16 / 24 / 32). Arbitrary values are the visible
   symptom of an absent system.
-- **Filter rows** are the standard list-page header: shared `mp-*` filter classes,
-  persistent labels outside the input value, all controls in one row aligned to the same
-  **40px** height, compact and sized to their content (not stretched). Filter selects show
-  the plain value only — no secondary description text. Role-prefixed classes such as
-  `admin-*` stay inside that role's app (the admin app keeps its older 48px stretched
-  filter look).
-- **Create buttons**: every list-add button uses a visible `+` prefix in the label (all
-  apps). In the workshop app it sits at the **right end of the filter row**
-  (`.mp-filters > .mp-button`, baseline-aligned with the 40px controls); a page or tab
-  without filters renders it as a lone right-aligned `.mp-filters` row directly above the
-  table. Page heads are title-only. The one exception is a pair of primary operations
-  (Ombor's Kirim + Tuzatish), which spans the full row as a two-column grid.
-- **Tables** are the primary data surface: numeric columns right-aligned in mono; event
-  timestamps as `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted
-  "Kiritildi:" entry-timestamp line beneath; images in fixed-size framed thumbnails with a
-  non-empty fallback.
+- **The workshop shell** is a two-column frame that does not scroll as a page: a 264px sidebar
+  and the content column, each scrolling on its own inside `var(--app-vh)` — never `100vh`,
+  which does not participate in the root zoom. The sidebar holds, top to bottom: the wordmark,
+  the branch picker, the one primary create action, the grouped nav, and the account button. The
+  68px header above the content holds global search and the two utilities (locale,
+  notifications) — nothing else. There is no desktop sidebar-collapse: the 264px column is the
+  layout, and below 921px the sidebar becomes the drawer, which carries **the sidebar's whole
+  content** (branch card, create action, nav, account) because those controls exist nowhere else.
+- **The fixed frame is desktop-only.** Below 921px the page reverts to document scrolling with a
+  sticky header, so iOS URL-bar collapse, `scrollLock` and pull-to-refresh keep working; and
+  `@media print` resets the frame to `height: auto; overflow: visible` or a printed document
+  clips to one screen.
+- **Panels sit in a grid with a 16–20px gutter**, `align-items: start`, and never touch. A
+  dashboard's two-column split is `minmax(0, 1.65fr) minmax(0, 1fr)`, collapsing to one column
+  below 1100px with the **work list first**. A KPI row is `repeat(4, minmax(0, 1fr))` above
+  900px and `repeat(2, …)` below it.
+- **Filter rows** are the standard list-page header: shared `mp-*` filter classes, persistent
+  labels outside the input value, all controls in one row aligned to the same **40px** height,
+  compact and sized to their content (not stretched). Filter selects show the plain value only —
+  no secondary description text. Role-prefixed classes such as `admin-*` stay inside that role's
+  app (the admin app keeps its older 48px stretched filter look).
+- **Create buttons**: every add button uses a visible `+` prefix in the label (all apps). The
+  workshop's **one** headline create action — `+ Yangi buyurtma` — lives in the sidebar above
+  the nav, because it is the app's most-run task and it belongs to the workshop rather than to
+  any one list; it carries the same gate the route does (`manage_orders` on an active branch)
+  and renders disabled with a reason otherwise. Because it is always on screen, the Buyurtmalar
+  list does **not** repeat it. Every *other* list-add button sits at the **right end of the
+  filter row** (`.mp-filters > .mp-button`, baseline-aligned with the 40px controls); a page or
+  tab without filters renders it as a lone right-aligned `.mp-filters` row directly above the
+  table. Page heads are title-only. The one exception is a pair of primary operations (Ombor's
+  Kirim + Tuzatish), which spans the full row as a two-column grid.
+- **Tables** are the primary data surface: header row on the panel's own background with no fill,
+  rows tall and airy, numeric columns right-aligned with tabular figures; event timestamps as
+  `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted "Kiritildi:"
+  entry-timestamp line beneath; images in fixed-size framed thumbnails with a non-empty fallback.
 
 ## Elevation & Depth
 
-Depth comes from **surface steps, not heavy shadows**: `sunk` → `bg` → `elevated`, separated
-by hairlines. Shadows are reserved for true overlays (dropdown popovers, modals, toasts).
-Interactive lift is subtle — buttons raise 1px on hover (`translateY(-1px)`), settle on
-press, and lose all elevation when disabled.
+Depth comes from **a panel floating on the canvas**: white on `bg`, lifted by a soft, wide,
+low-opacity shadow, and carrying **no border**. Three steps —
 
-Two overlay layers, and the order matters: dropdown/popover panels teleport at **z-50**;
-the modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS
-Safari can't scroll behind).
+```
+panel:   0 1px 2px {ink}/4%,  0 10px 28px -22px {ink}/50%
+card:    0 1px 2px {ink}/5%,  0  8px 22px -18px {ink}/50%
+lifted:  0 1px 2px {ink}/6%,  0 14px 32px -20px {ink}/60%   ← hover on a clickable card
+```
+
+— reachable as the `shadow-panel` / `shadow-card` / `shadow-lifted` utilities. Inside a panel the
+second level is a **`sunk` fill**, not another shadow, and a row separator is a `divider` line. A
+border on a panel is a bug: it fights the shadow and doubles the edge.
+
+Interactive lift is subtle — buttons raise 1px on hover (`translateY(-1px)`), settle on press,
+and lose all elevation when disabled. A clickable card deepens its shadow instead of gaining a
+border. Coloured glows are gone: nothing separates with a tinted halo any more.
+
+Two overlay layers, and the order matters: dropdown/popover panels teleport at **z-50**; the
+modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS Safari
+can't scroll behind) **and** pins the desktop frame's inner scroller, which the body pin alone
+cannot reach.
 
 Desktop paints at `zoom: 90%` on the root (≥769px) — the density the back-office is designed
 for. Full-bleed surfaces size from the **`--app-vh` / `--app-vw`** tokens rather than raw
-viewport units, which do not participate in the zoom. Measuring and positioning under it is an
-implementation concern: see [`AGENTS.md`](./AGENTS.md).
+viewport units, which do not participate in the zoom. The `lg` / `xl` / `2xl` breakpoints are
+pre-divided by that ratio (922 / 1152 / 1382), so a hand-written `@media (min-width: 1024px)`
+fires 11% later than the `lg:` utility — use the utility. Measuring and positioning under the
+zoom is an implementation concern: see [`AGENTS.md`](./AGENTS.md).
 
 ## Shapes
 
-Radius scale: **6px** for buttons and inputs, **8px** for cards and popover items, **12px**
-for modals and larger cards, **16px** for hero surfaces, **999px** for pills and status
-badges. Legacy one-off radii (5/7/9/10px) exist in older CSS — converge on the scale when
-touching them; don't add new off-scale values.
+Radius scale: **8px** for an icon tile, **10px** for a small control (nav item, compact button),
+**11px** for buttons and inputs, **14px** for a card or an inset block, **18px** for a panel,
+**999px** for pills and status badges. `6px` (`rounded-xs`) survives for the smallest chips, and
+2–4px stays for a swatch the scale would round into a circle. Legacy off-scale radii
+(5/7/9/12/16px) exist in older CSS — converge on the scale when touching them; don't add new
+off-scale values.
 
 ## Components
 
-- **Buttons** (`.mp-button`) — 40px min-height, 700 weight, `{rounded.sm}`, 10×16px padding.
-  Primary = accent fill; disabled = 50% opacity, no elevation, `not-allowed` cursor. Submit
-  buttons disable + show progress during async work and end in explicit success or a
+- **Buttons** (`.mp-button`) — 40px min-height, 600 weight, `{rounded.lg}`, 10×16px padding.
+  Primary = graphite fill with `on-accent` text; secondary = `sunk` fill with `ink`; tertiary =
+  white with a `hairline` border; disabled = 50% opacity, no elevation, `not-allowed` cursor.
+  A **text button** is `accent-deep` on nothing — that is the only place orange carries words.
+  Submit buttons disable + show progress during async work and end in explicit success or a
   re-enabled error state — never a silent reset.
-- **Dropdowns** — use the project dropdown primitive (`ProjectDropdown`); never
-  browser-native `<select>` as visible UI in filters, forms, modals, tables, or settings.
-  The primitive matches the app surface: crisp radius, elevated popover, visible focus
-  ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
-  arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
-  textareas, checkboxes, radios, and file inputs until a project primitive exists —
+- **Dropdowns** — use the project dropdown primitive (`ProjectDropdown`); never browser-native
+  `<select>` as visible UI in filters, forms, modals, tables, or settings. The primitive matches
+  the app surface: crisp radius, elevated popover, visible focus ring, selected check mark,
+  hover/active states, keyboard operation (`Enter`/`Space`, arrows, `Esc`, `Tab` close). It takes
+  a `#trigger` slot, so a host that needs a different shape — the sidebar's two-line branch
+  card — wears its own skin without forking the listbox. Native controls remain acceptable for
+  text inputs, textareas, checkboxes, radios, and file inputs until a project primitive exists —
   but **never `<input type="date">`**, which renders in the browser's OS locale
   (`07/19/2026` on en-US) and so can't hold the app's date convention.
 - **Server-backed pickers** — when the candidate set is too large or too live to preload, the
@@ -256,22 +363,30 @@ touching them; don't add new off-scale values.
   active filter on, because with one filter active it would duplicate that filter's own clear
   sitting right beside it. **No two visible controls may do the same thing.** Filtered-empty
   keeps the no-results empty state, never first-run copy.
-- **Segmented control** (`SegmentedControl`) — a **closed set of two or three** form choices,
-  all visible at once on a `sunk` track, selected segment filled `accent-soft` with
-  `accent-deep` text. A dropdown for two options is a click that reveals nothing; past three
-  or four segments the row stops fitting and it goes back to `FormSelect`. Keyboard contract
-  is the radiogroup one: `role="radiogroup"` + `role="radio"`/`aria-checked`, one tab stop
-  with a roving tabindex, arrows wrap, `Home`/`End` jump, focus follows the selection.
+- **Segmented control** (`SegmentedControl`) — a **closed set of two or three** choices, all
+  visible at once on a `track` trough with 3px padding; the selected segment is a **white
+  chip** with a 1px lift shadow and `ink` text, the resting ones are `ink-soft` on the track.
+  A dropdown for two options is a click that reveals nothing; past three or four segments the
+  row stops fitting and it goes back to `FormSelect`. Keyboard contract is the radiogroup one:
+  `role="radiogroup"` + `role="radio"`/`aria-checked`, one tab stop with a roving tabindex,
+  arrows wrap, `Home`/`End` jump, focus follows the selection.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
-  current state's word as a visible text label (never color alone), disabled while the row
+  current state's word as a visible text label (never colour alone), disabled while the row
   saves.
-- **Icons** — `AppIcon` (one SVG set, 24×24 stroke grid); icon-only buttons always carry an
-  accessible name that says the action *and* the row it acts on
-  (`Beton bo'yoq — tahrirlash`). One glyph per concept: expand/collapse is `chevron-down`
-  rotated 180°, and voiding a row is `ban` — a circle with a diagonal, never `trash`, because
-  nothing here is ever deleted.
+- **Icons** — one line set on a 24×24 grid, round caps and joins. `AppIcon` draws it at
+  `stroke-width: 2`; the shells inline the same paths at 18px and thin them to `1.8` per host in
+  CSS (nav item, chrome button, station tile). Icon-only buttons always carry an accessible name
+  that says the action *and* the row it acts on (`Beton bo'yoq — tahrirlash`). An icon tile has two
+  treatments and they mean different things: a **graphite** tile with a bone glyph belongs to
+  the chrome and the brand, an **`accent-soft`** tile with an `accent-strong` glyph marks a
+  production station. An empty state gets neither — it is a `sunk` tile with an `ink-muted`
+  glyph, so it cannot be mistaken for a control. One glyph per concept: expand/collapse is
+  `chevron-down` rotated 180°, and voiding a row is `ban` — a circle with a diagonal, never
+  `trash`, because nothing here is ever deleted.
 - **Cursor honesty** — pointer cursor and row hover belong only on clickable controls or
-  clickable rows; static table rows stay visually still with the default cursor.
+  clickable rows; static table rows stay visually still with the default cursor. A row hover is
+  a `sunk` fill, never a tint of the accent — a coloured flash on every row is not an
+  affordance, it is a strobe.
 - **Clickable rows** — where a table row has one obvious primary action, the row runs it and
   the action column goes away. The control stays a real `RouterLink` or `<button>` in the
   row's identifying cell and is stretched across the row by a pseudo-element (`.row-clickable`
@@ -281,15 +396,35 @@ touching them; don't add new off-scale values.
   that stays independently clickable inside the row (a status switch, the `⋯` trigger) sits
   above the stretched layer with `.row-above`, never on the cell holding `.row-open`.
 - **Headline figures** — two treatments, and the page picks by weight. `.kpi` cards are for a
-  dashboard, where the numbers *are* the page. `.figs` is the lighter row for a page whose
+  dashboard, where the numbers *are* the page: an 18px-radius white panel, a sentence-case
+  `ink-soft` label, the figure in Display below it, and one caption line under that — a green
+  or red pill when the figure has a delta to report. `.figs` is the lighter row for a page whose
   numbers are context above a table: no border, radius, shadow or background tint — hairlines
-  above, below and between, sentence-case labels at normal weight, and the value in mono
-  ~22px with tabular numerals. **Colour lands on the figure only**; the label stays
-  `ink-muted`, and a figure whose colour carries meaning also states it in words.
+  above, below and between, sentence-case labels at normal weight, and the value in Display with
+  tabular figures. **Colour lands on the figure only**; the label stays `ink-soft`, and a figure
+  whose colour carries meaning also states it in words.
+- **Work lists** — a dashboard panel whose rows are *jobs*, not data: each row is a title, a
+  detail line, and one action button on the right, separated by `divider` lines. Exactly **one**
+  row in the panel carries the graphite primary button — the first row that has an action, which
+  is also the most urgent — and every other action is the neutral **`bg`** button, so the eye
+  lands on the one thing to do first. `bg` and not `sunk`: one step darker is what gives the
+  button an edge against the white panel it sits on. A row appears whenever its condition holds
+  and the reader can see the data behind it; the **button** is what follows the grant that can
+  *run* the action — it retargets to the narrowest page that reader can open, and drops away
+  entirely when there is none, because an instruction the reader cannot carry out is worse than a
+  row that only reports. A panel with nothing in it says so.
+- **Charts** are read as text first. A bar chart's colour ramp is three steps — `signal` for
+  today, `hairline-strong` for the period maximum, `hairline` for the rest — which is a
+  deliberately quiet hierarchy, so the numbers themselves must be reachable without it: an
+  `sr-only` sentence summarising total / today / peak, and a `<title>` on every bar.
+- **Skeletons** fill with `hairline`, not `sunk`: on a white panel `sunk` sits at 1.07:1 and the
+  placeholder is invisible. The shimmer sweeps `hairline-strong`, not white.
 - **Documents that leave the building** (the akt sverka today) are laid out on screen the way
   they print — title, both parties, period, totals — so print is a restyle of the same DOM,
   not a second implementation. A print stylesheet cannot number pages (no browser implements
   `@page` margin boxes); when page numbers matter, the file comes from the server renderer.
+  The cutting-map PDF mirrors four tokens in Python (`backend/app/modules/cutting/rendering.py`)
+  — success, danger, ink-muted, ink-soft. That is a sync contract: change them together.
 
 ## Copy
 
@@ -308,15 +443,18 @@ the two Uzbek scripts only.
 cannot act on is a log line, not copy.
 
 **2. No generic fallback where a specific message is possible.** Every `APIError` code a
-user can realistically trigger gets its own entry in the role's error map —
-`workshopErrorMessages` (`app/workshopUi.ts`), `CLIENT_ERROR_LABELS` (`app/clientUi.ts`),
-`ADMIN_ERROR_MESSAGES` (`app/adminUi.ts`), plus the field-level `apiValidationMessage`
-(`app/adminValidation.ts`) and `cuttingImportErrorLabel` (`stores/cuttingImport.ts`). The
-generic string is reserved for genuinely unexpected failures — unhandled 500s, transport
-errors. A code that reaches the fallback is a missing entry, not a shrug. When a call site
-catches an error, it passes `apiErrorCode(error)` through the map and keeps its own
-action-specific sentence as the fallback; a bare `catch {}` that throws the code away is
-the bug QAD-123 found and QAD-163 swept.
+user can realistically trigger is enumerated for its role. The two translated apps keep a
+**set of codes**, not a bag of copy — `WORKSHOP_ERROR_CODES` (`app/workshopUi.ts`) and
+`CLIENT_ERROR_CODES` (`app/clientUi.ts`) resolve through `workshopAdmin.error.<code>` /
+`client.error.<code>`, so the sentence follows the active locale instead of freezing at
+module-evaluation time. The superadmin app is Uzbek-only and keeps a literal map,
+`ADMIN_ERROR_MESSAGES` (`app/adminUi.ts`), with field-level rejections in `apiValidationMessage`
+(`app/adminValidation.ts`); the cutting import carries its own, `cuttingImportErrorLabel`
+(`stores/cuttingImport.ts`). The generic string is reserved for genuinely unexpected failures —
+unhandled 500s, transport errors. A code that reaches the fallback is a missing entry, not a
+shrug. When a call site catches an error, it passes `apiErrorCode(error)` through the role's
+resolver and keeps its own action-specific sentence as the fallback; a bare `catch {}` that
+throws the code away is the bug QAD-123 found and QAD-163 swept.
 
 **3. No blame, no apology, no filler.** No `Iltimos`, no exclamation marks, no
 `muvaffaqiyatli` — a success toast *is* the success, so it states the outcome
@@ -379,6 +517,7 @@ Russian and appear in the Russian column on purpose.
 | The edge-banding station / stage       | `Krom` / `Kromka`   | `Кромка`             | — _owner's ruling pending_        |
 | The cutting station / stage            | `Kesish`            | `Распил`             | —                                 |
 | A workshop location                    | `filial`            | `филиал`             | `bo'lim` (= a UI section)         |
+| The workshop shell's nav column        | `yon menyu`         | `боковое меню`       | `sidebar`, `panel`                |
 | A permission a staff member holds      | `ruxsat`            | `право доступа`      | `grant`                           |
 | Everything, across branches            | `Barcha filiallar`  | `Все филиалы`        | `ustaxona-keng`                   |
 | A supplier                             | `ta'minotchi`       | `поставщик`          | `yetkazib beruvchi`, `postavshik` |
@@ -399,6 +538,10 @@ arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a fina
 income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
 of the interface) are different words for different things.
 
+`yon menyu` names the 264px column itself, and it is the one word copy uses to send someone
+there — below 921px the same content becomes the drawer, so "yon menyuda" stays true on a phone
+and no string has to name two places.
+
 `o'lcham` is the whole a branch carries and prices — a dekor at one thickness in one size
 (`2750×1830×18`, or `2 mm × 19` for kromka); the API calls it a `format` and always will, but no
 screen does. It **contains** a `list o'lchami` (`2750×1830`) or a `lenta eni` (`19`), so those
@@ -412,20 +555,54 @@ word, so a client read `Joylashtirildi 12/14` on the result screen and then saw 
 sitting in a stage called `Joylashtirildi` — one meaning a placed part, the other a submitted
 order. Submitting is `Yuborildi`.
 
+## Brand
+
+There is no pictorial logo. The name **is** the mark, with a single cut running through it.
+
+- **Wordmark** — `MEBEL | PRO` in Display 800, uppercase, `−0.02em`. The cut sits between the
+  words: width 7% of the cap height, 15% taller than the caps, in `signal` orange. Minimum size
+  13px on screen / 6mm in print — below that the cut disappears and the icon takes over. This is
+  the standard for print and partner material; no app screen renders it today.
+- **Icon** — the name abbreviated: `M`, the cut, `P`, bone on a graphite tile. Proportions come
+  from the tile's edge, so they hold at every size: radius 22%, letters at 44% of the edge in
+  Display 800, the cut 6% wide and 53% tall, gaps of 4.7%. **Below 16px the `P` is dropped** and
+  only `M` and the cut survive — two letters at that size smear into one shape. The 16px frame of
+  the `.ico` is the only place that reduction ships.
+- **The icon exists twice, and both have to say the same thing.** *In the app* it is markup —
+  `BrandMark.vue` renders the letters as type, so every shell and every login screen draws one
+  component and none of them reaches for the icon file. *As an asset*
+  (`web/public/favicon.svg`, the 180 / 192 / 512 rasters, the maskable variant, the three-size
+  `.ico`) the letters are **Wix Madefor Display 800 outlines**, because an SVG used as an icon
+  renders in a restricted mode with no webfont and a `<text>` element would fall back to whatever
+  the OS has. Regenerate the assets from the font, never by tracing.
+- **One-colour** — for a stamp, a fax or an engraving the cut goes graphite with the letters.
+- **Clear space** — one cap height on every side, and nothing inside it.
+- **Orange is never the mark's background** and never fills a button: the cut would vanish and
+  text on it would fail contrast.
+
 ## Do's and Don'ts
 
 **Do**
 
-- Use semantic tokens for every color, radius, and spacing value.
-- Keep one primary (accent) action per screen, visually dominant.
-- Pair every status color with a word or icon.
+- Use semantic tokens for every colour, radius, and spacing value.
+- Keep one primary (graphite) action per screen, visually dominant — the shell's own
+  `+ Yangi buyurtma` is the workshop's single exception, and a screen that has it does not add
+  a second copy.
+- Pair every status colour with a word or icon.
+- Reach for `signal` orange only in small areas — a dot, a rule, one bar, a ring, a tick.
 - Open create/edit in `AppModal`; seed inline-listbox selects inside it.
-- Right-align money/quantities in mono with the unit beneath.
-- Focus ring on everything interactive: 3px accent outline, 2px offset (`:focus-visible`).
+- Right-align money/quantities with tabular figures and the unit beneath.
+- Focus ring on everything interactive: 3px graphite outline, 2px offset, and keep the 5px
+  light halo — it is the only thing that makes the ring visible on a graphite fill.
 
 **Don't**
 
-- Don't hardcode hex — no raw colors outside `@theme`.
+- Don't hardcode hex — no raw colours outside `@theme`.
+- Don't fill a button, a badge background, or any surface under text with `signal` orange
+  (3.1:1 under white); step down to `accent-deep`/`accent-strong` when orange carries words.
+- Don't put a border on a panel or a KPI card — the shadow is the edge — and don't add a
+  coloured glow to anything.
+- Don't use uppercase, wide-tracked labels, or a serif or monospace face anywhere.
 - Don't use native `<select>` as visible UI, or `ProjectDropdown` inside a modal.
 - Don't use placeholders as labels, or clear a form on a validation error.
 - Don't swallow an error code in a bare `catch {}`, or ship a string with a backtick
@@ -435,5 +612,6 @@ order. Submitting is `Yuborildi`.
 - Don't split a sentence around an interpolation into two keys, and don't build a Russian
   count by concatenating a number and a noun.
 - Don't put hover/pointer affordances on non-clickable rows.
-- Don't use serif for operational UI, or add font sizes below 10.5px.
+- Don't add font sizes below 12.5px, or a touch target under 44px of hittable area — the
+  desktop chrome runs at 38px and grows under `@media (pointer: coarse)`.
 - Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.

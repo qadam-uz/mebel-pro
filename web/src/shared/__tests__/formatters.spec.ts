@@ -4,6 +4,8 @@ import {
   formatDate,
   formatDateInputValue,
   formatDateTime,
+  formatDayMonthWeekday,
+  formatSignedPercent,
   formatRelative,
   formatStockQuantity,
   formatStockUnit,
@@ -46,6 +48,22 @@ describe('shared formatters', () => {
       if (previousTz === undefined) delete process.env.TZ
       else process.env.TZ = previousTz
     }
+  })
+
+  it('writes the dashboard dateline as day, month and weekday in Uzbek', () => {
+    // 7 August 2026 is a Friday. The month is the day-of-month form (lowercase,
+    // from `formats.monthOf`), never the capitalised calendar-header one.
+    expect(formatDayMonthWeekday(new Date(2026, 7, 7))).toBe('7 avgust, juma')
+    expect(formatDayMonthWeekday(new Date(2026, 0, 4))).toBe('4 yanvar, yakshanba')
+    // Date-only strings keep the same calendar day the rest of the app shows.
+    expect(formatDayMonthWeekday('2026-03-02')).toBe('2 mart, dushanba')
+  })
+
+  it('signs a percent change itself, so no caller concatenates a plus', () => {
+    expect(formatSignedPercent(18)).toBe('+18%')
+    expect(formatSignedPercent(-12)).toBe('-12%')
+    // Flat is flat: the sign appears only where there is one.
+    expect(formatSignedPercent(0)).toBe('0%')
   })
 
   it('formats datetimes as DD.MM.YYYY HH:mm in local time', () => {

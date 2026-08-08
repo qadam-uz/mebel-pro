@@ -197,7 +197,7 @@ onBeforeUnmount(() => {
         ref="listRef"
         role="listbox"
         tabindex="0"
-        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
         :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
         :aria-labelledby="`${internalId}-label`"
         :aria-activedescendant="activeOptionId"
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
         >
           <span class="min-w-0">
             <span class="block truncate font-bold">{{ option.label }}</span>
-            <span v-if="option.meta" class="block truncate font-mono text-[11px] text-ink-muted">
+            <span v-if="option.meta" class="block truncate text-[11px] text-ink-muted">
               {{ option.meta }}
             </span>
           </span>

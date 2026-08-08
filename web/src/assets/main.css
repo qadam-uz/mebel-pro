@@ -11,37 +11,112 @@
   --breakpoint-xl: 1152px; /* 1280 × 0.9 */
   --breakpoint-2xl: 1382px; /* 1536 × 0.9 */
 
-  --font-serif: 'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif;
-  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* Two families carry the interface: Display for headings and figures, Text for
+     everything else. Both ship a real `cyrillic` subset, so ru / uz-Cyrl no
+     longer swap the sans. Numerals need no family of their own —
+     `font-variant-numeric: tabular-nums` is set on `body`.
+     `--font-serif` is a dead alias kept only so a stray `font-serif` class
+     cannot fall through to Georgia; no call site writes it.
+     `--font-mono` is NOT an alias and must stay a real monospace stack: it has
+     no `font-mono` call sites either, but Tailwind's Preflight resolves
+     `code, kbd, samp, pre` through `--default-mono-font-family: var(--font-mono)`,
+     so pointing it at the proportional face would un-monospace every stack trace
+     and JSON dump in the superadmin app. */
+  --font-sans: 'Wix Madefor Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Wix Madefor Display', 'Wix Madefor Text', system-ui, sans-serif;
+  --font-serif: 'Wix Madefor Display', 'Wix Madefor Text', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
-  --color-bg: #f5f4ef;
+  /* Surfaces — a cool neutral ramp. `sunk` is the secondary block inside a
+     panel, `track` the trough a segmented control sits in, `deep` the graphite
+     brand surface. */
+  --color-bg: #f1f2f4;
   --color-elevated: #ffffff;
-  --color-sunk: #edebe2;
-  --color-deep: #211f19;
-  --color-ink: #23221c;
-  --color-ink-strong: #3b382e;
-  --color-ink-soft: #57544a;
-  --color-ink-muted: #68645a;
-  --color-hairline: #e7e4da;
-  --color-hairline-strong: #d5d1c3;
-  --color-accent: #4341c6;
-  --color-accent-hover: #4f4dd3;
-  --color-accent-soft: #edecfa;
-  --color-accent-tint: #d9d8f5;
-  --color-accent-deep: #322f96;
-  --color-success: #217a3c;
-  --color-success-soft: #eaf5eb;
-  --color-success-border: #cfe7d2;
-  --color-warning: #96490a;
-  --color-warning-soft: #faf1de;
-  --color-warning-border: #eedfba;
-  --color-danger: #b5372a;
-  --color-danger-soft: #fbedea;
-  --color-danger-border: #f2d3cb;
+  --color-sunk: #f6f7f9;
+  --color-track: #e6e8ec;
+  --color-deep: #22252a;
+
+  /* Text. `ink-strong` is a legacy alias of `ink` — the new ramp has nothing
+     darker than `ink`. `ink-muted` sits at #666d79 rather than the handoff's
+     #6b7280 because #6b7280 gives only 4.32:1 on the #f1f2f4 canvas, and
+     AGENTS.md sets the floor at 4.5:1; the two are visually indistinguishable. */
+  --color-ink: #0f1115;
+  --color-ink-strong: #0f1115;
+  --color-ink-nav: #4a5058;
+  --color-ink-soft: #565c66;
+  --color-ink-muted: #666d79;
+
+  /* Lines, lightest first: a row separator inside a card, a panel edge, an
+     input/button border, and the line that must survive on `sunk` (which is
+     also the chart's period-max bar). */
+  --color-divider: #f0f1f4;
+  --color-hairline-soft: #e9ebef;
+  --color-hairline: #e4e6ea;
+  --color-hairline-strong: #c3c8d0;
+
+  /* Action — graphite. `accent` is the single action colour (primary buttons,
+     focus ring, icon tiles, selected state, ::selection) and text on it is
+     bone, not white. */
+  --color-accent: #22252a;
+  --color-accent-hover: #34383f;
+  --color-on-accent: #f4f2ee;
+
+  /* Signal — orange, an ACCENT and never a fill: the notification dot, today's
+     column in a chart, a 2px rule, a banding tick, the cut in the wordmark. It
+     gives 3.1:1 under white text, so it never backs text and never fills a
+     button. Its tints are the app's "selected" fills; when orange must carry
+     words it steps down — `accent-deep` on a neutral surface, `accent-strong`
+     on either tint (accent-deep on accent-soft is only 4.44:1). */
+  --color-signal: #ff5a1f;
+  --color-accent-soft: #ffe9e0;
+  --color-accent-tint: #ffd8c9;
+  --color-accent-deep: #c53d0c;
+  --color-accent-strong: #a83408;
+
+  /* Status. `danger` is #c9302a rather than the handoff's #d0342c so a danger
+     chip clears 4.5:1 on `danger-soft` (#d0342c gives 4.36). */
+  --color-success: #067a4b;
+  --color-success-soft: #e7f5ee;
+  --color-success-border: #cbe8da;
+  --color-warning: #a15c00;
+  --color-warning-soft: #fcf2e2;
+  --color-warning-border: #f2e2bf;
+  --color-danger: #c9302a;
+  --color-danger-soft: #fdecea;
+  --color-danger-border: #f7d3cf;
   --color-info: #0b6e8d;
-  --color-info-soft: #e6f2f7;
+  --color-info-soft: #e8f2f7;
   --color-info-border: #c9e2eb;
+
+  /* The two order-stage chips the status ramp does not already cover: `Yangi` /
+     `Tugatilgan` sit on a cool grey, `Tasdiqlangan` on a warm taupe. The rest
+     of the ramp reuses accent-soft / accent-tint / success / danger, so the
+     chips warm as the work advances (DESIGN.md, "Order stages"). */
+  --color-neutral-soft: #eef0f3;
+  --color-taupe: #6b5647;
+  --color-taupe-soft: #f3f0ec;
+
+  /* Radius: 8 icon tile · 10 small control · 11 button + input · 14 card ·
+     18 panel. `xs` survives for the smallest chips. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 11px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  /* A panel is white on the canvas, lifted by a soft wide shadow and carrying
+     no border — the shadow IS the edge. Tinted from `ink` so a retheme stays a
+     token change. */
+  --shadow-panel:
+    0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent),
+    0 10px 28px -22px color-mix(in srgb, var(--color-ink) 50%, transparent);
+  --shadow-card:
+    0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent),
+    0 8px 22px -18px color-mix(in srgb, var(--color-ink) 50%, transparent);
+  --shadow-lifted:
+    0 1px 2px color-mix(in srgb, var(--color-ink) 6%, transparent),
+    0 14px 32px -20px color-mix(in srgb, var(--color-ink) 60%, transparent);
 }
 
 @layer base {
@@ -80,19 +155,11 @@
     }
   }
 
-  /* Hanken Grotesk has no Cyrillic — Google does not serve a `cyrillic` subset
-     for it at all, only `cyrillic-ext`, which is the archaic block and none of
-     the letters Russian or Uzbek Cyrillic are written with. Left alone, every
-     ru / uz-Cyrl string would drop to system-ui mid-sentence. Manrope is the
-     nearest geometric grotesk that carries both scripts at the weights this
-     design uses (400-800), so Cyrillic locales swap the whole sans family
-     rather than letting the browser mix two fonts inside one word. The Latin UI
-     is untouched: `data-locale` is only ever `ru` or `uz-Cyrl` here. */
-  html[data-locale='ru'],
-  html[data-locale='uz-Cyrl'] {
-    --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  }
-
+  /* No per-locale font override exists any more. Hanken Grotesk had no Cyrillic
+     subset, so ru / uz-Cyrl used to swap the whole sans family to Manrope; both
+     Wix Madefor families ship a real `cyrillic` subset (U+0400-045F) as one
+     variable face, so all three locales now render in the same two families and
+     a browser can never mix two faces inside one word. */
   html,
   body,
   #app {
@@ -108,6 +175,10 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Every number in the app lines up by default. This is what replaced the
+       monospace numeric family: figures are the Text face's tabular ones, so a
+       money column aligns without a second typeface (DESIGN.md, Typography). */
+    font-variant-numeric: tabular-nums;
   }
 
   body.modal-open {
@@ -119,9 +190,12 @@
 
   ::selection {
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
   }
 
+  /* The graphite ring is the handoff's; the 5px light halo is NOT, and it is the
+     only reason a solid ring reads on a graphite fill. Without it, focus on a
+     primary button or an avatar sits at 1:1 against the control it marks. */
   :focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
@@ -157,11 +231,8 @@
 @layer components {
   .mp-surface {
     background: var(--color-elevated);
-    border: 1px solid var(--color-hairline);
     border-radius: 8px;
-    box-shadow:
-      0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent),
-      0 4px 10px -3px color-mix(in srgb, var(--color-ink) 9%, transparent);
+    box-shadow: var(--shadow-panel);
   }
 
   .mp-button {
@@ -170,10 +241,10 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 6px;
+    border-radius: 11px;
     border: 1px solid transparent;
     padding: 10px 16px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1;
     text-decoration: none;
     transition:
@@ -210,8 +281,7 @@
   .mp-button-primary {
     background: var(--color-accent);
     border-color: var(--color-accent);
-    color: #fff;
-    box-shadow: 0 2px 8px -3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+    color: var(--color-on-accent);
   }
 
   .mp-button-primary:hover {
@@ -221,15 +291,15 @@
 
   .mp-button-outline {
     background: var(--color-elevated);
-    border-color: var(--color-hairline-strong);
+    border-color: var(--color-hairline);
     color: var(--color-ink);
   }
 
   .mp-input {
     min-height: 44px;
     width: 100%;
-    border-radius: 6px;
-    border: 1px solid var(--color-hairline-strong);
+    border-radius: 11px;
+    border: 1px solid var(--color-hairline);
     background: var(--color-elevated);
     padding: 10px 12px;
     color: var(--color-ink);
@@ -252,8 +322,11 @@
     font-weight: 400;
   }
 
+  /* The app's most-used focus affordance: the accent border alone moves from
+     #e4e6ea to graphite, which the soft ring makes unmissable. */
   .mp-input:focus {
     border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   /* A unit that stays put. Where the unit changes the meaning of the number by
@@ -276,7 +349,7 @@
     right: 10px;
     transform: translateY(-50%);
     pointer-events: none;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--color-ink-muted);
     white-space: nowrap;
@@ -288,6 +361,8 @@
   @media (max-width: 768px) {
     .mp-input,
     .ep-search,
+    .workshop-search input,
+    .admin-search input,
     textarea,
     [role='combobox'] {
       font-size: 1rem;
@@ -304,22 +379,70 @@
     background: var(--color-sunk);
     padding: 3px 9px;
     color: var(--color-ink-soft);
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   /* Tappable chips (source toggles, panel tabs) need a comfortable target on
-     touch; the informational <span class="mp-chip"> stays compact (CB-61). */
+     touch; the informational <span class="mp-chip"> stays compact (CB-61).
+
+     Every size in this block is divided by `--app-zoom`, and that is not
+     decoration. A coarse pointer is not only a phone: an iPad reports
+     `pointer: coarse` at 810-1366px, which is ABOVE the 769px cutoff where the
+     root `zoom: 90%` kicks in — so a literal `44px` here would paint 39.6 real
+     pixels on exactly the devices the rule exists for. `--app-zoom` is declared
+     only inside that desktop tier, so the `1` fallback keeps phones at a true
+     44px. */
   @media (pointer: coarse) {
     button.mp-chip {
-      min-height: 40px;
+      min-height: calc(40px / var(--app-zoom, 1));
       padding-inline: 14px;
     }
 
     /* Dashboard tool / period / retry buttons are dense (32-36px) — lift them
        to the 44px touch target on coarse pointers without changing desktop. */
     .workshop-dashboard .mp-button {
-      min-height: 44px;
+      min-height: calc(44px / var(--app-zoom, 1));
+    }
+
+    /* The desktop chrome draws its rows and utilities at 38-42px; on a touch
+       pointer every one of them has to reach 44px of hittable area. The drawer
+       trigger and the sidebar create action are in this list because they exist
+       ONLY below 921px — i.e. only where the pointer is coarse — and the drawer
+       trigger is the single way to reach the nav, the branch picker and log-out
+       on a phone. */
+    .workshop-nav-item,
+    .worklist-action,
+    .station-row,
+    .workshop-mobile-button,
+    .workshop-create {
+      min-height: calc(44px / var(--app-zoom, 1));
+    }
+
+    /* `min-width`, not `width`: this block sits far above the base rules, so a
+       plain `width` here loses the source-order tie to `.workshop-mobile-button`'s
+       own `width: 38px` and the button grows tall but stays narrow. A minimum
+       beats a fixed size wherever it is declared. */
+    .workshop-mobile-button {
+      min-width: calc(44px / var(--app-zoom, 1));
+    }
+
+    .workshop-bell,
+    .workshop-icon-button {
+      position: relative;
+    }
+
+    /* The visible box keeps the header's 38px rhythm; the hit area under it is
+       the 44×44 the UX bar asks for (same trick as `.mp-locale-trigger`). */
+    .workshop-bell::before,
+    .workshop-icon-button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: calc(44px / var(--app-zoom, 1));
+      height: calc(44px / var(--app-zoom, 1));
+      transform: translate(-50%, -50%);
     }
   }
 
@@ -345,8 +468,8 @@
     position: sticky;
     top: 0;
     z-index: 30;
-    border-bottom: 1px solid var(--color-hairline);
-    background: rgb(255 255 255 / 82%);
+    border-bottom: 1px solid var(--color-hairline-soft);
+    background: color-mix(in srgb, var(--color-elevated) 92%, transparent);
     backdrop-filter: saturate(140%) blur(10px);
   }
 
@@ -367,10 +490,10 @@
   }
 
   .client-brand-name {
-    font-family: var(--font-serif);
-    font-size: 1.1875rem;
-    font-weight: 600;
-    letter-spacing: 0;
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
   }
 
   .client-nav {
@@ -401,10 +524,10 @@
     min-height: 34px;
     align-items: center;
     gap: 7px;
-    border-radius: 7px;
+    border-radius: 10px;
     padding: 6px 12px;
     color: var(--color-ink-soft);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
     font-weight: 600;
     text-decoration: none;
     transition:
@@ -415,7 +538,7 @@
 
   .client-nav a:hover {
     background: var(--color-sunk);
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
   }
 
   .client-nav a.router-link-active,
@@ -438,7 +561,7 @@
     height: 36px;
     place-items: center;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink-strong);
     transition:
@@ -449,10 +572,9 @@
   }
 
   .client-icon-button:hover {
-    border-color: var(--color-hairline-strong);
-    background: var(--color-elevated);
+    border-color: var(--color-hairline);
+    background: var(--color-sunk);
     color: var(--color-ink);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
   }
 
   .client-badge {
@@ -464,9 +586,9 @@
     border: 2px solid var(--color-bg);
     border-radius: 999px;
     background: var(--color-accent);
-    color: #fff;
-    font-size: 0.625rem;
-    font-weight: 800;
+    color: var(--color-on-accent);
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 14px;
     text-align: center;
   }
@@ -475,21 +597,21 @@
     display: flex;
     align-items: center;
     gap: 9px;
-    border: 1px solid var(--color-hairline-strong);
+    border: 1px solid var(--color-hairline);
     border-radius: 999px;
     background: var(--color-elevated);
     padding: 4px 12px 4px 4px;
     color: inherit;
     text-decoration: none;
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: var(--shadow-card);
     transition:
       border-color 140ms ease,
       box-shadow 140ms ease;
   }
 
   .client-user-pill:hover {
-    border-color: var(--color-ink-soft);
-    box-shadow: 0 4px 10px -3px color-mix(in srgb, var(--color-ink) 9%, transparent);
+    border-color: var(--color-hairline-strong);
+    box-shadow: var(--shadow-lifted);
   }
 
   .client-user-avatar {
@@ -497,11 +619,11 @@
     width: 30px;
     height: 30px;
     place-items: center;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
-    color: #fff;
-    font-size: 0.78125rem;
-    font-weight: 800;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: 13.5px;
+    font-weight: 700;
     line-height: 1;
   }
 
@@ -521,11 +643,11 @@
   .client-page-head h1 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 2rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.08;
+    font-family: var(--font-display);
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.1;
   }
 
   .client-page-head .sub {
@@ -538,10 +660,9 @@
   .client-card {
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
+    border-radius: 14px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: var(--shadow-card);
   }
 
   /* Clickable card: a tactile lift on hover-capable pointers only, so a tap on
@@ -550,7 +671,6 @@
   .client-card-link {
     cursor: pointer;
     transition:
-      border-color 0.14s ease,
       transform 0.14s ease,
       box-shadow 0.14s ease;
   }
@@ -558,8 +678,7 @@
   @media (hover: hover) {
     .client-card-link:hover {
       transform: translateY(-2px);
-      border-color: var(--color-hairline-strong);
-      box-shadow: 0 12px 26px -14px color-mix(in srgb, var(--color-ink) 24%, transparent);
+      box-shadow: var(--shadow-lifted);
     }
   }
 
@@ -569,16 +688,17 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 14px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 16px 20px 12px;
   }
 
   .client-card-h h2 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .client-card-b {
@@ -590,23 +710,24 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     margin-bottom: 14px;
     padding-bottom: 11px;
   }
 
   .client-section-title h2 {
     margin: 0;
-    font-family: var(--font-serif);
-    font-size: 1rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .client-section-title a {
     display: inline-flex;
     min-height: 36px;
     align-items: center;
-    border-radius: 7px;
+    border-radius: 10px;
     padding-inline: 8px;
   }
 
@@ -616,7 +737,7 @@
 
   .client-empty,
   .client-error {
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 52px 24px;
     text-align: center;
   }
@@ -638,15 +759,17 @@
     height: 54px;
     place-items: center;
     margin: 0 auto 14px;
-    border-radius: 12px;
-    font-family: var(--font-serif);
+    border-radius: 14px;
+    font-family: var(--font-display);
     font-size: 1.5rem;
     font-weight: 700;
   }
 
+  /* An empty-state tile is neither a control nor a station: `sunk` + `ink-muted`,
+     so a noun glyph in it can never be mistaken for something to press. */
   .client-empty-icon {
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
+    background: var(--color-sunk);
+    color: var(--color-ink-muted);
   }
 
   .client-error-icon {
@@ -669,7 +792,7 @@
   .client-error h3 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.375rem;
     font-weight: 600;
   }
@@ -682,16 +805,18 @@
     font-size: 0.875rem;
   }
 
+  /* `sunk` sits at 1.07:1 on a white panel — a skeleton filled with it is
+     invisible, and a white shimmer over it is no motion at all. */
   .client-skeleton {
     position: relative;
     overflow: hidden;
-    border-radius: 7px;
-    background: var(--color-sunk);
+    border-radius: 8px;
+    background: var(--color-hairline);
     background-image: linear-gradient(
       90deg,
-      var(--color-sunk) 0%,
-      var(--color-hairline) 40%,
-      var(--color-sunk) 80%
+      var(--color-hairline) 0%,
+      var(--color-hairline-strong) 40%,
+      var(--color-hairline) 80%
     );
     background-size: 480px 100%;
     animation: client-sk-shimmer 1.3s ease-in-out infinite;
@@ -709,7 +834,7 @@
     gap: 5px;
     border-radius: 999px;
     padding: 3px 9px;
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -718,29 +843,34 @@
     content: '';
     width: 5px;
     height: 5px;
-    border-radius: 50%;
+    border-radius: 999px;
     background: currentColor;
   }
 
   .client-pill-new {
-    background: var(--color-sunk);
-    color: var(--color-ink-strong);
+    background: var(--color-neutral-soft);
+    color: var(--color-ink-nav);
   }
 
+  /* Tasdiqlangan: the taupe pair, so `info` stays a real informational colour. */
   .client-pill-info {
-    background: var(--color-info-soft);
-    color: var(--color-info);
+    background: var(--color-taupe-soft);
+    color: var(--color-taupe);
   }
 
   .client-pill-work {
     background: var(--color-accent-tint);
-    color: var(--color-accent-deep);
+    color: var(--color-accent-strong);
   }
 
-  .client-pill-ready,
-  .client-pill-done {
+  .client-pill-ready {
     background: var(--color-success-soft);
     color: var(--color-success);
+  }
+
+  .client-pill-done {
+    background: var(--color-neutral-soft);
+    color: var(--color-ink-soft);
   }
 
   .client-pill-danger {
@@ -753,7 +883,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 11px;
     align-items: center;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 10px 0;
   }
 
@@ -763,14 +893,13 @@
 
   .client-row-name {
     color: var(--color-ink);
-    font-size: 0.875rem;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 600;
   }
 
   .client-row-meta {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 12.5px;
   }
 
   /* A bordered control, not a bare text link: on a detail screen this is the
@@ -783,12 +912,12 @@
     align-items: center;
     gap: 7px;
     margin-bottom: 10px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 6px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-elevated);
     color: var(--color-ink);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
     padding-inline: 12px;
     text-decoration: none;
     transition:
@@ -798,16 +927,16 @@
   }
 
   .client-back:hover {
-    border-color: var(--color-accent);
+    border-color: var(--color-hairline-strong);
     background: var(--color-sunk);
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
   }
 
   .client-tabs {
     display: flex;
     gap: 4px;
     overflow-x: auto;
-    border-bottom: 1px solid var(--color-hairline-strong);
+    border-bottom: 1px solid var(--color-hairline);
     margin-bottom: 20px;
   }
 
@@ -819,13 +948,15 @@
     color: var(--color-ink-soft);
     cursor: pointer;
     padding: 10px 14px;
-    font-size: 0.84375rem;
+    font-size: 13.5px;
     font-weight: 600;
     white-space: nowrap;
   }
 
+  /* Under a near-black label a graphite underline reads as nothing — the tab
+     indicator is one of `signal`'s named uses. */
   .client-tab.active {
-    border-bottom-color: var(--color-accent);
+    border-bottom-color: var(--color-signal);
     color: var(--color-ink);
   }
 
@@ -840,7 +971,7 @@
     border-radius: 6px;
     border: 1px solid transparent;
     padding: 5px 10px;
-    font-size: 0.75rem;
+    font-size: 12.5px;
     font-weight: 700;
     text-align: left;
   }
@@ -861,7 +992,7 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    border-radius: 9px;
+    border-radius: 10px;
     padding: 12px 16px;
     font-size: 0.8125rem;
     margin-bottom: 16px;
@@ -909,7 +1040,7 @@
     align-items: center;
     gap: 12px;
     width: min(100%, 420px);
-    border-radius: 10px;
+    border-radius: 14px;
     border: 1px solid var(--color-hairline-strong);
     background: var(--color-elevated);
     box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--color-ink) 35%, transparent);
@@ -984,7 +1115,7 @@
     align-items: center;
     gap: 10px;
     border: 1px solid var(--color-hairline);
-    border-radius: 7px;
+    border-radius: 11px;
     background: var(--color-sunk);
     color: var(--color-ink);
     padding: 6px 10px 6px 6px;
@@ -995,10 +1126,12 @@
       box-shadow 140ms ease;
   }
 
+  /* Hover is an affordance, not a selection — a neutral deepening, never a tint
+     of the accent (which is now peach). */
   @media (hover: hover) {
     .client-edges-btn:hover {
-      border-color: var(--color-accent);
-      background: var(--color-accent-soft);
+      border-color: var(--color-hairline-strong);
+      background: var(--color-track);
     }
   }
 
@@ -1016,17 +1149,18 @@
     opacity: 0.65;
   }
 
+  /* A banded side and an unbanded pencil line must not read alike: in graphite
+     they would, so the tick is `signal` — one of its named uses. */
   .client-edge-svg .side {
     fill: none;
-    stroke: var(--color-accent);
+    stroke: var(--color-signal);
     stroke-linecap: round;
   }
 
   .client-edge-svg .lbl {
-    fill: var(--color-accent);
-    font-family: var(--font-mono);
+    fill: var(--color-signal);
     font-size: 0.40625rem;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .client-edge-summary {
@@ -1047,8 +1181,7 @@
 
   .client-edge-summary small {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     margin-top: 2px;
   }
 
@@ -1072,8 +1205,7 @@
     flex-direction: column;
     overflow: hidden;
     transform: translate(-50%, -50%);
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 18px;
     background: var(--color-elevated);
     box-shadow:
       0 8px 18px -6px color-mix(in srgb, var(--color-ink) 10%, transparent),
@@ -1086,13 +1218,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 14px 18px;
   }
 
   .client-edge-modal-h h3 {
     margin: 0;
-    font-family: var(--font-sans);
     font-size: 0.90625rem;
     font-weight: 700;
   }
@@ -1103,7 +1234,7 @@
     height: 44px;
     place-items: center;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink-muted);
     font-size: 1.375rem;
@@ -1111,7 +1242,7 @@
   }
 
   .client-edge-close:hover {
-    border-color: var(--color-hairline-strong);
+    border-color: var(--color-hairline);
     background: var(--color-sunk);
     color: var(--color-ink);
   }
@@ -1130,18 +1261,17 @@
   .client-edge-modal-f {
     flex-wrap: wrap;
     justify-content: flex-end;
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
     border-bottom: 0;
     background: var(--color-sunk);
   }
 
   .ep-help {
     margin: 0;
-    border: 1px solid var(--color-hairline);
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
     font-weight: 600;
     line-height: 1.45;
     padding: 10px 12px;
@@ -1172,7 +1302,7 @@
   @media (hover: hover) {
     .ep-pattern:hover:not(:disabled),
     .ep-source button:hover {
-      border-color: var(--color-ink-soft);
+      border-color: var(--color-hairline-strong);
       background: var(--color-sunk);
     }
   }
@@ -1182,10 +1312,18 @@
     opacity: 0.55;
   }
 
+  /* A true selection keeps the tint; text on either tint is accent-strong, and
+     the outline steps to accent-tint so it isn't a near-black frame. */
   .ep-pattern.on,
   .ep-source button.on {
-    border-color: var(--color-accent);
+    border-color: var(--color-accent-tint);
     background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  .ep-pattern.on .nm,
+  .ep-source button.on .nm {
+    color: var(--color-accent-strong);
   }
 
   .ep-pattern .nm,
@@ -1193,7 +1331,7 @@
     display: block;
     color: var(--color-ink);
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1.2;
   }
 
@@ -1201,7 +1339,7 @@
   .ep-source .meta {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     font-weight: 600;
     line-height: 1.3;
     margin-top: 2px;
@@ -1227,7 +1365,6 @@
     height: 104px;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--color-hairline);
     border-radius: 4px;
     background: repeating-linear-gradient(
       45deg,
@@ -1237,16 +1374,14 @@
       var(--color-elevated) 14px
     );
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     font-weight: 700;
   }
 
   .edge-diagram .lbl {
     color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .edge-btn {
@@ -1254,13 +1389,12 @@
     align-items: center;
     justify-content: center;
     border: 1px dashed var(--color-hairline-strong);
-    border-radius: 5px;
+    border-radius: 8px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
     cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 1.2;
     padding: 4px;
     text-align: center;
@@ -1272,16 +1406,16 @@
 
   @media (hover: hover) {
     .edge-btn:hover {
-      border-color: var(--color-ink);
+      border-color: var(--color-hairline-strong);
       color: var(--color-ink);
     }
   }
 
   .edge-btn.set {
-    border-color: var(--color-accent);
+    border-color: var(--color-accent-tint);
     border-style: solid;
     background: var(--color-accent-soft);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   .edge-btn.h {
@@ -1301,8 +1435,8 @@
   .ep-search {
     min-height: 42px;
     width: 100%;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-sunk);
     color: var(--color-ink);
     font-size: 0.8125rem;
@@ -1312,6 +1446,7 @@
 
   .ep-search:focus {
     border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .picker-select {
@@ -1333,7 +1468,7 @@
     align-items: center;
     gap: 10px;
     border: 1px solid var(--color-hairline);
-    border-radius: 7px;
+    border-radius: 11px;
     background: var(--color-elevated);
     color: var(--color-ink);
     cursor: pointer;
@@ -1343,14 +1478,18 @@
 
   @media (hover: hover) {
     .ep-edge-opt:hover {
-      border-color: var(--color-ink-soft);
+      border-color: var(--color-hairline-strong);
       background: var(--color-sunk);
     }
   }
 
   .ep-edge-opt.on {
-    border-color: var(--color-accent);
+    border-color: var(--color-accent-tint);
     background: var(--color-accent-soft);
+  }
+
+  .ep-edge-opt.on .nm {
+    color: var(--color-accent-strong);
   }
 
   .ep-edge-opt .rad {
@@ -1378,7 +1517,7 @@
     width: 22px;
     height: 22px;
     border-radius: 4px;
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 8%, transparent);
   }
 
   .ep-edge-opt .lab {
@@ -1396,13 +1535,12 @@
   .ep-edge-opt .nm {
     color: var(--color-ink);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .ep-edge-opt .meta {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     margin-top: 2px;
   }
 
@@ -1411,17 +1549,16 @@
     border-radius: 999px;
     background: var(--color-sunk);
     color: var(--color-ink-strong);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 2px 8px;
     white-space: nowrap;
   }
 
   .ep-edge-opt.on .thk {
-    border-color: var(--color-accent);
+    border-color: var(--color-accent-tint);
     background: var(--color-elevated);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   .ep-edge-opt .fav {
@@ -1430,24 +1567,22 @@
     margin-left: 6px;
     border-radius: 999px;
     background: var(--color-accent-soft);
-    color: var(--color-accent);
-    font-size: 0.5625rem;
-    font-weight: 900;
-    letter-spacing: 0.04em;
+    color: var(--color-accent-strong);
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 1px 6px;
-    text-transform: uppercase;
   }
 
   .ep-empty {
-    border-radius: 7px;
-    font-size: 0.78125rem;
+    border-radius: 10px;
+    font-size: 13.5px;
     font-weight: 600;
     line-height: 1.45;
     padding: 12px;
   }
 
   .ep-empty {
-    border: 1px dashed var(--color-hairline);
+    border: 1px dashed var(--color-hairline-strong);
     background: var(--color-sunk);
     color: var(--color-ink-muted);
     text-align: center;
@@ -1456,8 +1591,7 @@
   .client-trace {
     margin-top: 10px;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 12.5px;
   }
 
   @media (max-width: 860px) {
@@ -1486,7 +1620,7 @@
     .client-nav a {
       min-height: 34px;
       padding-inline: 8px;
-      font-size: 0.78125rem;
+      font-size: 13.5px;
     }
 
     .client-nav::-webkit-scrollbar {
@@ -1511,7 +1645,7 @@
       max-height: 92vh;
       max-height: 92dvh;
       transform: none;
-      border-radius: 16px 16px 0 0;
+      border-radius: 18px 18px 0 0;
     }
 
     .client-edge-modal-h,
@@ -1562,30 +1696,49 @@
     }
   }
 
+  /* ── Workshop shell ──────────────────────────────────────────────────────
+     A two-column frame that does not scroll as a page: a 264px sidebar and the
+     content column, each scrolling on its own inside `--app-vh`. There is no
+     desktop sidebar collapse any more — the 264px column IS the layout, and
+     below 921px the sidebar becomes the drawer, which carries the sidebar's
+     WHOLE content (branch card, create action, nav, account) because those
+     controls exist nowhere else on a phone. ── */
   .workshop-app {
     display: grid;
     min-height: var(--app-vh);
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: 264px minmax(0, 1fr);
     background: var(--color-bg);
     color: var(--color-ink);
   }
 
-  .workshop-sidebar {
-    position: sticky;
-    top: 0;
-    display: flex;
-    height: var(--app-vh);
-    flex-direction: column;
-    overflow: hidden;
-    border-right: 1px solid var(--color-hairline);
-    background:
-      radial-gradient(120% 60% at 0% 0%, var(--color-accent-soft), transparent 62%),
-      var(--color-elevated);
-    padding: 18px 14px 14px;
+  /* The fixed frame is desktop-only. Below 921px the document scrolls as before,
+     so iOS URL-bar collapse, `scrollLock` and pull-to-refresh keep working.
+     `--app-vh`, never `100vh`: viewport units do not participate in the root
+     `zoom`, so a raw `100vh` frame paints 90% of the screen (QAD-180). */
+  @media (min-width: 921px) {
+    .workshop-app {
+      height: var(--app-vh);
+      overflow: hidden;
+    }
   }
 
+  .workshop-sidebar {
+    display: flex;
+    height: var(--app-vh);
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--color-hairline-soft);
+    background: var(--color-elevated);
+    padding: 20px 16px 16px;
+  }
+
+  /* Everything but the nav is pinned. An e2e spec resolves these as DIRECT
+     children of the sidebar and asserts the brand and the account button hold
+     still while the nav scrolls (QAD-180). */
   .workshop-sidebar > .workshop-brand,
-  .workshop-sidebar > .workshop-tenant,
+  .workshop-sidebar > .workshop-branch-card,
+  .workshop-sidebar > .workshop-create,
   .workshop-sidebar > .workshop-user-card {
     flex: none;
   }
@@ -1594,15 +1747,39 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    border-bottom: 1px solid var(--color-hairline);
     color: inherit;
-    padding: 4px 6px 18px;
+    padding: 2px 4px 20px;
     text-decoration: none;
   }
 
-  .workshop-brand-mark {
-    width: 30px;
-    height: 30px;
+  /* The product mark, shared by all three shells and the three login screens
+     (`BrandMark.vue`): a graphite tile with two Display 800 letters around a
+     `signal` bar — the cut in the name. Size-agnostic on purpose: the box, the
+     type size and the cut all come from the component's `size` prop as inline
+     styles, so one set of rules serves 24px and 40px. The icon FILE
+     (`/favicon.svg` and the rasters) draws the same lockup from outlines and
+     stays out of the app — see the component's own note. */
+  .mp-brand-mark {
+    display: grid;
+    flex: none;
+    grid-auto-flow: column;
+    place-items: center;
+    overflow: hidden;
+    background: var(--color-accent);
+  }
+
+  .mp-brand-letter {
+    color: var(--color-on-accent);
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  .mp-brand-cut {
+    display: block;
+    flex: none;
+    background: var(--color-signal);
   }
 
   .workshop-brand-copy {
@@ -1612,93 +1789,198 @@
   .workshop-brand-name {
     display: block;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.0625rem;
-    font-weight: 600;
-    line-height: 1.1;
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
   }
 
   .workshop-brand-role {
     display: block;
-    color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    line-height: 1.25;
-    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.3;
   }
 
-  .workshop-tenant {
+  /* ── Branch picker. It lives in the sidebar, not the topbar, and wears
+     ProjectDropdown's `#trigger` slot so the two-line card shape costs no fork
+     of the listbox. */
+  .workshop-branch-card {
+    width: 100%;
+  }
+
+  .workshop-branch {
     display: flex;
+    width: 100%;
     align-items: center;
     gap: 10px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 9px;
+    border: 0;
+    border-radius: 14px;
     background: var(--color-sunk);
-    margin: 14px 4px 18px;
-    padding: 10px 12px;
+    color: inherit;
+    padding: 9px 11px;
+    text-align: left;
+    text-decoration: none;
+    transition:
+      background 140ms ease,
+      border-color 140ms ease;
   }
 
-  .workshop-tenant-avatar,
-  .workshop-user-avatar {
+  .workshop-branch:hover:not(:disabled, [aria-disabled='true'], .is-static) {
+    background: color-mix(in srgb, var(--color-sunk) 60%, var(--color-track));
+  }
+
+  /* More than half of the workshop's routes are branch-scope `workshop` or
+     `entity`, so the inert picker is the common case, not an edge case: 60%
+     opacity on a #f6f7f9 card reads as a rendering fault. An outlined, empty
+     card reads as "not applicable here". */
+  .workshop-branch:disabled,
+  .workshop-branch[aria-disabled='true'] {
+    background: transparent;
+    border: 1px solid var(--color-hairline-soft);
+    color: var(--color-ink-soft);
+    cursor: default;
+  }
+
+  /* One branch (or none): the same card, rendered as a plain div. */
+  .workshop-branch.is-static {
+    background: transparent;
+    border: 1px solid var(--color-hairline-soft);
+    cursor: default;
+  }
+
+  .workshop-branch:disabled .workshop-branch-name,
+  .workshop-branch[aria-disabled='true'] .workshop-branch-name {
+    color: var(--color-ink-soft);
+  }
+
+  .workshop-branch:disabled .workshop-branch-chevron,
+  .workshop-branch[aria-disabled='true'] .workshop-branch-chevron {
+    display: none;
+  }
+
+  .workshop-branch-avatar {
     display: grid;
+    width: 28px;
+    height: 28px;
     flex: none;
     place-items: center;
-    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
-    color: #fff;
-    font-weight: 800;
+    border-radius: 8px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: 13px;
+    font-weight: 700;
     line-height: 1;
   }
 
-  .workshop-tenant-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    font-family: var(--font-serif);
-    font-size: 0.8125rem;
+  .workshop-branch-copy {
+    min-width: 0;
+    flex: 1;
   }
 
-  .workshop-user-avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 999px;
-    font-size: 0.75rem;
-  }
-
-  .workshop-tenant-name,
-  .workshop-user-name {
+  .workshop-branch-name {
     display: block;
     overflow: hidden;
     color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    line-height: 1.2;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .workshop-tenant-meta,
-  .workshop-user-meta {
+  .workshop-branch-meta {
     display: block;
     overflow: hidden;
-    color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
+    line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .workshop-branch-chevron {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    color: var(--color-ink-muted);
+  }
+
+  /* Why the picker is inert. It sits BELOW the card now (it used to share a
+     topbar row with it), so it wraps to two lines instead of being clipped. */
+  .workshop-branch-hint {
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+    line-height: 1.3;
+    padding: 6px 2px 0;
+  }
+
+  /* If the picker renders its reason through ProjectDropdown's own hint slot,
+     that hint still has to wrap inside a 264px column — the shared rule clamps
+     it to one ellipsised line, which was tuned for a topbar row. */
+  .workshop-sidebar .mp-dd-hint,
+  .workshop-drawer-panel .mp-dd-hint {
+    max-width: 100%;
+    padding: 6px 2px 0;
+    white-space: normal;
+  }
+
+  /* ── The workshop's one headline create action. It belongs to the app rather
+     than to any one list, so it lives above the nav and the Buyurtmalar list
+     does not repeat it (DESIGN.md, Layout). */
+  .workshop-create {
+    display: flex;
+    width: 100%;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    transition: background 140ms ease;
+  }
+
+  .workshop-create:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--color-accent-hover);
+  }
+
+  .workshop-create:disabled,
+  .workshop-create[aria-disabled='true'] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* No icon rule here on purpose: the `+` is part of the label
+     (`orders.list.create` = "+ Yangi buyurtma"), which is the create-button
+     convention the whole app follows, so a glyph would render "+ + Yangi
+     buyurtma". */
 
   .workshop-nav {
     display: flex;
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: 14px;
+    gap: 18px;
+    margin-top: 22px;
   }
 
   /* The sidebar is a fixed full-height column with `overflow: hidden`, so the
-     nav between the pinned brand header and the pinned user card is the only
-     thing allowed to scroll — otherwise the last groups are clipped and
+     nav between the pinned brand header and the pinned account button is the
+     only thing allowed to scroll — otherwise the last groups are clipped and
      unreachable on short screens (~700px of viewport on a 13" laptop, where an
      owner has the most entries). `overscroll-behavior` keeps a nav flick from
      running on into the page behind it. */
@@ -1728,44 +2010,28 @@
     gap: 2px;
   }
 
-  .workshop-nav-group + .workshop-nav-group {
-    margin-top: 6px;
-  }
-
   .workshop-nav-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    padding: 4px 10px;
-    text-transform: uppercase;
-  }
-
-  .workshop-nav-label::after {
-    content: '';
-    height: 1px;
-    flex: 1;
-    background: var(--color-hairline-strong);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 11px 6px;
   }
 
   .workshop-nav-item {
     display: flex;
-    min-height: 36px;
+    height: 38px;
     align-items: center;
-    gap: 10px;
-    border-radius: 7px;
-    color: var(--color-ink-soft);
-    font-size: 0.84375rem;
-    font-weight: 700;
-    padding: 8px 10px;
+    gap: 11px;
+    border-radius: 10px;
+    color: var(--color-ink-nav);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0 11px;
+    text-align: left;
     text-decoration: none;
     transition:
       background 140ms ease,
-      color 140ms ease,
-      box-shadow 140ms ease;
+      color 140ms ease;
   }
 
   .workshop-nav-item:hover {
@@ -1773,44 +2039,50 @@
     color: var(--color-ink);
   }
 
+  /* The selected item is an `accent-soft` pill with `accent-strong` text — a
+     filled graphite pill with white text was the old language, and a coloured
+     glow around it is gone from the system entirely. */
   .workshop-nav-item.on,
   .workshop-nav-item.router-link-active,
   .workshop-nav-item.router-link-exact-active {
-    background: var(--color-accent);
-    color: #fff;
-    box-shadow: 0 2px 8px -3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+    font-weight: 600;
   }
 
   /* `+N` pill on Buyurtmalar (QAD-156) — how many orders still wait in NEW.
      Rendered only for a non-zero count, so it never shows a bare 0. */
   .workshop-nav-badge {
     display: inline-flex;
-    min-width: 20px;
-    min-height: 18px;
+    min-width: 21px;
+    height: 20px;
     align-items: center;
     justify-content: center;
     margin-left: auto;
     border-radius: 999px;
-    background: var(--color-danger);
-    color: #fff;
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    font-weight: 800;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: 12.5px;
+    font-weight: 700;
     line-height: 1;
-    padding: 1px 6px;
+    padding: 0 6px;
   }
 
-  .workshop-nav-item.on .workshop-nav-badge,
-  .workshop-nav-item.router-link-active .workshop-nav-badge {
-    /* On the active (accent) row a flat danger fill muddies; a hairline ring
-       keeps the red legible against it. */
-    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 55%);
+  /* Kesish / Krom carry a plain count, not a badge: the number is context, not
+     something waiting on the person reading it. */
+  .workshop-nav-count {
+    margin-left: auto;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
   }
 
   .workshop-nav-icon {
     display: grid;
     width: 18px;
     height: 18px;
+    flex: none;
     place-items: center;
     color: currentColor;
   }
@@ -1836,26 +2108,95 @@
     stroke-width: 1.8;
   }
 
-  .workshop-user-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid transparent;
-    border-top-color: var(--color-hairline);
-    border-radius: 9px;
-    background: var(--color-sunk);
-    color: inherit;
-    margin-top: 14px;
-    padding: 10px;
-    text-decoration: none;
-    transition:
-      border-color 140ms ease,
-      background 140ms ease;
+  /* ── The account trigger: the topbar user pill moved down here, so the header
+     carries global search and the two utilities and nothing else. */
+  /* The class sits on ActionMenu's root wrapper — the second selector
+     out-specifies `.mp-action-menu-wrap`, which is declared later in this layer
+     and would otherwise keep the sidebar's last row an inline-block. */
+  .workshop-user-card,
+  .workshop-user-card.mp-action-menu-wrap {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
   }
 
-  .workshop-user-card:hover {
-    border-color: var(--color-hairline-strong);
-    background: color-mix(in srgb, var(--color-sunk) 60%, var(--color-hairline-strong));
+  /* Matched structurally AND by name: `ActionMenu` renders the trigger as its
+     own `<button>` and the host names it `workshop-user-trigger`, so both
+     selectors have to carry the whole skin — layout included. Leaving the
+     layout to the host was the bug: a bare class name means the button keeps
+     `display: inline-block`, the avatar and the name stop being a row, and the
+     chevron inflates to its intrinsic 129px. */
+  .workshop-user-card > button,
+  .workshop-user-trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 11px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: inherit;
+    padding: 8px;
+    text-align: left;
+    text-decoration: none;
+    transition: background 140ms ease;
+  }
+
+  .workshop-user-card > button:hover,
+  .workshop-user-trigger:hover {
+    background: var(--color-sunk);
+  }
+
+  .workshop-user-chevron {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    color: var(--color-ink-muted);
+  }
+
+  .workshop-user-avatar {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--color-track);
+    color: var(--color-ink-nav);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .workshop-user-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .workshop-user-name {
+    display: block;
+    overflow: hidden;
+    color: var(--color-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workshop-user-meta {
+    display: block;
+    overflow: hidden;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .workshop-main {
@@ -1864,20 +2205,26 @@
     flex-direction: column;
   }
 
+  /* `min-height: 0` only — no `overflow: hidden` here. The frame already clips
+     at `.workshop-app`, and a second clipping ancestor would cut the search
+     panel that hangs out of the topbar. */
+  @media (min-width: 921px) {
+    .workshop-main {
+      min-height: 0;
+    }
+  }
+
+  /* 68px, transparent, no rule under it: the frame does not scroll on the
+     desktop, so there is nothing for a frosted backdrop to hide behind. The
+     ≤920px document-scroll mode restores sticky + frosted. */
   .workshop-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
     display: flex;
-    min-height: 64px;
+    height: 68px;
     min-width: 0;
-    flex-wrap: wrap;
+    flex: none;
     align-items: center;
-    gap: 14px;
-    border-bottom: 1px solid var(--color-hairline);
-    background: rgb(255 255 255 / 88%);
-    backdrop-filter: saturate(140%) blur(10px);
-    padding: 12px 28px;
+    gap: 12px;
+    padding: 0 32px;
   }
 
   .workshop-mobile-button {
@@ -1886,111 +2233,62 @@
     height: 38px;
     flex: none;
     place-items: center;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 10px;
     background: var(--color-elevated);
-    color: var(--color-ink);
+    color: var(--color-ink-nav);
   }
 
-  /* Desktop icon rail: the hamburger shrinks the sidebar to icons so
-     production pages (Kesish/Krom) get a wider workspace. Labels come back
-     via title tooltips; mobile never collapses (it uses the drawer). */
+  .workshop-mobile-button:hover {
+    background: var(--color-sunk);
+  }
+
+  /* Drawer-only: the 264px sidebar is the desktop layout and there is nothing
+     left to collapse, so the trigger disappears above the drawer breakpoint.
+     This rule has to sit AFTER the `display: grid` above — same specificity,
+     and the frame's own media block near the top of this section lost the race. */
   @media (min-width: 921px) {
-    .workshop-app.nav-collapsed {
-      grid-template-columns: 68px minmax(0, 1fr);
-    }
-
-    .workshop-app.nav-collapsed .workshop-sidebar {
-      padding: 18px 8px 14px;
-    }
-
-    .workshop-app.nav-collapsed .workshop-brand {
-      justify-content: center;
-      padding: 4px 0 18px;
-    }
-
-    .workshop-app.nav-collapsed .workshop-brand-copy,
-    .workshop-app.nav-collapsed .workshop-tenant-name,
-    .workshop-app.nav-collapsed .workshop-tenant-meta,
-    .workshop-app.nav-collapsed .workshop-user-name,
-    .workshop-app.nav-collapsed .workshop-user-meta,
-    .workshop-app.nav-collapsed .workshop-nav-label,
-    .workshop-app.nav-collapsed
-      .workshop-nav-item
-      > span:not(.workshop-nav-icon):not(.workshop-nav-badge) {
+    .workshop-mobile-button {
       display: none;
-    }
-
-    /* The rail hides labels, but the badge is the whole point — pin it to the
-       icon's top-right corner so the count survives the collapse. */
-    .workshop-app.nav-collapsed .workshop-nav-item {
-      position: relative;
-    }
-
-    .workshop-app.nav-collapsed .workshop-nav-badge {
-      position: absolute;
-      top: 0;
-      right: 2px;
-      min-width: 16px;
-      min-height: 15px;
-      margin-left: 0;
-      border: 1.5px solid var(--color-elevated);
-      font-size: 0.5625rem;
-      padding: 0 4px;
-      box-shadow: none;
-    }
-
-    .workshop-app.nav-collapsed .workshop-tenant,
-    .workshop-app.nav-collapsed .workshop-user-card {
-      justify-content: center;
-      margin-right: 0;
-      margin-left: 0;
-      padding: 8px 0;
-    }
-
-    .workshop-app.nav-collapsed .workshop-sidebar > .workshop-nav {
-      padding-right: 0;
-    }
-
-    .workshop-app.nav-collapsed .workshop-nav-item {
-      justify-content: center;
-      padding: 8px 0;
     }
   }
 
   .workshop-search-wrap {
     position: relative;
-    flex: 1 1 280px;
-    max-width: 480px;
-    min-width: 220px;
+    flex: 0 1 420px;
+    min-width: 0;
   }
 
   .workshop-search {
     display: flex;
-    min-height: 40px;
+    height: 40px;
     width: 100%;
     align-items: center;
-    gap: 8px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    gap: 9px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
     color: var(--color-ink-muted);
-    padding: 7px 12px;
+    padding: 0 13px;
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease;
   }
 
+  /* A solid ring, not a tinted glow — the halo language is gone. */
   .workshop-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .workshop-search svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
+    flex: none;
     fill: none;
     stroke: currentColor;
     stroke-linecap: round;
-    stroke-width: 1.8;
+    stroke-width: 1.9;
   }
 
   .workshop-search input {
@@ -1999,18 +2297,15 @@
     border: 0;
     background: transparent;
     color: var(--color-ink);
-    font-weight: 600;
+    font-weight: 500;
     outline: 0;
   }
 
   .workshop-kbd {
-    border: 1px solid var(--color-hairline);
-    border-radius: 5px;
-    background: var(--color-sunk);
+    flex: none;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
-    padding: 1px 5px;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .workshop-search-panel {
@@ -2018,11 +2313,11 @@
     top: calc(100% + 8px);
     left: 0;
     z-index: 65;
-    width: min(560px, calc(100vw - 32px));
-    max-height: min(520px, calc(100vh - 96px));
+    width: min(560px, calc(var(--app-vw) - 32px));
+    max-height: min(520px, calc(var(--app-vh) - 140px));
     overflow-y: auto;
     border: 1px solid var(--color-hairline-strong);
-    border-radius: 8px;
+    border-radius: 14px;
     background: var(--color-elevated);
     box-shadow:
       0 8px 18px -6px color-mix(in srgb, var(--color-ink) 14%, transparent),
@@ -2033,17 +2328,15 @@
   .workshop-search-section + .workshop-search-section,
   .workshop-search-shortcuts {
     margin-top: 8px;
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
     padding-top: 8px;
   }
 
   .workshop-search-section-title {
     padding: 4px 7px 6px;
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 900;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .workshop-search-result {
@@ -2052,16 +2345,23 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-radius: 7px;
+    border-radius: 10px;
     color: var(--color-ink);
     padding: 8px;
     text-decoration: none;
   }
 
-  .workshop-search-result:hover,
+  .workshop-search-result:hover {
+    background: var(--color-sunk);
+  }
+
+  /* An inset ring rather than `outline: none` — the row sits in a scrolling
+     popover, where an offset outline would be clipped at the panel's edge. */
   .workshop-search-result:focus-visible {
     background: var(--color-sunk);
-    outline: none;
+    outline: 3px solid var(--color-accent);
+    outline-offset: -3px;
+    box-shadow: none;
   }
 
   .workshop-search-result span {
@@ -2077,15 +2377,15 @@
   }
 
   .workshop-search-result strong {
-    font-size: 0.8125rem;
-    font-weight: 900;
+    font-size: 15px;
+    font-weight: 600;
   }
 
   .workshop-search-result small {
     margin-top: 2px;
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
-    font-weight: 650;
+    font-size: 12.5px;
+    font-weight: 500;
   }
 
   .workshop-search-result em {
@@ -2093,9 +2393,9 @@
     border-radius: 999px;
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     font-style: normal;
-    font-weight: 850;
+    font-weight: 600;
     padding: 4px 7px;
   }
 
@@ -2109,12 +2409,12 @@
     margin: 0;
     color: var(--color-ink-muted);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 500;
     padding: 14px 10px;
   }
 
   .workshop-search-error {
-    border-radius: 7px;
+    border-radius: 10px;
     background: color-mix(in srgb, var(--color-danger) 8%, transparent);
     color: var(--color-danger);
   }
@@ -2123,8 +2423,7 @@
     display: block;
     margin-top: 3px;
     color: currentColor;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
   }
 
   .workshop-search-shortcuts {
@@ -2137,71 +2436,108 @@
     border: 1px solid var(--color-hairline);
     border-radius: 999px;
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 6px 9px;
     text-decoration: none;
   }
 
   .workshop-search-shortcuts a:hover,
   .workshop-search-shortcuts a:focus-visible {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-    outline: none;
+    border-color: var(--color-hairline-strong);
+    color: var(--color-accent-deep);
+  }
+
+  /* A border-colour shift is a hover cue, not a focus indicator. These chips
+     live in a scrolling popover, so the ring goes inset — an offset outline
+     would be clipped at the panel's edge, the same reason the result rows use
+     one. */
+  .workshop-search-shortcuts a:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: -3px;
+    box-shadow: none;
   }
 
   .workshop-top-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     margin-left: auto;
   }
 
-  .workshop-top-user {
-    display: flex;
-    min-height: 40px;
-    align-items: center;
-    gap: 9px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 999px;
+  /* Both utilities wear the same white bordered 38px square as the search
+     field's sibling, so the header reads as one row of controls. */
+  .workshop-top-actions .mp-locale-trigger {
+    height: 38px;
+    border-color: var(--color-hairline);
+    border-radius: 10px;
     background: var(--color-elevated);
-    color: inherit;
-    padding: 4px 12px 4px 4px;
-    text-decoration: none;
+    color: var(--color-ink-nav);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 0 12px;
   }
 
-  .workshop-top-user-text {
-    max-width: 160px;
-    overflow: hidden;
-    font-size: 0.8125rem;
-    font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .workshop-top-actions .mp-locale-trigger:hover,
+  .workshop-top-actions .mp-locale-trigger[aria-expanded='true'] {
+    border-color: var(--color-hairline);
+    background: var(--color-sunk);
+    color: var(--color-ink);
   }
 
   .workshop-icon-button,
   .workshop-bell {
     position: relative;
     display: grid;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
+    flex: none;
     place-items: center;
-    border: 1px solid transparent;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--color-ink-strong);
+    border: 1px solid var(--color-hairline);
+    border-radius: 10px;
+    background: var(--color-elevated);
+    color: var(--color-ink-nav);
+    transition:
+      background 140ms ease,
+      color 140ms ease;
   }
 
   .workshop-icon-button:hover,
   .workshop-bell:hover {
-    border-color: var(--color-hairline-strong);
-    background: var(--color-elevated);
+    background: var(--color-sunk);
+    color: var(--color-ink);
+  }
+
+  /* Unread notifications are a dot, not a number: the count lives in the
+     trigger's accessible name, where it can be read out instead of guessed at. */
+  .workshop-bell-dot {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    border: 2px solid var(--color-elevated);
+    border-radius: 999px;
+    background: var(--color-signal);
   }
 
   .workshop-page {
     min-width: 0;
     flex: 1;
-    padding: 16px 28px;
+    padding: 4px 32px 32px;
+  }
+
+  @media (min-width: 921px) {
+    .workshop-page {
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* `scrollLock` pins `document.body`, which cannot reach an inner scroller —
+       without this a desktop wheel scrolls the page behind an open modal. */
+    body.modal-open .workshop-page {
+      overflow: hidden;
+    }
   }
 
   .page-head {
@@ -2209,44 +2545,42 @@
     flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 14px;
-    margin-bottom: 18px;
+    gap: 16px;
+    margin-bottom: 22px;
   }
 
   .page-head h1 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 2rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.08;
+    font-family: var(--font-display);
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.1;
   }
 
   .page-head .date,
   .page-head .sub {
     color: var(--color-ink-soft);
-    font-size: 0.84375rem;
-    margin-top: 6px;
-  }
-
-  .page-head .date {
-    font-family: var(--font-mono);
+    font-size: 15px;
+    margin-top: 5px;
   }
 
   .page-head .tools {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
 
+  /* A panel: white on the canvas, lifted by a soft wide shadow, carrying no
+     border — the shadow IS the edge (DESIGN.md, Elevation). */
   .card {
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: var(--shadow-panel);
   }
 
   .card-h {
@@ -2255,25 +2589,43 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 14px;
-    padding: 18px 22px 12px;
+    padding: 22px 24px 4px;
   }
 
   .card-h h2 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
-  .card-h .sub {
+  .card-h .sub,
+  .card-h .meta {
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
+  }
+
+  /* A panel's secondary action is a text button — the one place orange carries
+     words on a neutral surface. */
+  .card-h .link {
+    border: 0;
+    background: transparent;
+    color: var(--color-accent-deep);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 0;
+    text-decoration: none;
+  }
+
+  .card-h .link:hover {
+    text-decoration: underline;
   }
 
   .card-b {
     min-width: 0;
-    padding: 0 22px 22px;
+    padding: 0 24px 22px;
   }
 
   .chart {
@@ -2283,29 +2635,31 @@
   }
 
   .chart .grid line {
-    stroke: var(--color-hairline);
+    stroke: var(--color-divider);
     stroke-dasharray: 2 3;
   }
 
   .chart .axis {
-    stroke: var(--color-hairline-strong);
+    stroke: var(--color-hairline);
   }
 
+  /* Three steps and no more: `signal` for today, `hairline-strong` for the
+     period maximum, `hairline` for the rest (DESIGN.md, Charts). */
   .chart .bars rect {
-    fill: var(--color-hairline-strong);
+    fill: var(--color-hairline);
     transition: fill 0.15s ease;
   }
 
   .chart .bars rect:hover {
-    fill: var(--color-accent-hover);
+    fill: var(--color-hairline-strong);
   }
 
   .chart .bars rect.hi {
-    fill: var(--color-accent);
+    fill: var(--color-signal);
   }
 
   .chart .bars rect.md {
-    fill: var(--color-ink-strong);
+    fill: var(--color-hairline-strong);
   }
 
   .chart-plot {
@@ -2321,9 +2675,8 @@
     z-index: 1;
     color: var(--color-ink-muted);
     background: color-mix(in srgb, var(--color-elevated) 85%, transparent);
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 500;
     padding-left: 6px;
   }
 
@@ -2331,10 +2684,9 @@
     display: flex;
     justify-content: space-between;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    font-weight: 600;
-    margin-top: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    margin-top: 8px;
   }
 
   .chart-legend {
@@ -2344,8 +2696,7 @@
     gap: 10px;
     margin-top: 10px;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 12.5px;
   }
 
   .chart-key {
@@ -2358,21 +2709,21 @@
   }
 
   .chart-key.today {
-    background: var(--color-accent);
+    background: var(--color-signal);
   }
 
   .chart-key.peak {
-    background: var(--color-ink-strong);
-  }
-
-  .chart-key.other {
     background: var(--color-hairline-strong);
   }
 
+  .chart-key.other {
+    background: var(--color-hairline);
+  }
+
   .more {
-    color: var(--color-accent);
-    font-size: 0.78125rem;
-    font-weight: 800;
+    color: var(--color-accent-deep);
+    font-size: 13.5px;
+    font-weight: 600;
     text-decoration: none;
   }
 
@@ -2432,10 +2783,9 @@
      pill + the single primary action on the first row, the meta line beneath,
      and the compact phase strip along the bottom. */
   .od-head {
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: var(--shadow-panel);
     padding: 16px 24px;
     margin-bottom: 16px;
   }
@@ -2449,9 +2799,10 @@
 
   .od-top h1 {
     color: var(--color-ink);
+    font-family: var(--font-display);
     font-size: 1.375rem;
-    font-weight: 800;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     line-height: 1.15;
     margin: 0;
   }
@@ -2469,7 +2820,7 @@
     gap: 8px 20px;
     margin-top: 8px;
     color: var(--color-ink-soft);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
   }
 
   .od-meta b {
@@ -2484,7 +2835,7 @@
   .od-hint {
     margin: 8px 0 0;
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     font-weight: 600;
     text-align: right;
   }
@@ -2498,7 +2849,7 @@
     align-items: baseline;
     gap: 4px 8px;
     margin-top: 8px;
-    font-size: 0.84375rem;
+    font-size: 13.5px;
   }
 
   .od-note .lbl {
@@ -2544,7 +2895,7 @@
     display: flex;
     align-items: center;
     margin-top: 16px;
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
     padding-top: 12px;
     overflow-x: auto;
   }
@@ -2564,20 +2915,22 @@
   }
 
   /* Done = fully colored; current = outline only — the hollow ring reads as
-     "in progress", the solid fill as "behind us". */
+     "in progress", the solid fill as "behind us". Both are `signal`, one of the
+     handoff's named orange uses: in graphite a finished phase would be
+     indistinguishable from an untouched one. */
   .od-step.done .od-dot {
-    background: var(--color-accent);
+    background: var(--color-signal);
   }
 
   .od-step.current .od-dot {
     background: var(--color-elevated);
-    border: 2.5px solid var(--color-accent);
+    border: 2.5px solid var(--color-signal);
   }
 
   .od-step .od-lbl {
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 500;
     line-height: 1.2;
     white-space: nowrap;
   }
@@ -2588,7 +2941,7 @@
 
   .od-step.current .od-lbl {
     color: var(--color-accent-deep);
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .od-conn {
@@ -2600,7 +2953,7 @@
   }
 
   .od-conn.done {
-    background: var(--color-accent);
+    background: var(--color-signal);
   }
 
   /* Collapsible detailed history (the former Tarix tab), folded into Umumiy. */
@@ -2619,16 +2972,17 @@
   }
 
   .collapse-summary:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
+    outline: 3px solid var(--color-accent);
+    outline-offset: -3px;
   }
 
   .collapse-summary h2 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .collapse-meta {
@@ -2636,7 +2990,7 @@
     align-items: center;
     gap: 10px;
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
   }
 
   @media (max-width: 620px) {
@@ -2658,9 +3012,9 @@
     gap: 8px;
     border: 0;
     background: transparent;
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 600;
     margin-bottom: 12px;
     padding: 0;
     text-decoration: none;
@@ -2671,8 +3025,8 @@
   }
 
   .totals {
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
+    border: 1px solid var(--color-hairline-soft);
+    border-radius: 14px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
     font-size: 0.8125rem;
@@ -2688,29 +3042,29 @@
 
   .totals .num {
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-weight: 800;
+    font-weight: 600;
     text-align: right;
   }
 
   .totals .grand {
     border-top: 1px solid var(--color-ink);
     color: var(--color-ink);
-    font-weight: 800;
+    font-weight: 600;
     margin-top: 8px;
     padding-top: 10px;
   }
 
   .totals .grand .num {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.375rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   /* Settlement (paid / balance) folded under the cost total — one invoice-style
      money card instead of a separate "To'lov holati" card (QAD-89). */
   .totals .settle {
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-hairline-soft);
     margin-top: 8px;
     padding-top: 10px;
   }
@@ -2723,7 +3077,7 @@
     display: flex;
     justify-content: space-between;
     gap: 14px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     color: var(--color-ink-soft);
     font-size: 0.8125rem;
     padding: 9px 0;
@@ -2735,8 +3089,7 @@
 
   .ro-figure .v {
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-weight: 800;
+    font-weight: 600;
     text-align: right;
   }
 
@@ -2751,21 +3104,19 @@
     min-width: 0;
     flex-direction: column;
     gap: 14px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 18px;
     background: var(--color-elevated);
+    box-shadow: var(--shadow-panel);
     color: inherit;
     padding: 22px;
     text-decoration: none;
     transition:
-      border-color 150ms ease,
       transform 150ms ease,
       box-shadow 150ms ease;
   }
 
   .br-card:hover {
-    border-color: var(--color-ink);
-    box-shadow: 0 10px 26px -18px color-mix(in srgb, var(--color-ink) 42%, transparent);
+    box-shadow: var(--shadow-lifted);
     transform: translateY(-2px);
   }
 
@@ -2778,18 +3129,17 @@
 
   .br-card h3 {
     color: var(--color-ink);
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.25rem;
-    font-weight: 600;
-    letter-spacing: 0;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     line-height: 1.15;
     margin: 0;
   }
 
   .br-card .addr {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     margin-top: 4px;
   }
 
@@ -2797,94 +3147,106 @@
     display: grid;
     gap: 14px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
     padding-top: 14px;
   }
 
   .br-card .kpi-grid .l {
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.07em;
+    font-size: 12.5px;
+    font-weight: 600;
     margin-bottom: 4px;
-    text-transform: uppercase;
   }
 
   .br-card .kpi-grid .v {
     color: var(--color-ink);
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     line-height: 1;
   }
 
   .kpis {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
 
+  /* The dashboard KPI row: four across above 900px, two below (DESIGN.md,
+     Layout). Eight KPIs for an owner fill two rows exactly (QAD-182). */
+  .kpis-dash {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 20px;
+  }
+
+  /* A KPI card is a small panel: 18px radius, no border, card shadow. */
   .kpi {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
-    padding: 18px 20px 16px;
+    box-shadow: var(--shadow-card);
+    padding: 20px 22px 18px;
   }
 
-  /* Only link-cards get the lift, so clickable KPIs read as clickable. */
-  a.kpi {
-    transition:
-      border-color 140ms ease,
-      box-shadow 140ms ease,
-      transform 140ms ease;
+  /* Only clickable cards get the lift, and they deepen their shadow rather than
+     gaining a border. */
+  a.kpi,
+  button.kpi {
+    transition: box-shadow 140ms ease;
   }
 
-  a.kpi:hover {
-    border-color: var(--color-hairline-strong);
-    box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--color-ink) 22%, transparent);
-    transform: translateY(-1px);
+  button.kpi {
+    display: block;
+    width: 100%;
+    border: 0;
+    color: inherit;
+    text-align: left;
+  }
+
+  a.kpi:hover,
+  button.kpi:hover {
+    box-shadow: var(--shadow-lifted);
   }
 
   .kpi.warn {
-    border-color: var(--color-warning-border);
     background: var(--color-warning-soft);
   }
 
   .kpi.bad {
-    border-color: var(--color-danger-border);
     background: var(--color-danger-soft);
   }
 
   .kpi .lbl {
-    color: var(--color-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    margin-bottom: 10px;
-    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
+    font-weight: 500;
+    margin-bottom: 0;
   }
 
   .kpi .v {
+    margin-top: 10px;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: clamp(26px, 2.6vw, 36px);
-    font-weight: 600;
-    letter-spacing: 0;
+    font-family: var(--font-display);
+    font-size: clamp(24px, 2.3vw, 32px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
     line-height: 1;
     white-space: nowrap;
   }
 
-  /* Currency/unit suffix — deliberately smaller than the numeral so money
-     values stay on one line and the number carries the visual weight. */
+  /* Currency/unit suffix — deliberately smaller than the numeral, and in the
+     body face: Display is for identity and magnitude, never for a label. */
   .kpi .v small {
     color: var(--color-ink-soft);
     font-family: var(--font-sans);
-    font-size: 0.8125rem;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
   }
 
   /* State tints for KPI values/labels: these compound selectors out-specify
@@ -2904,14 +3266,249 @@
     color: var(--color-danger);
   }
 
+  /* One caption line under the figure — a caption, not a split row: the delta
+     pill leads and the words that explain it follow. */
   .kpi .d {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    color: var(--color-ink-soft);
-    font-size: 0.75rem;
+    justify-content: flex-start;
+    gap: 6px;
     margin-top: 10px;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+  }
+
+  /* The delta a KPI has to report, when it has one. Colour is never the only
+     signal: the pill always carries its own number or word. */
+  .kpi-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .kpi-pill.ok {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  .kpi-pill.warn {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  .kpi-pill.bad {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  /* ── Asosiy: the lower split ──────────────────────────────────────────────
+     The work list carries the weight; the two side panels are context. Source
+     order already puts the work list first, so the one-column fall-back below
+     1100px needs no `order`. ── */
+  .dash-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  @media (min-width: 1100px) {
+    .dash-split {
+      grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    }
+  }
+
+  .dash-side {
+    display: grid;
+    min-width: 0;
+    gap: 20px;
+  }
+
+  /* ── Sizdan kutilmoqda: rows that are jobs, not data. Each row is a title, a
+     detail line and one action; exactly one row in the panel carries the
+     graphite primary (DESIGN.md, Work lists). ── */
+  .worklist {
+    display: block;
+    min-width: 0;
+  }
+
+  .worklist-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    border-top: 1px solid var(--color-divider);
+    padding: 16px 0;
+  }
+
+  .worklist-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-ink);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .worklist-detail {
+    margin-top: 3px;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
+  }
+
+  .worklist-action {
+    display: inline-flex;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 10px;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 0 16px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 140ms ease;
+  }
+
+  .worklist-action:hover:not(:disabled) {
+    background: var(--color-track);
+  }
+
+  .worklist-action.primary {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .worklist-action.primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+  }
+
+  .worklist-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  @media (max-width: 480px) {
+    .worklist-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .worklist-action {
+      width: 100%;
+    }
+  }
+
+  /* ── Stansiyalar: one inset row per production station. The `accent-soft`
+     tile with an `accent-strong` glyph is the station treatment — a graphite
+     tile would read as chrome (DESIGN.md, Icons). ── */
+  .station-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--color-sunk);
+    color: inherit;
+    padding: 14px 16px;
+    text-align: left;
+    text-decoration: none;
+  }
+
+  .station-row + .station-row {
+    margin-top: 10px;
+  }
+
+  /* No hover, no transition, no pointer: the station rows REPORT the load and go
+     nowhere — the panel's «Navbatlar» link is the only control here. A hover fill
+     on a row that cannot be clicked is the cursor-honesty rule broken
+     (DESIGN.md, Components). */
+
+  .station-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: none;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  .station-icon svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .station-name {
+    display: block;
+    color: var(--color-ink);
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+
+  .station-staff {
+    display: block;
+    overflow: hidden;
+    color: var(--color-ink-soft);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .station-count {
+    flex: none;
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  /* ── Savdo: the period bar chart. Read as text first — the panel carries an
+     sr-only total/today/peak sentence and a <title> on every bar. ── */
+  .sales-chart {
+    display: block;
+    width: 100%;
+    height: 74px;
+    margin-top: 16px;
+  }
+
+  .sales-chart rect {
+    fill: var(--color-hairline);
+  }
+
+  .sales-chart rect.peak {
+    fill: var(--color-hairline-strong);
+  }
+
+  .sales-chart rect.today {
+    fill: var(--color-signal);
+  }
+
+  .sales-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
   }
 
   .table-wrap {
@@ -2996,20 +3593,18 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    border-bottom: 1px solid var(--color-hairline-strong);
-    background: var(--color-sunk);
+    border-bottom: 1px solid var(--color-hairline);
+    background: var(--color-elevated);
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.07em;
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 10px 12px;
     text-align: left;
-    text-transform: uppercase;
     white-space: nowrap;
   }
 
   .tbl td {
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 11px 12px;
     vertical-align: middle;
   }
@@ -3030,7 +3625,8 @@
   }
 
   .tbl tr.clickable:hover {
-    background: var(--color-accent-soft);
+    background: var(--color-sunk);
+    color: var(--color-ink);
   }
 
   /* QAD-184 — a row whose primary action is reachable from anywhere in it. The
@@ -3101,35 +3697,34 @@
 
   .mp-row-icon:hover,
   .tbl tr:hover .mp-row-icon {
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
   }
 
   .tbl .id,
   .id,
   .num {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
   .tbl .id,
   .id {
     color: var(--color-ink-soft);
-    font-size: 0.71875rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     white-space: nowrap;
   }
 
   .tbl .nm,
   .nm {
     color: var(--color-ink);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .tbl .nm small,
   .nm small {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
@@ -3143,8 +3738,8 @@
   .tbl .amt,
   .amt {
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-weight: 800;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
@@ -3183,12 +3778,12 @@
     display: inline-grid;
     min-height: 32px;
     align-items: center;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 6px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 10px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     transition:
       border-color 140ms ease,
       background 140ms ease,
@@ -3225,9 +3820,9 @@
   .mp-action-icon-button:hover,
   .mp-action-menu-button[aria-expanded='true'],
   .mp-action-icon-button[aria-expanded='true'] {
-    border-color: var(--color-accent);
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
+    border-color: var(--color-hairline-strong);
+    background: var(--color-sunk);
+    color: var(--color-ink);
   }
 
   /* Sits in a topbar beside the bell, so it wears the bell's transparent-until-
@@ -3244,11 +3839,11 @@
     gap: 5px;
     padding: 0 8px;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink-strong);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     transition:
       border-color 140ms ease,
       background 140ms ease,
@@ -3270,14 +3865,9 @@
 
   .mp-locale-trigger:hover,
   .mp-locale-trigger[aria-expanded='true'] {
-    border-color: var(--color-hairline-strong);
-    background: var(--color-elevated);
-  }
-
-  .mp-locale-trigger[aria-expanded='true'] {
-    border-color: var(--color-accent);
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
+    border-color: var(--color-hairline);
+    background: var(--color-sunk);
+    color: var(--color-ink);
   }
 
   .mp-locale-glyph {
@@ -3291,7 +3881,7 @@
   }
 
   .mp-locale-code {
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
   }
 
   /* Fixed, and teleported to `<body>` — a row's panel must escape `.table-wrap`,
@@ -3304,7 +3894,7 @@
     max-height: 320px;
     overflow-y: auto;
     border: 1px solid var(--color-hairline-strong);
-    border-radius: 8px;
+    border-radius: 14px;
     background: var(--color-elevated);
     box-shadow: 0 18px 44px -24px color-mix(in srgb, var(--color-ink) 48%, transparent);
     padding: 5px;
@@ -3315,11 +3905,11 @@
     width: 100%;
     align-items: center;
     border: 0;
-    border-radius: 6px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink-strong);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
     gap: 8px;
     padding: 8px 10px;
     text-align: left;
@@ -3357,16 +3947,14 @@
 
   .mp-action-menu-sep {
     height: 1px;
-    background: var(--color-hairline);
+    background: var(--color-divider);
     margin: 4px 0;
   }
 
   .filter-label {
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .tabs {
@@ -3378,7 +3966,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
-    border-bottom: 1px solid var(--color-hairline-strong);
+    border-bottom: 1px solid var(--color-hairline);
     margin-bottom: 16px;
   }
 
@@ -3391,16 +3979,17 @@
     background: none;
     color: var(--color-ink-soft);
     padding: 10px 14px;
-    font-size: 0.84375rem;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 600;
     white-space: nowrap;
   }
 
   .tab.on,
   .tab.active {
     /* Inset shadow keeps the underline inside the box (no overflow), unlike a
-       bottom border pulled onto the hairline with a negative margin. */
-    box-shadow: inset 0 -2px 0 var(--color-accent);
+       bottom border pulled onto the hairline with a negative margin. `signal`,
+       because a graphite rule under a near-black label reads as nothing. */
+    box-shadow: inset 0 -2px 0 var(--color-signal);
     color: var(--color-ink);
   }
 
@@ -3410,8 +3999,8 @@
     gap: 5px;
     border-radius: 999px;
     padding: 3px 9px;
-    font-size: 0.6875rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 700;
     white-space: nowrap;
   }
 
@@ -3432,7 +4021,7 @@
   .assignment-chip {
     gap: 4px;
     padding: 2px 8px;
-    font-size: 0.625rem;
+    font-size: 12.5px;
     line-height: 1.2;
   }
 
@@ -3442,24 +4031,31 @@
     flex: none;
   }
 
+  /* ── Order stages warm as the work advances (DESIGN.md, Colors). These classes
+     are overloaded: `p-new`/`p-rdy` also render draft states, `p-ok`/`p-warn`/
+     `p-dn` also render branch status, and `p-cut`/`p-eb` also render the
+     cutter/edger assignment chips — so each pair has to read in all of those
+     roles rather than being forked per role. ── */
   .p-new {
-    background: var(--color-sunk);
-    color: var(--color-ink-strong);
+    background: var(--color-neutral-soft);
+    color: var(--color-ink-nav);
   }
 
+  /* Tasdiqlangan borrowed `info`; it now has its own taupe pair, which leaves
+     `info` free to be a real informational colour (`.banner.info`). */
   .p-conf {
-    background: var(--color-info-soft);
-    color: var(--color-info);
+    background: var(--color-taupe-soft);
+    color: var(--color-taupe);
   }
 
   .p-cut {
     background: var(--color-accent-soft);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   .p-eb {
     background: var(--color-accent-tint);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   .p-rdy,
@@ -3480,9 +4076,8 @@
   }
 
   .p-dn {
-    background: var(--color-sunk);
-    color: var(--color-ink-muted);
-    border: 1px solid var(--color-hairline-strong);
+    background: var(--color-neutral-soft);
+    color: var(--color-ink-soft);
   }
 
   .row-item {
@@ -3490,7 +4085,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 11px;
     align-items: center;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 10px 0;
   }
 
@@ -3500,9 +4095,8 @@
 
   .row-item .meta {
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     text-align: right;
   }
 
@@ -3520,7 +4114,7 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    border-radius: 9px;
+    border-radius: 10px;
     font-size: 0.8125rem;
     margin-bottom: 16px;
     padding: 12px 16px;
@@ -3546,7 +4140,7 @@
 
   .st-empty,
   .st-error {
-    border-radius: 12px;
+    border-radius: 14px;
     background: var(--color-elevated);
     padding: 52px 24px;
     text-align: center;
@@ -3564,7 +4158,7 @@
   .st-error h3 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.375rem;
     font-weight: 600;
   }
@@ -3577,12 +4171,15 @@
     margin: 8px auto 0;
   }
 
+  /* `hairline`, not `sunk`: on a white panel `sunk` sits at 1.07:1 and the
+     placeholder is invisible — and a white shimmer over it is no motion at all
+     (DESIGN.md, Skeletons). */
   .sk-line,
   .sk {
     position: relative;
     overflow: hidden;
-    border-radius: 7px;
-    background: var(--color-sunk);
+    border-radius: 8px;
+    background: var(--color-hairline);
   }
 
   .sk-line {
@@ -3591,14 +4188,29 @@
     width: 80%;
   }
 
+  /* The sweep animates the TRANSFORM. It used to borrow
+     `client-sk-shimmer`, which moves `background-position` — a no-op on a
+     gradient with no `background-size` — so the bar sat parked at -100% and no
+     skeleton in the workshop or admin app ever shimmered. */
   .sk-line::after,
   .sk::after {
     position: absolute;
     inset: 0;
-    animation: client-sk-shimmer 1.3s ease-in-out infinite;
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 45%), transparent);
+    animation: sk-sweep 1.3s ease-in-out infinite;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--color-hairline-strong) 80%, transparent),
+      transparent
+    );
     content: '';
     transform: translateX(-100%);
+  }
+
+  @keyframes sk-sweep {
+    to {
+      transform: translateX(100%);
+    }
   }
 
   .board {
@@ -3618,23 +4230,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--color-sunk);
-    color: var(--color-ink-soft);
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+    font-weight: 600;
     margin: 0 0 10px;
     padding: 7px 10px;
-    text-transform: uppercase;
   }
 
   .board-col .ct {
     border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-ink-strong);
-    font-family: var(--font-mono);
-    font-weight: 700;
+    font-weight: 600;
     padding: 1px 7px;
   }
 
@@ -3652,10 +4261,9 @@
   .board-card {
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 8px;
+    border-radius: 14px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: var(--shadow-card);
     color: inherit;
     cursor: grab;
     display: block;
@@ -3679,17 +4287,18 @@
   /* Highlight the whole valid drop lane (and its header) while dragging so a
      card can be dropped anywhere in the column, not just on the header. */
   .board-col.drop-target {
-    background: var(--color-accent-soft);
-    border-radius: 10px;
+    background: var(--color-sunk);
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 1px var(--color-hairline-strong);
   }
 
   .board-col.drop-target h4 {
     background: var(--color-accent-tint);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   .board-card:hover {
-    border-color: var(--color-accent);
+    box-shadow: var(--shadow-lifted);
   }
 
   .board-card .top {
@@ -3711,7 +4320,7 @@
     min-width: 0;
     color: var(--color-ink);
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 600;
     margin-top: 8px;
     overflow-wrap: anywhere;
   }
@@ -3722,7 +4331,7 @@
     flex-wrap: wrap;
     gap: 6px;
     color: var(--color-ink-muted);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     margin-top: 6px;
   }
 
@@ -3738,8 +4347,8 @@
   }
 
   .queue-col {
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
+    border: 1px solid var(--color-hairline-soft);
+    border-radius: 18px;
     background: var(--color-elevated);
     padding: 14px;
   }
@@ -3748,16 +4357,17 @@
     display: flex;
     justify-content: space-between;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     margin: 0 0 12px;
   }
 
   .q-card {
-    border: 1px solid var(--color-hairline);
-    border-radius: 9px;
+    border-radius: 14px;
     background: var(--color-elevated);
+    box-shadow: var(--shadow-card);
     margin-bottom: 10px;
     padding: 14px;
   }
@@ -3770,15 +4380,14 @@
 
   .q-card h4 {
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-size: 0.8125rem;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 600;
     margin: 0;
   }
 
   .q-card .meta {
     color: var(--color-ink-soft);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
     margin-top: 4px;
   }
 
@@ -3798,19 +4407,20 @@
     align-self: start;
     border-radius: 999px;
     background: var(--color-accent-soft);
-    color: var(--color-accent);
-    font-size: 0.65625rem;
-    font-weight: 800;
+    color: var(--color-accent-strong);
+    font-size: 12.5px;
+    font-weight: 700;
     padding: 3px 8px;
   }
 
   /* Production station (Kesish / Krom) — the shop-floor terminal. Bigger targets
      and louder hierarchy than the office screens: read from a metre away. */
+  /* The current job stands out by elevation, not by a 2px accent frame. */
   .prod-hero {
     position: relative;
-    border: 2px solid var(--color-accent);
-    border-radius: 14px;
+    border-radius: 18px;
     background: var(--color-elevated);
+    box-shadow: var(--shadow-lifted);
     margin-bottom: 12px;
     padding: 18px;
   }
@@ -3821,21 +4431,19 @@
     left: 14px;
     border-radius: 999px;
     background: var(--color-accent);
-    color: #fff;
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
+    color: var(--color-on-accent);
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 2px 10px;
-    text-transform: uppercase;
   }
 
   .prod-hero h4,
   .prod-card h4 {
     color: var(--color-ink);
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: 1.0625rem;
-    font-weight: 800;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     margin: 0;
   }
 
@@ -3847,9 +4455,9 @@
   }
 
   .prod-card {
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 14px;
     background: var(--color-elevated);
+    box-shadow: var(--shadow-card);
     margin-bottom: 10px;
     padding: 14px 16px;
   }
@@ -3859,21 +4467,18 @@
     align-items: baseline;
     justify-content: space-between;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.09em;
+    font-size: 12.5px;
+    font-weight: 600;
     margin: 20px 0 10px;
-    text-transform: uppercase;
   }
 
   .prod-done-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    border-top: 1px dashed var(--color-hairline);
+    border-top: 1px dashed var(--color-hairline-strong);
     color: var(--color-ink-soft);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
     padding: 9px 4px;
   }
 
@@ -3883,13 +4488,15 @@
 
   .prod-done-row .when {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     margin-left: auto;
   }
 
-  /* Which sides of a part get banding: teal side = banded. Paired with the
-     per-part text list for screen readers — the glyph is aria-hidden. */
+  /* Which sides of a part get banding: an orange tick = banded. A shop-floor
+     correctness signal, so it is `signal` and not graphite — in graphite a
+     banded side is indistinguishable from the unbanded pencil line beside it.
+     Paired with the per-part text list for screen readers (the glyph is
+     aria-hidden). */
   .edge-glyph {
     border: 1.5px solid var(--color-hairline-strong);
     border-radius: 3px;
@@ -3900,19 +4507,19 @@
   }
 
   .edge-glyph.t {
-    border-top: 4px solid var(--color-accent);
+    border-top: 4px solid var(--color-signal);
   }
 
   .edge-glyph.b {
-    border-bottom: 4px solid var(--color-accent);
+    border-bottom: 4px solid var(--color-signal);
   }
 
   .edge-glyph.l {
-    border-left: 4px solid var(--color-accent);
+    border-left: 4px solid var(--color-signal);
   }
 
   .edge-glyph.r {
-    border-right: 4px solid var(--color-accent);
+    border-right: 4px solid var(--color-signal);
   }
 
   .prod-stickybar {
@@ -3938,7 +4545,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid var(--color-hairline-strong);
+    border: 1px solid var(--color-hairline);
     border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
@@ -3966,7 +4573,7 @@
     flex-wrap: wrap;
     gap: 8px 16px;
     color: var(--color-ink-soft);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
     margin-top: 12px;
   }
 
@@ -4025,40 +4632,42 @@
     align-items: baseline;
     justify-content: space-between;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.09em;
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 0 2px;
-    text-transform: uppercase;
   }
 
   .prod-rail-row {
     display: flex;
     align-items: stretch;
     gap: 6px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 14px;
     background: var(--color-elevated);
+    box-shadow: var(--shadow-card);
     padding: 4px;
   }
 
+  /* No border left to recolour, so the two states move to a ring and a fill. */
   .prod-rail-row.active {
-    border-color: var(--color-accent);
+    box-shadow:
+      inset 0 0 0 1px var(--color-hairline-strong),
+      var(--shadow-lifted);
   }
 
   .prod-rail-row.marked {
-    border-color: var(--color-accent-tint);
     background: var(--color-accent-soft);
+    box-shadow:
+      inset 0 0 0 1px var(--color-accent-tint),
+      var(--shadow-card);
   }
 
   .prod-rail-select {
-    border-radius: 8px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink);
     flex: 1;
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
     min-height: 44px;
     padding: 8px 10px;
     text-align: left;
@@ -4070,7 +4679,7 @@
 
   .prod-rail-mark {
     align-items: center;
-    border: 1.5px solid var(--color-hairline-strong);
+    border: 1.5px solid var(--color-hairline);
     border-radius: 10px;
     background: var(--color-elevated);
     color: var(--color-ink-muted);
@@ -4095,7 +4704,7 @@
   .prod-rail-mark[aria-pressed='true'] {
     border-color: var(--color-accent);
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
   }
 
   .prod-rail-mark[aria-pressed='true'] svg {
@@ -4110,8 +4719,8 @@
 
   .field label {
     color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 800;
+    font-size: 13.5px;
+    font-weight: 600;
   }
 
   /* :not(.mp-field-error, .mp-field-hint) — the error and hint spans live inside
@@ -4119,15 +4728,15 @@
      (specificity trap). */
   .field > span:not(.mp-field-error, .mp-field-hint) {
     color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 800;
+    font-size: 13.5px;
+    font-weight: 600;
   }
 
   .field:has(input:required, textarea:required) > span:first-child::after {
     color: var(--color-danger);
     content: ' *';
     font-size: 0.8125rem;
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: 0;
   }
 
@@ -4135,22 +4744,21 @@
     margin-left: 4px;
     color: var(--color-danger);
     font-size: 0.8125rem;
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: 0;
-    text-transform: none;
   }
 
   .mp-field-error {
     color: var(--color-danger);
-    font-size: 0.75rem;
-    font-weight: 750;
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 1.25;
   }
 
   /* Advisory copy under a field — quieter than the label, quieter than an error. */
   .mp-field-hint {
     color: var(--color-ink-soft);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     font-weight: 600;
     line-height: 1.25;
   }
@@ -4170,23 +4778,22 @@
 
   .matrix th,
   .matrix td {
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 10px 12px;
     text-align: center;
   }
 
   .matrix th {
-    background: var(--color-sunk);
+    background: var(--color-elevated);
+    border-bottom-color: var(--color-hairline);
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .matrix .permission {
     color: var(--color-ink);
-    font-weight: 800;
+    font-weight: 600;
     min-width: 220px;
     text-align: left;
   }
@@ -4218,15 +4825,15 @@
     content: '';
   }
 
-  /* Node language mirrors the header phase strip: done = fully colored,
-     the live phase = outline only (CB-113). */
+  /* Node language mirrors the header phase strip: done = fully colored, the
+     live phase = outline only (CB-113), both in `signal`. */
   .tl .step.done::before {
-    background: var(--color-accent);
+    background: var(--color-signal);
   }
 
   .tl .step.now::before {
     background: var(--color-elevated);
-    box-shadow: 0 0 0 2.5px var(--color-accent);
+    box-shadow: 0 0 0 2.5px var(--color-signal);
   }
 
   .tl .step.now {
@@ -4241,8 +4848,7 @@
   .tl .when {
     display: block;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     margin-bottom: 3px;
   }
 
@@ -4254,17 +4860,18 @@
     place-items: center;
     border-radius: 999px;
     background: var(--color-accent);
-    color: #fff;
-    font-size: 0.75rem;
-    font-weight: 800;
+    color: var(--color-on-accent);
+    font-size: 13px;
+    font-weight: 700;
   }
 
+  /* Material swatches are real wood/laminate colours, so the hexes stay. */
   .sw {
     flex: none;
     width: 34px;
     height: 34px;
     border: 1px solid var(--color-hairline);
-    border-radius: 7px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #d8b98f, #b68d60);
   }
 
@@ -4292,13 +4899,15 @@
     background: linear-gradient(135deg, #ead6b7, #c89f70);
   }
 
+  /* White on white: this swatch is legible only through its dashed border. */
   .sw-7 {
-    border: 1px dashed var(--color-ink-muted);
+    border: 1px dashed var(--color-hairline-strong);
     background: #fff;
   }
 
+  /* Nudged off the warm near-black, which read as a mistake beside graphite. */
   .sw-8 {
-    background: #2a2825;
+    background: #2a2d33;
   }
 
   .sw-9 {
@@ -4347,21 +4956,24 @@
     z-index: 80;
     transform: translateY(-160%);
     border: 1px solid var(--color-accent);
-    border-radius: 6px;
+    border-radius: 11px;
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
     padding: 9px 12px;
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 600;
     text-decoration: none;
-    box-shadow: var(--shadow-elevated);
+    /* `--shadow-elevated` was never defined — this reference had been a silent
+       no-op since it was written. */
+    box-shadow: var(--shadow-panel);
     transition: transform 120ms ease;
   }
 
   .admin-skip-link:focus-visible {
     transform: translateY(0);
-    outline: 3px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
+    outline: 3px solid var(--color-accent);
     outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-elevated);
   }
 
   .admin-sidebar {
@@ -4371,10 +4983,10 @@
     height: var(--app-vh);
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid var(--color-hairline);
-    background:
-      radial-gradient(120% 50% at 0% 0%, var(--color-accent-soft), transparent 62%),
-      var(--color-elevated);
+    border-right: 1px solid var(--color-hairline-soft);
+    /* The wash used to be a graphite tint; `accent-soft` is peach now, so a
+       gradient here paints a full-height orange column behind the nav. */
+    background: var(--color-elevated);
     padding: 18px 14px 14px;
   }
 
@@ -4388,7 +5000,7 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 4px 6px 18px;
     color: inherit;
     text-decoration: none;
@@ -4407,21 +5019,19 @@
   .admin-brand-name {
     display: block;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.0625rem;
-    font-weight: 600;
-    letter-spacing: 0;
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
     line-height: 1.15;
   }
 
   .admin-brand-role {
     display: block;
-    color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    line-height: 1.2;
-    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.3;
   }
 
   .admin-tenant {
@@ -4429,8 +5039,7 @@
     align-items: center;
     gap: 10px;
     margin: 14px 4px 18px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 9px;
+    border-radius: 14px;
     background: var(--color-sunk);
     padding: 10px 12px;
   }
@@ -4441,14 +5050,10 @@
     height: 28px;
     flex: none;
     place-items: center;
-    border-radius: 5px;
-    background: linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--color-deep) 72%, var(--color-ink-soft)),
-      var(--color-deep)
-    );
-    color: #fff;
-    font-family: var(--font-serif);
+    border-radius: 8px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-family: var(--font-display);
     font-size: 0.8125rem;
     font-weight: 700;
   }
@@ -4458,8 +5063,8 @@
     display: block;
     overflow: hidden;
     color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 600;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4468,9 +5073,8 @@
   .admin-tenant-meta,
   .admin-user-meta {
     display: block;
-    color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
     line-height: 1.35;
   }
 
@@ -4518,10 +5122,8 @@
     margin-bottom: 4px;
     padding: 4px 10px;
     color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-nav-item {
@@ -4532,18 +5134,17 @@
     align-items: center;
     gap: 10px;
     border: 0;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
-    color: var(--color-ink-soft);
+    color: var(--color-ink-nav);
     padding: 8px 10px;
-    font-size: 0.84375rem;
-    font-weight: 650;
+    font-size: 14px;
+    font-weight: 500;
     text-align: left;
     text-decoration: none;
     transition:
       background 140ms ease,
-      color 140ms ease,
-      box-shadow 140ms ease;
+      color 140ms ease;
   }
 
   .admin-nav-item:hover {
@@ -4551,10 +5152,11 @@
     color: var(--color-ink);
   }
 
+  /* An `accent-soft` pill, not a filled graphite one, and no glow. */
   .admin-nav-item.on {
-    background: var(--color-accent);
-    color: #fff;
-    box-shadow: 0 2px 8px -3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+    font-weight: 600;
   }
 
   .admin-nav-icon {
@@ -4626,13 +5228,13 @@
   }
 
   .admin-reset-gate-body strong {
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .admin-reset-gate-cta {
     flex: none;
     border: 1px solid currentColor;
-    border-radius: 7px;
+    border-radius: 10px;
     padding: 6px 12px;
     font-size: 0.8125rem;
     font-weight: 700;
@@ -4660,9 +5262,8 @@
     border-radius: 999px;
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 1px 6px;
   }
 
@@ -4671,9 +5272,11 @@
     color: var(--color-danger);
   }
 
+  /* A 22%-white fill is invisible on the new `accent-soft` row — a solid tint
+     of the row's own colour is not. */
   .admin-nav-item.on .admin-nav-count {
-    background: rgb(255 255 255 / 22%);
-    color: #fff;
+    background: var(--color-accent-tint);
+    color: var(--color-accent-strong);
   }
 
   .admin-doc-menu {
@@ -4689,11 +5292,11 @@
 
   .admin-doc-menu a {
     display: block;
-    border-radius: 5px;
+    border-radius: 8px;
     padding: 7px 9px;
     color: var(--color-ink-soft);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 500;
     text-decoration: none;
   }
 
@@ -4707,20 +5310,17 @@
     align-items: center;
     gap: 10px;
     margin-top: 14px;
-    border: 1px solid transparent;
-    border-radius: 9px;
-    background: var(--color-sunk);
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
     padding: 8px 10px;
     color: inherit;
     text-decoration: none;
-    transition:
-      background 140ms ease,
-      border-color 140ms ease;
+    transition: background 140ms ease;
   }
 
   .admin-user-card:hover {
-    border-color: var(--color-hairline-strong);
-    background: color-mix(in srgb, var(--color-sunk) 60%, var(--color-hairline-strong));
+    background: var(--color-sunk);
   }
 
   .admin-user-avatar {
@@ -4730,10 +5330,10 @@
     flex: none;
     place-items: center;
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
-    color: #fff;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .admin-main {
@@ -4759,8 +5359,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 16px;
-    border-bottom: 1px solid var(--color-hairline);
-    background: rgb(255 255 255 / 88%);
+    border-bottom: 1px solid var(--color-hairline-soft);
+    background: color-mix(in srgb, var(--color-elevated) 92%, transparent);
     padding: 12px 28px;
     backdrop-filter: saturate(140%) blur(10px);
   }
@@ -4770,12 +5370,12 @@
     min-height: 36px;
     align-items: center;
     gap: 6px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 10px;
     background: var(--color-elevated);
     padding: 6px 10px;
     color: var(--color-ink);
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .admin-search {
@@ -4785,17 +5385,17 @@
     flex: 1;
     align-items: center;
     gap: 8px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-elevated);
     padding: 7px 12px;
     color: var(--color-ink-muted);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
   }
 
+  /* A solid ring, not a tinted glow. */
   .admin-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .admin-search input {
@@ -4804,19 +5404,15 @@
     border: 0;
     background: transparent;
     color: var(--color-ink);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
     font-weight: 600;
     outline: 0;
   }
 
   .admin-kbd {
-    border: 1px solid var(--color-hairline);
-    border-radius: 5px;
-    background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.65625rem;
-    padding: 1px 5px;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-top-actions {
@@ -4834,11 +5430,11 @@
     justify-content: center;
     gap: 8px;
     border: 1px solid var(--color-accent);
-    border-radius: 6px;
+    border-radius: 11px;
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
     padding: 10px 16px;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1;
     text-decoration: none;
     transition:
@@ -4874,11 +5470,11 @@
   .admin-page-head h1 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 2rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.08;
+    font-family: var(--font-display);
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.1;
   }
 
   .admin-page-head .sub,
@@ -4891,8 +5487,7 @@
   .admin-page-head .date {
     margin-top: 5px;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
   }
 
   .admin-page-tools {
@@ -4911,90 +5506,85 @@
     color: var(--color-ink-muted);
     padding: 4px 0;
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
     text-decoration: none;
   }
 
   .admin-back:hover {
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
   }
 
   .admin-kpis {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 24px;
+    gap: 16px;
+    margin-bottom: 20px;
   }
 
   .admin-kpi {
     min-width: 0;
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    padding: 18px 20px 16px;
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
+    padding: 20px 22px 18px;
+    box-shadow: var(--shadow-card);
     color: inherit;
     text-decoration: none;
-    transition:
-      border-color 150ms ease,
-      box-shadow 150ms ease,
-      transform 150ms ease;
+    transition: box-shadow 150ms ease;
   }
 
+  /* A clickable card deepens its shadow; it has no border to recolour. */
   .admin-kpi:hover {
-    border-color: var(--color-hairline-strong);
-    box-shadow:
-      0 4px 8px -3px color-mix(in srgb, var(--color-ink) 6%, transparent),
-      0 14px 30px -8px color-mix(in srgb, var(--color-ink) 13%, transparent);
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-lifted);
   }
 
   .admin-kpi.warning {
-    border-color: var(--color-warning-border);
     background: var(--color-warning-soft);
-    box-shadow: inset 3px 0 0 var(--color-warning);
+    box-shadow:
+      inset 3px 0 0 var(--color-warning),
+      var(--shadow-card);
   }
 
   .admin-kpi.danger {
-    border-color: var(--color-danger-border);
     background: var(--color-danger-soft);
-    box-shadow: inset 3px 0 0 var(--color-danger);
+    box-shadow:
+      inset 3px 0 0 var(--color-danger),
+      var(--shadow-card);
   }
 
   .admin-kpi-label {
-    margin-bottom: 10px;
-    color: var(--color-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    margin-bottom: 0;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
+    font-weight: 500;
   }
 
   .admin-kpi-value {
+    margin-top: 10px;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: clamp(26px, 2.6vw, 36px);
-    font-weight: 600;
-    letter-spacing: 0;
+    font-family: var(--font-display);
+    font-size: clamp(24px, 2.3vw, 32px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
     line-height: 1;
   }
 
   .admin-kpi-value small {
     margin-left: 4px;
-    color: var(--color-ink-muted);
+    color: var(--color-ink-soft);
     font-family: var(--font-sans);
-    font-size: 0.45em;
+    font-size: 13px;
     font-weight: 600;
+    letter-spacing: 0;
   }
 
   .admin-kpi-detail {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    justify-content: flex-start;
+    gap: 6px;
     margin-top: 10px;
-    color: var(--color-ink-soft);
-    font-size: 0.75rem;
+    color: var(--color-ink-muted);
+    font-size: 13px;
   }
 
   .admin-card {
@@ -5002,10 +5592,9 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent);
+    box-shadow: var(--shadow-panel);
   }
 
   .admin-card-h {
@@ -5014,26 +5603,26 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 14px;
-    padding: 18px 22px 12px;
+    padding: 22px 24px 4px;
   }
 
   .admin-card-h h2 {
     margin: 0;
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 1.125rem;
-    font-weight: 600;
-    letter-spacing: 0;
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .admin-card-h .sub {
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
   }
 
   .admin-card-b {
     min-width: 0;
-    padding: 0 22px 22px;
+    padding: 0 24px 22px;
   }
 
   .admin-card-b.flush {
@@ -5044,9 +5633,9 @@
     margin-left: auto;
     border: 0;
     background: transparent;
-    color: var(--color-accent);
-    font-size: 0.78125rem;
-    font-weight: 800;
+    color: var(--color-accent-deep);
+    font-size: 13.5px;
+    font-weight: 600;
     text-decoration: none;
   }
 
@@ -5084,20 +5673,18 @@
   }
 
   .admin-table th {
-    border-bottom: 1px solid var(--color-hairline-strong);
-    background: var(--color-sunk);
+    border-bottom: 1px solid var(--color-hairline);
+    background: var(--color-elevated);
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.07em;
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 1.3;
     padding: 10px 12px;
-    text-transform: uppercase;
     white-space: nowrap;
   }
 
   .admin-table td {
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 11px 12px;
     vertical-align: middle;
   }
@@ -5111,26 +5698,26 @@
     transition: background 120ms ease;
   }
 
+  /* A `sunk` fill, never a tint of the accent: an orange flash on every row is
+     a strobe, not an affordance. */
   .admin-table tr.clickable:hover {
-    background: var(--color-accent-soft);
+    background: var(--color-sunk);
   }
 
   .admin-table .id,
   .admin-mono {
-    font-family: var(--font-mono);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
   }
 
   .admin-table .nm {
     color: var(--color-ink);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .admin-table .nm small {
     display: block;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
@@ -5145,10 +5732,8 @@
 
   .admin-trend-head small {
     color: var(--color-ink-muted);
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: none;
+    font-size: 12.5px;
+    font-weight: 500;
   }
 
   .admin-trend-cell {
@@ -5160,7 +5745,6 @@
   .admin-trend-value {
     min-width: 3ch;
     color: var(--color-ink);
-    font-family: var(--font-mono);
     font-size: 0.9375rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -5169,7 +5753,6 @@
 
   .admin-trend-void {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
   }
 
   .admin-spark {
@@ -5180,19 +5763,19 @@
 
   .admin-spark-line {
     fill: none;
-    stroke: var(--color-accent);
+    stroke: var(--color-signal);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .admin-spark-area {
-    fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    fill: color-mix(in srgb, var(--color-signal) 12%, transparent);
     stroke: none;
   }
 
   .admin-spark-tip {
-    fill: var(--color-accent);
+    fill: var(--color-signal);
   }
 
   /* Nothing has happened yet — a baseline rule reads as an empty axis, where an
@@ -5208,10 +5791,10 @@
     height: 44px;
     place-items: center;
     overflow: hidden;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 9px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 10px;
     background: var(--color-sunk);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-elevated) 55%, transparent);
   }
 
   .admin-material-thumb-swatch {
@@ -5229,10 +5812,10 @@
     height: 24px;
     place-items: center;
     border-radius: 999px;
-    background: rgb(255 255 255 / 88%);
+    background: color-mix(in srgb, var(--color-elevated) 92%, transparent);
     color: var(--color-ink-strong);
-    font-size: 0.6875rem;
-    font-weight: 850;
+    font-size: 12.5px;
+    font-weight: 600;
     box-shadow: 0 2px 8px color-mix(in srgb, var(--color-ink) 12%, transparent);
   }
 
@@ -5282,11 +5865,10 @@
     min-height: 18px;
     align-items: center;
     color: var(--color-ink-muted) !important;
-    font-size: 0.65625rem !important;
-    font-weight: 850 !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
     letter-spacing: 0;
     line-height: 1.2 !important;
-    text-transform: uppercase;
   }
 
   /* Real-specificity (not :where()) so a form-field class like .mp-input can't
@@ -5297,8 +5879,8 @@
     width: 100%;
     min-height: 48px;
     min-width: 0;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 8px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-elevated);
     color: var(--color-ink);
     font-size: 0.875rem;
@@ -5318,6 +5900,7 @@
   .admin-filter-input > input:focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-elevated);
   }
 
   :where(.admin-filter-select),
@@ -5362,7 +5945,10 @@
      drops them to the control baseline (18px caption + 4px gap). */
   .mp-filters > .mp-button {
     min-height: 40px;
-    border-radius: 8px;
+    /* Matches `.mp-button`'s own 11px. The 8px here was written when the base
+       button was 6px; left alone it made the create button visibly squarer than
+       every other button on the same screen. */
+    border-radius: 11px;
     padding-block: 5px;
     margin-top: 22px;
     margin-left: auto;
@@ -5377,10 +5963,9 @@
      `.mp-filters` bar the shared caption rule above already covers it). */
   .mp-filter-dd-label {
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 850;
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 1.2;
-    text-transform: uppercase;
   }
 
   /* Why a ProjectDropdown is inert — sits BESIDE the disabled trigger (workshop
@@ -5391,7 +5976,7 @@
     max-width: 15rem;
     overflow: hidden;
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -5406,12 +5991,12 @@
     gap: 8px;
     min-height: 40px;
     padding: 0 14px;
-    border: 1px solid var(--color-hairline-strong);
+    border: 1px solid var(--color-hairline);
     border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
     font-size: 0.8125rem;
-    font-weight: 800;
+    font-weight: 600;
     white-space: nowrap;
     transition:
       border-color 150ms ease,
@@ -5432,6 +6017,7 @@
   .mp-filter-chip:focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-elevated);
   }
 
   .mp-filter-chip-dot {
@@ -5454,8 +6040,8 @@
     margin-top: 22px;
     padding: 0 8px;
     color: var(--color-ink-soft);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
     white-space: nowrap;
     transition: color 150ms ease;
   }
@@ -5475,17 +6061,15 @@
   .admin-field > span:first-child,
   .admin-field-label {
     color: var(--color-ink-muted);
-    font-size: 0.71875rem;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-field:has(input:required, textarea:required) > span:first-child::after {
     color: var(--color-danger);
     content: ' *';
     font-size: 0.8125rem;
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: 0;
   }
 
@@ -5493,16 +6077,15 @@
     margin-left: 4px;
     color: var(--color-danger);
     font-size: 0.8125rem;
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: 0;
-    text-transform: none;
   }
 
   .admin-field-error {
     margin-top: -2px;
     color: var(--color-danger);
-    font-size: 0.75rem;
-    font-weight: 750;
+    font-size: 12.5px;
+    font-weight: 600;
     line-height: 1.25;
   }
 
@@ -5510,11 +6093,11 @@
   .admin-field textarea {
     min-height: 42px;
     width: 100%;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 11px;
     background: var(--color-elevated);
     color: var(--color-ink);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
     font-weight: 600;
     line-height: 1.35;
     outline: 0;
@@ -5527,7 +6110,7 @@
   .admin-field input:focus,
   .admin-field textarea:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .admin-form-grid {
@@ -5549,8 +6132,8 @@
     grid-template-columns: minmax(156px, 220px) minmax(0, 1fr);
     gap: 16px;
     align-items: stretch;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 14px;
     background: var(--color-sunk);
     padding: 12px;
   }
@@ -5564,10 +6147,8 @@
     position: relative;
     min-height: 132px;
     overflow: hidden;
-    border: 1px solid var(--color-hairline);
-    border-radius: 8px;
-    background:
-      linear-gradient(135deg, rgb(255 255 255 / 65%), rgb(255 255 255 / 10%)), var(--color-elevated);
+    border-radius: 10px;
+    background: var(--color-elevated);
   }
 
   .admin-image-upload-img {
@@ -5583,8 +6164,8 @@
     min-height: 132px;
     place-items: center;
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-image-upload-busy {
@@ -5592,9 +6173,9 @@
     inset: auto 8px 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--color-ink) 82%, transparent);
-    color: #fff;
-    font-size: 0.6875rem;
-    font-weight: 850;
+    color: var(--color-on-accent);
+    font-size: 12.5px;
+    font-weight: 600;
     padding: 6px 9px;
     text-align: center;
   }
@@ -5616,8 +6197,8 @@
   .admin-image-upload-copy span,
   .admin-image-upload-copy small {
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
-    font-weight: 650;
+    font-size: 13.5px;
+    font-weight: 500;
     line-height: 1.35;
   }
 
@@ -5636,8 +6217,8 @@
   .admin-image-upload-error {
     margin: 0;
     color: var(--color-danger);
-    font-size: 0.75rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-pill {
@@ -5646,8 +6227,8 @@
     gap: 5px;
     border-radius: 999px;
     border: 1px solid transparent;
-    font-size: 0.6875rem;
-    font-weight: 800;
+    font-size: 12.5px;
+    font-weight: 700;
     padding: 3px 9px;
     white-space: nowrap;
   }
@@ -5681,8 +6262,8 @@
   }
 
   .admin-pill-muted {
-    background: var(--color-sunk);
-    color: var(--color-ink-muted);
+    background: var(--color-neutral-soft);
+    color: var(--color-ink-soft);
   }
 
   .admin-tabs {
@@ -5693,7 +6274,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
-    border-bottom: 1px solid var(--color-hairline-strong);
+    border-bottom: 1px solid var(--color-hairline);
   }
 
   .admin-tabs::-webkit-scrollbar {
@@ -5705,8 +6286,8 @@
     background: transparent;
     color: var(--color-ink-soft);
     padding: 10px 14px;
-    font-size: 0.84375rem;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 600;
     white-space: nowrap;
   }
 
@@ -5715,13 +6296,14 @@
     color: var(--color-ink);
   }
 
+  /* `signal`: a graphite rule under a near-black label reads as nothing. */
   .admin-tab.on {
-    box-shadow: inset 0 -2px 0 var(--color-accent);
+    box-shadow: inset 0 -2px 0 var(--color-signal);
   }
 
   .admin-empty,
   .admin-error {
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 48px 24px;
     text-align: center;
   }
@@ -5740,9 +6322,10 @@
   .admin-empty h3,
   .admin-error h3 {
     margin: 0 0 6px;
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.3125rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .admin-empty p,
@@ -5750,25 +6333,27 @@
     margin: 0 auto;
     max-width: 460px;
     color: var(--color-ink-soft);
-    font-size: 0.84375rem;
+    font-size: 13.5px;
   }
 
   .admin-error p {
     color: var(--color-danger);
   }
 
+  /* Fills with `hairline`, sweeps `hairline-strong`: `sunk` on a white panel is
+     1.07:1 and the placeholder disappears (DESIGN.md, Skeletons). */
   .admin-skeleton-line {
     height: 12px;
     margin-bottom: 10px;
-    border-radius: 5px;
+    border-radius: 6px;
     background:
       linear-gradient(
         90deg,
-        var(--color-sunk) 0%,
-        var(--color-hairline) 40%,
-        var(--color-sunk) 80%
+        var(--color-hairline) 0%,
+        var(--color-hairline-strong) 40%,
+        var(--color-hairline) 80%
       ),
-      var(--color-sunk);
+      var(--color-hairline);
     background-size: 480px 100%;
     animation: client-sk-shimmer 1.3s ease-in-out infinite;
   }
@@ -5793,8 +6378,7 @@
     flex-direction: column;
     overflow: hidden;
     transform: translate(-50%, -50%);
-    border: 1px solid var(--color-hairline);
-    border-radius: 16px;
+    border-radius: 18px;
     background: var(--color-elevated);
     box-shadow:
       0 8px 18px -6px color-mix(in srgb, var(--color-ink) 10%, transparent),
@@ -5817,15 +6401,16 @@
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 18px 24px 14px;
   }
 
   .admin-modal-h h3 {
     margin: 0;
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 1.25rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .admin-icon-button {
@@ -5835,13 +6420,13 @@
     height: 36px;
     place-items: center;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-ink-soft);
   }
 
   .admin-icon-button:hover:not(:disabled) {
-    border-color: var(--color-hairline-strong);
+    border-color: var(--color-hairline);
     background: var(--color-sunk);
     color: var(--color-ink);
   }
@@ -5864,14 +6449,14 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
-    border-top: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
     background: var(--color-sunk);
     padding: 14px 24px;
   }
 
   .admin-secret-box {
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 9px;
+    border: 1px solid var(--color-hairline-soft);
+    border-radius: 14px;
     background: var(--color-sunk);
     padding: 6px 14px;
   }
@@ -5881,7 +6466,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline-soft);
     padding: 11px 0;
   }
 
@@ -5891,17 +6476,14 @@
 
   .admin-secret-key {
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .admin-secret-value {
     color: var(--color-ink);
-    font-family: var(--font-mono);
     font-size: 0.875rem;
-    font-weight: 800;
+    font-weight: 600;
     word-break: break-all;
   }
 
@@ -5915,7 +6497,7 @@
     grid-template-columns: auto 1fr auto;
     gap: 11px;
     align-items: center;
-    border-bottom: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-divider);
     padding: 10px 0;
   }
 
@@ -5932,19 +6514,15 @@
     min-height: var(--app-vh);
     place-items: center;
     background:
-      radial-gradient(110% 70% at 50% -10%, var(--color-accent-soft), transparent 60%),
-      var(--color-bg);
+      radial-gradient(110% 70% at 50% -10%, var(--color-sunk), transparent 60%), var(--color-bg);
     padding: 32px 18px;
   }
 
   .admin-auth-card {
     width: min(100%, 420px);
-    border: 1px solid var(--color-hairline);
-    border-radius: 16px;
+    border-radius: 18px;
     background: var(--color-elevated);
-    box-shadow:
-      0 8px 18px -6px color-mix(in srgb, var(--color-ink) 10%, transparent),
-      0 28px 60px -14px color-mix(in srgb, var(--color-ink) 22%, transparent);
+    box-shadow: var(--shadow-panel);
     padding: 36px 32px;
   }
 
@@ -5991,51 +6569,50 @@
       grid-template-columns: 1fr;
     }
 
+    /* Below 921px the sidebar IS the drawer. */
     .workshop-sidebar {
       display: none;
     }
 
+    /* The document scrolls here, so the header has to stay reachable and has to
+       separate itself from what slides under it. */
     .workshop-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      height: auto;
+      min-height: 60px;
+      flex-wrap: wrap;
       gap: 10px;
-      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-hairline-soft);
+      background: color-mix(in srgb, var(--color-elevated) 92%, transparent);
+      backdrop-filter: saturate(140%) blur(10px);
+      padding: 11px 16px;
     }
 
-    /* Compact 3-row topbar on phones: [Menyu ⋯ bell/avatar], [branch], [search]
-       instead of four stacked rows with dead space. */
+    /* Two rows: [Menyu · locale · bell] then the search field full-width. */
     .workshop-top-actions {
       order: 2;
     }
 
-    .workshop-branch-dd {
-      order: 3;
-      flex-basis: 100%;
-      flex-wrap: wrap;
-    }
-
-    .workshop-branch-dd > button {
-      width: 100%;
-    }
-
-    /* The phone topbar already stacks, so the scope hint drops under the
-       full-width trigger instead of competing with it for the row. */
-    .workshop-branch-dd > .mp-dd-hint {
-      max-width: 100%;
-    }
-
     .workshop-search-wrap {
-      order: 4;
-      flex-basis: 100%;
-      max-width: none;
+      order: 3;
+      flex: 1 1 100%;
     }
 
     .workshop-page {
       padding: 22px 16px 48px;
     }
 
+    /* Below the popover layers, not above them. The drawer now carries the
+       branch picker and the account menu, and both teleport to `<body>` — the
+       listbox at z-50, the action menu at z-60 — so a drawer at z-70 painted
+       over the very controls it hosts. z-40 still covers the page and the
+       topbar (z-30), while modals (70/80) and toasts (90) stay on top of it. */
     .workshop-drawer {
       position: fixed;
       inset: 0;
-      z-index: 70;
+      z-index: 40;
       display: block;
     }
 
@@ -6053,8 +6630,12 @@
       height: 100%;
       flex-direction: column;
       overflow-y: auto;
+      overscroll-behavior: contain;
       background: var(--color-elevated);
       padding: 16px;
+      box-shadow:
+        0 8px 18px -6px color-mix(in srgb, var(--color-ink) 10%, transparent),
+        0 28px 60px -14px color-mix(in srgb, var(--color-ink) 22%, transparent);
     }
 
     .workshop-drawer-head {
@@ -6062,6 +6643,26 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 14px;
+    }
+
+    /* The drawer carries the sidebar's WHOLE content — branch card, create
+       action, nav groups, account button — because on a phone those controls
+       exist nowhere else. The nav no longer needs its own scroller here: the
+       panel itself scrolls. */
+    .workshop-drawer-panel .workshop-nav {
+      flex: none;
+      margin-top: 18px;
+    }
+
+    .workshop-drawer-panel .workshop-branch-card,
+    .workshop-drawer-panel .workshop-create,
+    .workshop-drawer-panel .workshop-user-card {
+      flex: none;
+    }
+
+    .workshop-drawer-panel .workshop-user-card {
+      margin-top: auto;
+      padding-top: 14px;
     }
 
     .admin-app {
@@ -6160,7 +6761,7 @@
       width: calc(100vw - 24px);
       max-width: calc(100vw - 24px);
       max-height: min(92vh, calc(100dvh - 24px));
-      border-radius: 12px;
+      border-radius: 18px;
     }
 
     .admin-modal-h {
@@ -6212,7 +6813,16 @@
     }
 
     .page-head h1 {
-      font-size: 1.75rem;
+      font-size: 27px;
+    }
+
+    .kpis,
+    .kpis-dash {
+      gap: 12px;
+    }
+
+    .kpi {
+      padding: 16px 16px 14px;
     }
 
     .field-row,
@@ -6237,7 +6847,6 @@
       text-align: left;
     }
 
-    .workshop-top-user-text,
     .workshop-kbd,
     .admin-kbd,
     .admin-primary-action svg {
@@ -6245,7 +6854,7 @@
     }
 
     .admin-page-head h1 {
-      font-size: 1.625rem;
+      font-size: 27px;
     }
 
     .admin-kpis,
@@ -6286,8 +6895,8 @@
     gap: 8px;
     min-height: 44px;
     width: 100%;
-    border-radius: 8px;
-    border: 1px solid var(--color-hairline-strong);
+    border-radius: 11px;
+    border: 1px solid var(--color-hairline);
     background: var(--color-elevated);
     padding: 0 12px;
     color: var(--color-ink);
@@ -6298,6 +6907,7 @@
 
   .mp-phone:focus-within {
     border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .mp-phone.is-disabled {
@@ -6356,8 +6966,8 @@
   .figs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    border-top: 1px solid var(--color-hairline);
-    border-bottom: 1px solid var(--color-hairline);
+    border-top: 1px solid var(--color-divider);
+    border-bottom: 1px solid var(--color-divider);
   }
 
   .figs .fig {
@@ -6368,20 +6978,21 @@
   }
 
   .figs .fig + .fig {
-    border-left: 1px solid var(--color-hairline);
+    border-left: 1px solid var(--color-divider);
   }
 
   .figs .fig-l {
-    color: var(--color-ink-muted);
-    font-size: 0.8125rem;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
   }
 
   .figs .fig-v {
     color: var(--color-ink);
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: 1.375rem;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
+    letter-spacing: -0.03em;
     line-height: 1.1;
     white-space: nowrap;
   }
@@ -6398,19 +7009,18 @@
 
   .figs .fig-v small {
     color: var(--color-ink-soft);
-    font-family: var(--font-sans);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     font-weight: 600;
   }
 
   .figs .fig-note {
     color: var(--color-ink-muted);
-    font-size: 0.71875rem;
+    font-size: 12.5px;
   }
 
   .figs-meta {
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     margin: 8px 0 20px;
   }
 
@@ -6420,7 +7030,7 @@
     }
 
     .figs .fig + .fig {
-      border-top: 1px solid var(--color-hairline);
+      border-top: 1px solid var(--color-divider);
       border-left: 0;
     }
   }
@@ -6440,22 +7050,22 @@
   .akt-title {
     color: var(--color-ink);
     font-size: 0.9375rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
   .akt-meta {
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
     margin-top: 4px;
   }
 
   .akt-parties {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-top: 1px solid var(--color-hairline);
-    border-bottom: 1px solid var(--color-hairline-strong);
+    border-top: 1px solid var(--color-divider);
+    border-bottom: 1px solid var(--color-hairline);
   }
 
   .akt-party {
@@ -6466,15 +7076,13 @@
   }
 
   .akt-party + .akt-party {
-    border-left: 1px solid var(--color-hairline);
+    border-left: 1px solid var(--color-divider);
   }
 
   .akt-role {
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .akt-party b {
@@ -6485,8 +7093,7 @@
 
   .akt-party small {
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 12.5px;
   }
 
   @media (max-width: 640px) {
@@ -6495,7 +7102,7 @@
     }
 
     .akt-party + .akt-party {
-      border-top: 1px solid var(--color-hairline);
+      border-top: 1px solid var(--color-divider);
       border-left: 0;
     }
   }
@@ -6504,18 +7111,16 @@
   .akt-tbl th small {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 0.65625rem;
+    font-size: 12.5px;
     font-weight: 500;
     letter-spacing: 0;
-    text-transform: none;
   }
 
   /* Direction word beside a balance — printed only where the sign flips. */
   .akt-tbl .akt-dir {
     display: block;
     color: var(--color-ink-muted);
-    font-family: var(--font-sans);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
@@ -6524,7 +7129,7 @@
   }
 
   .akt-tbl tfoot .akt-turnover td {
-    border-top: 1px solid var(--color-hairline-strong);
+    border-top: 1px solid var(--color-hairline);
     border-bottom: 0;
     padding-top: 12px;
   }
@@ -6537,7 +7142,7 @@
   .akt-tbl tfoot .akt-closing .nm,
   .akt-tbl tfoot .akt-closing .amt {
     font-size: 0.9375rem;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   /* Narrow viewports drop the date and the split debit/credit pair for one
@@ -6590,12 +7195,27 @@
   .tabs,
   .mp-filters,
   .kpis,
+  .kpis-dash,
   .figs,
   .figs-meta,
   .card .mp-button,
   .akt-live,
   .mp-toast-host {
     display: none !important;
+  }
+
+  /* The desktop frame is a fixed two-scroller box; on paper it has to become an
+     ordinary flow document or the statement clips to exactly one screen.
+     `.card` is in this list because it is the innermost clipping ancestor — the
+     akt sverka renders as `<section class="card akt">` and `.card` carries
+     `overflow: hidden`, so resetting only the frame above it still cut the
+     statement off at one page. */
+  .workshop-app,
+  .workshop-main,
+  .workshop-page,
+  .card {
+    height: auto;
+    overflow: visible;
   }
   .workshop-app {
     display: block;
@@ -6651,7 +7271,7 @@
   }
   .akt-sign-lead {
     color: var(--color-ink-muted);
-    font-size: 0.78125rem;
+    font-size: 13.5px;
   }
   .akt-sign-grid {
     display: grid;
@@ -6667,7 +7287,7 @@
   .akt-sign-grid small {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 0.75rem;
+    font-size: 12.5px;
     margin-bottom: 10px;
   }
   /* Each line is a label with a rule to write on. */
@@ -6675,7 +7295,7 @@
     display: block;
     border-bottom: 1px solid var(--color-hairline-strong);
     color: var(--color-ink-muted);
-    font-size: 0.6875rem;
+    font-size: 12.5px;
     padding-bottom: 2px;
     margin-top: 18px;
   }

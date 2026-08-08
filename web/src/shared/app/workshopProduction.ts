@@ -41,6 +41,62 @@ export function workshopProductionQueueCounts(
   return { cutting, banding, total: cutting + banding }
 }
 
+export interface WorkshopStationOrder {
+  status: string
+  assigned_cutter_user_id: string | null
+  assigned_edger_user_id: string | null
+}
+
+export interface WorkshopStationLoad {
+  cutting: number
+  banding: number
+  /** Distinct staff currently holding work at each station. */
+  cutters: string[]
+  edgers: string[]
+}
+
+/**
+ * Station-wide load for the dashboard's Stansiyalar panel: how much work sits at
+ * each station right now, whoever it belongs to, plus who is holding it.
+ *
+ * Deliberately **not** `workshopProductionQueueCounts` and deliberately not the
+ * `/workshop/production/queue` endpoint: both answer the *personal* question the
+ * station terminal asks ("what is assigned to me"), and that endpoint is
+ * personal for everyone — the owner included. The office view is the other
+ * question, so it is derived from the order rows the dashboard already holds.
+ *
+ * The status sets mirror `list_production_queue` in the backend so the two never
+ * disagree: the saw holds `confirmed` and `cutting`, the bander `edge_banding`.
+ */
+export function workshopStationLoad(orders: WorkshopStationOrder[]): WorkshopStationLoad {
+  const cutting = orders.filter(
+    (order) => order.status === 'confirmed' || order.status === 'cutting',
+  )
+  const banding = orders.filter((order) => order.status === 'edge_banding')
+  const distinct = (ids: Array<string | null>) => [
+    ...new Set(ids.filter((id): id is string => id !== null)),
+  ]
+  return {
+    cutting: cutting.length,
+    banding: banding.length,
+    cutters: distinct(cutting.map((order) => order.assigned_cutter_user_id)),
+    edgers: distinct(banding.map((order) => order.assigned_edger_user_id)),
+  }
+}
+
+/**
+ * "Aziz Tursunov" → "Aziz T." — the station card lists two or three people in a
+ * one-third column, where full names wrap it into three lines. Initials would
+ * fit too but read as an acronym rather than as a person, so the given name
+ * stays whole and only the family name shortens.
+ */
+export function workerShortName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[1][0].toUpperCase()}.`
+}
+
 // The job sheet names parts by their detail name from the cutting result,
 // falling back to the editor's D-numbering — never the raw part_ref (a uuid).
 export function productionPartNames(

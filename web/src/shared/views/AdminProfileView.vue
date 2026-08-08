@@ -203,7 +203,7 @@ onMounted(loadSessions)
       <div class="admin-card-b">
         <dl class="grid gap-4 sm:grid-cols-2">
           <div v-for="[label, value] in profileRows" :key="label">
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">{{ label }}</dt>
+            <dt class="text-[12.5px] font-semibold text-ink-muted">{{ label }}</dt>
             <dd class="mt-1 break-all text-base font-bold text-ink">{{ value }}</dd>
           </div>
         </dl>

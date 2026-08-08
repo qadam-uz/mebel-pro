@@ -286,7 +286,9 @@ onBeforeUnmount(detachTarget)
           {{ onboarding.activeHint.body }}
         </p>
         <div class="mt-3 flex items-center justify-between gap-3">
-          <span class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-deep">
+          <span
+            class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-strong"
+          >
             {{ $t('shell.onboarding.stepBadge', { n: onboarding.activeHint.step }) }}
           </span>
           <button

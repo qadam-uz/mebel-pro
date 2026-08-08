@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
       role="listbox"
       aria-multiselectable="true"
       tabindex="0"
-      class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
       :aria-labelledby="`${internalId}-label`"
       :aria-activedescendant="activeOptionId"
       @keydown="onKeydown"
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
           class="grid size-5 place-items-center rounded border"
           :class="
             modelValue.includes(option.value)
-              ? 'border-accent bg-accent text-white'
+              ? 'border-accent bg-accent text-on-accent'
               : 'border-hairline-strong bg-elevated text-transparent'
           "
           aria-hidden="true"
@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
         </span>
         <span class="min-w-0">
           <span class="block truncate font-bold">{{ option.label }}</span>
-          <span v-if="option.meta" class="block truncate font-mono text-[11px] text-ink-muted">
+          <span v-if="option.meta" class="block truncate text-[11px] text-ink-muted">
             {{ option.meta }}
           </span>
         </span>

@@ -30,19 +30,19 @@ export interface WorkshopDashboardAccess<TBranch extends PermissionBranch> {
   financeBranches: TBranch[]
   inventoryBranches: TBranch[]
   productionBranches: TBranch[]
-  /** Renders the order KPI, the per-branch card and the recent-orders table. */
+  /** Renders the «Ishlab chiqarishda» KPI and the order-derived work-list rows. */
   canOrders: boolean
-  /** Opens `/workshop/orders`. */
+  /** Opens `/workshop/orders`, and turns the order rows' buttons live. */
   canManageOrders: boolean
-  /** Renders the money tiles and the sales chart. */
+  /** Renders «Bugungi tushum» and the Savdo chart. */
   canFinance: boolean
-  /** Opens the income / expense ledgers and the debt board; also renders the debt tiles. */
+  /** Renders «Mijozlar qarzi» and opens the ledgers and the debt board. */
   canManageFinance: boolean
-  /** Renders the stock tiles and the low-stock card; also opens `/workshop/inventory`. */
+  /** Renders «Kam qolgan material» and the negative-stock row; opens Ombor. */
   canInventory: boolean
   /** Opens `/workshop/catalog` — no dashboard section of its own. */
   canCatalog: boolean
-  /** Renders the personal production queue; also opens the station pages. */
+  /** Renders the Stansiyalar panel; also opens the station pages. */
   canProduction: boolean
   /** At least one tile in the KPI grid, and therefore the card grid, renders. */
   hasKpis: boolean
@@ -87,7 +87,56 @@ export function workshopDashboardAccess<TBranch extends PermissionBranch>(
     canCatalog,
     canProduction,
     hasKpis,
-    // The production queue is the one section outside the KPI/card grid.
+    // The Stansiyalar panel is the one section outside the KPI/card grid, and
+    // it is the whole of what `canProduction` lights up: drop it and a
+    // process_production-only staffer lands in the "nothing here for you" empty
+    // state instead of on the two station queues (QAD-167).
     hasVisibleSection: hasKpis || canProduction,
+  }
+}
+
+/** How today's income compares with yesterday's, and whether it compares at all. */
+export interface DailyIncomeDelta {
+  todayTiyin: number
+  /** `null` when the series is too short to hold a yesterday. */
+  yesterdayTiyin: number | null
+  /**
+   * `percent` — a real ratio to show.
+   * `noYesterday` — yesterday was zero, so a percentage is undefined and the
+   * caption states the fact in words instead of rendering "∞%" or "+0%".
+   * `noCompare` — the series has no yesterday row to compare against.
+   */
+  kind: 'percent' | 'noYesterday' | 'noCompare'
+  /** Whole signed percent; only meaningful when `kind === 'percent'`. */
+  percent: number
+  /** Today at or above yesterday — the pill's ok/bad tone. */
+  up: boolean
+}
+
+/**
+ * Today vs. yesterday out of the finance summary's daily series.
+ *
+ * `daily_income` is densely filled by the backend (every calendar day in the
+ * range, zeros included) and always ends on today, so today is the last row and
+ * yesterday the one before it — no date arithmetic, and no gap to trip over.
+ */
+export function dailyIncomeDelta(
+  rows: ReadonlyArray<{ income_tiyin: number }> | null | undefined,
+): DailyIncomeDelta {
+  const series = rows ?? []
+  const todayTiyin = series.length > 0 ? series[series.length - 1].income_tiyin : 0
+  const yesterdayTiyin = series.length > 1 ? series[series.length - 2].income_tiyin : null
+  if (yesterdayTiyin === null) {
+    return { todayTiyin, yesterdayTiyin, kind: 'noCompare', percent: 0, up: todayTiyin > 0 }
+  }
+  if (yesterdayTiyin === 0) {
+    return { todayTiyin, yesterdayTiyin, kind: 'noYesterday', percent: 0, up: todayTiyin > 0 }
+  }
+  return {
+    todayTiyin,
+    yesterdayTiyin,
+    kind: 'percent',
+    percent: Math.round(((todayTiyin - yesterdayTiyin) / yesterdayTiyin) * 100),
+    up: todayTiyin >= yesterdayTiyin,
   }
 }

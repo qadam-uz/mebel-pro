@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BrandMark from '@/shared/components/BrandMark.vue'
 import { reactive } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -55,12 +56,12 @@ async function submit() {
   <main class="admin-auth-wrap">
     <section class="admin-auth-card" aria-labelledby="admin-login-title">
       <RouterLink :to="config.homePath" class="client-brand mb-7 inline-flex">
-        <img src="/favicon.svg" alt="" class="size-8" />
+        <BrandMark :size="32" />
         <span class="client-brand-name">Mebel Pro</span>
       </RouterLink>
 
       <form class="space-y-4" novalidate @submit.prevent="submit">
-        <h1 id="admin-login-title" class="font-serif text-3xl font-semibold leading-tight">
+        <h1 id="admin-login-title" class="font-display text-3xl font-semibold leading-tight">
           Admin paneliga kirish
         </h1>
 

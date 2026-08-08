@@ -188,7 +188,7 @@ onMounted(() => {
       <article
         v-for="order in visibleOrders"
         :key="order.id"
-        class="client-card client-card-link p-5 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+        class="client-card client-card-link p-5 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         role="link"
         tabindex="0"
         :aria-label="`${order.order_number} — ${order.branch_name}`"
@@ -205,12 +205,12 @@ onMounted(() => {
                  status pill already occupies this row on the right, and a second
                  boxed element would read as a second status. -->
             <p class="truncate text-sm text-ink-soft">
-              <span class="font-mono text-[15px] font-bold text-ink">{{ order.order_number }}</span>
+              <span class="text-[15px] font-bold text-ink">{{ order.order_number }}</span>
               · {{ order.workshop_name }} · {{ order.branch_name }}
             </p>
             <div class="mt-1 flex flex-wrap items-center gap-2">
               <h2
-                class="font-serif text-lg font-semibold"
+                class="font-display text-lg font-semibold"
                 :class="order.draft_name ? 'text-ink' : 'text-ink-muted'"
               >
                 {{ order.draft_name || $t('client.draft.untitled') }}
@@ -222,11 +222,11 @@ onMounted(() => {
               </span>
             </div>
             <p class="mt-1 text-sm text-ink-soft">
-              <b class="font-mono font-semibold text-ink">{{ order.item_count }}</b>
+              <b class="font-semibold text-ink">{{ order.item_count }}</b>
               {{ $t('client.unit.part', order.item_count) }} ·
-              <b class="font-mono font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
+              <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
               {{ $t('client.unit.sheet', order.planned_panels) }} ·
-              <span class="font-mono">{{ formatFullDate(order.created_at) }}</span>
+              <span>{{ formatFullDate(order.created_at) }}</span>
             </p>
           </div>
           <span :class="clientStatusPillClass(order.status)">
@@ -237,7 +237,7 @@ onMounted(() => {
         <div
           class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4"
         >
-          <div class="font-mono text-base font-bold text-ink">
+          <div class="text-base font-bold text-ink">
             {{ formatTiyin(order.total_tiyin) }}
           </div>
           <button

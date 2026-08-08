@@ -359,7 +359,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         <div>
           <div class="flex items-center gap-4">
             <span
-              class="grid size-14 place-items-center rounded-full bg-accent font-serif text-xl font-bold text-white"
+              class="grid size-14 place-items-center rounded-full bg-accent font-display text-xl font-bold text-on-accent"
             >
               {{ initials(user.full_name, 'U') }}
             </span>
@@ -422,9 +422,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         <div class="grow">
           <b>{{ $t('workshopAdmin.staffDetail.newTempPassword') }}</b>
           <div class="mt-1.5 flex flex-wrap items-center gap-2">
-            <span
-              class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
-            >
+            <span class="select-all rounded bg-white px-2.5 py-1 text-base font-bold text-ink">
               {{ workshop.lastTempPassword }}
             </span>
             <button
@@ -626,7 +624,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 <tr v-for="permission in permissionCatalog" :key="permission">
                   <td class="permission">
                     {{ permissionLabel(permission) }}
-                    <small class="block font-mono text-[10.5px] font-normal text-ink-muted">{{
+                    <small class="block text-[10.5px] font-normal text-ink-muted">{{
                       permission
                     }}</small>
                   </td>

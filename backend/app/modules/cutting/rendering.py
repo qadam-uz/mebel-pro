@@ -69,10 +69,10 @@ _THICKENING_TEXT_W_FACTOR = 1.5
 
 # Print equivalents of the web tokens the visualiser uses. Structure stays
 # grayscale for print; colour is reserved for the offcut semantics.
-_SUCCESS = HexColor("#15803d")  # --color-success: usable offcut
-_DANGER = HexColor("#be3a2b")  # --color-danger: waste offcut
-_INK_MUTED = HexColor("#5b6675")  # --color-ink-muted: waste offcut label, footer
-_INK_SOFT = HexColor("#475569")  # --color-ink-soft: placement labels
+_SUCCESS = HexColor("#067a4b")  # --color-success: usable offcut
+_DANGER = HexColor("#c9302a")  # --color-danger: waste offcut
+_INK_MUTED = HexColor("#666d79")  # --color-ink-muted: waste offcut label, footer
+_INK_SOFT = HexColor("#565c66")  # --color-ink-soft: placement labels
 
 # The vendored Unicode font pair is shared with the other in-process documents
 # (app/core/pdf.py); these aliases keep the module-local naming.

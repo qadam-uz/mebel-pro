@@ -117,6 +117,53 @@ export function formatDate(value: string | Date): string {
   return `${day}.${month}.${date.getFullYear()}`
 }
 
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+const MONTH_KEYS = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+] as const
+
+/**
+ * The dashboard dateline — "7 avgust, juma".
+ *
+ * Composed from the catalog rather than `Intl.DateTimeFormat` for the same
+ * reason `formatTiyin` pins its own currency suffix: ICU's date tables are
+ * trimmed on some runtimes and quietly fall back to English month names. It
+ * also needs its own month set. `formats.month.*` is capitalised nominative and
+ * shared with the calendar header, but a day-of-month phrase wants a different
+ * form — Russian needs the genitive ("7 августа", not "7 Август") — so the
+ * words come from `formats.monthOf.*`, and the two sets stay separate.
+ */
+export function formatDayMonthWeekday(value: string | Date): string {
+  const date = parseDateValue(value)
+  return translate('formats.dayMonthWeekday', {
+    day: date.getDate(),
+    month: translate(`formats.monthOf.${MONTH_KEYS[date.getMonth()]}`),
+    weekday: translate(`formats.weekday.${WEEKDAY_KEYS[date.getDay()]}`),
+  })
+}
+
+// A signed percentage for a delta pill — "+18%", "−12%". The sign comes from the
+// number formatter, not from a concatenated glyph, so the locale picks its own
+// minus and its own spacing before the sign ("+18 %" in Russian).
+export function formatSignedPercent(percent: number): string {
+  return new Intl.NumberFormat(intlLocale(), {
+    style: 'percent',
+    maximumFractionDigits: 0,
+    signDisplay: 'exceptZero',
+  }).format(percent / 100)
+}
+
 export function formatDateTime(value: string | Date): string {
   const date = parseDateValue(value)
   const hours = String(date.getHours()).padStart(2, '0')

@@ -358,7 +358,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="page-head">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 class="!font-mono !text-[22px]">{{ job.order_number }}</h1>
+          <h1 class="!text-[22px]">{{ job.order_number }}</h1>
           <!-- The job's size in numbers, on the number's own row; material
                names stay in the panels rail and the parts list. -->
           <div class="prod-stats">
@@ -370,13 +370,13 @@ onBeforeUnmount(() => {
               <b>{{ job.client_first_name }}</b>
             </span>
             <span class="prod-stat"
-              >{{ $t('finance.job.parts') }} <b class="font-mono">{{ job.item_count }}</b></span
+              >{{ $t('finance.job.parts') }} <b>{{ job.item_count }}</b></span
             >
             <span v-if="job.planned_panels > 0" class="prod-stat">
-              {{ $t('finance.job.panels') }} <b class="font-mono">{{ job.planned_panels }}</b>
+              {{ $t('finance.job.panels') }} <b>{{ job.planned_panels }}</b>
             </span>
             <span v-if="kromTotal" class="prod-stat">
-              {{ $t('finance.station.banding') }} <b class="font-mono">{{ kromTotal }}</b>
+              {{ $t('finance.station.banding') }} <b>{{ kromTotal }}</b>
             </span>
           </div>
         </div>
@@ -411,7 +411,7 @@ onBeforeUnmount(() => {
               <div v-if="edgeLegend.length" class="prod-legend">
                 <span v-for="line in edgeLegend" :key="line.key" class="prod-legend-item">
                   <span class="prod-legend-swatch" :style="{ background: line.swatch }"></span>
-                  {{ line.label }} · <b class="font-mono">{{ line.metres }}</b>
+                  {{ line.label }} · <b>{{ line.metres }}</b>
                 </span>
               </div>
             </div>
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
             <span class="w-32 truncate text-[13.5px] font-semibold text-ink-soft">
               {{ itemName(item, index) }}
             </span>
-            <span class="grow font-mono text-[15px] font-bold text-ink">
+            <span class="grow text-[15px] font-bold text-ink">
               {{ item.length_mm }} × {{ item.width_mm }}
             </span>
             <span class="sr-only">{{ bandedSidesText(item) }}</span>
@@ -487,9 +487,7 @@ onBeforeUnmount(() => {
               }"
               aria-hidden="true"
             ></span>
-            <span class="w-10 text-right font-mono text-[13px] text-ink-soft">
-              ×{{ item.quantity }}
-            </span>
+            <span class="w-10 text-right text-[13px] text-ink-soft"> ×{{ item.quantity }} </span>
           </div>
         </div>
       </section>

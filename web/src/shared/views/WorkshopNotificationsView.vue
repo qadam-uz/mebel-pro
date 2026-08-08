@@ -147,8 +147,8 @@ onMounted(() => {
         v-for="item in filtered"
         :key="item.id"
         type="button"
-        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-hairline p-4 text-left transition hover:border-ink"
-        :class="item.read_at === null ? 'bg-accent-soft' : 'bg-elevated'"
+        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border bg-elevated p-4 text-left transition hover:border-ink"
+        :class="item.read_at === null ? 'border-hairline-strong' : 'border-hairline'"
         @click="openItem(item)"
       >
         <span
@@ -163,7 +163,17 @@ onMounted(() => {
             {{ body(item) }}
           </span>
         </span>
-        <span class="font-mono text-[11px] text-ink-muted">{{ formatDate(item.created_at) }}</span>
+        <!-- Unread reads as emphasised, not selected: the signal dot plus a
+             heavier edge on the same white row — a `sunk` fill would sink the
+             unread rows towards the canvas and read as dimmer, not louder. The
+             word sits behind the dot for anyone who cannot see the colour. -->
+        <span class="flex items-center gap-2 text-[11px] text-ink-muted">
+          <template v-if="item.read_at === null">
+            <span class="size-2 shrink-0 rounded-full bg-signal" aria-hidden="true"></span>
+            <span class="sr-only">{{ $t('shell.notifications.unreadMark') }}</span>
+          </template>
+          {{ formatDate(item.created_at) }}
+        </span>
       </button>
     </div>
   </section>

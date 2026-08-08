@@ -92,8 +92,8 @@ function select(row: ClientBranchOption) {
         :aria-label="$t('cutting.branch.searchAria')"
       />
     </div>
-    <div v-if="recommended" class="rounded-lg border-2 border-accent bg-accent-soft p-3">
-      <span class="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-white">{{
+    <div v-if="recommended" class="rounded-lg border-2 border-accent-tint bg-accent-soft p-3">
+      <span class="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-on-accent">{{
         $t('cutting.branch.recommended')
       }}</span
       ><BranchRow
@@ -113,7 +113,7 @@ function select(row: ClientBranchOption) {
         class="flex items-center gap-2 border-b border-hairline bg-sunk px-3 py-2 text-sm font-bold text-ink"
       >
         <span
-          class="grid size-7 place-items-center rounded-full bg-accent-soft text-[11px] text-accent"
+          class="grid size-7 place-items-center rounded-full bg-accent-soft text-[11px] text-accent-strong"
           >{{ initials(rows[0].workshop_name) }}</span
         >{{ rows[0].workshop_name }}
         <span class="text-ink-muted"

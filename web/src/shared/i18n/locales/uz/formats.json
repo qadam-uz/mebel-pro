@@ -30,6 +30,21 @@
     "nov": "Noyabr",
     "dec": "Dekabr"
   },
+  "monthOf": {
+    "jan": "yanvar",
+    "feb": "fevral",
+    "mar": "mart",
+    "apr": "aprel",
+    "may": "may",
+    "jun": "iyun",
+    "jul": "iyul",
+    "aug": "avgust",
+    "sep": "sentabr",
+    "oct": "oktabr",
+    "nov": "noyabr",
+    "dec": "dekabr"
+  },
+  "dayMonthWeekday": "{day} {month}, {weekday}",
   "weekdayShort": {
     "mon": "Du",
     "tue": "Se",
@@ -38,6 +53,15 @@
     "fri": "Ju",
     "sat": "Sh",
     "sun": "Ya"
+  },
+  "weekday": {
+    "mon": "dushanba",
+    "tue": "seshanba",
+    "wed": "chorshanba",
+    "thu": "payshanba",
+    "fri": "juma",
+    "sat": "shanba",
+    "sun": "yakshanba"
   },
   "rangePreset": {
     "all": "Barcha sanalar",

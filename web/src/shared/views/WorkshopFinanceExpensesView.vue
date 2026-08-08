@@ -1187,7 +1187,7 @@ onMounted(async () => {
             >
               <span>
                 {{ $t('common.field.total') }}
-                <b class="ml-1 font-mono text-ink">
+                <b class="ml-1 text-ink">
                   {{ formatTiyin(incomeSettlement.total_tiyin) }}
                 </b>
               </span>
@@ -1198,14 +1198,14 @@ onMounted(async () => {
                     ? $t('finance.income.settlementOthers')
                     : $t('finance.income.settlementRecorded')
                 }}
-                <b class="ml-1 font-mono text-ink">
+                <b class="ml-1 text-ink">
                   {{ formatTiyin(incomeSettlement.recorded_tiyin) }}
                 </b>
               </span>
               <span aria-hidden="true">·</span>
               <span>
                 {{ $t('finance.field.remainder') }}
-                <b class="ml-1 font-mono text-danger">
+                <b class="ml-1 text-danger">
                   {{ formatTiyin(incomeSettlement.balance_tiyin) }}
                 </b>
               </span>
@@ -1236,7 +1236,7 @@ onMounted(async () => {
               <button
                 v-if="showRemainingBalanceButton"
                 type="button"
-                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm px-2 py-1 text-[11px] font-bold text-accent transition hover:bg-accent-soft"
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm px-2 py-1 text-[11px] font-bold text-accent-deep transition hover:bg-sunk"
                 @click="fillRemainingBalance"
               >
                 {{ $t('finance.field.remainder') }}
@@ -1430,10 +1430,7 @@ onMounted(async () => {
                   <small class="text-ink-soft">{{ expense.vendor ?? '—' }}</small>
                   <!-- Which faktura the money paid — the link the whole ticket
                        exists to make visible. -->
-                  <small
-                    v-if="expense.invoice_no"
-                    class="block font-mono text-[11px] text-ink-muted"
-                  >
+                  <small v-if="expense.invoice_no" class="block text-[11px] text-ink-muted">
                     {{ expense.invoice_no }}
                   </small>
                 </td>

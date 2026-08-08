@@ -54,17 +54,9 @@ const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-// "+ Yangi buyurtma" is enabled only when the staffer can place orders on the
-// CURRENT topbar branch and that branch is open — the flow is fixed to it.
-const currentBranch = computed(() =>
-  workshop.branches.find((item) => item.id === workshop.selectedBranchContext),
-)
-const canCreateWalkIn = computed(
-  () =>
-    !!currentBranch.value &&
-    currentBranch.value.status === 'active' &&
-    permissions.canOnBranch(p.manageOrders, currentBranch.value.id),
-)
+// "+ Yangi buyurtma" moved to the shell sidebar, which owns the gate now (an
+// open branch the staffer may place orders on). It is on screen from every page,
+// so this list does not repeat it.
 const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
@@ -629,9 +621,7 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-outline min-h-11 px-3 text-xs"
         >
           {{ $t('orders.list.drafts')
-          }}<span v-if="draftCount > 0" class="ml-1 font-mono font-bold text-ink"
-            >· {{ draftCount }}</span
-          >
+          }}<span v-if="draftCount > 0" class="ml-1 font-bold text-ink">· {{ draftCount }}</span>
         </RouterLink>
         <!-- Icon-only segmented view switch; each segment carries its accessible
              name (DESIGN.md icon rule) and a hover tooltip. -->
@@ -644,7 +634,9 @@ onBeforeUnmount(() => {
             type="button"
             class="grid size-10 place-items-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50"
             :class="
-              mode === 'board' ? 'bg-accent text-white' : 'text-ink-soft hover:bg-bg hover:text-ink'
+              mode === 'board'
+                ? 'bg-accent text-on-accent'
+                : 'text-ink-soft hover:bg-bg hover:text-ink'
             "
             :disabled="terminalStatus"
             :aria-pressed="mode === 'board'"
@@ -658,7 +650,9 @@ onBeforeUnmount(() => {
             type="button"
             class="grid size-10 place-items-center rounded-md transition"
             :class="
-              mode === 'table' ? 'bg-accent text-white' : 'text-ink-soft hover:bg-bg hover:text-ink'
+              mode === 'table'
+                ? 'bg-accent text-on-accent'
+                : 'text-ink-soft hover:bg-bg hover:text-ink'
             "
             :aria-pressed="mode === 'table'"
             :aria-label="$t('orders.list.tableView')"
@@ -708,24 +702,9 @@ onBeforeUnmount(() => {
       <button v-if="showResetAll" type="button" class="mp-filter-reset" @click="resetFilters">
         {{ $t('orders.list.resetFilters') }}
       </button>
-      <!-- Primary action lives on the filter line; the `.mp-filters > .mp-button`
-           rule aligns it to the control baseline and pushes it to the far end. -->
-      <RouterLink
-        v-if="canCreateWalkIn"
-        :to="rolePath('/workshop/orders/new')"
-        class="mp-button mp-button-primary"
-      >
-        {{ $t('orders.list.create') }}
-      </RouterLink>
-      <button
-        v-else
-        class="mp-button mp-button-outline"
-        type="button"
-        disabled
-        :title="$t('orders.list.createBlocked')"
-      >
-        {{ $t('orders.list.create') }}
-      </button>
+      <!-- No create button here. The shell's sidebar carries `+ Yangi buyurtma`
+           on every screen, with the same gate; a second copy on this page would
+           be two identical primary controls competing on one screen. -->
     </div>
 
     <!-- The filtered state must announce itself (DESIGN.md UX bar: visible
@@ -741,7 +720,7 @@ onBeforeUnmount(() => {
            while the sentence around it stays one reorderable message. -->
       <i18n-t v-else keypath="orders.list.filterCount" scope="global">
         <template #count>
-          <b class="font-mono text-ink"
+          <b class="text-ink"
             >{{ orders.workshopOrders.length }}{{ orders.workshopOrdersHasMore ? '+' : '' }}</b
           >
         </template>

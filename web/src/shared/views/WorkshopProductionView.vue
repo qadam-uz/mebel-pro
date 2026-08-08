@@ -347,8 +347,8 @@ watch(
         </div>
         <div class="card p-3">
           <div v-for="job in completedToday" :key="job.id" class="prod-done-row">
-            <span class="font-extrabold text-accent" aria-hidden="true">✓</span>
-            <span class="font-mono text-[13px] font-bold text-ink">{{ job.order_number }}</span>
+            <span class="font-extrabold text-success" aria-hidden="true">✓</span>
+            <span class="text-[13px] font-bold text-ink">{{ job.order_number }}</span>
             <span class="truncate">{{ jobMeta(job) }}</span>
             <span class="when">{{ completedLabel(job) }}</span>
           </div>

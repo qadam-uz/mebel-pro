@@ -62,26 +62,26 @@ withDefaults(
            message around the <b> would make the word order untranslatable. -->
       <i18n-t v-if="active" keypath="forms.filterStatus.found" tag="span" scope="global">
         <template #count>
-          <b class="font-mono text-ink">{{ count }}{{ hasMore ? '+' : '' }}</b>
+          <b class="text-ink">{{ count }}{{ hasMore ? '+' : '' }}</b>
         </template>
         <template #noun>{{ noun }}</template>
       </i18n-t>
       <i18n-t v-else-if="total" keypath="forms.filterStatus.count" tag="span" scope="global">
         <template #count>
-          <b class="font-mono text-ink">{{ count }}</b>
+          <b class="text-ink">{{ count }}</b>
         </template>
         <template #noun>{{ noun }}</template>
       </i18n-t>
       <span v-if="active && total" class="text-ink-muted">·</span>
       <i18n-t v-if="total" keypath="forms.filterStatus.total" tag="span" scope="global">
         <template #total>
-          <b class="font-mono text-ink">{{ total }}</b>
+          <b class="text-ink">{{ total }}</b>
         </template>
       </i18n-t>
       <button
         v-if="onReset"
         type="button"
-        class="text-accent underline underline-offset-2"
+        class="text-accent-deep underline underline-offset-2"
         @click="onReset()"
       >
         {{ $t('forms.filterStatus.resetAll') }}

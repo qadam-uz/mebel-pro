@@ -124,8 +124,11 @@ async function loadMessages(locale: Locale): Promise<void> {
 }
 
 /** `lang` drives screen-reader pronunciation and the browser's own translation
- *  prompt; `data-locale` drives the Cyrillic font swap in `main.css`. Both are
- *  set from one place so they can never disagree. */
+ *  prompt; `data-locale` is the CSS hook for anything that has to differ per
+ *  locale. Nothing uses it right now — it used to swap the sans family for the
+ *  two Cyrillic locales, which the current two-family system made unnecessary
+ *  (both Wix Madefor faces carry Cyrillic). Both attributes are set from one
+ *  place so they can never disagree. */
 function applyDocumentLocale(locale: Locale): void {
   if (typeof document === 'undefined') return
   document.documentElement.lang = locale

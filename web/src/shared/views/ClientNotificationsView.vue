@@ -72,10 +72,13 @@ function iconName(item: NotificationItem) {
   return notificationIconName(item)
 }
 
+// The glyph colour travels with the fill: bone on graphite (pure white on
+// graphite reads as glare), white on the saturated status reds and greens.
 function iconClass(item: NotificationItem) {
-  if (item.event_code.includes('cancel')) return 'bg-danger'
-  if (item.event_code.includes('ready') || item.event_code.includes('complete')) return 'bg-success'
-  return 'bg-accent'
+  if (item.event_code.includes('cancel')) return 'bg-danger text-white'
+  if (item.event_code.includes('ready') || item.event_code.includes('complete'))
+    return 'bg-success text-white'
+  return 'bg-accent text-on-accent'
 }
 
 function destination(item: NotificationItem) {
@@ -180,16 +183,24 @@ onMounted(() => {
       </div>
 
       <div v-else class="grid gap-2">
+        <!-- The unread edge is a ring, and the ring utility re-declares
+             `box-shadow` from the utilities layer — which would drop the card's
+             own `--shadow-card` — so the two shadow utilities come along to put
+             the elevation and the hover lift back. -->
         <button
           v-for="item in visibleItems"
           :key="item.id"
           type="button"
           class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left client-card-link max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
-          :class="item.read_at === null ? 'bg-accent-soft border-accent-tint' : ''"
+          :class="
+            item.read_at === null
+              ? 'shadow-card ring-1 ring-hairline-strong hover:shadow-lifted'
+              : ''
+          "
           @click="openItem(item)"
         >
           <span
-            class="client-notif-icon grid size-[38px] place-items-center rounded-lg text-white shadow-[0_2px_6px_-2px_rgb(15_27_45_/_22%)]"
+            class="client-notif-icon grid size-[38px] place-items-center rounded-lg shadow-[0_2px_6px_-2px_color-mix(in_srgb,var(--color-ink)_22%,transparent)]"
             :class="iconClass(item)"
             aria-hidden="true"
           >
@@ -199,7 +210,22 @@ onMounted(() => {
             <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
             <span v-if="body(item)" class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
           </span>
-          <span class="font-mono text-xs text-ink-muted max-[480px]:col-start-2 max-[480px]:mt-1">
+          <!-- Unread reads as emphasised, not selected: the signal dot plus a
+               heavier edge, on the same white card. A `sunk` fill would pull the
+               row down towards the canvas and make the unread ones look dimmer
+               than the read ones. The dot carries its word for anyone who cannot
+               see it. The edge is a RING, not a border — `.client-card` is
+               shadow-only, so `border-hairline-strong` alone would set a colour
+               on a zero-width border and the row would carry the dot and nothing
+               else. See the class binding above for why the shadow utilities
+               ride along. -->
+          <span
+            class="flex items-center gap-2 text-xs text-ink-muted max-[480px]:col-start-2 max-[480px]:mt-1"
+          >
+            <template v-if="item.read_at === null">
+              <span class="size-2 shrink-0 rounded-full bg-signal" aria-hidden="true"></span>
+              <span class="sr-only">{{ $t('shell.notifications.unreadMark') }}</span>
+            </template>
             {{ formatRelativeDate(item.created_at) }}
           </span>
         </button>

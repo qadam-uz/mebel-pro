@@ -71,7 +71,7 @@ function panelGroups(result: CuttingResult) {
         <h4 class="min-w-0 flex-1 text-sm font-extrabold leading-tight text-ink">
           {{ group.label }}
         </h4>
-        <span class="font-mono text-xs font-bold text-ink-muted"
+        <span class="text-xs font-bold text-ink-muted"
           >{{ group.panels.length }} {{ $t('cutting.unit.sheet', group.panels.length) }}</span
         >
       </div>
@@ -83,7 +83,7 @@ function panelGroups(result: CuttingResult) {
           class="grid w-24 shrink-0 gap-1 rounded-md border p-1.5 text-left transition hover:border-accent"
           :class="
             panel.id === activePanelId
-              ? 'border-accent bg-accent-soft'
+              ? 'border-accent-tint bg-accent-soft'
               : 'border-hairline bg-elevated'
           "
           :aria-pressed="panel.id === activePanelId"
@@ -117,7 +117,7 @@ function panelGroups(result: CuttingResult) {
               />
             </svg>
             <span
-              class="absolute bottom-1 right-1 rounded bg-elevated/95 px-1 py-0.5 font-mono text-[10.5px] font-black text-ink shadow-sm"
+              class="absolute bottom-1 right-1 rounded bg-elevated/95 px-1 py-0.5 text-[10.5px] font-black text-ink shadow-sm"
             >
               {{ panelFillPercent(result, panel) }}
             </span>

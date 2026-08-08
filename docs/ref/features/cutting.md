@@ -631,26 +631,26 @@ Same workspace, editing disabled, with a banner naming the bound order.
 The workshop app runs the **same editor component** for staff-created walk-in drafts
 ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) in a **fixed-branch mode**:
 the branch selector is hidden, the branch is locked to the branch the flow was entered from
-and frozen into the draft at creation (a later topbar branch switch never retargets an
+and frozen into the draft at creation (a later branch switch in the picker never retargets an
 in-progress draft), and a persistent **identity strip** in the editor header names the
 walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
 just during the continuous create flow), so a re-opened draft still names who it's for. A
-draft that somehow carries no branch falls back to the current topbar context rather than
+draft that somehow carries no branch falls back to the current branch context rather than
 demanding a fresh pick. Everything else — parts editor, edge picker, optimise, results — is
 this page, unchanged.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
-unfinished walk-in cuttings, reached from a **Chizmalar** entry beside **+ Yangi buyurtma** on
-the Orders screen (the entry carries a count of open drafts). The list follows the topbar
-branch context and reloads when it changes — a draft is frozen to one branch, so the page
+unfinished walk-in cuttings, reached from a **Chizmalar** entry at the right end of the Orders
+screen's filter row, which carries a count of open drafts. The list follows the selected
+branch and reloads when it changes — a draft is frozen to one branch, so the page
 shows the branch you're standing in, and the Chizmalar count matches. Each row shows the walk-in
 client (name + phone), the locked branch, part / panel / waste figures, and a **derived status
 label** — *Tayyor — buyurtma berish mumkin* once a result is chosen, else *Tahrirlanmoqda*.
 A draft carries no status column of its own; the label is derived from whether a cutting
 result has been chosen. **Davom etish** reopens the shared editor on the saved draft (which
 routes on to checkout once a result is picked); a per-row delete discards it with a danger
-confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via **+ Yangi
-buyurtma**) / error, each recoverable.
+confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via the sidebar's
+**+ Yangi buyurtma**) / error, each recoverable.
 
 An order's **Cutting** tab embeds the SVG of the order's confirmed result and a button that opens the PDF in a new tab.
 

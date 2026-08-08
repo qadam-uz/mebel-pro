@@ -488,7 +488,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div>
-            <h3 class="mb-2 text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+            <h3 class="mb-2 text-[12.5px] font-semibold text-ink-muted">
               {{ $t('workshopAdmin.staff.initialGrants') }}
             </h3>
             <div v-if="createGrantBranches.length > 0" class="table-wrap">
@@ -505,7 +505,7 @@ onBeforeUnmount(() => {
                   <tr v-for="permission in permissionCatalog" :key="permission">
                     <td class="permission">
                       {{ permissionLabel(permission) }}
-                      <small class="block font-mono text-[10.5px] font-normal text-ink-muted">{{
+                      <small class="block text-[10.5px] font-normal text-ink-muted">{{
                         permission
                       }}</small>
                     </td>
@@ -548,9 +548,7 @@ onBeforeUnmount(() => {
         <div class="grow">
           <b>{{ $t('workshopAdmin.staff.tempPassword') }}</b>
           <div class="mt-1.5 flex flex-wrap items-center gap-2">
-            <span
-              class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
-            >
+            <span class="select-all rounded bg-white px-2.5 py-1 text-base font-bold text-ink">
               {{ createdTempPassword }}
             </span>
             <button

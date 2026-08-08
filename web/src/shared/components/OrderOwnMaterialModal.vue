@@ -75,7 +75,7 @@ function save() {
           >
             −
           </button>
-          <span class="font-mono text-lg font-extrabold text-ink">
+          <span class="text-lg font-extrabold text-ink">
             {{ counts[row.materialId] ?? 0 }}
           </span>
           <button

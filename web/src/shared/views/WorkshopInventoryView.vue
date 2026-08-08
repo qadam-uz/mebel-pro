@@ -60,7 +60,22 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const today = formatDateInputValue(new Date())
-const activeTab = ref<'stock' | 'invoices' | 'tx' | 'suppliers'>('stock')
+const INVENTORY_TABS = ['stock', 'invoices', 'tx', 'suppliers'] as const
+type InventoryTab = (typeof INVENTORY_TABS)[number]
+
+// The dashboard's «Kirim yozish» work-list row has to land on the arrival form,
+// which is a modal inside this page and has no URL of its own. So the page reads
+// a small front-end-only query on mount — `?tab=invoices&action=kirim` — the
+// same way it already honours `?search=`. Nothing server-side sees it, and the
+// `action` is stripped once consumed so a reload does not reopen the form.
+function routeTab(): InventoryTab | null {
+  const value = route.query.tab
+  return typeof value === 'string' && (INVENTORY_TABS as readonly string[]).includes(value)
+    ? (value as InventoryTab)
+    : null
+}
+
+const activeTab = ref<InventoryTab>(routeTab() ?? 'stock')
 const inventoryTabs = computed<ChoiceOption[]>(() => [
   { value: 'stock', label: t('inventory.tab.stock') },
   { value: 'invoices', label: t('inventory.tab.invoices') },
@@ -887,16 +902,31 @@ watch([invoiceSearch, invoicePaymentFilter], () => {
 
 // Materials feed the invoice line pickers, suppliers feed its header — both
 // live on the stock/supplier endpoints, so the Kirimlar tab loads them too.
-watch(activeTab, (tab) => {
-  if (tab !== 'invoices' || !selectedBranchId.value) return
+function primeInvoicePickers() {
+  if (!selectedBranchId.value) return
   if (workshop.stockItems.length === 0) void workshop.loadStock(selectedBranchId.value)
   void ensureSuppliersLoaded()
+}
+
+watch(activeTab, (tab) => {
+  if (tab !== 'invoices') return
+  primeInvoicePickers()
 })
 
 onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
   await refreshActiveInventoryTab({ force: true })
+  // A `?tab=` deep link opens straight on its tab, so the tab-change watcher
+  // that primes the line pickers never fired for it.
+  if (activeTab.value === 'invoices') primeInvoicePickers()
+  if (route.query.action !== 'kirim') return
+  // Consumed: drop it from the URL so a reload (or Back) does not reopen the
+  // form the operator just closed.
+  const query = { ...route.query }
+  delete query.action
+  await router.replace({ query })
+  openInvoiceModal()
 })
 
 onBeforeUnmount(() => {
@@ -1451,7 +1481,7 @@ onBeforeUnmount(() => {
             <tbody>
               <template v-for="invoice in workshop.supplierInvoices" :key="invoice.id">
                 <tr class="row-clickable">
-                  <td class="nm font-mono">{{ invoice.invoice_no }}</td>
+                  <td class="nm">{{ invoice.invoice_no }}</td>
                   <td>
                     {{ invoice.supplier_name ?? '—' }}
                     <small v-if="invoice.note" class="block truncate text-ink-muted">

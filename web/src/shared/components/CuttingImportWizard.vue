@@ -453,13 +453,13 @@ function previewCell(row: (string | null)[], column: number) {
   >
     <div class="grid gap-4">
       <div v-if="error" class="client-banner danger" role="alert">
-        <span class="font-mono font-black">!</span>
+        <span class="font-black">!</span>
         <span>{{ error }}</span>
       </div>
 
       <section v-if="step === 'file'" class="grid gap-4">
         <label
-          class="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-hairline-strong bg-sunk px-5 py-6 text-center transition hover:border-accent hover:bg-accent-soft/40"
+          class="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-hairline-strong bg-sunk px-5 py-6 text-center transition hover:border-accent hover:bg-neutral-soft"
         >
           <Icon name="upload" class="size-9 text-accent" />
           <span class="text-sm font-extrabold text-ink">{{ $t('cutting.import.dropzone') }}</span>
@@ -492,9 +492,7 @@ function previewCell(row: (string | null)[], column: number) {
             :key="source.extension"
             class="grid gap-x-3 gap-y-1 border-t border-hairline pt-2 sm:grid-cols-[68px_minmax(0,1fr)]"
           >
-            <span class="font-mono text-xs font-extrabold text-accent-deep">{{
-              source.extension
-            }}</span>
+            <span class="text-xs font-extrabold text-accent-deep">{{ source.extension }}</span>
             <div class="min-w-0">
               <p class="text-sm font-extrabold text-ink">{{ source.program }}</p>
               <p class="mt-0.5 text-sm text-ink-soft">{{ source.how }}</p>
@@ -519,7 +517,7 @@ function previewCell(row: (string | null)[], column: number) {
           </span>
           <button
             type="button"
-            class="ml-auto text-sm font-extrabold text-accent hover:text-accent-hover"
+            class="ml-auto text-sm font-extrabold text-accent-deep hover:text-accent-strong"
             @click="chooseAnotherFile"
           >
             {{ $t('cutting.import.anotherFile') }}
@@ -527,7 +525,7 @@ function previewCell(row: (string | null)[], column: number) {
         </div>
 
         <div v-if="canCommitMapLayout" class="client-banner info">
-          <span class="font-mono font-black">i</span>
+          <span class="font-black">i</span>
           <span>{{ $t('cutting.import.mapLayoutKept') }}</span>
         </div>
 
@@ -592,7 +590,7 @@ function previewCell(row: (string | null)[], column: number) {
             >
               <div class="flex items-center justify-between gap-3">
                 <b class="min-w-0 truncate text-ink">{{ sheet.name }}</b>
-                <span class="shrink-0 font-mono text-ink-muted">
+                <span class="shrink-0 text-ink-muted">
                   {{ sheet.width_mm }}×{{ sheet.height_mm }}
                 </span>
               </div>
@@ -655,14 +653,14 @@ function previewCell(row: (string | null)[], column: number) {
             </span>
             <span
               v-if="mappingComplete && !columnsExpanded"
-              class="min-w-0 truncate font-mono text-xs text-ink-soft"
+              class="min-w-0 truncate text-xs text-ink-soft"
             >
               {{ mappingSummary.join(' · ') }}
             </span>
             <button
               v-if="mappingComplete"
               type="button"
-              class="ml-auto text-sm font-extrabold text-accent hover:text-accent-hover"
+              class="ml-auto text-sm font-extrabold text-accent-deep hover:text-accent-strong"
               :aria-expanded="columnsExpanded"
               @click="columnsOpen = !columnsOpen"
             >
@@ -718,7 +716,7 @@ function previewCell(row: (string | null)[], column: number) {
                           <span class="text-ink-muted" aria-hidden="true">⌄</span>
                         </summary>
                         <div
-                          class="absolute left-0 z-30 mt-1 grid w-52 gap-1 rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_40px_-24px_rgb(15_27_45_/_55%)]"
+                          class="absolute left-0 z-30 mt-1 grid w-52 gap-1 rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_40px_-24px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
                         >
                           <button
                             type="button"
@@ -776,7 +774,7 @@ function previewCell(row: (string | null)[], column: number) {
         <!-- The only decision that always needs a person. -->
         <section v-if="parsed" class="grid gap-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="text-sm font-extrabold uppercase text-ink-muted">
+            <h3 class="text-sm font-semibold text-ink-muted">
               {{ $t('cutting.import.materialsTitle') }}
             </h3>
           </div>
@@ -873,7 +871,7 @@ function previewCell(row: (string | null)[], column: number) {
           </div>
 
           <div v-if="canCommitMapLayout && !mapMaterialSizesMatch" class="client-banner danger">
-            <span class="font-mono font-black">!</span>
+            <span class="font-black">!</span>
             <span>{{ $t('cutting.import.layoutDropped') }}</span>
           </div>
         </section>

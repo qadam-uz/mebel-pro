@@ -193,7 +193,7 @@ function revealDrawing() {
           >
             <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
             <span class="min-w-0 font-bold leading-tight text-ink-soft">{{ material.label }}</span>
-            <span class="shrink-0 font-mono text-ink"
+            <span class="shrink-0 text-ink"
               >{{ material.count }} {{ $t('cutting.unit.sheet', material.count) }}</span
             >
           </li>
@@ -219,7 +219,7 @@ function revealDrawing() {
                 {{ row.label }}
               </span>
             </span>
-            <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
+            <span class="shrink-0 text-ink">{{ metres(row.total) }}</span>
           </li>
         </ul>
         <p v-else class="mt-2 text-sm text-ink-soft">{{ $t('cutting.result.noEdgeUsed') }}</p>
@@ -241,7 +241,7 @@ function revealDrawing() {
             class="rounded-md border px-3 py-2 text-left text-sm transition"
             :class="
               group.partRef === activePartRef
-                ? 'border-accent bg-accent-soft text-accent'
+                ? 'border-accent-tint bg-accent-soft text-accent-strong'
                 : 'border-hairline bg-elevated text-ink hover:border-accent-tint'
             "
             @click="selectPartGroup(group.partRef)"
@@ -250,14 +250,12 @@ function revealDrawing() {
               <b class="min-w-0 truncate font-semibold"
                 >{{ group.name }} · {{ group.length_mm }}×{{ group.width_mm }}</b
               >
-              <span
-                class="rounded bg-sunk px-1.5 py-0.5 font-mono text-[11px] font-bold text-ink-muted"
-              >
+              <span class="rounded bg-sunk px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
                 × {{ group.count }}
               </span>
               <span
                 v-if="group.rotatedCount > 0"
-                class="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent"
+                class="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent-strong"
               >
                 ↻ {{ group.rotatedCount }}
               </span>

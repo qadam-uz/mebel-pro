@@ -20,6 +20,7 @@
     "sessions": "Sessiyalar",
     "logout": "Chiqib ketish",
     "menuAria": "{name} — hisob menyusi",
+    "menuAriaWithMeta": "{name} · {meta} — hisob menyusi",
     "logoutFailed": "Chiqib bo'lmadi. Qayta urinib ko'ring."
   },
   "tenant": {
@@ -36,7 +37,8 @@
     "entity": "Filial ochilgan yozuvdan olinadi"
   },
   "nav": {
-    "newOrdersAria": "{label} — {n} ta yangi buyurtma"
+    "newOrdersAria": "{label} — {n} ta yangi buyurtma",
+    "queuedAria": "{label} — navbatda {n} ta buyurtma"
   },
   "search": {
     "label": "Global qidiruv",
@@ -81,6 +83,7 @@
     "filterLabel": "Tur",
     "filterAll": "Hammasi",
     "filterUnread": "O'qilmagan",
+    "unreadMark": "O'qilmagan",
     "filterOrders": "Buyurtmalar",
     "filterInventory": "Ombor",
     "filterFinance": "Moliya",

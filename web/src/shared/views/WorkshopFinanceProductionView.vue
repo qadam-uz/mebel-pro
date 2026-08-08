@@ -106,7 +106,9 @@ watch([dateFrom, dateTo], () => {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">{{ $t('finance.labour.title') }}</h1>
+        <h1 class="font-display text-3xl font-semibold text-ink">
+          {{ $t('finance.labour.title') }}
+        </h1>
       </div>
     </div>
 
@@ -154,7 +156,7 @@ watch([dateFrom, dateTo], () => {
     <section v-else class="mp-surface overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full text-left text-sm">
-          <thead class="bg-sunk text-xs uppercase text-ink-muted">
+          <thead class="bg-sunk text-[12.5px] text-ink-muted">
             <tr>
               <th class="px-5 py-3">{{ $t('finance.field.worker') }}</th>
               <th class="px-5 py-3 text-right">{{ $t('finance.labour.colPanelsCut') }}</th>
@@ -167,13 +169,13 @@ watch([dateFrom, dateTo], () => {
           <tbody class="divide-y divide-hairline">
             <tr v-for="row in finance.production.rows" :key="row.user_id">
               <td class="px-5 py-3 font-bold text-ink">{{ row.full_name }}</td>
-              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+              <td class="px-5 py-3 text-right text-xs tabular-nums">
                 {{ row.panels_cut }}
               </td>
-              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+              <td class="px-5 py-3 text-right text-xs tabular-nums">
                 {{ row.cut_count }}
               </td>
-              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+              <td class="px-5 py-3 text-right text-xs tabular-nums">
                 {{ row.orders_banded }}
               </td>
               <td class="px-5 py-3 text-xs">
@@ -187,7 +189,7 @@ watch([dateFrom, dateTo], () => {
                     class="flex items-baseline justify-between gap-4"
                   >
                     <span class="text-ink-soft">{{ line.label }}</span>
-                    <b class="whitespace-nowrap font-mono text-ink">{{ line.length }}</b>
+                    <b class="whitespace-nowrap text-ink">{{ line.length }}</b>
                   </li>
                 </ul>
               </td>
@@ -202,7 +204,7 @@ watch([dateFrom, dateTo], () => {
                     class="flex items-baseline justify-between gap-4"
                   >
                     <span class="text-ink-soft">{{ line.label }}</span>
-                    <b class="whitespace-nowrap font-mono text-ink">{{ line.length }}</b>
+                    <b class="whitespace-nowrap text-ink">{{ line.length }}</b>
                   </li>
                 </ul>
               </td>
@@ -211,13 +213,13 @@ watch([dateFrom, dateTo], () => {
           <tfoot v-if="finance.production.rows.length > 1" class="border-t border-hairline-strong">
             <tr class="bg-sunk">
               <td class="px-5 py-3 font-bold text-ink">{{ $t('common.field.total') }}</td>
-              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+              <td class="px-5 py-3 text-right text-xs font-bold tabular-nums">
                 {{ productionTotals.panelsCut }}
               </td>
-              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+              <td class="px-5 py-3 text-right text-xs font-bold tabular-nums">
                 {{ productionTotals.cutCount }}
               </td>
-              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+              <td class="px-5 py-3 text-right text-xs font-bold tabular-nums">
                 {{ productionTotals.ordersBanded }}
               </td>
               <td class="px-5 py-3"></td>

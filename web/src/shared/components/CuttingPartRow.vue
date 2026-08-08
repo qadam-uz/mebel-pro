@@ -164,14 +164,14 @@ function focusNumericFromPointer(event: MouseEvent) {
 <template>
   <article
     :id="`part-row-${part.part_ref}`"
-    class="border-b border-hairline px-2 py-1.5 transition last:border-b-0 focus-within:bg-accent-soft/40"
+    class="border-b border-hairline px-2 py-1.5 transition last:border-b-0 focus-within:bg-sunk"
     :class="hasError ? 'border-danger-soft bg-danger-soft/60' : 'border-hairline bg-elevated'"
   >
     <div
       class="grid gap-2 @min-[680px]:grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] @min-[680px]:items-center @min-[680px]:gap-1.5"
     >
       <div
-        class="font-mono text-xs font-extrabold text-ink-muted @min-[680px]:col-start-1 @min-[680px]:row-start-1"
+        class="text-xs font-extrabold text-ink-muted @min-[680px]:col-start-1 @min-[680px]:row-start-1"
       >
         #{{ (displayIndex ?? index) + 1 }}
       </div>
@@ -205,11 +205,11 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="button"
             role="switch"
             :aria-checked="rotationAllowed"
-            class="grid size-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+            class="grid size-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             :class="
               rotationAllowed
                 ? 'border-hairline bg-sunk/30 text-ink-muted hover:border-hairline-strong hover:bg-sunk'
-                : 'border-accent-tint bg-accent-soft text-accent hover:border-accent'
+                : 'border-accent-tint bg-accent-soft text-accent-strong hover:border-accent'
             "
             :title="grainTitle"
             :aria-label="grainTitle"
@@ -313,7 +313,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
             @mousedown="focusNumericFromPointer"
@@ -334,7 +334,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
             @mousedown="focusNumericFromPointer"
@@ -355,7 +355,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
             @mousedown="focusNumericFromPointer"

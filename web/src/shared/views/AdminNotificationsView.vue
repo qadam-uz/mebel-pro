@@ -149,7 +149,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
           v-for="item in rows"
           :key="item.id"
           class="admin-row-item"
-          :class="{ 'border-l-2 border-accent pl-2': item.read_at === null }"
+          :class="{ 'border-l-2 border-signal pl-2': item.read_at === null }"
         >
           <span
             class="flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-extrabold"

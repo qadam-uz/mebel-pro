@@ -234,11 +234,18 @@ onBeforeUnmount(() => {
         </svg>
       </template>
       <template v-else>{{ menuLabel }}</template>
+      <!-- The workshop bell shows an 8×8 signal dot, not a digit: the exact
+           number is not actionable at a glance, and the count is not lost —
+           `bellLabel` carries it in the trigger's accessible name, so the state
+           is never conveyed by colour alone. -->
       <span
-        v-if="notifications.unread > 0"
-        :class="
-          isClient || isWorkshop || isAdmin ? 'client-badge' : 'mp-chip bg-danger-soft text-danger'
-        "
+        v-if="isWorkshop && notifications.unread > 0"
+        class="workshop-bell-dot"
+        aria-hidden="true"
+      ></span>
+      <span
+        v-else-if="notifications.unread > 0"
+        :class="isClient || isAdmin ? 'client-badge' : 'mp-chip bg-danger-soft text-danger'"
       >
         {{ badgeText }}
       </span>
@@ -247,28 +254,28 @@ onBeforeUnmount(() => {
     <div
       v-if="open"
       ref="menuRef"
-      class="z-50 overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      class="z-50 overflow-hidden rounded-xl border border-hairline bg-elevated shadow-[0_1px_2px_color-mix(in_srgb,var(--color-ink)_6%,transparent),0_14px_32px_-20px_color-mix(in_srgb,var(--color-ink)_60%,transparent)]"
       :class="menuPositionClass"
       role="menu"
       :aria-label="menuLabel"
       @keydown="onMenuKeydown"
     >
       <div class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div class="font-bold text-ink">{{ menuLabel }}</div>
+        <div class="font-semibold text-ink">{{ menuLabel }}</div>
         <button
           type="button"
           role="menuitem"
-          class="text-xs font-bold text-accent"
+          class="text-[12.5px] font-semibold text-accent-deep"
           :disabled="notifications.unread === 0"
           @click="markAllRead"
         >
           {{ $t('shell.notifications.markAll') }}
         </button>
       </div>
-      <div v-if="notifications.loading" class="px-4 py-5 text-sm font-bold text-ink-soft">
+      <div v-if="notifications.loading" class="px-4 py-5 text-sm text-ink-soft">
         {{ $t('shell.notifications.loading') }}
       </div>
-      <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-bold text-danger">
+      <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-semibold text-danger">
         {{ $t('shell.notifications.loadFailedMenu') }}
       </div>
       <div v-else-if="notifications.items.length === 0" class="px-4 py-5 text-sm text-ink-soft">
@@ -288,17 +295,17 @@ onBeforeUnmount(() => {
               <Icon :name="iconName(item)" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
-              <span v-if="body(item)" class="mt-0.5 block truncate text-xs text-ink-soft">
+              <span class="block truncate text-sm font-semibold text-ink">{{ title(item) }}</span>
+              <span v-if="body(item)" class="mt-0.5 block truncate text-[12.5px] text-ink-soft">
                 {{ body(item) }}
               </span>
-              <span class="mt-1 block text-[11px] text-ink-muted">
+              <span class="mt-1 block text-[12.5px] text-ink-muted">
                 {{ formatDate(item.created_at) }}
               </span>
             </span>
             <span
               v-if="item.read_at === null"
-              class="mt-1 size-2 shrink-0 rounded-full bg-accent"
+              class="mt-1 size-2 shrink-0 rounded-full bg-signal"
             ></span>
           </span>
         </button>
@@ -307,7 +314,7 @@ onBeforeUnmount(() => {
         v-if="isClient || isWorkshop || isAdmin"
         type="button"
         role="menuitem"
-        class="block w-full border-t border-hairline px-4 py-3 text-center text-xs font-bold text-accent transition hover:bg-sunk"
+        class="block w-full border-t border-hairline px-4 py-3 text-center text-[12.5px] font-semibold text-accent-deep transition hover:bg-sunk"
         @click="openAll"
       >
         {{ $t('shell.notifications.viewAll') }}

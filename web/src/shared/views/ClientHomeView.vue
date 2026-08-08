@@ -124,7 +124,7 @@ onMounted(() => {
   <section>
     <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="font-serif text-[26px] font-semibold leading-tight text-ink">{{ heading }}</h1>
+        <h1 class="font-display text-[26px] font-semibold leading-tight text-ink">{{ heading }}</h1>
         <p v-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
           {{ subtitle }}
         </p>
@@ -188,10 +188,10 @@ onMounted(() => {
           <Icon name="check" />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="text-[11px] font-extrabold uppercase tracking-wider text-accent">
+          <div class="text-[12.5px] font-semibold text-accent-strong">
             {{ $t('client.home.readyTitle') }}
           </div>
-          <div class="mt-0.5 font-mono text-lg font-bold text-ink">
+          <div class="mt-0.5 text-lg font-bold text-ink">
             {{ primaryReady.order_number }}
           </div>
           <div class="mt-0.5 text-sm text-ink-muted">
@@ -206,7 +206,7 @@ onMounted(() => {
           <div class="text-[11px] font-bold text-ink-muted">
             {{ $t('client.home.totalPrice') }}
           </div>
-          <div class="mt-0.5 font-mono text-base font-bold text-ink">
+          <div class="mt-0.5 text-base font-bold text-ink">
             {{ formatTiyin(primaryReady.total_tiyin) }}
           </div>
         </div>
@@ -220,7 +220,7 @@ onMounted(() => {
       </div>
 
       <div
-        class="mb-6 grid grid-cols-3 overflow-hidden rounded-[14px] border border-hairline bg-elevated shadow-[0_1px_2px_rgb(15_27_45_/_4%)]"
+        class="mb-6 grid grid-cols-3 overflow-hidden rounded-[14px] border border-hairline bg-elevated shadow-[0_1px_2px_color-mix(in_srgb,var(--color-ink)_4%,transparent)]"
       >
         <RouterLink
           :to="rolePath('/c/orders')"
@@ -232,7 +232,7 @@ onMounted(() => {
             <Icon name="box" />
           </span>
           <span>
-            <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
+            <span class="block text-[22px] font-bold leading-none text-ink">{{
               activeOrders.length
             }}</span>
             <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
@@ -250,7 +250,7 @@ onMounted(() => {
             <Icon name="layers" />
           </span>
           <span>
-            <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
+            <span class="block text-[22px] font-bold leading-none text-ink">{{
               productionCount
             }}</span>
             <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
@@ -268,7 +268,7 @@ onMounted(() => {
             <Icon name="scissors" />
           </span>
           <span>
-            <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
+            <span class="block text-[22px] font-bold leading-none text-ink">{{
               cutting.drafts.length
             }}</span>
             <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
@@ -299,11 +299,21 @@ onMounted(() => {
         </div>
 
         <div v-else class="grid gap-3">
+          <!-- "Ready for pickup" is marked with a signal RING, not a border:
+               `.client-card` is shadow-only, so a bare `border-signal` sets a
+               colour on a zero-width border and paints nothing. A ring is drawn
+               as a box-shadow, and the ring utility re-declares `box-shadow`
+               from the utilities layer — which would drop the card's own
+               `--shadow-card` — so the two shadow utilities come along to put the
+               elevation (and the hover lift) back. The status pill still carries
+               the word; the ring is emphasis, never the only signal. -->
           <article
             v-for="order in activeOrders"
             :key="order.id"
-            class="client-card client-card-link grid cursor-pointer gap-3 p-4 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto] sm:items-center sm:gap-5"
-            :class="order.status === 'ready' ? 'border-accent-tint bg-accent-soft/40' : ''"
+            class="client-card client-card-link grid cursor-pointer gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto] sm:items-center sm:gap-5"
+            :class="
+              order.status === 'ready' ? 'shadow-card ring-1 ring-signal hover:shadow-lifted' : ''
+            "
             role="link"
             tabindex="0"
             :aria-label="`${order.order_number} — ${order.branch_name}`"
@@ -311,7 +321,7 @@ onMounted(() => {
             @keydown.enter="openOrder(order.id)"
           >
             <div class="min-w-0">
-              <div class="font-mono text-base font-bold text-ink">{{ order.order_number }}</div>
+              <div class="text-base font-bold text-ink">{{ order.order_number }}</div>
               <div class="mt-1 text-sm text-ink-muted">
                 <b class="font-semibold text-ink">{{ order.branch_name }}</b> ·
                 {{ formatRelativeDate(order.created_at) }}
@@ -341,9 +351,7 @@ onMounted(() => {
               <span :class="clientStatusPillClass(order.status)">
                 {{ clientStatusLabel(order.status) }}
               </span>
-              <span class="font-mono text-sm font-bold text-ink">{{
-                formatTiyin(order.total_tiyin)
-              }}</span>
+              <span class="text-sm font-bold text-ink">{{ formatTiyin(order.total_tiyin) }}</span>
               <RouterLink
                 :to="rolePath(`/c/orders/${order.id}`)"
                 class="mp-button mp-button-primary min-h-9 px-3 text-xs"
@@ -382,7 +390,7 @@ onMounted(() => {
           <article
             v-for="draft in recentDrafts"
             :key="draft.id"
-            class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+            class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             role="link"
             tabindex="0"
             :aria-label="draftTitle(draft)"
@@ -395,16 +403,16 @@ onMounted(() => {
               <Icon name="scissors" />
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate font-mono text-sm font-bold text-ink">
+              <div class="truncate text-sm font-bold text-ink">
                 {{ draftTitle(draft) }}
               </div>
               <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
                 <span
-                  ><b class="font-mono text-ink">{{ draftParts(draft) }}</b>
+                  ><b class="text-ink">{{ draftParts(draft) }}</b>
                   {{ $t('client.unit.part', draftParts(draft)) }}</span
                 >
                 <span
-                  ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b>
+                  ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
                   {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
                 >
                 <span>{{ formatRelativeDate(draft.updated_at) }}</span>
@@ -425,7 +433,7 @@ onMounted(() => {
           <RouterLink
             v-if="hiddenDraftCount > 0"
             :to="rolePath('/c/cutting/drafts')"
-            class="flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-dashed border-hairline-strong p-3 text-sm font-bold text-ink-soft no-underline transition hover:border-accent hover:bg-accent-soft hover:text-accent focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+            class="flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-dashed border-hairline-strong p-3 text-sm font-bold text-ink-soft no-underline transition hover:border-accent hover:bg-sunk focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             {{ $t('client.home.moreDrafts', hiddenDraftCount) }}
             <span aria-hidden="true">→</span>

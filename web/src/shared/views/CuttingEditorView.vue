@@ -1645,12 +1645,12 @@ onBeforeRouteLeave(async () => {
         :to="rolePath(adapter.paths.orderDetail(String(boundOrderId)))"
         class="client-banner info hover:border-accent"
       >
-        <span class="grid size-6 shrink-0 place-items-center text-accent" aria-hidden="true">
+        <span class="grid size-6 shrink-0 place-items-center text-ink" aria-hidden="true">
           <Icon name="lock" />
         </span>
         <span class="min-w-0 flex-1">
           {{ $t('cutting.editor.readOnlyBanner') }}
-          <span class="font-bold text-accent">{{ $t('cutting.editor.openOrder') }} →</span>
+          <span class="font-bold text-accent-deep">{{ $t('cutting.editor.openOrder') }} →</span>
         </span>
       </RouterLink>
 
@@ -1662,7 +1662,7 @@ onBeforeRouteLeave(async () => {
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
         >
           <span
-            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft text-accent"
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft text-accent-strong"
             aria-hidden="true"
           >
             <Icon name="pencil" class="size-4" />
@@ -1681,7 +1681,7 @@ onBeforeRouteLeave(async () => {
           </div>
           <RouterLink
             :to="rolePath(adapter.paths.orderDetail(String(revisionOrderId)))"
-            class="text-xs font-bold text-accent"
+            class="text-xs font-bold text-accent-deep"
           >
             {{ $t('cutting.editor.backToOrder') }} →
           </RouterLink>
@@ -1694,16 +1694,14 @@ onBeforeRouteLeave(async () => {
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
         >
           <span
-            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft font-mono font-black text-accent"
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft font-black text-accent-strong"
             aria-hidden="true"
           >
             @
           </span>
           <div class="min-w-0 flex-1">
             <b class="text-ink">{{ cutting.walkInClient.name }}</b>
-            <span class="ml-2 font-mono text-xs text-ink-muted">{{
-              cutting.walkInClient.phone
-            }}</span>
+            <span class="ml-2 text-xs text-ink-muted">{{ cutting.walkInClient.phone }}</span>
           </div>
         </section>
 
@@ -1716,7 +1714,7 @@ onBeforeRouteLeave(async () => {
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
-            class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-black text-info"
             aria-hidden="true"
           >
             i
@@ -1770,7 +1768,7 @@ onBeforeRouteLeave(async () => {
             class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
           >
             <span
-              class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
+              class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-black text-info"
               aria-hidden="true"
             >
               i
@@ -1855,10 +1853,14 @@ onBeforeRouteLeave(async () => {
             "
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
-            <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
+            <button type="button" class="text-accent-strong hover:underline" @click="openBulkEdge">
               {{ $t('cutting.editor.bulkApplyEdge') }}
             </button>
-            <button type="button" class="text-accent hover:underline" @click="openBulkMaterial">
+            <button
+              type="button"
+              class="text-accent-strong hover:underline"
+              @click="openBulkMaterial"
+            >
               {{ $t('cutting.editor.bulkChangeMaterial') }}
             </button>
             <button type="button" class="text-danger hover:underline" @click="bulkDelete">
@@ -1962,7 +1964,7 @@ onBeforeRouteLeave(async () => {
                     <button
                       v-if="!isReadOnly && group.materialId"
                       type="button"
-                      class="min-w-0 truncate border-b border-dashed border-ink-muted text-left text-sm font-extrabold text-ink hover:border-accent hover:text-accent"
+                      class="min-w-0 truncate border-b border-dashed border-ink-muted text-left text-sm font-extrabold text-ink hover:border-accent"
                       @click.stop="openGroupMaterial(group)"
                     >
                       {{ group.label }}
@@ -1993,7 +1995,7 @@ onBeforeRouteLeave(async () => {
                 <button
                   v-if="!isReadOnly"
                   type="button"
-                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint hover:text-accent"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint"
                   @click="addGroupRow(group)"
                 >
                   <Icon name="plus" class="size-3.5" />
@@ -2045,7 +2047,7 @@ onBeforeRouteLeave(async () => {
                  the add affordance follows the content. -->
             <button
               type="button"
-              class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-accent-soft/40 hover:text-accent"
+              class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
               @click="openNewMaterial"
             >
               <Icon name="plus" class="size-4" />
@@ -2054,7 +2056,7 @@ onBeforeRouteLeave(async () => {
           </div>
 
           <div v-if="optimizeError" class="client-banner danger mx-5 mt-4" role="alert">
-            <span class="font-mono font-black">!</span>
+            <span class="font-black">!</span>
             <span>
               {{ optimizeError }}
               <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
@@ -2074,10 +2076,10 @@ onBeforeRouteLeave(async () => {
              inline (including on touch) instead of only in a title tooltip. -->
         <div
           v-if="parts.length > 0"
-          class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_rgb(15_27_45_/_30%)] backdrop-blur"
+          class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur"
         >
           <div class="text-sm">
-            <span class="font-mono font-bold text-ink"
+            <span class="font-bold text-ink"
               >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} · {{ totalQuantity }}
               {{ $t('cutting.unit.piece', totalQuantity) }}</span
             >
@@ -2203,15 +2205,15 @@ onBeforeRouteLeave(async () => {
       @keydown.esc="closeRegistryPicker"
     >
       <div
-        class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
+        class="absolute inset-0 bg-ink/45 backdrop-blur-[2px]"
         @click="closeRegistryPicker"
       ></div>
       <div
-        class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
+        class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
       >
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 class="font-serif text-lg font-semibold text-ink">
+            <h3 class="font-display text-lg font-semibold text-ink">
               {{ $t('cutting.edge.replaceTitle') }}
             </h3>
             <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
@@ -2263,11 +2265,11 @@ onBeforeRouteLeave(async () => {
       @keydown.esc="closeMaterialPicker"
     >
       <div
-        class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
+        class="absolute inset-0 bg-ink/45 backdrop-blur-[2px]"
         @click="closeMaterialPicker"
       ></div>
       <div
-        class="relative z-10 w-[min(460px,100%)] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
+        class="relative z-10 w-[min(460px,100%)] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_60px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
       >
         <div class="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
           <div>
@@ -2318,11 +2320,11 @@ onBeforeRouteLeave(async () => {
                 v-if="group.imageFileId"
                 :file-id="group.imageFileId"
                 :alt="group.title"
-                class="size-10 shrink-0 rounded-md object-cover shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+                class="size-10 shrink-0 rounded-md object-cover shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-ink)_12%,transparent)]"
               />
               <span
                 v-else
-                class="size-10 shrink-0 rounded-md shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+                class="size-10 shrink-0 rounded-md shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-ink)_12%,transparent)]"
                 :style="materialPickerSwatchStyle(group.materials[0])"
                 aria-hidden="true"
               ></span>
@@ -2339,10 +2341,10 @@ onBeforeRouteLeave(async () => {
               v-for="material in group.materials"
               :key="material.id"
               type="button"
-              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-sunk"
               :class="
                 material.id === materialPickerCurrentId
-                  ? 'border-accent bg-accent-soft/30'
+                  ? 'border-accent-tint bg-accent-soft'
                   : 'border-hairline'
               "
               @click="applyMaterialPicker(material.id)"
@@ -2353,14 +2355,14 @@ onBeforeRouteLeave(async () => {
                 </span>
                 <span
                   v-if="material.price_unset"
-                  class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-warning"
+                  class="rounded-full bg-warning-soft px-2 py-0.5 text-[12.5px] font-semibold text-warning"
                 >
                   {{ $t('cutting.material.priceUnset') }}
                 </span>
               </span>
               <span
                 v-if="material.id === materialPickerCurrentId"
-                class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
+                class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent-strong"
                 :aria-label="$t('cutting.material.selected')"
               >
                 <Icon name="check" class="size-3.5" />

@@ -168,9 +168,17 @@ function dayClass(cell: string): string[] {
     return classes
   }
   classes.push('cursor-pointer')
-  if (isStart || isEnd) classes.push('bg-accent font-semibold text-white')
-  else if (inRange) classes.push('bg-accent-soft text-ink')
-  else if (cell === today.value) classes.push('font-bold text-accent hover:bg-sunk')
+  if (isStart || isEnd) classes.push('bg-accent font-semibold text-on-accent')
+  // The in-range band is the neutral `track` trough, not an accent tint: a tinted
+  // band paints an orange stripe across the whole grid, and the two graphite
+  // endpoints already say where the range starts and stops. It must not be `sunk`
+  // either — `sunk` is 1.07:1 on the white popover AND it is the hover fill, so
+  // the band would be both invisible and indistinguishable from the live hover
+  // preview the host feeds back through `hovered`. In-range cells deliberately
+  // take no `hover:` class, so a day that is both in-range and hovered keeps
+  // reading as in-range.
+  else if (inRange) classes.push('bg-track text-ink')
+  else if (cell === today.value) classes.push('font-semibold text-accent-deep hover:bg-sunk')
   else classes.push('text-ink hover:bg-sunk')
   return classes
 }

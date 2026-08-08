@@ -19,7 +19,7 @@ const roleText = (name: string) => t(roleMessageKey(config.role, name))
       <span class="mp-dot" aria-hidden="true"></span>
       404
     </span>
-    <h1 class="mt-5 font-serif text-4xl font-semibold text-ink">{{ t('nav.notFound.title') }}</h1>
+    <h1 class="mt-5 font-display text-4xl font-semibold text-ink">{{ t('nav.notFound.title') }}</h1>
     <p class="mt-3 text-base text-ink-soft">{{ roleText('notFoundBody') }}</p>
     <RouterLink :to="config.homePath" class="mp-button mp-button-primary mt-6">
       {{ roleText('backHome') }}

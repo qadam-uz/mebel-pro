@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-09
 order: 20
 ---
 
@@ -390,22 +390,31 @@ section of the page renders** — not only when the grant set is empty. A holder
 your work is elsewhere" plus a link to the catalog, rather than a bare heading and a refresh
 button.
 
-The collapsed icon rail renders the same item list — collapsing hides labels in CSS only — so a
-permission-hidden entry stays hidden and no tooltip names a page the user cannot open.
+Below 921px the sidebar becomes a **drawer** carrying the same item list — together with the
+branch picker, the create action and the account button, which exist nowhere else on a phone — so
+a permission-hidden entry stays hidden there too. There is no collapsed icon-rail state on the
+desktop — the 264px column *is* the layout — so no tooltip can name a page the user cannot open.
 
 ### Links obey the target's requirement, not the card's
 
-A card, tile or back link is gated on the permission that **renders** it; the page it points at
-has its own, usually stricter, requirement. The two must be checked separately or the link
-bounces off the router guard straight back to `/workshop`. Every dashboard tile therefore
-renders as a plain tile — no anchor, no hover lift, no pointer cursor — when its target is out
-of reach, and each "more" link disappears rather than dangling. The rule lives in one place,
+A card, panel row or back link is gated on the permission that **renders** it; the page it points
+at has its own, usually stricter, requirement. The two must be checked separately or the link
+bounces off the router guard straight back to `/workshop`. A KPI card whose target is out of reach
+therefore renders as a plain card — no anchor, no hover lift, no pointer cursor — and a panel's
+"more" link disappears rather than dangling. The rule lives in one place,
 `web/src/shared/app/workshopDashboard.ts`, which answers both questions side by side:
-`view_orders` renders the order cards but cannot open `/workshop/orders`;
-`view_finance_reports` renders the money tiles but cannot open the ledgers; the per-branch
-production tiles link only for the owner, since branch pages are owner-only. On an order screen
-the back link points at the orders board for `manage_orders` holders and at **Asosiy** for
-everyone else the page admits.
+`view_orders` renders the order KPI but cannot open `/workshop/orders`; `view_finance_reports`
+renders the money figures but cannot open the ledgers.
+
+A **Sizdan kutilmoqda** row splits the same rule across the row and its button. The **row**
+appears whenever its condition holds and the reader can see the data behind it; the panel as a
+whole is off only for a viewer holding neither an order grant nor `manage_inventory`, because
+none of its rows would then have a source. The **button** is what follows the acting grant:
+`manage_orders` gets the board or the order that carries the assign controls, a `view_orders`
+reader gets the single order it can actually open, and where nothing is reachable the row states
+the stall with no button at all — an instruction the reader cannot carry out is worse than a row
+that only reports. On an order screen the back link points at the orders board for `manage_orders`
+holders and at **Asosiy** for everyone else the page admits.
 
 ### What each route requires
 
@@ -471,8 +480,8 @@ viewer could not open.
 
 Revoking a grant while the holder is signed in fails closed on the server, and the open tab now
 follows within one round-trip: the refused request clears the rows it was meant to refresh, the
-app re-reads `me` and the branch context, the sidebar collapses, and a page that is no longer
-allowed redirects to `/workshop`. No reload needed.
+app re-reads `me` and the branch context, the sidebar drops the entries the user no longer holds,
+and a page that is no longer allowed redirects to `/workshop`. No reload needed.
 
 ### Known deviations
 
@@ -500,10 +509,12 @@ than no duplicate — if another one appears, delete it rather than syncing it.
 
 ## Branch context (workshop app)
 
-A staff user may hold grants on multiple branches. The workshop app uses a **branch picker** —
-a chip in the top bar ("Branch: Yunusobod ▼") that defines the current branch context. Every
-branch-scoped screen (orders, inventory, dashboard, material catalog, workers) reads from
-it.
+A staff user may hold grants on multiple branches. The workshop app uses a **branch picker** — a
+two-line card at the top of the sidebar, under the wordmark: the workshop's name on the dominant
+line, the selected branch beneath it, opening the list of branches. It defines the current branch
+context, and every branch-scoped screen (orders, inventory, the Asosiy dashboard, material
+catalog, workers) reads from it. Below 921px it travels into the drawer with the rest of the sidebar,
+because a phone has nowhere else to put it.
 
 Rules:
 
@@ -524,22 +535,28 @@ that declaration, so a new route has to state where it stands.
 | Scope | What it means | Picker | Pages |
 | --- | --- | --- | --- |
 | `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Saqlangan chizmalar · Kesish · Krom · Ombor · Material katalogi · Tushum va xarajat · Qarzdorlik · Xodimlar mehnati · Yangi buyurtma |
-| `workshop` | Workshop-wide by design | disabled, with the reason | Filiallar · Xodimlar ro'yxati · Sozlamalar · Bildirishnomalar · Profil |
-| `entity` | Takes its branch from the record on screen | disabled, with the reason | Buyurtma tafsilotlari · Chizma (ish) · Kesim chizmasi + natija + rasmiylashtirish · Filial tafsilotlari · Xodim tafsilotlari |
+| `workshop` | Workshop-wide by design | disabled, the reason stacked beneath the card | Filiallar · Xodimlar ro'yxati · Sozlamalar · Bildirishnomalar · Profil |
+| `entity` | Takes its branch from the record on screen | disabled, the reason stacked beneath the card | Buyurtma tafsilotlari · Chizma (ish) · Kesim chizmasi + natija + rasmiylashtirish · Filial tafsilotlari · Xodim tafsilotlari |
 
 **The whole finance module is `branch`.** `Qarzdorlik` included: every term in the debt fold —
 invoice, supplier payment, order, adjustment — names a branch, so a branch's balance is a real
 number and the branches sum to the workshop. Only the three **Tizim** pages are workshop-wide,
 because a branch list, a staff list and the workshop's own settings have no branch to be scoped
-to; `Bildirishnomalar` and `Profil` join them as personal surfaces reached from the topbar
-rather than the nav. An `entity` page must never let the topbar override the branch stored on the record —
-a cutting draft in particular is frozen to the branch it was started on, and the editor keeps
-its own in-page branch control for that reason. It seeds that control from the current context
-when the draft has no branch bound yet, so the user isn't asked twice for a choice they already
-made in the topbar.
+to; `Bildirishnomalar` and `Profil` join them as personal surfaces reached from the chrome rather
+than the nav — the bell in the header, the profile from the sidebar's account button. An `entity`
+page must never let the picker override the branch stored on the record — a cutting draft in
+particular is frozen to the branch it was started on, and the editor keeps its own in-page branch
+control for that reason. It seeds that control from the current context when the draft has no
+branch bound yet, so the user isn't asked twice for a choice they already made in the picker.
 
-The picker is hidden entirely in a single-branch workshop: there is no choice to offer, and
-every page behaves as if that one branch is selected.
+**Below two branches the card stays and stops being a control.** A workshop with one branch — or
+none, before the first is created — renders the same two-line block as an inert outlined card:
+same shape and position, no chevron, no listbox, nothing to open. Hiding it would change the
+shape of the sidebar from one workshop to the next, and the outline is the signal the `workshop`
+and `entity` scopes above already carry (minus their stacked reason) — the card is stating that
+there is no choice to make here. The context auto-pins to the one branch and every page behaves
+as if it is selected; with no branches at all the second line reads `Filial yo'q` rather than
+going blank.
 
 ### The route guard is branch-blind, deliberately
 

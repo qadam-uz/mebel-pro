@@ -6,8 +6,10 @@ import {
   partitionProductionJobs,
   productionJobMetaLine,
   productionPartNames,
+  workerShortName,
   workshopProductionQueueCounts,
   workshopQueuePartsLine,
+  workshopStationLoad,
   type ProductionStationJob,
 } from '@/shared/app/workshopProduction'
 
@@ -65,6 +67,43 @@ describe('workshop production display helpers', () => {
         'user-1',
       ),
     ).toEqual({ cutting: 2, banding: 1, total: 3 })
+  })
+
+  it('counts station load across every assignee, not just the caller', () => {
+    // The same rows the personal count above reads. The dashboard's Stansiyalar
+    // panel asks the other question — what is at each station, whoever holds it
+    // — so nobody's id enters the calculation.
+    const load = workshopStationLoad([
+      { status: 'new', assigned_cutter_user_id: null, assigned_edger_user_id: null },
+      { status: 'confirmed', assigned_cutter_user_id: 'user-1', assigned_edger_user_id: null },
+      { status: 'confirmed', assigned_cutter_user_id: null, assigned_edger_user_id: null },
+      { status: 'cutting', assigned_cutter_user_id: 'user-2', assigned_edger_user_id: 'user-3' },
+      {
+        status: 'edge_banding',
+        assigned_cutter_user_id: 'user-1',
+        assigned_edger_user_id: 'user-3',
+      },
+      {
+        status: 'edge_banding',
+        assigned_cutter_user_id: 'user-2',
+        assigned_edger_user_id: 'user-3',
+      },
+      // Past both stations — neither queue holds it any more.
+      { status: 'ready', assigned_cutter_user_id: 'user-1', assigned_edger_user_id: 'user-1' },
+    ])
+
+    expect(load.cutting).toBe(3)
+    expect(load.banding).toBe(2)
+    // Distinct, and an unassigned order contributes no name.
+    expect(load.cutters).toEqual(['user-1', 'user-2'])
+    expect(load.edgers).toEqual(['user-3'])
+  })
+
+  it('shortens a station assignee to a given name and a family initial', () => {
+    expect(workerShortName('Aziz Tursunov')).toBe('Aziz T.')
+    expect(workerShortName('  Rustam   Qodirov Ogli ')).toBe('Rustam Q.')
+    expect(workerShortName('Doniyor')).toBe('Doniyor')
+    expect(workerShortName('   ')).toBe('')
   })
 
   it('names job-sheet parts from detail names with the editor D-numbering fallback', () => {
