@@ -107,10 +107,15 @@ onBeforeUnmount(clearLocalPreview)
           :alt="alt"
           class="admin-image-upload-img"
         />
+        <!-- The only place a stored image is shown large: the preview box is at
+             least 132 px tall, where the 160 px rendition would visibly soften on
+             a high-DPR screen. Every other use is a 34-58 px swatch and keeps the
+             `sm` default. -->
         <AuthFileImage
           v-else-if="fileId"
           :file-id="fileId"
           :alt="alt"
+          size="md"
           class="admin-image-upload-img"
         />
         <div v-else class="admin-image-upload-empty" aria-hidden="true">
