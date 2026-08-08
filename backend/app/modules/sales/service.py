@@ -145,11 +145,6 @@ class PricingSnapshot:
     edge_banding_rate_tiyin: int
     material_lines: list[MaterialPriceLine]
     edge_lines: list[EdgePriceLine]
-    # Materials this order sells that still resolve to no price. A branch may
-    # carry a format long before it prices one, and both catalogs show those
-    # rows — so a draft and a quote are allowed to contain them. Confirming is
-    # not: see `_expect_every_material_priced`.
-    unpriced_material_ids: list[uuid.UUID]
 
 
 @dataclass(frozen=True)
@@ -3217,12 +3212,6 @@ async def _price_result(
         edge_banding_rate_tiyin=edge_rate,
         material_lines=material_lines,
         edge_lines=edge_lines,
-        unpriced_material_ids=_unpriced_material_ids(
-            panel_demands=panel_demands,
-            edge_demands=edge_demands,
-            branch_materials=branch_materials,
-            overrides=overrides,
-        ),
     )
 
 
@@ -3237,46 +3226,78 @@ async def order_unpriced_material_ids(
     that has to fix the gap and the check that enforces it can never disagree
     about which materials are missing a price.
 
-    Materials are fetched WITHOUT the active filter: a material deactivated
-    after the order was placed still has to be paid for, and re-running the
-    "does the branch still carry this" check here would resurrect the failure
-    QAD-150 exists to prevent.
+    Prices come from the order's OWN frozen snapshots, never the live rate card.
+    The money an order bills is frozen at placement (`material_snapshot`,
+    `edge_snapshots`), so reading the catalog answers a different question than
+    the one that matters and gets it wrong in both directions:
+
+    - money escapes — an order placed while a material was unpriced bills 0 for
+      it forever; if the branch prices its catalog afterwards, a live read says
+      "priced" and confirm lets the zero-priced order through.
+    - work is blocked — an order placed at a correct 250 000 is refused because
+      the branch happens to have unpriced that material since.
+
+    The frozen price is the one the client owes, so the frozen price is what is
+    checked. `set_order_prices` rewrites these snapshots when staff price an
+    order, which is why an override lifts the block.
+
+    Which materials are SOLD still comes from the cutting result's demands, so
+    a sheet the client supplied entirely (demand 0) stays exempt.
     """
     panel_demands = _panel_stock_demands(result)
     edge_demands = _edge_stock_demands(result)
-    material_ids = set(panel_demands) | set(edge_demands)
-    if not material_ids:
+    if not (set(panel_demands) | set(edge_demands)):
         return []
-    rows = (
-        await db.scalars(
-            select(BranchMaterial).where(
-                # Scoped to the branch for the same reason `_active_branch_materials`
-                # is: it stops another branch's format id being priced here.
-                BranchMaterial.branch_id == order.branch_id,
-                BranchMaterial.id.in_(material_ids),
-            )
-        )
-    ).all()
+    items = (await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))).all()
     return _unpriced_material_ids(
         panel_demands=panel_demands,
         edge_demands=edge_demands,
-        branch_materials={row.id: row for row in rows},
-        overrides=PriceOverrides.from_stored(order.price_overrides),
+        frozen_prices=_frozen_material_prices(items),
     )
+
+
+def _frozen_material_prices(items: Sequence[OrderItem]) -> dict[uuid.UUID, int]:
+    """The per-material prices this order actually billed, from its own items.
+
+    Panels carry theirs on `material_snapshot`; an edge material has no item row
+    of its own — its cost is folded into a panel line's `edge_cost_tiyin` — so
+    its frozen price is read from that line's per-side `edge_snapshots`.
+
+    A material appearing on several lines is priced once, so the max is taken
+    rather than the last seen: a single priced line is proof the order billed
+    for it, and only "nowhere priced" should read as unpriced.
+    """
+    prices: dict[uuid.UUID, int] = {}
+
+    def _record(material_id: uuid.UUID, price: int) -> None:
+        prices[material_id] = max(prices.get(material_id, 0), price)
+
+    for item in items:
+        if item.material_source is MaterialSource.SHOP:
+            _record(item.branch_material_id, int(item.material_snapshot.get("price_tiyin") or 0))
+        for field in _edge_fields():
+            edge = getattr(item, field, None)
+            if not edge or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
+                continue
+            _record(
+                uuid.UUID(str(edge["material_id"])),
+                int((edge.get("snapshot") or {}).get("price_tiyin") or 0),
+            )
+    return prices
 
 
 def _unpriced_material_ids(
     *,
     panel_demands: dict[uuid.UUID, int],
     edge_demands: dict[uuid.UUID, int],
-    branch_materials: dict[uuid.UUID, BranchMaterial],
-    overrides: PriceOverrides,
+    frozen_prices: dict[uuid.UUID, int],
 ) -> list[uuid.UUID]:
-    """Materials this order *sells* whose resolved price is still zero.
+    """Materials this order *sells* that it froze at a price of zero.
 
-    Resolved, not stored: an order-level override is exactly how staff price a
-    material the branch has not priced yet, so a material with an override is
-    priced even though its branch row reads 0.
+    `frozen_prices` is what the order actually billed, taken from its own item
+    snapshots — not the branch's current rate card. An order-level override
+    lifts the block because `set_order_prices` re-prices and rewrites those
+    snapshots, so the frozen number becomes the agreed one.
 
     A demand of zero is not unpriced. `_panel_stock_demands` keeps a material's
     key at zero when the client supplied every sheet of it themselves — the
@@ -3288,13 +3309,7 @@ def _unpriced_material_ids(
         for material_id, quantity in demands.items():
             if quantity <= 0:
                 continue
-            material = branch_materials.get(material_id)
-            # A missing material is already a hard error upstream
-            # (`branch_does_not_carry_panel` / `_edge`); don't mask it as a
-            # pricing problem.
-            if material is None:
-                continue
-            if overrides.material_price(material_id, material.price_tiyin) <= 0:
+            if frozen_prices.get(material_id, 0) <= 0:
                 unpriced.add(material_id)
     return sorted(unpriced, key=str)
 

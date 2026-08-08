@@ -9,7 +9,6 @@ must not refuse the orders that are legitimately free of charge.
 """
 
 import uuid
-from decimal import Decimal
 
 from app.models.enums import DekorType, MaterialStatus
 from app.modules.catalog.contracts import BranchMaterial, Dekor
@@ -35,6 +34,47 @@ async def _unprice(db: AsyncSession, branch_material_id: uuid.UUID) -> None:
     await db.flush()
 
 
+async def _order_placed_with_an_unpriced_panel(
+    client: AsyncClient,
+    db: AsyncSession,
+    *,
+    login: str = "unpriced-owner",
+) -> tuple[dict[str, object], str, uuid.UUID]:
+    """Place a client order whose panel had NO price when the order was frozen.
+
+    The distinction matters and is the whole point of these tests. Unpricing a
+    material *after* placement does not make the order unpriced — its money was
+    already frozen at the real rate, and the client owes it. Only a material
+    that was unpriced at placement leaves a zero in the bill.
+    """
+    from tests.test_sales_api import (
+        _client_access,
+        _materials,
+        _optimized_draft,
+        _workshop_setup,
+    )
+
+    owner_access, _, branch_id, _ = await _workshop_setup(db, login=login)
+    panel, edge = await _materials(db, branch_id=branch_id)
+    await _unprice(db, panel.id)
+    client_access, _ = await _client_access(db, phone=f"+99890{uuid.uuid4().int % 10**7:07d}")
+    draft = await _optimized_draft(
+        client, client_access, branch_id=branch_id, panel=panel, edge=edge
+    )
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": draft["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Unpriced Probe",
+            "contact_phone": "+998901555444",
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    return placed.json(), owner_access, panel.id
+
+
 async def _panel_material_id(db: AsyncSession, order_id: object) -> uuid.UUID:
     """The branch material behind a shop-supplied panel line on this order."""
     row = await db.scalar(
@@ -50,13 +90,14 @@ async def _panel_material_id(db: AsyncSession, order_id: object) -> uuid.UUID:
     return row.branch_material_id
 
 
-async def test_confirm_is_refused_while_a_sold_material_has_no_price(
+async def test_confirm_is_refused_when_the_order_froze_a_material_at_zero(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
-    material_id = await _panel_material_id(db_session, order["id"])
-    await _unprice(db_session, material_id)
+    order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
+    assert order["subtotal_materials_tiyin"] == 0, "the bill really does charge nothing"
 
     refused = await client.post(
         f"/api/v1/workshop/orders/{order['id']}/approve",
@@ -72,6 +113,57 @@ async def test_confirm_is_refused_while_a_sold_material_has_no_price(
     assert body["details"]["material_names"], "the operator needs a name, not a uuid"
 
 
+async def test_pricing_the_catalog_after_placement_does_not_unlock_confirm(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The guard reads the order's frozen bill, never the live rate card.
+
+    An order placed while a material was unpriced bills 0 for it forever. If a
+    live read were used, the branch pricing its catalog afterwards would satisfy
+    the guard while the order still charged nothing — money out the door with
+    nobody having priced THAT order.
+    """
+    order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
+    material = await db_session.get(BranchMaterial, material_id)
+    assert material is not None
+    material.price_tiyin = 250_000
+    await db_session.flush()
+
+    refused = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["code"] == "order_has_unpriced_materials"
+
+
+async def test_unpricing_the_catalog_after_placement_does_not_block_a_priced_order(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The mirror case, and the reason a live read is wrong in both directions.
+
+    This order froze a real 250 000. The branch later unpricing that format
+    changes nothing about what the client owes, so confirm must still work.
+    """
+    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    await _unprice(db_session, await _panel_material_id(db_session, order["id"]))
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "confirmed"
+
+
 async def test_an_order_level_price_unblocks_confirm(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -82,9 +174,9 @@ async def test_an_order_level_price_unblocks_confirm(
     not for its catalog — so the guard has to read the resolved price, not the
     stored one.
     """
-    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
-    material_id = await _panel_material_id(db_session, order["id"])
-    await _unprice(db_session, material_id)
+    order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
 
     priced = await client.post(
         f"/api/v1/workshop/orders/{order['id']}/prices",
@@ -92,6 +184,7 @@ async def test_an_order_level_price_unblocks_confirm(
         json={"version": order["version"], "material_prices": {str(material_id): 250_000}},
     )
     assert priced.status_code == 200, priced.text
+    assert priced.json()["subtotal_materials_tiyin"] > 0, "the bill must actually change"
 
     approved = await client.post(
         f"/api/v1/workshop/orders/{order['id']}/approve",
@@ -211,17 +304,27 @@ async def test_order_detail_names_the_materials_confirm_will_refuse_on(
     Detail reports exactly what the guard checks, from the same helper, so the
     workshop can price the gap instead of discovering it on a failed confirm.
     """
-    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
-    material_id = await _panel_material_id(db_session, order["id"])
+    unpriced_order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
+    priced_order, _, priced_owner, _, _, _ = await _placed_order(
+        client, db_session, login="priced-owner"
+    )
 
-    before = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(owner_access))
-    await _unprice(db_session, material_id)
-    after = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(owner_access))
+    listed = (
+        await client.get(
+            f"/api/v1/workshop/orders/{unpriced_order['id']}", headers=_auth(owner_access)
+        )
+    ).json()["unpriced_materials"]
+    clean = (
+        await client.get(
+            f"/api/v1/workshop/orders/{priced_order['id']}", headers=_auth(priced_owner)
+        )
+    ).json()["unpriced_materials"]
 
-    assert before.json()["unpriced_materials"] == []
-    listed = after.json()["unpriced_materials"]
     assert [row["material_id"] for row in listed] == [str(material_id)]
     assert listed[0]["material_label"], "the operator needs a name, not a uuid"
+    assert clean == []
 
 
 async def test_the_itemized_breakdown_reads_through_the_override(
@@ -264,47 +367,32 @@ def test_a_material_the_client_supplied_entirely_needs_no_price() -> None:
     that is entirely correct, so any demand of zero is skipped.
     """
     material_id = uuid.uuid4()
-    unpriced = BranchMaterial(
-        id=material_id,
-        branch_id=uuid.uuid4(),
-        dekor_id=uuid.uuid4(),
-        qalinlik_mm=Decimal("18"),
-        price_tiyin=0,
-    )
 
     assert (
         _unpriced_material_ids(
             panel_demands={material_id: 0},
             edge_demands={},
-            branch_materials={material_id: unpriced},
-            overrides=PriceOverrides(),
+            frozen_prices={material_id: 0},
         )
         == []
     )
     assert _unpriced_material_ids(
         panel_demands={material_id: 1},
         edge_demands={},
-        branch_materials={material_id: unpriced},
-        overrides=PriceOverrides(),
+        frozen_prices={material_id: 0},
     ) == [material_id]
 
 
-def test_an_override_prices_a_material_whose_branch_row_is_zero() -> None:
+def test_a_frozen_price_from_an_override_counts_as_priced() -> None:
+    """`set_order_prices` re-prices and rewrites the snapshots, so an override
+    reaches this function as an ordinary frozen price."""
     material_id = uuid.uuid4()
-    unpriced = BranchMaterial(
-        id=material_id,
-        branch_id=uuid.uuid4(),
-        dekor_id=uuid.uuid4(),
-        qalinlik_mm=Decimal("18"),
-        price_tiyin=0,
-    )
 
     assert (
         _unpriced_material_ids(
             panel_demands={material_id: 3},
             edge_demands={},
-            branch_materials={material_id: unpriced},
-            overrides=PriceOverrides(material_prices={material_id: 120_000}),
+            frozen_prices={material_id: 120_000},
         )
         == []
     )
