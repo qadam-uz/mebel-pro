@@ -305,7 +305,8 @@ async def test_an_unreadable_image_still_uploads(
     )
 
     assert uploaded.status_code == 200
-    served = await client.get(f"/api/v1/files/{uploaded.json()['id']}?size=sm", headers=_auth(token))
+    file_id = uploaded.json()["id"]
+    served = await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
     assert served.status_code == 200
     # No rendition was made, so the read falls back to exactly what was stored.
     assert served.content == b"not really a png"
