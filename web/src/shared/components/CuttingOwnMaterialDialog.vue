@@ -95,7 +95,7 @@ function submit() {
   >
     <div class="grid gap-4">
       <section v-if="sheetLines.length" class="grid gap-3">
-        <h3 class="text-[11px] font-extrabold uppercase tracking-wide text-ink-muted">
+        <h3 class="text-[12.5px] font-semibold text-ink-muted">
           {{ $t('cutting.result.sectionSheets') }}
         </h3>
         <div
@@ -118,7 +118,7 @@ function submit() {
               −
             </button>
             <span
-              class="grid min-w-11 place-items-center border-x border-hairline bg-elevated font-mono text-sm font-extrabold"
+              class="grid min-w-11 place-items-center border-x border-hairline bg-elevated text-sm font-extrabold"
               :class="countFor(line.material_id) ? 'text-ink' : 'text-ink-muted'"
               aria-live="polite"
             >
@@ -133,14 +133,12 @@ function submit() {
               +
             </button>
           </div>
-          <span class="w-12 shrink-0 font-mono text-xs text-ink-muted">
-            / {{ line.panels_used }}
-          </span>
+          <span class="w-12 shrink-0 text-xs text-ink-muted"> / {{ line.panels_used }} </span>
         </div>
       </section>
 
       <section v-if="edgeLines.length" class="grid gap-2.5 border-t border-hairline pt-4">
-        <h3 class="text-[11px] font-extrabold uppercase tracking-wide text-ink-muted">
+        <h3 class="text-[12.5px] font-semibold text-ink-muted">
           {{ $t('cutting.result.sectionEdges') }}
         </h3>
         <label
@@ -164,7 +162,7 @@ function submit() {
           <span class="min-w-0 flex-1 truncate text-sm font-extrabold text-ink">
             {{ row.line.material_name }}
           </span>
-          <span class="shrink-0 font-mono text-xs text-ink-muted">
+          <span class="shrink-0 text-xs text-ink-muted">
             {{ $t('cutting.own.needed', { metres: metres(row.line.consumed_mm) }) }}
           </span>
         </label>

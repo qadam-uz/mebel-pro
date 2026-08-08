@@ -1001,7 +1001,7 @@ onBeforeUnmount(() => {
                bare newline between elements, which glued "Jami:" to the sum. -->
           <span
             ><span class="lbl">{{ $t('orders.detail.totalLabel') }}&nbsp;</span
-            ><b class="font-mono">{{ formatTiyin(order.total_tiyin) }}</b></span
+            ><b>{{ formatTiyin(order.total_tiyin) }}</b></span
           >
           <!-- The note rides the right end of the meta line. A long note
                truncates to the free space (full text on hover); an over-long
@@ -1147,7 +1147,7 @@ onBeforeUnmount(() => {
                 <ul class="mt-1 grid gap-0.5">
                   <li v-for="row in ownRows" :key="row.materialId" class="text-sm">
                     {{ row.materialName }} —
-                    <span class="font-mono font-bold">{{ row.amount }}</span>
+                    <span class="font-bold">{{ row.amount }}</span>
                   </li>
                 </ul>
                 <small class="mt-1 block text-ink-muted">{{ $t('orders.own.body') }}</small>
@@ -1309,7 +1309,7 @@ onBeforeUnmount(() => {
                         </template>
                       </small></span
                     >
-                    <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                    <span class="shrink-0 whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
                     }}</span>
                   </div>
@@ -1330,7 +1330,7 @@ onBeforeUnmount(() => {
                         </template>
                       </small></span
                     >
-                    <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                    <span class="shrink-0 whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
                     }}</span>
                   </div>
@@ -1347,7 +1347,7 @@ onBeforeUnmount(() => {
                   <!-- Snapshot lines missing (no cutting result) — aggregate rows. -->
                   <div class="flex items-baseline justify-between gap-3">
                     <span class="min-w-0 text-ink">{{ $t('orders.detail.sheets') }}</span>
-                    <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                    <span class="shrink-0 whitespace-nowrap text-ink">{{
                       formatTiyin(order.subtotal_materials_tiyin)
                     }}</span>
                   </div>
@@ -1361,7 +1361,7 @@ onBeforeUnmount(() => {
                         metres(edgeConsumedTotal(order))
                       }}</small></span
                     >
-                    <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                    <span class="shrink-0 whitespace-nowrap text-ink">{{
                       formatTiyin(edgeMaterialTotal(order))
                     }}</span>
                   </div>
@@ -1376,7 +1376,7 @@ onBeforeUnmount(() => {
                       $t('orders.unit.sheets', { n: totalPanels }, totalPanels)
                     }}</small></span
                   >
-                  <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                  <span class="shrink-0 whitespace-nowrap text-ink">{{
                     formatTiyin(order.subtotal_cutting_tiyin)
                   }}</span>
                 </div>
@@ -1390,7 +1390,7 @@ onBeforeUnmount(() => {
                       metres(edgeConsumedTotal(order))
                     }}</small></span
                   >
-                  <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
+                  <span class="shrink-0 whitespace-nowrap text-ink">{{
                     formatTiyin(edgeServiceTotal(order))
                   }}</span>
                 </div>
@@ -1409,7 +1409,7 @@ onBeforeUnmount(() => {
                       order.surcharge_reason
                     }}</small></span
                   >
-                  <span class="shrink-0 font-mono whitespace-nowrap text-ink"
+                  <span class="shrink-0 whitespace-nowrap text-ink"
                     >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
                   >
                 </div>
@@ -1423,7 +1423,7 @@ onBeforeUnmount(() => {
                       order.discount_reason
                     }}</small></span
                   >
-                  <span class="shrink-0 font-mono whitespace-nowrap text-ink"
+                  <span class="shrink-0 whitespace-nowrap text-ink"
                     >- {{ formatTiyin(order.discount_tiyin) }}</span
                   >
                 </div>
@@ -1434,13 +1434,13 @@ onBeforeUnmount(() => {
             <div class="mt-2 grid gap-2 border-t border-hairline pt-3">
               <div class="flex items-baseline justify-between font-bold text-ink">
                 <span>{{ $t('orders.detail.total') }}</span>
-                <span class="font-mono text-base">{{ formatTiyin(order.total_tiyin) }}</span>
+                <span class="text-base">{{ formatTiyin(order.total_tiyin) }}</span>
               </div>
               <template v-if="order.settlement && canViewSettlement">
                 <div class="flex items-baseline justify-between text-sm text-ink-soft">
                   <span>{{ $t('orders.detail.paid') }}</span>
                   <span
-                    class="font-mono font-semibold"
+                    class="font-semibold"
                     :class="order.settlement.recorded_tiyin > 0 ? 'text-success' : ''"
                     >{{ formatTiyin(order.settlement.recorded_tiyin) }}</span
                   >
@@ -1448,7 +1448,7 @@ onBeforeUnmount(() => {
                 <div class="flex items-baseline justify-between text-sm">
                   <span class="text-ink-soft">{{ $t('orders.detail.balance') }}</span>
                   <span
-                    class="font-mono font-bold"
+                    class="font-bold"
                     :class="order.settlement.balance_tiyin === 0 ? 'text-success' : 'text-ink'"
                     >{{ formatTiyin(order.settlement.balance_tiyin) }}</span
                   >
@@ -1629,7 +1629,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div>
-          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">
+          <div class="mb-2 text-[12.5px] font-semibold text-ink-muted">
             {{ $t('orders.detail.contents') }}
           </div>
           <!-- The same grouped, read-only list the client sees on their order
@@ -1643,7 +1643,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="order.planned_edge_lines.length > 0">
-          <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">
+          <div class="mb-2 text-[12.5px] font-semibold text-ink-muted">
             {{ $t('orders.detail.edge') }}
           </div>
           <div v-for="line in order.planned_edge_lines" :key="line.material_id" class="row-item">

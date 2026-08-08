@@ -121,7 +121,7 @@ function edgeSidesLabel(part: CuttingPart) {
         class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline bg-sunk px-3 py-2"
       >
         <span class="text-sm font-bold text-ink">{{ group.label }}</span>
-        <span class="shrink-0 font-mono text-xs text-ink-muted">
+        <span class="shrink-0 text-xs text-ink-muted">
           {{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
           {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
         </span>
@@ -167,21 +167,23 @@ function edgeSidesLabel(part: CuttingPart) {
         :key="row.part.part_ref"
         class="grid grid-cols-[34px_minmax(0,1fr)_repeat(5,minmax(44px,1fr))] items-center gap-2 border-b border-hairline px-3 py-2 text-sm last:border-b-0"
       >
-        <span class="text-center font-mono text-xs text-ink-muted"> #{{ row.index + 1 }} </span>
+        <span class="text-center text-xs text-ink-muted"> #{{ row.index + 1 }} </span>
         <span class="min-w-0 truncate text-ink">
           {{ partDisplayName(row.part, row.index) }}
         </span>
-        <span class="text-center font-mono text-ink">{{ row.part.length_mm }}</span>
-        <span class="text-center font-mono text-ink">{{ row.part.width_mm }}</span>
-        <span class="text-center font-mono text-ink">{{ row.part.quantity }}</span>
+        <span class="text-center text-ink">{{ row.part.length_mm }}</span>
+        <span class="text-center text-ink">{{ row.part.width_mm }}</span>
+        <span class="text-center text-ink">{{ row.part.quantity }}</span>
         <span class="grid place-items-center">
-          <!-- Accent marks the constraint, not the freedom: a part that may NOT
-               rotate is what the cutter has to honour, so it carries the colour
-               while a free part stays quiet. Same mapping as the editor row. -->
+          <!-- The signal marks the constraint, not the freedom: a part that may
+               NOT rotate is what the cutter has to honour, so it carries the
+               colour while a free part stays quiet. `signal` and not `accent`
+               because the action colour is graphite now — against `ink-muted` an
+               18px graphite glyph is no distinction at all. -->
           <Icon
             :name="row.part.follow_grain === false ? 'rotate' : 'grain'"
             class="size-[18px]"
-            :class="row.part.follow_grain === false ? 'text-ink-muted' : 'text-accent'"
+            :class="row.part.follow_grain === false ? 'text-ink-muted' : 'text-signal'"
           />
         </span>
         <span class="grid place-items-center">

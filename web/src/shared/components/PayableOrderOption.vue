@@ -19,7 +19,7 @@ defineProps<{ order: PayableOrder | undefined }>()
            screen it drops to its own full-width line instead of being clipped
            to five characters beside the order number. -->
       <span class="flex flex-wrap items-baseline gap-x-2">
-        <b class="font-mono text-[12px] text-ink">{{ order.order_number }}</b>
+        <b class="text-[12px] text-ink">{{ order.order_number }}</b>
         <span class="min-w-0 grow basis-28 truncate font-bold">{{ order.contact_name }}</span>
       </span>
       <span class="mt-0.5 block text-[11px] leading-tight text-ink-muted">
@@ -28,10 +28,10 @@ defineProps<{ order: PayableOrder | undefined }>()
       </span>
     </span>
     <span class="text-right">
-      <b class="block font-mono text-[13px] text-danger">{{ formatTiyin(order.balance_tiyin) }}</b>
+      <b class="block text-[13px] text-danger">{{ formatTiyin(order.balance_tiyin) }}</b>
       <small
         v-if="order.total_tiyin !== order.balance_tiyin"
-        class="block font-mono text-[11px] text-ink-muted"
+        class="block text-[11px] text-ink-muted"
       >
         {{ formatTiyin(order.total_tiyin) }}
       </small>

@@ -21,14 +21,14 @@ const workshop = useWorkshopStore()
 const { t } = useI18n()
 
 // A branch-scoped page (routes.ts declares `branchScope: 'branch'`): a draft is
-// frozen to the branch it was started on, so the list follows the topbar branch
-// exactly as the orders list does.
+// frozen to the branch it was started on, so the list follows the sidebar's
+// branch context exactly as the orders list does.
 function loadDrafts() {
   return cutting.loadWorkshopDrafts(workshop.selectedBranchContext)
 }
 
-// Named only when the topbar actually offers a choice — a single-branch workshop
-// hides the picker, so calling the branch out would be noise there.
+// Named only when the sidebar's branch card actually offers a choice — a
+// single-branch workshop pins it, so calling the branch out would be noise there.
 const contextBranchName = computed(() => {
   if (workshop.branches.length < 2) return null
   return (
@@ -58,10 +58,6 @@ function draftLabel(draft: WorkshopDraftSummary): string {
 
 function openDraft(draft: WorkshopDraftSummary) {
   void router.push(rolePath(`/workshop/orders/cutting/${draft.id}`))
-}
-
-function newOrder() {
-  void router.push(rolePath('/workshop/orders/new'))
 }
 
 async function confirmDelete() {
@@ -97,6 +93,11 @@ watch(
         <h1>{{ $t('cutting.drafts.title') }}</h1>
         <div class="sub">{{ subtitle }}</div>
       </div>
+      <!-- No create button here, in either the head or the empty state below:
+           `+ Yangi buyurtma` is the shell's single global action and lives in the
+           workshop sidebar, where it carries the branch gate. A copy on this page
+           would be a second primary that stays live on a branch the sidebar's
+           button has already disabled. -->
       <div class="tools">
         <RouterLink
           :to="rolePath('/workshop/orders')"
@@ -104,13 +105,6 @@ watch(
         >
           ← {{ $t('cutting.drafts.backToOrders') }}
         </RouterLink>
-        <button
-          type="button"
-          class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-          @click="newOrder"
-        >
-          + {{ $t('cutting.drafts.newOrder') }}
-        </button>
       </div>
     </div>
 
@@ -139,13 +133,6 @@ watch(
     >
       <h3 class="text-base font-bold">{{ $t('cutting.drafts.emptyTitle') }}</h3>
       <p class="max-w-sm text-sm text-ink-soft">{{ emptyMessage }}</p>
-      <button
-        type="button"
-        class="mp-button mp-button-primary mt-2 min-h-10 px-4"
-        @click="newOrder"
-      >
-        + {{ $t('cutting.drafts.newOrder') }}
-      </button>
     </section>
 
     <div v-else class="grid gap-2">
@@ -161,15 +148,15 @@ watch(
               {{ workshopDraftStatus(draft.has_result).label }}
             </span>
           </span>
-          <span class="mt-1 block font-mono text-xs text-ink-muted">{{ draft.client_phone }}</span>
+          <span class="mt-1 block text-xs text-ink-muted">{{ draft.client_phone }}</span>
           <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span v-if="draft.branch_name" class="text-ink-soft">{{ draft.branch_name }}</span>
             <span
-              ><b class="font-mono text-ink">{{ draft.part_count }}</b>
+              ><b class="text-ink">{{ draft.part_count }}</b>
               {{ $t('cutting.unit.part', draft.part_count) }}</span
             >
             <span v-if="draft.has_result">
-              <b class="font-mono text-ink">{{ draft.panel_count || '—' }}</b>
+              <b class="text-ink">{{ draft.panel_count || '—' }}</b>
               {{ $t('cutting.unit.panel', draft.panel_count) }}
             </span>
             <span>{{

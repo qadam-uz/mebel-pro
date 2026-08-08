@@ -135,7 +135,7 @@ watch(
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-xs text-ink-muted">
         <template v-if="point">
-          <span v-if="!readonly" class="font-mono text-ink">
+          <span v-if="!readonly" class="text-ink">
             {{ point.latitude.toFixed(6) }}, {{ point.longitude.toFixed(6) }}
           </span>
           <a
@@ -143,7 +143,7 @@ watch(
             :href="openUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="font-bold text-accent underline underline-offset-2"
+            class="font-bold text-accent-deep underline underline-offset-2"
             :class="readonly ? '' : 'ml-2'"
           >
             {{ $t('client.branches.openMap') }}

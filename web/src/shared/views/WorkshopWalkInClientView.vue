@@ -122,11 +122,11 @@ function enterEditor(clientId: string) {
 
         <template v-else>
           <div class="rounded-lg border border-hairline bg-sunk p-4">
-            <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
+            <div class="text-[12.5px] font-semibold text-ink-muted">
               {{ $t('orders.walkIn.found') }}
             </div>
             <div class="mt-1 text-lg font-bold text-ink">{{ matched.name }}</div>
-            <div class="font-mono text-sm text-ink-muted">{{ matched.phone }}</div>
+            <div class="text-sm text-ink-muted">{{ matched.phone }}</div>
           </div>
           <p class="text-sm text-ink-soft">{{ $t('orders.walkIn.confirm') }}</p>
           <div class="flex justify-between gap-2">

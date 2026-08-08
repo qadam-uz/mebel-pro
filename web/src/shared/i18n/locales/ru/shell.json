@@ -20,6 +20,7 @@
     "sessions": "Сессии",
     "logout": "Выйти",
     "menuAria": "{name} — меню аккаунта",
+    "menuAriaWithMeta": "{name} · {meta} — меню аккаунта",
     "logoutFailed": "Не удалось выйти. Повторите попытку."
   },
   "tenant": {
@@ -36,7 +37,8 @@
     "entity": "Филиал берётся из открытой записи"
   },
   "nav": {
-    "newOrdersAria": "{label} — {n} новый заказ | {label} — {n} новых заказа | {label} — {n} новых заказов"
+    "newOrdersAria": "{label} — {n} новый заказ | {label} — {n} новых заказа | {label} — {n} новых заказов",
+    "queuedAria": "{label} — {n} заказ в очереди | {label} — {n} заказа в очереди | {label} — {n} заказов в очереди"
   },
   "search": {
     "label": "Глобальный поиск",
@@ -81,6 +83,7 @@
     "filterLabel": "Тип",
     "filterAll": "Все",
     "filterUnread": "Непрочитанные",
+    "unreadMark": "Непрочитано",
     "filterOrders": "Заказы",
     "filterInventory": "Склад",
     "filterFinance": "Финансы",

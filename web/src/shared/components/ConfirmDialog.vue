@@ -143,9 +143,9 @@ onBeforeUnmount(() => {
         aria-modal="true"
         :aria-labelledby="`${id}-title`"
         :aria-describedby="`${id}-message`"
-        class="relative w-full max-w-md rounded-lg border border-hairline-strong bg-elevated p-5 shadow-[0_28px_90px_-30px_rgb(15_27_45_/_55%)]"
+        class="relative w-full max-w-md rounded-lg border border-hairline-strong bg-elevated p-5 shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
       >
-        <h2 :id="`${id}-title`" class="font-serif text-xl font-semibold text-ink">
+        <h2 :id="`${id}-title`" class="font-display text-xl font-semibold text-ink">
           {{ title }}
         </h2>
         <p :id="`${id}-message`" class="mt-3 text-sm leading-6 text-ink-soft">

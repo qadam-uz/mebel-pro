@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mebel Pro">
   <title>Mebel Pro</title>
-  <!-- Cutting map mark: a panel split into parts, one part in wood amber. -->
-  <rect width="32" height="32" rx="7" fill="#4341C6"/>
-  <rect x="5" y="5" width="9" height="22" rx="2" fill="#F6E6CD"/>
-  <rect x="16.5" y="5" width="10.5" height="10" rx="2" fill="#F6E6CD"/>
-  <rect x="16.5" y="17" width="10.5" height="10" rx="2" fill="#D9A968"/>
+  <!-- The name IS the mark: M, the cut, P. The letters are Wix Madefor
+       Display 800 OUTLINES, not text — an SVG used as an icon renders in a
+       restricted mode with no webfont, so a <text> element would fall back
+       to whatever the OS has. Geometry follows the handoff's Brend board
+       (32px tile: radius 7, letters 14px, gap 1.5, cut 2x17). Below ~16px
+       the P is dropped and only M + the cut survive. -->
+  <rect width="32" height="32" rx="7.0" fill="#22252a"/>
+  <path transform="translate(2.482 21.005) scale(0.014 -0.014)" d="M528 88H402L128 658L227 661V0H61V715H253L496 206H436L679 715H867V0H699V661L802 658Z" fill="#f4f2ee"/>
+  <rect x="16.83" y="7.5" width="2.0" height="17.0" fill="#ff5a1f"/>
+  <path transform="translate(20.334 21.005) scale(0.014 -0.014)" d="M234 0H62V715H361Q441 715 502.0 686.0Q563 657 597.0 605.5Q631 554 631 485Q631 417 597.0 365.0Q563 313 502.0 284.0Q441 255 361 255H224V398H361Q405 398 431.0 421.5Q457 445 457 485Q457 525 431.0 548.5Q405 572 361 572H234Z" fill="#f4f2ee"/>
 </svg>

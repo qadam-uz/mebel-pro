@@ -47,7 +47,7 @@ onMounted(refreshBranches)
     </div>
 
     <div class="client-banner info !mb-5">
-      <span class="font-bold text-accent">i</span>
+      <span class="font-bold text-ink">i</span>
       <span>{{ $t('client.branches.note') }}</span>
     </div>
 
@@ -107,10 +107,10 @@ onMounted(refreshBranches)
         :class="branch.status !== 'active' ? 'bg-sunk' : ''"
       >
         <div
-          class="grid size-[50px] place-items-center rounded-lg font-serif text-lg font-bold"
+          class="grid size-[50px] place-items-center rounded-lg font-display text-lg font-bold"
           :class="
             branch.status === 'active'
-              ? 'bg-accent-tint text-accent'
+              ? 'bg-accent-tint text-accent-strong'
               : 'bg-warning-soft text-warning'
           "
           aria-hidden="true"
@@ -119,10 +119,10 @@ onMounted(refreshBranches)
         </div>
 
         <div class="min-w-0">
-          <h2 class="m-0 truncate font-serif text-lg font-semibold text-ink">
+          <h2 class="m-0 truncate font-display text-lg font-semibold text-ink">
             {{ branch.workshop_name }} · {{ branch.branch_name }}
           </h2>
-          <p class="mt-1 font-mono text-xs text-ink-muted">{{ branch.address }}</p>
+          <p class="mt-1 text-xs text-ink-muted">{{ branch.address }}</p>
           <!-- Only when the branch has a pin — an address alone does not get a
                client to the door in a city where the same street repeats. -->
           <!-- A pin icon that opens Yandex Maps, not an embedded map: this is a
@@ -133,7 +133,7 @@ onMounted(refreshBranches)
             :href="mapUrl(branch) ?? undefined"
             target="_blank"
             rel="noopener noreferrer"
-            class="mt-1 grid size-11 place-items-center rounded-md border border-hairline text-accent transition hover:border-accent hover:bg-accent-soft"
+            class="mt-1 grid size-11 place-items-center rounded-md border border-hairline text-accent-deep transition hover:border-hairline-strong hover:bg-sunk"
             :title="$t('client.branches.openMap')"
             :aria-label="$t('client.branches.openMap')"
           >
@@ -143,7 +143,7 @@ onMounted(refreshBranches)
             <a
               v-for="(phone, index) in phones(branch)"
               :key="phone"
-              class="inline-flex min-h-11 items-center font-mono text-xs font-bold text-accent underline underline-offset-2"
+              class="inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
               :href="`tel:${phone}`"
             >
               {{ formatPhone(phone) }}

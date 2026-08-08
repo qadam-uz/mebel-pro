@@ -225,7 +225,7 @@ onMounted(async () => {
           </div>
           <div class="client-card-b">
             <div class="client-banner success">
-              <span class="font-mono font-black">i</span>
+              <span class="font-black">i</span>
               <span>{{ $t('client.orderNew.contactNote') }}</span>
             </div>
             <div class="grid gap-3 md:grid-cols-2">
@@ -235,7 +235,7 @@ onMounted(async () => {
                 <button
                   v-if="nameDiffers"
                   type="button"
-                  class="w-fit text-xs font-bold text-accent underline"
+                  class="w-fit text-xs font-bold text-accent-deep underline"
                   @click="resetField('name')"
                 >
                   {{ $t('client.orderNew.resetFromProfile') }}
@@ -250,7 +250,7 @@ onMounted(async () => {
                 <button
                   v-if="phoneDiffers"
                   type="button"
-                  class="w-fit text-xs font-bold text-accent underline"
+                  class="w-fit text-xs font-bold text-accent-deep underline"
                   @click="resetField('phone')"
                 >
                   {{ $t('client.orderNew.resetFromProfile') }}
@@ -272,27 +272,27 @@ onMounted(async () => {
           <div class="grid gap-2 text-sm">
             <div class="flex justify-between gap-4">
               <span class="text-ink-soft">{{ $t('client.common.parts') }}</span
-              ><span class="font-mono font-bold text-ink">{{ totalQuantity }}</span>
+              ><span class="font-bold text-ink">{{ totalQuantity }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="text-ink-soft">{{ $t('client.orderNew.sheets') }}</span
-              ><span class="font-mono font-bold text-ink">{{ totalPanels }}</span>
+              ><span class="font-bold text-ink">{{ totalPanels }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <!-- "Kromka" length here, "Kromka: <material>" money below — never
                    the same bare word for two different units (CB collision). -->
               <span class="text-ink-soft">{{ $t('client.orderNew.edgeLength') }}</span
-              ><span class="font-mono font-bold text-ink">{{ metres(totalEdge) }}</span>
+              ><span class="font-bold text-ink">{{ metres(totalEdge) }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="text-ink-soft">{{ $t('client.orderNew.waste') }}</span
-              ><span class="font-mono font-bold text-ink">{{
+              ><span class="font-bold text-ink">{{
                 formatPercent(chosenResult.waste_percentage)
               }}</span>
             </div>
           </div>
 
-          <div class="grid gap-1.5 border-t border-hairline pt-3 font-mono text-xs">
+          <div class="grid gap-1.5 border-t border-hairline pt-3 text-xs">
             <div v-for="row in billRows" :key="row.key" class="flex justify-between gap-3">
               <span class="min-w-0 text-ink-soft"
                 >{{ row.label
@@ -301,7 +301,7 @@ onMounted(async () => {
               <span class="shrink-0 font-bold text-ink">{{ formatTiyin(row.amount_tiyin) }}</span>
             </div>
             <div
-              class="mt-1 flex justify-between gap-3 border-t border-hairline pt-2 text-sm font-extrabold text-accent"
+              class="mt-1 flex justify-between gap-3 border-t border-hairline pt-2 text-sm font-extrabold text-ink"
             >
               <span>{{ $t('client.common.total') }}</span
               ><span>{{ formatTiyin(quote?.total_tiyin ?? 0) }}</span>
@@ -325,7 +325,7 @@ onMounted(async () => {
             <p class="text-xs text-ink-soft">{{ $t('client.orderNew.paymentNote') }}</p>
 
             <div v-if="localError" class="client-banner danger mb-0">
-              <span class="font-mono font-black">!</span><span>{{ localError }}</span>
+              <span class="font-black">!</span><span>{{ localError }}</span>
             </div>
             <button
               v-if="!quote && !quoteLoading"

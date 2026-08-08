@@ -227,7 +227,7 @@ onMounted(async () => {
             >
               <div>
                 <div class="nm">{{ grant.label }}</div>
-                <small class="font-mono text-[11px] text-ink-muted">{{ grant.permission }}</small>
+                <small class="text-[11px] text-ink-muted">{{ grant.permission }}</small>
               </div>
               <div class="meta">{{ grant.branch }}</div>
             </div>

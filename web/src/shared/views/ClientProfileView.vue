@@ -168,14 +168,14 @@ onMounted(reloadProfile)
               <div class="client-row-name">{{ $t('client.common.phone') }}</div>
               <div class="text-sm text-ink-muted">{{ $t('client.profile.phoneHint') }}</div>
             </div>
-            <div class="font-mono text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
+            <div class="text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
           </div>
 
           <div class="client-row-item">
             <div>
               <div class="client-row-name">{{ $t('client.profile.orderCount') }}</div>
             </div>
-            <div class="font-mono text-sm text-ink">
+            <div class="text-sm text-ink">
               {{ $t('client.unit.count', orders.clientOrders.length) }}
             </div>
           </div>
@@ -207,7 +207,7 @@ onMounted(reloadProfile)
               <div class="flex min-w-0 items-center gap-3">
                 <span
                   class="grid size-9 shrink-0 place-items-center rounded-lg bg-sunk text-ink-soft"
-                  :class="session.is_current ? 'bg-accent-soft text-accent' : ''"
+                  :class="session.is_current ? 'bg-accent-soft text-accent-strong' : ''"
                   aria-hidden="true"
                 >
                   <Icon name="monitor" />
@@ -232,7 +232,7 @@ onMounted(reloadProfile)
               >
                 {{ $t('client.profile.revokeSession') }}
               </button>
-              <span v-else class="font-mono text-xs text-ink-muted">—</span>
+              <span v-else class="text-xs text-ink-muted">—</span>
             </div>
           </template>
         </div>

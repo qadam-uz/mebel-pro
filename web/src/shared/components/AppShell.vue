@@ -26,17 +26,21 @@ import {
   workshopTenantName,
 } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import ActionMenu from '@/shared/components/ActionMenu.vue'
+import BrandMark from '@/shared/components/BrandMark.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import ToastHost from '@/shared/components/ToastHost.vue'
 import { useToast } from '@/shared/composables/useToast'
+import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOnboardingStore } from '@/shared/stores/onboarding'
 import { useOrdersStore } from '@/shared/stores/orders'
+import { useProductionStore } from '@/shared/stores/production'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 import { useWorkshopSearchStore } from '@/shared/stores/workshopSearch'
 
@@ -45,8 +49,10 @@ const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const onboarding = useOnboardingStore()
 const orders = useOrdersStore()
+const production = useProductionStore()
 const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
+const permissions = useWorkshopPermissions()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -83,11 +89,6 @@ async function onAccountMenuSelect(index: number) {
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const mobileNavOpen = ref(false)
-// Desktop icon-rail collapse: production workers mostly live in Kesish/Krom,
-// so the sidebar can shrink to icons for a wider workspace. Device-level
-// preference (floor tablets); mobile keeps the drawer instead.
-const SIDEBAR_COLLAPSED_KEY = 'mp-workshop-sidebar-collapsed'
-const sidebarCollapsed = ref(browserStorage()?.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
 const mobileTriggerRef = ref<HTMLButtonElement | null>(null)
 const drawerPanelRef = ref<HTMLElement | null>(null)
 const workshopSearchRootRef = ref<HTMLElement | null>(null)
@@ -109,13 +110,6 @@ const contextStorageKey = computed(() =>
     ? workshopContextStorageKey(auth.me.principal_id, auth.me.session_id)
     : null,
 )
-// The card's second line was `auth.displayName` again — the same string the
-// line above it already shows (QAD-182). The login is what belongs there: it is
-// the one thing about themselves a staff member occasionally has to read out.
-const profileSubtitle = computed(() => {
-  if (auth.me?.password_reset_required) return t('shell.tenant.passwordResetHint')
-  return auth.me?.login ?? ''
-})
 const tenantLabel = computed(() => {
   // Settings first so an owner's rename shows without a reload; `me` is the
   // source everyone else has, because `/workshop/settings` is owner-only and
@@ -135,6 +129,26 @@ const tenantMeta = computed(() => {
   if (config.role === 'admin') return auth.displayName
   return roleText('tenantMeta')
 })
+// The sidebar's user button reads the ROLE: the grant summary lost its own render
+// site when the branch picker took the card above it, and a role is the more
+// useful second line under a name. The password-reset warning still wins — it is
+// the only place that state stays visible in the workshop chrome.
+const workshopUserMeta = computed(() =>
+  auth.me?.password_reset_required ? t('shell.tenant.passwordResetHint') : tenantMeta.value,
+)
+// `aria-label` on the trigger REPLACES its contents, so the meta line — the role,
+// or the password-reset warning, which the workshop chrome shows nowhere else —
+// dropped out of the accessible name the moment the plain RouterLink became an
+// ActionMenu. Fold it back in rather than leaving a screen reader with the name
+// alone.
+const accountMenuLabel = computed(() =>
+  workshopUserMeta.value
+    ? t('shell.account.menuAriaWithMeta', {
+        name: auth.displayName,
+        meta: workshopUserMeta.value,
+      })
+    : t('shell.account.menuAria', { name: auth.displayName }),
+)
 const tenantInitial = computed(() =>
   (tenantLabel.value.trim().slice(0, 1) || roleText('label')[0]).toUpperCase(),
 )
@@ -175,11 +189,20 @@ const visibleNav = computed<NavItem[]>(() => {
 const selectedWorkshopBranch = computed(() =>
   workshop.branches.find((branch) => branch.id === selectedContext.value),
 )
-// The topbar branch switcher only earns its space when there's a real choice.
-// With a single branch (or none) the context auto-pins to it, so hide the
-// selector on every screen and let the pages use that one branch silently.
+// The branch switcher only earns a listbox when there's a real choice. With a
+// single branch (or none) the context auto-pins to it, so the sidebar renders the
+// same card as an inert block — same geometry, no chevron — rather than changing
+// the column's shape between workshops.
 const showBranchSwitcher = computed(
   () => config.role === 'workshop' && workshop.branches.length > 1,
+)
+// The branch card's second line. Reads the option list, not `workshop.branches`,
+// so the zero-branch case shows "Filial yo'q" instead of going blank.
+const selectedBranchLabel = computed(
+  () =>
+    dropdownOptions.value.find((option) => option.value === selectedContext.value)?.label ??
+    dropdownOptions.value[0]?.label ??
+    '',
 )
 // Not every page reads the branch context: some are workshop-wide by design
 // (debts, settings, branches, notifications, profile), others take their branch
@@ -235,16 +258,50 @@ const newOrderBadge = computed(() => {
   if (config.role !== 'workshop' || !canSeeOrdersNav.value || orders.newOrderCount < 1) return null
   return orders.newOrderCount > 99 ? '99+' : String(orders.newOrderCount)
 })
-// The badge itself is decorative; the count belongs to the link's own name so a
-// screen reader hears "Buyurtmalar — 4 ta yangi buyurtma" in one go.
+// Kesish / Krom carry a plain number: how many jobs wait in the signed-in user's
+// OWN queue. The backend scopes `/production/queue` to the caller's assignments
+// for everyone, owner included, so this is exactly the figure the station page
+// shows — never a workshop-wide total the operator cannot act on.
+const cuttingNavPath = computed(() => rolePath('/workshop/cutting'))
+const bandingNavPath = computed(() => rolePath('/workshop/banding'))
+const canSeeProductionNav = computed(() =>
+  visibleNav.value.some((item) => item.to === cuttingNavPath.value),
+)
+const productionNavCounts = computed(() => {
+  const counts = new Map<string, number>()
+  if (config.role !== 'workshop' || !canSeeProductionNav.value) return counts
+  const cutting = production.queues.cutting?.jobs.length ?? 0
+  const banding = production.queues.banding?.jobs.length ?? 0
+  if (cutting > 0) counts.set(cuttingNavPath.value, cutting)
+  if (banding > 0) counts.set(bandingNavPath.value, banding)
+  return counts
+})
+// The badge and the count are decorative; the figure belongs to the link's own
+// name so a screen reader hears "Buyurtmalar — 4 ta yangi buyurtma" in one go.
 function navAriaLabel(item: NavItem) {
-  if (item.to !== ordersNavPath.value || !newOrderBadge.value) return undefined
-  return t(
-    'shell.nav.newOrdersAria',
-    { label: t(item.labelKey), n: orders.newOrderCount },
-    orders.newOrderCount,
-  )
+  if (item.to === ordersNavPath.value && newOrderBadge.value) {
+    return t(
+      'shell.nav.newOrdersAria',
+      { label: t(item.labelKey), n: orders.newOrderCount },
+      orders.newOrderCount,
+    )
+  }
+  const queued = productionNavCounts.value.get(item.to)
+  if (queued === undefined) return undefined
+  return t('shell.nav.queuedAria', { label: t(item.labelKey), n: queued }, queued)
 }
+// `+ Yangi buyurtma` lives in the sidebar now, so it carries the same gate the
+// route does: the walk-in flow is fixed to the selected branch, which must be
+// open and must be one the staffer may place orders on. When it fails the control
+// renders as a disabled button with the reason — never a link, because a link
+// that bounces off the route guard is a dead end that looks live.
+const canCreateOrder = computed(() => {
+  if (config.role !== 'workshop') return false
+  const branch = selectedWorkshopBranch.value
+  return (
+    !!branch && branch.status === 'active' && permissions.canOnBranch(p.manageOrders, branch.id)
+  )
+})
 const adminMetrics = computed(() =>
   adminNavMetrics({
     workshops: admin.workshops.length,
@@ -296,6 +353,9 @@ function iconPath(name: string | undefined) {
       '<path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2m-5.7-3.7 1.4-1.4m8.6-8.6 1.4-1.4m0 11.4-1.4-1.4M7.7 7.7 6.3 6.3"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+    'chevron-down': '<path d="m6 9 6 6 6-6"/>',
   }
   return paths[name ?? 'dashboard'] ?? paths.dashboard
 }
@@ -311,24 +371,15 @@ function drawerFocusable() {
 function openMobileNav() {
   previousMobileFocus =
     document.activeElement instanceof HTMLElement ? document.activeElement : mobileTriggerRef.value
+  // The search panel is a teleported overlay of the topbar the drawer covers;
+  // leaving it open would float it over the scrim with nothing behind it.
+  closeWorkshopSearch()
   mobileNavOpen.value = true
 }
 
 function closeMobileNav() {
   if (!mobileNavOpen.value) return
   mobileNavOpen.value = false
-}
-
-// One trigger for both worlds: on desktop it toggles the sidebar between full
-// and icon-rail; on mobile it opens the drawer.
-function onNavTrigger() {
-  const isDesktop = window.matchMedia('(min-width: 921px)').matches
-  if (config.role === 'workshop' && isDesktop) {
-    sidebarCollapsed.value = !sidebarCollapsed.value
-    browserStorage()?.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
-    return
-  }
-  openMobileNav()
 }
 
 function onDrawerKeydown(event: KeyboardEvent) {
@@ -354,6 +405,31 @@ function onDrawerKeydown(event: KeyboardEvent) {
     event.preventDefault()
     first.focus()
   }
+}
+
+/** A popover the drawer hosts, teleported to `<body>` and therefore outside the
+ *  drawer's own subtree. */
+function isDrawerOverlay(node: Node | null) {
+  if (!(node instanceof Element)) return false
+  return Boolean(node.closest('[role="listbox"], [role="menu"], .mp-action-menu'))
+}
+
+// The keydown trap above only sees events inside the drawer, and the drawer now
+// hosts two controls whose panels teleport to `<body>`: the branch picker and
+// the account menu. `ProjectDropdown` closes its listbox on Tab WITHOUT
+// returning focus, so the browser resumed the tab order from `<body>` and walked
+// straight out of an `aria-modal` dialog into the page behind it. A focusin
+// guard catches that no matter how focus left — Tab, Shift+Tab, or a
+// programmatic move — because it tests where focus LANDED rather than which key
+// produced it.
+function onDocumentFocusIn(event: FocusEvent) {
+  if (!mobileNavOpen.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (drawerPanelRef.value?.contains(target) || isDrawerOverlay(target)) return
+  const focusable = drawerFocusable()
+  if (focusable.length > 0) focusable[0].focus()
+  else drawerPanelRef.value?.focus()
 }
 
 function searchDestination(path: string, query = workshopSearchQuery.value) {
@@ -449,8 +525,46 @@ function reloadNewOrderCount() {
   void orders.loadNewOrderCount(selectedWorkshopBranch.value?.id ?? null)
 }
 
+// Same rhythm for the two station counts, and only for a user who actually has
+// the stations in their nav — nobody else may read the queue.
+//
+// Two things this must NOT do, both learned the hard way. It must not skip while
+// `production.loading`: the first run fires before the branch context resolves,
+// so it asks for every branch, and a skip then dropped the branch-scoped refetch
+// that followed and left the badge counting the wrong workshop. And it must not
+// run at all while the user is standing on a station page — that page owns the
+// same store, so a shell refresh that fails would swap its loaded queue for a
+// full-page error the operator never asked for. `requestedProductionBranch`
+// replaces the loading skip: it collapses a repeat of the same question without
+// swallowing a different one. `undefined` means "not asked yet", distinct from a
+// null (all-branches) context.
+let requestedProductionBranch: string | null | undefined
+const onStationPage = computed(
+  () =>
+    route.path === rolePath('/workshop/cutting') || route.path === rolePath('/workshop/banding'),
+)
+
+function reloadProductionCounts(force = false) {
+  if (
+    config.role !== 'workshop' ||
+    !canLoadWorkshopContext.value ||
+    !canSeeProductionNav.value ||
+    onStationPage.value
+  ) {
+    return
+  }
+  const branchId = selectedWorkshopBranch.value?.id ?? null
+  if (!force && requestedProductionBranch === branchId) return
+  requestedProductionBranch = branchId
+  void production.loadQueues(['cutting', 'banding'], branchId)
+}
+
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible') reloadNewOrderCount()
+  if (document.visibilityState !== 'visible') return
+  reloadNewOrderCount()
+  // Coming back to the tab is the one moment the counts are worth re-asking for
+  // even when the branch has not moved.
+  reloadProductionCounts(true)
 }
 
 watch(
@@ -553,10 +667,38 @@ watch([() => selectedWorkshopBranch.value?.id, canSeeOrdersNav], reloadNewOrderC
   immediate: true,
 })
 
+// Wrapped, not passed by reference: a watcher hands its new value to the
+// callback, which would land in `force` and turn every branch tick into an
+// unconditional refetch.
+watch(
+  [() => selectedWorkshopBranch.value?.id, canSeeProductionNav],
+  () => reloadProductionCounts(),
+  {
+    immediate: true,
+  },
+)
+
+// The order-mutation half of the rhythm. The orders store owns that hook for the
+// new-order badge; the station counts have to read it from outside, so watch the
+// open order's version: a bump on the SAME order is a mutation (assign, start,
+// finish — all of which move a queue), while a different id is just another order
+// being opened and must not cost a request.
+watch(
+  () => (orders.currentOrder ? `${orders.currentOrder.id}:${orders.currentOrder.version}` : ''),
+  (stamp, previous) => {
+    if (!stamp || !previous) return
+    if (stamp.split(':')[0] !== previous.split(':')[0]) return
+    // The branch has not moved, the queue has — this one has to bypass the
+    // same-branch dedupe.
+    reloadProductionCounts(true)
+  },
+)
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('keydown', onGlobalKeydown)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('focusin', onDocumentFocusIn)
 })
 
 onBeforeUnmount(() => {
@@ -564,6 +706,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onGlobalKeydown)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('focusin', onDocumentFocusIn)
   if (mobileNavOpen.value) unlockBodyScroll()
   previousMobileFocus = null
 })
@@ -582,7 +725,7 @@ onBeforeUnmount(() => {
           class="client-brand"
           :aria-label="$t('shell.a11y.clientHome')"
         >
-          <img src="/favicon.svg" alt="" class="size-8" />
+          <BrandMark :size="32" />
           <span class="client-brand-name">{{ config.productLabel }}</span>
         </RouterLink>
 
@@ -615,27 +758,78 @@ onBeforeUnmount(() => {
     </main>
   </div>
 
-  <div
-    v-else-if="config.role === 'workshop'"
-    class="workshop-app"
-    :class="{ 'nav-collapsed': sidebarCollapsed }"
-  >
+  <div v-else-if="config.role === 'workshop'" class="workshop-app">
     <aside class="workshop-sidebar" :aria-label="$t('shell.a11y.workshopNav')">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
-        <img src="/favicon.svg" alt="" class="workshop-brand-mark" />
+        <!-- The mark is markup, not the favicon: a graphite tile with two Display
+             800 letters around a 2px orange cut (DESIGN.md → Brand). -->
+        <BrandMark :size="32" />
         <span class="workshop-brand-copy">
           <span class="workshop-brand-name">{{ config.productLabel }}</span>
           <span class="workshop-brand-role">{{ roleText('label') }}</span>
         </span>
       </RouterLink>
 
-      <div class="workshop-tenant">
-        <span class="workshop-tenant-avatar" aria-hidden="true">{{ tenantInitial }}</span>
-        <span class="min-w-0">
-          <span class="workshop-tenant-name">{{ tenantLabel }}</span>
-          <span class="workshop-tenant-meta">{{ tenantMeta }}</span>
-        </span>
+      <ProjectDropdown
+        v-if="showBranchSwitcher"
+        v-model="selectedContext"
+        class="workshop-branch-card"
+        :label="roleText('dropdown')"
+        :options="dropdownOptions"
+        :disabled="branchPickerDisabled"
+        :hint="branchPickerHint"
+        trigger-class="workshop-branch"
+        hint-class="workshop-branch-hint"
+      >
+        <!-- The slot replaces the primitive's own one-line trigger, so the label
+             comes along as screen-reader text or the button's name would read as
+             two bare proper nouns. -->
+        <template #trigger="{ selected }">
+          <span class="sr-only">{{ roleText('dropdown') }}</span>
+          <span class="workshop-branch-avatar" aria-hidden="true">{{ tenantInitial }}</span>
+          <span class="workshop-branch-copy">
+            <span class="workshop-branch-name">{{ tenantLabel }}</span>
+            <span class="workshop-branch-meta">{{ selected.label }}</span>
+          </span>
+          <svg
+            class="workshop-branch-chevron"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            v-html="iconPath('chevron-right')"
+          ></svg>
+        </template>
+      </ProjectDropdown>
+      <!-- One branch (or none): the same card, inert. Keeping its geometry means
+           the sidebar does not change shape between workshops. -->
+      <div v-else class="workshop-branch-card">
+        <div class="workshop-branch is-static">
+          <span class="workshop-branch-avatar" aria-hidden="true">{{ tenantInitial }}</span>
+          <span class="workshop-branch-copy">
+            <span class="workshop-branch-name">{{ tenantLabel }}</span>
+            <span class="workshop-branch-meta">{{ selectedBranchLabel }}</span>
+          </span>
+        </div>
       </div>
+
+      <!-- Outside the <nav> on purpose: it is an action, not a destination, and
+           the nav's link list is asserted item-for-item against the grant set. -->
+      <RouterLink
+        v-if="canCreateOrder"
+        :to="rolePath('/workshop/orders/new')"
+        class="workshop-create"
+        @click="closeMobileNav"
+      >
+        {{ $t('orders.list.create') }}
+      </RouterLink>
+      <button
+        v-else
+        class="workshop-create"
+        type="button"
+        disabled
+        :title="$t('orders.list.createBlocked')"
+      >
+        {{ $t('orders.list.create') }}
+      </button>
 
       <nav class="workshop-nav" :aria-label="$t('shell.a11y.mainNav')">
         <section v-for="group in navGroups" :key="group.id" class="workshop-nav-group">
@@ -646,7 +840,6 @@ onBeforeUnmount(() => {
             :to="item.to"
             class="workshop-nav-item"
             active-class="on"
-            :title="t(item.labelKey)"
             :aria-label="navAriaLabel(item)"
           >
             <span class="workshop-nav-icon" aria-hidden="true">
@@ -659,17 +852,40 @@ onBeforeUnmount(() => {
               aria-hidden="true"
               >{{ newOrderBadge }}</span
             >
+            <span
+              v-else-if="productionNavCounts.get(item.to)"
+              class="workshop-nav-count"
+              aria-hidden="true"
+              >{{ productionNavCounts.get(item.to) }}</span
+            >
           </RouterLink>
         </section>
       </nav>
 
-      <RouterLink :to="config.profilePath" class="workshop-user-card" @click="closeMobileNav">
-        <span class="workshop-user-avatar" aria-hidden="true">{{ workshopUserInitials }}</span>
-        <span class="min-w-0">
-          <span class="workshop-user-name">{{ auth.displayName }}</span>
-          <span class="workshop-user-meta">{{ profileSubtitle }}</span>
-        </span>
-      </RouterLink>
+      <!-- The class goes on the component so it lands on ActionMenu's root
+           wrapper: the sidebar's last row is this block, and the frame test
+           measures it as a direct child of `.workshop-sidebar`. -->
+      <ActionMenu
+        class="workshop-user-card"
+        :items="accountMenuItems"
+        :label="accountMenuLabel"
+        trigger-class="workshop-user-trigger"
+        @select="onAccountMenuSelect"
+      >
+        <template #trigger>
+          <span class="workshop-user-avatar" aria-hidden="true">{{ workshopUserInitials }}</span>
+          <span class="workshop-user-copy">
+            <span class="workshop-user-name">{{ auth.displayName }}</span>
+            <span class="workshop-user-meta">{{ workshopUserMeta }}</span>
+          </span>
+          <svg
+            class="workshop-user-chevron"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            v-html="iconPath('chevron-down')"
+          ></svg>
+        </template>
+      </ActionMenu>
     </aside>
 
     <div
@@ -677,6 +893,7 @@ onBeforeUnmount(() => {
       class="workshop-drawer"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="workshop-mobile-drawer-title"
       @keydown="onDrawerKeydown"
     >
       <button
@@ -685,9 +902,20 @@ onBeforeUnmount(() => {
         :aria-label="$t('shell.a11y.closeMenu')"
         @click="closeMobileNav"
       ></button>
+      <!-- Below 921px the sidebar IS this drawer, so it carries the sidebar's
+           whole content. Branch switching, order creation and logging out live
+           nowhere else on a phone. -->
       <div ref="drawerPanelRef" class="workshop-drawer-panel" tabindex="-1">
         <div class="workshop-drawer-head">
-          <span class="font-serif text-lg font-semibold">Mebel Pro</span>
+          <span class="workshop-brand">
+            <BrandMark :size="32" />
+            <span class="workshop-brand-copy">
+              <span id="workshop-mobile-drawer-title" class="workshop-brand-name">
+                {{ config.productLabel }}
+              </span>
+              <span class="workshop-brand-role">{{ roleText('label') }}</span>
+            </span>
+          </span>
           <button
             class="workshop-icon-button"
             type="button"
@@ -697,6 +925,61 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('close')"></svg>
           </button>
         </div>
+
+        <ProjectDropdown
+          v-if="showBranchSwitcher"
+          v-model="selectedContext"
+          class="workshop-branch-card"
+          :label="roleText('dropdown')"
+          :options="dropdownOptions"
+          :disabled="branchPickerDisabled"
+          :hint="branchPickerHint"
+          trigger-class="workshop-branch"
+          hint-class="workshop-branch-hint"
+        >
+          <template #trigger="{ selected }">
+            <span class="sr-only">{{ roleText('dropdown') }}</span>
+            <span class="workshop-branch-avatar" aria-hidden="true">{{ tenantInitial }}</span>
+            <span class="workshop-branch-copy">
+              <span class="workshop-branch-name">{{ tenantLabel }}</span>
+              <span class="workshop-branch-meta">{{ selected.label }}</span>
+            </span>
+            <svg
+              class="workshop-branch-chevron"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              v-html="iconPath('chevron-right')"
+            ></svg>
+          </template>
+        </ProjectDropdown>
+        <div v-else class="workshop-branch-card">
+          <div class="workshop-branch is-static">
+            <span class="workshop-branch-avatar" aria-hidden="true">{{ tenantInitial }}</span>
+            <span class="workshop-branch-copy">
+              <span class="workshop-branch-name">{{ tenantLabel }}</span>
+              <span class="workshop-branch-meta">{{ selectedBranchLabel }}</span>
+            </span>
+          </div>
+        </div>
+
+        <RouterLink
+          v-if="canCreateOrder"
+          :to="rolePath('/workshop/orders/new')"
+          class="workshop-create"
+          @click="closeMobileNav"
+        >
+          {{ $t('orders.list.create') }}
+        </RouterLink>
+        <button
+          v-else
+          class="workshop-create"
+          type="button"
+          disabled
+          :title="$t('orders.list.createBlocked')"
+        >
+          {{ $t('orders.list.create') }}
+        </button>
+
         <nav class="workshop-nav" :aria-label="$t('shell.a11y.mobileNav')">
           <section v-for="group in navGroups" :key="`m-${group.id}`" class="workshop-nav-group">
             <div class="workshop-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
@@ -718,9 +1001,37 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
                 >{{ newOrderBadge }}</span
               >
+              <span
+                v-else-if="productionNavCounts.get(item.to)"
+                class="workshop-nav-count"
+                aria-hidden="true"
+                >{{ productionNavCounts.get(item.to) }}</span
+              >
             </RouterLink>
           </section>
         </nav>
+
+        <ActionMenu
+          class="workshop-user-card"
+          :items="accountMenuItems"
+          :label="accountMenuLabel"
+          trigger-class="workshop-user-trigger"
+          @select="onAccountMenuSelect"
+        >
+          <template #trigger>
+            <span class="workshop-user-avatar" aria-hidden="true">{{ workshopUserInitials }}</span>
+            <span class="workshop-user-copy">
+              <span class="workshop-user-name">{{ auth.displayName }}</span>
+              <span class="workshop-user-meta">{{ workshopUserMeta }}</span>
+            </span>
+            <svg
+              class="workshop-user-chevron"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              v-html="iconPath('chevron-down')"
+            ></svg>
+          </template>
+        </ActionMenu>
       </div>
     </div>
 
@@ -731,21 +1042,10 @@ onBeforeUnmount(() => {
           class="workshop-mobile-button"
           type="button"
           :aria-label="$t('shell.a11y.menu')"
-          @click="onNavTrigger"
+          @click="openMobileNav"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
         </button>
-
-        <ProjectDropdown
-          v-if="showBranchSwitcher"
-          v-model="selectedContext"
-          class="workshop-branch-dd"
-          :label="roleText('dropdown')"
-          :options="dropdownOptions"
-          :disabled="branchPickerDisabled"
-          :hint="branchPickerHint"
-          hide-label
-        />
 
         <div ref="workshopSearchRootRef" class="workshop-search-wrap">
           <label class="workshop-search" for="workshop-global-search">
@@ -929,25 +1229,12 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- Locale and notifications, and nothing else. The account menu moved
+             down to the sidebar's user button, where the name it belongs to is
+             already on screen (QAD-182 kept it one click from the avatar). -->
         <div class="workshop-top-actions">
           <LocaleSwitcher />
           <NotificationsMenu />
-          <!-- Logging out used to mean: click the avatar, wait for the profile
-               page, find the button in its head, confirm. The most expected
-               account action was three steps and a page load away (QAD-182). -->
-          <ActionMenu
-            :items="accountMenuItems"
-            :label="$t('shell.account.menuAria', { name: auth.displayName })"
-            trigger-class="workshop-top-user"
-            @select="onAccountMenuSelect"
-          >
-            <template #trigger>
-              <span class="workshop-user-avatar" aria-hidden="true">{{
-                workshopUserInitials
-              }}</span>
-              <span class="workshop-top-user-text">{{ auth.displayName }}</span>
-            </template>
-          </ActionMenu>
         </div>
       </header>
 
@@ -962,7 +1249,7 @@ onBeforeUnmount(() => {
     <a class="admin-skip-link" href="#admin-content">{{ $t('shell.admin.skipLink') }}</a>
     <aside class="admin-sidebar" :aria-label="$t('shell.a11y.platformNav')">
       <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
-        <img src="/favicon.svg" alt="" class="admin-brand-mark" />
+        <BrandMark :size="30" />
         <span class="admin-brand-copy">
           <span class="admin-brand-name">{{ config.productLabel }}</span>
           <span class="admin-brand-role">{{ roleText('label') }}</span>
@@ -1066,8 +1353,16 @@ onBeforeUnmount(() => {
       ></button>
       <div ref="drawerPanelRef" class="admin-drawer-panel" tabindex="-1">
         <div class="admin-drawer-head">
-          <span id="admin-mobile-drawer-title" class="font-serif text-lg font-semibold">
-            Mebel Pro
+          <!-- Was a hardcoded, untranslated literal in a face the system no longer
+               has. The platform sidebar's own brand block instead. -->
+          <span class="admin-brand">
+            <BrandMark :size="30" />
+            <span class="admin-brand-copy">
+              <span id="admin-mobile-drawer-title" class="admin-brand-name">
+                {{ config.productLabel }}
+              </span>
+              <span class="admin-brand-role">{{ roleText('label') }}</span>
+            </span>
           </span>
           <button
             class="admin-icon-button"

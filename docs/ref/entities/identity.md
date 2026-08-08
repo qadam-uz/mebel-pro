@@ -147,7 +147,7 @@ on the row, so the cap can't be raced past). Every row — delivered or not — 
 send budgets: per-phone resend cooldown (60 s), per-phone (5 / hour, 10 / day), per-IP
 (30 / hour, 50 / day), and platform-wide (150 / hour, 1000 / day) caps, all env-tunable
 (`OTP_*` settings; rules in
-[`access-management.md`](../features/access-management.md#client-sign-in-phone--telegram-otp)).
+[`access-management.md`](../features/access-management.md#client-sign-in-phone-telegram-otp)).
 `request_ip` is the socket peer in direct/dev traffic; when the immediate peer is a trusted
 proxy (`TRUSTED_PROXY_CIDRS`), it is the right-most `X-Forwarded-For` hop outside the trusted
 CIDRs — the address a trusted proxy actually vouches for; untrusted or malformed headers are

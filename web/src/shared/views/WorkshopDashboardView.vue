@@ -1,38 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 
 import { captureApiError } from '@/shared/api/client'
-import { traceLine } from '@/shared/app/errorTrace'
-import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
-import { workshopDashboardAccess } from '@/shared/app/workshopDashboard'
-import { workshopProductionQueueCounts } from '@/shared/app/workshopProduction'
-import {
-  dashboardFailureLine,
-  orderPillClass,
-  workshopStatusUz,
-  type DashboardSectionFailure,
-} from '@/shared/app/workshopUi'
+import { dailyIncomeDelta, workshopDashboardAccess } from '@/shared/app/workshopDashboard'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import { workerShortName, workshopStationLoad } from '@/shared/app/workshopProduction'
+import { dashboardFailureLine, type DashboardSectionFailure } from '@/shared/app/workshopUi'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
   formatDate,
   formatDateInputValue,
+  formatDayMonthWeekday,
   formatRelative,
-  formatTiyin,
-  formatTiyinRow,
+  formatSignedPercent,
   formatStockQuantity,
+  formatTiyin,
+  formatTiyinParts,
+  formatTiyinRow,
 } from '@/shared/formatters'
-import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import AppIcon from '@/shared/components/AppIcon.vue'
 import OnboardingChecklist from '@/shared/components/OnboardingChecklist.vue'
-import { activeWorkshopStatuses, useOrdersStore } from '@/shared/stores/orders'
+import SegmentedControl from '@/shared/components/SegmentedControl.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
+import {
+  activeWorkshopStatuses,
+  useOrdersStore,
+  type OrderSummary,
+  type WorkshopWorkerOption,
+} from '@/shared/stores/orders'
 import { useFinanceStore } from '@/shared/stores/finance'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const rolePath = useRolePath()
-const router = useRouter()
 const { t } = useI18n()
 const permissions = useWorkshopPermissions()
 const auth = useAuthStore()
@@ -46,13 +49,20 @@ const dashboardReady = ref(false)
 const dashboardFailures = ref<DashboardSectionFailure[]>([])
 const chartDays = ref(14)
 const chartPeriodOptions = [7, 14, 30]
-const CHART_WIDTH = 640
-// 196, not 218: the date labels moved out of the SVG (they'd distort under
-// preserveAspectRatio="none"), so the viewBox stops just below the baseline.
-const CHART_HEIGHT = 196
-const CHART_BASELINE = 188
-const CHART_MAX_BAR_HEIGHT = 154
-const CHART_GAP = 4
+// The orders page is read one page deep, so the active count is capped: past
+// this the card says "100+" rather than silently undercounting.
+const ORDER_PAGE_LIMIT = 100
+const CHART_WIDTH = 300
+const CHART_HEIGHT = 74
+// Widest gap that still leaves a readable bar. 30 bars in the same 300 units
+// need a narrower one, and on a phone the whole panel is ~340px wide, where a
+// 3-unit gap eats the bar itself.
+const CHART_GAP_WIDE = 3
+const CHART_GAP_DENSE = 2
+const CHART_GAP_NARROW = 1
+// Below this the panel is full-bleed on a phone and the wide gap would eat the
+// bars; expressed as a media query because the gap is in rescaled SVG units.
+const CHART_NARROW_MAX_PX = 619
 
 // Who sees what, and which of those cards may link anywhere — the whole rule
 // lives in one pure function so it can be reasoned about and tested away from
@@ -69,93 +79,340 @@ const canManageFinance = computed(() => access.value.canManageFinance)
 const canInventory = computed(() => access.value.canInventory)
 const canCatalog = computed(() => access.value.canCatalog)
 const canOrders = computed(() => access.value.canOrders)
+const canManageOrders = computed(() => access.value.canManageOrders)
 const canProduction = computed(() => access.value.canProduction)
 const hasKpis = computed(() => access.value.hasKpis)
 // A grant that lights up no section (manage_catalog, say) used to fall past the
 // "no grants" empty state into a heading and a refresh button — the empty state
 // has to cover "has grants, none of them surface here" as well (QAD-167).
 const hasVisibleSection = computed(() => access.value.hasVisibleSection)
+
+const selectedBranchName = computed(
+  () =>
+    workshop.branches.find((branch) => branch.id === workshop.selectedBranchContext)?.name ?? null,
+)
+// "7 avgust, juma". Recomputed rather than captured so a language switch
+// relabels the day without a reload.
+const todayLine = computed(() => formatDayMonthWeekday(new Date()))
+const headSub = computed(() =>
+  // No branch segment when the picker sits on all branches, or before the
+  // context has landed — inventing one would name a branch that isn't in scope.
+  selectedBranchName.value
+    ? t('workshopAdmin.dashboard.subBranch', {
+        branch: selectedBranchName.value,
+        date: todayLine.value,
+      })
+    : todayLine.value,
+)
+
+const periodSegments = computed<ChoiceOption[]>(() =>
+  chartPeriodOptions.map((days) => ({
+    value: String(days),
+    label: t('workshopAdmin.dashboard.periodOption', { n: days }, days),
+  })),
+)
+const periodValue = computed(() => String(chartDays.value))
+
+// --- KPI row ---------------------------------------------------------------
+
+// `daily_income` is dense and always ends today, so today is the last row and
+// yesterday the one before it (`workshopDashboard.ts` owns the rule).
+const incomeDelta = computed(() => dailyIncomeDelta(finance.summary?.daily_income))
 const activeOrders = computed(() =>
   orders.workshopOrders.filter((order) => activeWorkshopStatuses.includes(order.status)),
 )
-const recentOrders = computed(() => orders.recentWorkshopOrders)
-const productionQueueCounts = computed(() =>
-  workshopProductionQueueCounts(orders.workshopOrders, auth.me?.principal_id),
+const activeOrdersCapped = computed(() => orders.workshopOrdersHasMore)
+const activeOrdersCount = computed(() =>
+  activeOrdersCapped.value ? `${ORDER_PAGE_LIMIT}+` : String(activeOrders.value.length),
 )
-// The personal queue is production staff's main entry point, so they keep it
-// even when empty; the owner manages rather than cuts, so the card would sit
-// permanently empty — show it to the owner only on actual self-assignment.
-const showProductionQueue = computed(
-  () =>
-    canProduction.value && (!permissions.isOwner.value || productionQueueCounts.value.total > 0),
+const activeOrdersTotal = computed(() =>
+  activeOrders.value.reduce((sum, order) => sum + order.total_tiyin, 0),
 )
-// A card links only where its viewer can actually go: null means "render this
-// tile, but not as a link" (QAD-170).
-const ordersHref = computed(() =>
-  access.value.canManageOrders ? rolePath('/workshop/orders') : null,
+const clientDebtTiyin = computed(() => finance.clientDebts?.they_owe_total_tiyin ?? 0)
+// The caption names the population that actually produced the total: the rows
+// with a debt on them. Balances can be negative (an overpaid client), hence the
+// `> 0` — a raw row count would describe a different set from the sum above it.
+const clientDebtorCount = computed(
+  () => finance.clientDebts?.rows.filter((row) => row.balance_tiyin > 0).length ?? 0,
 )
-const incomeHref = computed(() =>
-  canManageFinance.value ? rolePath('/workshop/finance/income') : null,
+const lowStockCount = computed(() => workshop.lowStockItems.length)
+// A negative balance is an unrecorded arrival, not a low shelf — it escalates
+// from warn to danger (QAD-150).
+const negativeStock = computed(() =>
+  workshop.lowStockItems
+    .filter((item) => item.on_hand < 0)
+    .sort((left, right) => left.on_hand - right.on_hand),
 )
-const expensesHref = computed(() =>
-  canManageFinance.value ? rolePath('/workshop/finance/expenses') : null,
-)
-const debtsHref = computed(() =>
-  canManageFinance.value ? rolePath('/workshop/finance/debts') : null,
-)
-const inventoryHref = computed(() => (canInventory.value ? rolePath('/workshop/inventory') : null))
-// Branch pages are owner-only, so the per-branch production tiles are links for
-// the owner alone — every other order reader got a dead link.
-const branchesHref = computed(() =>
-  permissions.isOwner.value ? rolePath('/workshop/branches') : null,
-)
-function branchHref(branchId: string) {
-  return permissions.isOwner.value ? rolePath(`/workshop/branches/${branchId}`) : null
-}
-const lowStock = computed(() => workshop.lowStockItems.slice(0, 5))
-const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
-// Every money KPI on the page shares one scale, so the row can be read across
+// Every money figure on the row shares one scale, so the row can be read across
 // instead of figure by figure (QAD-182).
 const moneyKpis = computed(() =>
-  formatTiyinRow([
-    finance.summary?.income_tiyin ?? 0,
-    finance.summary?.expense_tiyin ?? 0,
-    finance.summary?.net_tiyin ?? 0,
-    finance.supplierDebts?.we_owe_total_tiyin ?? 0,
-    finance.clientDebts?.they_owe_total_tiyin ?? 0,
-    workshop.stockValueTiyin ?? 0,
-  ]),
+  formatTiyinRow([incomeDelta.value.todayTiyin, clientDebtTiyin.value]),
 )
-const incomeParts = computed(() => moneyKpis.value[0])
-const expenseParts = computed(() => moneyKpis.value[1])
-const netParts = computed(() => moneyKpis.value[2])
-const supplierDebtParts = computed(() => moneyKpis.value[3])
-const clientDebtParts = computed(() => moneyKpis.value[4])
-const stockValueParts = computed(() => moneyKpis.value[5])
+const todayIncomeParts = computed(() => moneyKpis.value[0])
+const clientDebtParts = computed(() => moneyKpis.value[1])
+const activeOrdersParts = computed(() => formatTiyinParts(activeOrdersTotal.value))
+const activeOrdersAmount = computed(
+  () => `${activeOrdersParts.value.amount} ${activeOrdersParts.value.unit}`,
+)
+
+// --- Sizdan kutilmoqda ------------------------------------------------------
+
+interface WorklistRow {
+  key: string
+  title: string
+  /** Signed quantity chip beside the title, when the row is about a balance. */
+  chip: string | null
+  detail: string
+  /** `null` when this viewer's grants cannot run the row's action. */
+  action: { label: string; to: string } | null
+}
+
+// The order rows behind (a) and (d) are `view_orders|manage_orders`-scoped,
+// while `orders.newOrderCount` is `manage_orders`-scoped — deriving both the
+// count and its detail line from the same list is what keeps them from
+// disagreeing on screen.
+const newOrders = computed(() =>
+  orders.workshopOrders
+    .filter((order) => order.status === 'new')
+    .sort((left, right) => left.created_at.localeCompare(right.created_at)),
+)
+
+// There is no `ready_at` column. These three are the moments the order actually
+// became ready, in the order they are set.
+function readyAt(order: OrderSummary) {
+  return order.edge_completed_at ?? order.cut_completed_at ?? order.updated_at
+}
+
+const readyOrders = computed(() =>
+  orders.workshopOrders
+    .filter((order) => order.status === 'ready')
+    .sort((left, right) => readyAt(left).localeCompare(readyAt(right))),
+)
+
+/** Confirmed work with no saw operator on it, grouped by the branch it sits in. */
+const cutterGaps = computed(() => {
+  const groups = new Map<
+    string,
+    { branchId: string; branchName: string; count: number; firstOrderId: string }
+  >()
+  for (const order of orders.workshopOrders) {
+    if (order.status !== 'confirmed' || order.assigned_cutter_user_id !== null) continue
+    const group = groups.get(order.branch_id)
+    if (group) group.count += 1
+    else
+      groups.set(order.branch_id, {
+        branchId: order.branch_id,
+        branchName: order.branch_name,
+        count: 1,
+        firstOrderId: order.id,
+      })
+  }
+  return [...groups.values()].sort((left, right) => right.count - left.count)
+})
+
+// A production-only viewer has no source for any of these rows — their order
+// rows are their own assignments — so the panel stays off rather than standing
+// permanently empty.
+const showWorklist = computed(() => canOrders.value || canInventory.value)
+
+const worklistRows = computed<WorklistRow[]>(() => {
+  const rows: WorklistRow[] = []
+  if (canOrders.value && newOrders.value.length > 0) {
+    const oldest = newOrders.value[0]
+    rows.push({
+      key: 'new-orders',
+      title: t(
+        'workshopAdmin.dashboard.waitNewOrders',
+        { n: newOrders.value.length },
+        newOrders.value.length,
+      ),
+      chip: null,
+      detail: t('workshopAdmin.dashboard.waitNewOrdersDetail', {
+        order: oldest.order_number,
+        client: oldest.contact_name,
+        age: formatRelative(oldest.created_at),
+      }),
+      action: {
+        label: t('workshopAdmin.dashboard.waitNewOrdersAction'),
+        // The board is `manage_orders`; a `view_orders` reader gets the order
+        // itself, which is the page their grant can actually open.
+        to: canManageOrders.value
+          ? rolePath('/workshop/orders')
+          : rolePath(`/workshop/orders/${oldest.id}`),
+      },
+    })
+  }
+  if (canOrders.value && readyOrders.value.length > 0) {
+    const listed = readyOrders.value.slice(0, 3)
+    const rest = readyOrders.value.length - listed.length
+    const waits = listed.map((order) =>
+      t('workshopAdmin.dashboard.waitReadyOrdersItem', {
+        order: order.order_number,
+        age: formatRelative(readyAt(order)),
+      }),
+    )
+    if (rest > 0) waits.push(t('workshopAdmin.dashboard.waitReadyOrdersMore', { n: rest }))
+    rows.push({
+      key: 'ready-orders',
+      title: t(
+        'workshopAdmin.dashboard.waitReadyOrders',
+        { n: readyOrders.value.length },
+        readyOrders.value.length,
+      ),
+      chip: null,
+      detail: waits.join(' · '),
+      // Not «Eslatma yuborish»: there is no client-callable endpoint that sends
+      // a reminder anywhere in the API, and the Telegram gateway is OTP-only. A
+      // button must not promise a message the system cannot send — so it opens
+      // the orders instead, and says so.
+      action: canManageOrders.value
+        ? {
+            label: t('workshopAdmin.dashboard.waitReadyOrdersAction'),
+            to: rolePath('/workshop/orders'),
+          }
+        : {
+            label: t('workshopAdmin.dashboard.waitReadyOrdersActionOne'),
+            to: rolePath(`/workshop/orders/${readyOrders.value[0].id}`),
+          },
+    })
+  }
+  if (canInventory.value && negativeStock.value.length > 0) {
+    const item = negativeStock.value[0]
+    rows.push({
+      key: 'negative-stock',
+      title: t('workshopAdmin.dashboard.waitNegativeStock', { material: item.material.label }),
+      chip: formatStockQuantity(item.on_hand, item.display_unit),
+      detail: t('workshopAdmin.dashboard.waitNegativeStockDetail'),
+      // The arrival form is a modal with no URL of its own, so Ombor honours a
+      // front-end-only query to open it (`WorkshopInventoryView`).
+      action: {
+        label: t('workshopAdmin.dashboard.waitNegativeStockAction'),
+        to: `${rolePath('/workshop/inventory')}?tab=invoices&action=kirim`,
+      },
+    })
+  }
+  if (canOrders.value) {
+    for (const gap of cutterGaps.value) {
+      rows.push({
+        key: `cutter-gap-${gap.branchId}`,
+        title: t('workshopAdmin.dashboard.waitNoCutter', { branch: gap.branchName }),
+        chip: null,
+        detail: t('workshopAdmin.dashboard.waitNoCutterDetail', { n: gap.count }, gap.count),
+        // The assign selects live on the order page and are `manage_orders` ON
+        // THAT BRANCH — the order detail view gates them with
+        // `canOnBranch(manageOrders, order.branch_id)`. The branch-blind
+        // `canManageOrders` was the wrong question: a staffer holding
+        // manage_orders on one branch and view_orders on another got a
+        // «Xodim tayinlash» button for the second branch that opened the order
+        // read-only, with no cutter select and no explanation. The row still
+        // reports the stall for a reader who cannot act on it.
+        action: permissions.canOnBranch(p.manageOrders, gap.branchId)
+          ? {
+              label: t('workshopAdmin.dashboard.waitNoCutterAction'),
+              to: rolePath(`/workshop/orders/${gap.firstOrderId}`),
+            }
+          : null,
+      })
+    }
+  }
+  return rows
+})
+
+// Exactly one graphite button in the panel — the first row that has an action,
+// which is also the most urgent since the rows are built in urgency order.
+const worklistPrimaryKey = computed(
+  () => worklistRows.value.find((row) => row.action !== null)?.key ?? null,
+)
+
+// --- Stansiyalar ------------------------------------------------------------
+
+// Station-wide, from the order rows already on the page: the queue endpoint is
+// personal for every principal, the owner included, so it cannot answer "what
+// is at the saw right now" (`workshopStationLoad`).
+const stationLoad = computed(() => workshopStationLoad(orders.workshopOrders))
+const stationWorkersByBranch = ref<Record<string, WorkshopWorkerOption[]>>({})
+const showStations = computed(() => canProduction.value || canManageOrders.value)
+const stationsHref = computed(() => rolePath('/workshop/cutting'))
+
+function resolveWorkerName(userId: string): string | null {
+  for (const workers of Object.values(stationWorkersByBranch.value)) {
+    const found = workers.find((worker) => worker.id === userId)
+    if (found) return found.full_name
+  }
+  return null
+}
+
+/**
+ * Who is holding the station's work, in words. Empty string — not "nobody" —
+ * when there are assignees whose names this viewer may not read: a
+ * `process_production` staffer cannot fetch the worker list, and telling them
+ * the station is unmanned would be a lie rather than a degradation.
+ */
+function stationStaffLine(userIds: string[]): string {
+  if (userIds.length === 0) return t('workshopAdmin.dashboard.stationNobody')
+  return userIds
+    .map(resolveWorkerName)
+    .filter((name): name is string => name !== null)
+    .map(workerShortName)
+    .join(' · ')
+}
+
+const stations = computed(() => [
+  {
+    key: 'cutting',
+    icon: 'scissors',
+    name: t('workshopAdmin.dashboard.stationCutting'),
+    count: stationLoad.value.cutting,
+    staff: stationStaffLine(stationLoad.value.cutters),
+  },
+  {
+    key: 'banding',
+    icon: 'layers',
+    name: t('workshopAdmin.dashboard.stationBanding'),
+    count: stationLoad.value.banding,
+    staff: stationStaffLine(stationLoad.value.edgers),
+  },
+])
+
+const hasSideCards = computed(() => showStations.value || canFinance.value)
+const isSplit = computed(() => showWorklist.value && hasSideCards.value)
+
+// --- Savdo ------------------------------------------------------------------
+
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
+// The 620px rule needs the viewport, not a container query: the gap lives in
+// SVG user units that `preserveAspectRatio="none"` rescales with the panel.
+const narrowViewport = ref(false)
+let viewportQuery: MediaQueryList | null = null
+function onViewportChange(event: MediaQueryListEvent | MediaQueryList) {
+  narrowViewport.value = event.matches
+}
+const chartGap = computed(() => {
+  if (narrowViewport.value) return CHART_GAP_NARROW
+  return chartRows.value.length >= 30 ? CHART_GAP_DENSE : CHART_GAP_WIDE
+})
 const chartBars = computed(() => {
   const rows = chartRows.value
   if (rows.length === 0) return []
-  const width = Math.max(3, (CHART_WIDTH - CHART_GAP * (rows.length + 1)) / rows.length)
+  const gap = chartGap.value
+  const width = Math.max(1, (CHART_WIDTH - gap * (rows.length - 1)) / rows.length)
   return rows.map((row, index) => {
     const height =
-      row.income_tiyin > 0
-        ? Math.max(6, (row.income_tiyin / chartMax.value) * CHART_MAX_BAR_HEIGHT)
-        : 0
+      row.income_tiyin > 0 ? Math.max(4, (row.income_tiyin / chartMax.value) * CHART_HEIGHT) : 0
     return {
       day: row.day,
       income_tiyin: row.income_tiyin,
-      x: CHART_GAP + index * (width + CHART_GAP),
-      y: CHART_BASELINE - height,
+      x: index * (width + gap),
+      y: CHART_HEIGHT - height,
       width,
       height,
       className:
         index === rows.length - 1
-          ? 'hi'
+          ? 'today'
           : row.income_tiyin === chartMax.value && row.income_tiyin > 0
-            ? 'md'
+            ? 'peak'
             : '',
     }
   })
@@ -169,17 +426,16 @@ const chartLabels = computed(() => {
 const chartToday = computed(() =>
   chartRows.value.length > 0 ? chartRows.value[chartRows.value.length - 1] : null,
 )
-const todayHasIncome = computed(() => (chartToday.value?.income_tiyin ?? 0) > 0)
-const selectedBranchName = computed(
-  () =>
-    workshop.branches.find((branch) => branch.id === workshop.selectedBranchContext)?.name ?? null,
-)
 const chartPeak = computed(() =>
   chartRows.value.reduce<{ day: string; income_tiyin: number } | null>((peak, row) => {
     if (!peak || row.income_tiyin > peak.income_tiyin) return row
     return peak
   }, null),
 )
+const salesTotalParts = computed(() => formatTiyinParts(finance.summary?.income_tiyin ?? 0))
+const salesTotal = computed(() => `${salesTotalParts.value.amount} ${salesTotalParts.value.unit}`)
+// The three-step ramp is deliberately quiet, so the numbers have to be reachable
+// as text: this sentence plus a `<title>` on every bar.
 const chartSummary = computed(() => {
   const days = chartDays.value
   if (chartRows.value.length === 0) {
@@ -207,6 +463,8 @@ const chartSummary = computed(() => {
     .join(' ')
 })
 
+// --- Loading ----------------------------------------------------------------
+
 function chartRange() {
   const end = new Date()
   const start = new Date()
@@ -230,7 +488,7 @@ function dashboardSections() {
 
 function recordDashboardError(section: string, code: string, traceId: string | null) {
   // First failure per section wins — a follow-up call for the same section
-  // (e.g. recent orders after active orders) repeats the same cause.
+  // repeats the same cause.
   if (dashboardFailures.value.some((failure) => failure.section === section)) return
   dashboardFailures.value.push({ section, code, traceId })
 }
@@ -241,15 +499,12 @@ function contextBranchFor(branches: Array<{ id: string }>) {
   return branches.some((branch) => branch.id === contextBranchId) ? contextBranchId : null
 }
 
-function openOrder(orderId: string) {
-  void router.push(rolePath(`/workshop/orders/${orderId}`))
-}
-
-function setChartPeriod(days: number) {
-  if (chartDays.value === days) return
+function setChartPeriod(value: string) {
+  const days = Number(value)
+  if (!Number.isFinite(days) || chartDays.value === days) return
   chartDays.value = days
   // Only the sales chart depends on the period — reload just the finance
-  // summary so the orders/branch/inventory cards don't flicker on a filter.
+  // summary so the KPI, work-list and station panels don't flicker on a filter.
   void loadFinanceSummary()
 }
 
@@ -271,33 +526,52 @@ async function loadFinanceSummary() {
   }
 }
 
+/**
+ * Station staff names, best effort. The worker list needs `manage_orders` on the
+ * branch, so the gate is checked *before* the request rather than after a 403:
+ * a `process_production` viewer is the very audience the station panel is for,
+ * and their screen degrades to counts without names instead of logging a refusal.
+ */
+async function loadStationWorkers() {
+  if (!showStations.value) return
+  const branchIds = [...new Set(orders.workshopOrders.map((order) => order.branch_id))]
+  for (const branchId of branchIds) {
+    if (stationWorkersByBranch.value[branchId]) continue
+    if (!permissions.canOnBranch(p.manageOrders, branchId)) continue
+    try {
+      await orders.loadWorkers(branchId)
+      stationWorkersByBranch.value = {
+        ...stationWorkersByBranch.value,
+        [branchId]: [...orders.workerOptions],
+      }
+    } catch {
+      // Names are a courtesy on this panel; the queue counts are the point.
+    }
+  }
+}
+
 // Orders, finance and inventory are independent of each other, so their loads
-// run side by side — eight serialised round trips became four. Within a group
-// the calls stay sequential on purpose: each store shares one `loading`/`error`
-// pair across its actions, so two of its loads in parallel would race those
-// flags and clear a skeleton (or an error) that still belongs to the other.
+// run side by side. Within a group the calls stay sequential on purpose: each
+// store shares one `loading`/`error` pair across its actions, so two of its
+// loads in parallel would race those flags and clear a skeleton (or an error)
+// that still belongs to the other.
 async function loadOrderSection() {
   if (!canOrders.value && !canProduction.value) return
   const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
   const orderBranchId = contextBranchFor(visibleOrderBranches)
   await orders.loadWorkshopOrders({
     status: 'active',
-    limit: 100,
+    limit: ORDER_PAGE_LIMIT,
     branch_id: orderBranchId,
   })
   if (orders.error) recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
-  if (!canOrders.value) return
-  await orders.loadRecentWorkshopOrders({ branch_id: orderBranchId, limit: 8 })
-  if (orders.error) {
-    recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
-  }
+  await loadStationWorkers()
 }
 
 async function loadFinanceSection() {
   await loadFinanceSummary()
-  // Best-effort tiles: a failed debts load must not take the dashboard down.
+  // Best-effort tile: a failed debts load must not take the dashboard down.
   if (!canManageFinance.value) return
-  await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
   await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
 }
 
@@ -311,8 +585,6 @@ async function loadInventorySection() {
   workshop.inventoryLoading = true
   try {
     await workshop.loadLowStock(inventoryBranchIds)
-    // Best-effort tile — a failed valuation must not take the dashboard down.
-    await workshop.loadStockValue(inventoryBranchIds).catch(() => undefined)
     workshop.inventoryError = null
     workshop.inventoryTraceId = null
   } catch (errorValue) {
@@ -354,6 +626,9 @@ let loadedForContext: string | null | undefined
 
 function loadDashboardFor(context: string | null) {
   loadedForContext = context
+  // Worker names are cached per branch for the life of the page; a branch
+  // switch changes which branches are in scope, so the cache goes with it.
+  stationWorkersByBranch.value = {}
   void loadDashboard()
 }
 
@@ -370,6 +645,11 @@ watch(
 )
 
 onMounted(async () => {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    viewportQuery = window.matchMedia(`(max-width: ${CHART_NARROW_MAX_PX}px)`)
+    onViewportChange(viewportQuery)
+    viewportQuery.addEventListener('change', onViewportChange)
+  }
   try {
     await workshop.loadBranchContext()
   } catch {
@@ -379,6 +659,10 @@ onMounted(async () => {
     if (loadedForContext === undefined) loadDashboardFor(workshop.selectedBranchContext)
   }
 })
+
+onBeforeUnmount(() => {
+  viewportQuery?.removeEventListener('change', onViewportChange)
+})
 </script>
 
 <template>
@@ -386,19 +670,20 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>{{ $t('workshopAdmin.dashboard.title') }}</h1>
-        <div class="sub">
-          {{
-            selectedBranchName
-              ? $t('workshopAdmin.dashboard.branchMetrics', { branch: selectedBranchName })
-              : $t('workshopAdmin.dashboard.workshopMetrics')
-          }}
-        </div>
+        <div class="sub">{{ headSub }}</div>
       </div>
-      <!-- No «Yangilash». Page heads are title-only (DESIGN.md), the dashboard
-           already refetches on mount and on a branch switch, and on a phone the
-           button became the most prominent thing on the screen (QAD-182). The
-           error banner below still offers a retry, which is when a manual
-           refresh is actually the answer. -->
+      <!-- The period drives the sales chart and nothing else, so it is not on
+           the page at all for a viewer who cannot see finance. -->
+      <div v-if="canFinance" class="tools">
+        <SegmentedControl
+          :label="$t('workshopAdmin.dashboard.periodGroup')"
+          hide-label
+          :model-value="periodValue"
+          :options="periodSegments"
+          :disabled="finance.loading"
+          @update:model-value="setChartPeriod"
+        />
+      </div>
     </div>
 
     <OnboardingChecklist />
@@ -415,6 +700,7 @@ onMounted(async () => {
       <button
         class="mp-button mp-button-outline min-h-8 px-3 text-xs"
         type="button"
+        :disabled="dashboardLoading"
         @click="loadDashboard"
       >
         {{ $t('workshopAdmin.action.retry') }}
@@ -438,472 +724,253 @@ onMounted(async () => {
 
     <template v-else>
       <div v-if="hasKpis" class="kpis kpis-dash">
-        <component
-          :is="ordersHref ? RouterLink : 'div'"
-          v-if="canOrders"
-          :to="ordersHref"
-          class="kpi"
-          :class="ordersHref ? 'no-underline' : ''"
-        >
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiActive') }}</div>
-          <div class="v num">
-            <span v-if="dashboardReady">{{ activeOrders.length }}</span>
-            <span v-else class="sk block h-7 w-12"></span>
-          </div>
-          <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiActiveMeta') }}</span>
-          </div>
-        </component>
-
-        <component
-          :is="incomeHref ? RouterLink : 'div'"
-          v-if="canFinance"
-          :to="incomeHref"
-          class="kpi"
-          :class="incomeHref ? 'no-underline' : ''"
-        >
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiIncome') }}</div>
-          <div class="v num">
-            <span v-if="dashboardReady" :title="incomeParts.full"
-              >{{ incomeParts.amount }} <small>{{ incomeParts.unit }}</small></span
+        <div v-if="canFinance" class="kpi">
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiIncomeToday') }}</div>
+          <div class="v">
+            <span v-if="dashboardReady" :title="todayIncomeParts.full"
+              >{{ todayIncomeParts.amount }} <small>{{ todayIncomeParts.unit }}</small></span
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.periodMeta', { n: chartDays }, chartDays) }}</span>
-          </div>
-        </component>
-
-        <component
-          :is="expensesHref ? RouterLink : 'div'"
-          v-if="canFinance"
-          :to="expensesHref"
-          class="kpi"
-          :class="expensesHref ? 'no-underline' : ''"
-        >
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiExpense') }}</div>
-          <div class="v num">
-            <span v-if="dashboardReady" :title="expenseParts.full"
-              >{{ expenseParts.amount }} <small>{{ expenseParts.unit }}</small></span
-            >
-            <span v-else class="sk block h-7 w-28"></span>
-          </div>
-          <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.periodMeta', { n: chartDays }, chartDays) }}</span>
-          </div>
-        </component>
-
-        <div v-if="canFinance" class="kpi" :class="netPositive ? '' : 'bad'">
-          <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">
-            {{ $t('workshopAdmin.dashboard.kpiProfit') }}
-          </div>
-          <div class="v num" :class="netPositive ? 'success-text' : 'danger-text'">
-            <span v-if="dashboardReady" :title="netParts.full"
-              >{{ netParts.amount }} <small>{{ netParts.unit }}</small></span
-            >
-            <span v-else class="sk block h-7 w-28"></span>
-          </div>
-          <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiProfitMeta') }}</span>
+            <template v-if="dashboardReady">
+              <!-- A percentage against a zero yesterday is undefined, so the
+                   card states the fact in words instead of showing "+0%". -->
+              <span
+                v-if="incomeDelta.kind === 'percent'"
+                class="kpi-pill"
+                :class="incomeDelta.up ? 'ok' : 'bad'"
+                >{{ formatSignedPercent(incomeDelta.percent) }}</span
+              >
+              <span v-if="incomeDelta.kind === 'percent'">{{
+                $t('workshopAdmin.dashboard.kpiIncomeVsYesterday')
+              }}</span>
+              <span v-else-if="incomeDelta.kind === 'noYesterday'">{{
+                $t('workshopAdmin.dashboard.kpiIncomeNoYesterday')
+              }}</span>
+              <span v-else>{{ $t('workshopAdmin.dashboard.kpiIncomeNoCompare') }}</span>
+            </template>
+            <span v-else class="sk block h-4 w-32"></span>
           </div>
         </div>
 
-        <RouterLink
-          v-if="debtsHref"
-          :to="debtsHref"
-          class="kpi no-underline"
-          :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn' : ''"
+        <component
+          :is="canManageOrders ? RouterLink : 'div'"
+          v-if="canOrders"
+          :to="canManageOrders ? rolePath('/workshop/orders') : null"
+          class="kpi"
+          :class="canManageOrders ? 'no-underline' : ''"
         >
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiSupplierDebt') }}</div>
-          <div
-            class="v num"
-            :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn-text' : ''"
-          >
-            <span v-if="dashboardReady" :title="supplierDebtParts.full"
-              >{{ supplierDebtParts.amount }} <small>{{ supplierDebtParts.unit }}</small></span
-            >
-            <span v-else class="sk block h-7 w-28"></span>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiActive') }}</div>
+          <div class="v">
+            <span v-if="dashboardReady">{{ activeOrdersCount }}</span>
+            <span v-else class="sk block h-7 w-12"></span>
           </div>
           <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiSupplierDebtMeta') }}</span>
+            <span v-if="dashboardReady" :title="activeOrdersParts.full">
+              {{
+                $t(
+                  'workshopAdmin.dashboard.kpiActiveMeta',
+                  { n: activeOrders.length, amount: activeOrdersAmount },
+                  activeOrders.length,
+                )
+              }}
+            </span>
+            <span v-else class="sk block h-4 w-32"></span>
           </div>
-        </RouterLink>
+        </component>
 
-        <RouterLink v-if="debtsHref" :to="debtsHref" class="kpi no-underline">
+        <!-- `manage_finance` only: the debts read behind this figure is scoped
+             to that grant, so a `view_finance_reports` reader never sees it. -->
+        <div v-if="canManageFinance" class="kpi">
           <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiClientDebt') }}</div>
-          <div class="v num">
+          <div class="v">
             <span v-if="dashboardReady" :title="clientDebtParts.full"
               >{{ clientDebtParts.amount }} <small>{{ clientDebtParts.unit }}</small></span
             >
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiClientDebtMeta') }}</span>
+            <span v-if="dashboardReady">{{
+              $t(
+                'workshopAdmin.dashboard.kpiClientDebtMeta',
+                { n: clientDebtorCount },
+                clientDebtorCount,
+              )
+            }}</span>
+            <span v-else class="sk block h-4 w-32"></span>
           </div>
-        </RouterLink>
+        </div>
 
-        <RouterLink
-          v-if="inventoryHref"
-          :to="inventoryHref"
-          class="kpi no-underline"
-          :class="lowStock.length > 0 ? 'warn' : ''"
-        >
+        <div v-if="canInventory" class="kpi">
           <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiLowStock') }}</div>
-          <div class="v num" :class="lowStock.length > 0 ? 'warn-text' : ''">
-            <span v-if="dashboardReady">{{ lowStock.length }}</span>
+          <div class="v" :class="lowStockCount > 0 ? 'warn-text' : ''">
+            <span v-if="dashboardReady">{{ lowStockCount }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
           <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiLowStockMeta') }}</span>
+            <template v-if="dashboardReady">
+              <span v-if="negativeStock.length > 0" class="kpi-pill bad">{{
+                $t(
+                  'workshopAdmin.dashboard.kpiLowStockNegative',
+                  { n: negativeStock.length },
+                  negativeStock.length,
+                )
+              }}</span>
+              <span v-else>{{ $t('workshopAdmin.dashboard.kpiLowStockMeta') }}</span>
+            </template>
+            <span v-else class="sk block h-4 w-32"></span>
           </div>
-        </RouterLink>
-
-        <RouterLink
-          v-if="inventoryHref && workshop.stockValueTiyin !== null"
-          :to="inventoryHref"
-          class="kpi no-underline"
-        >
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiStockValue') }}</div>
-          <div class="v num">
-            <span v-if="dashboardReady" :title="stockValueParts.full"
-              >{{ stockValueParts.amount }} <small>{{ stockValueParts.unit }}</small></span
-            >
-            <span v-else class="sk block h-7 w-28"></span>
-          </div>
-          <div class="d">
-            <span>{{ $t('workshopAdmin.dashboard.kpiStockValueMeta') }}</span>
-          </div>
-        </RouterLink>
-      </div>
-
-      <div v-if="showProductionQueue" class="card mb-[18px]">
-        <div class="card-h">
-          <div>
-            <h2>{{ $t('workshopAdmin.dashboard.queueTitle') }}</h2>
-            <div class="sub">{{ $t('workshopAdmin.dashboard.queueSubtitle') }}</div>
-          </div>
-        </div>
-        <div class="card-b">
-          <div
-            v-if="productionQueueCounts.total > 0"
-            class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline md:grid-cols-2"
-          >
-            <RouterLink
-              :to="rolePath('/workshop/cutting')"
-              class="bg-elevated p-4 no-underline transition hover:bg-sunk"
-            >
-              <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                {{ $t('workshopAdmin.dashboard.queueCutting') }}
-              </div>
-              <div class="mt-2 font-serif text-3xl font-semibold text-ink">
-                {{ productionQueueCounts.cutting }}
-                <small class="font-sans text-sm text-ink-muted">
-                  {{ $t('workshopAdmin.dashboard.jobUnit', productionQueueCounts.cutting) }}
-                </small>
-              </div>
-              <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
-                {{ $t('workshopAdmin.dashboard.queueCuttingBody') }}
-              </p>
-            </RouterLink>
-            <RouterLink
-              :to="rolePath('/workshop/banding')"
-              class="bg-elevated p-4 no-underline transition hover:bg-sunk"
-            >
-              <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                {{ $t('workshopAdmin.dashboard.queueBanding') }}
-              </div>
-              <div class="mt-2 font-serif text-3xl font-semibold text-ink">
-                {{ productionQueueCounts.banding }}
-                <small class="font-sans text-sm text-ink-muted">
-                  {{ $t('workshopAdmin.dashboard.jobUnit', productionQueueCounts.banding) }}
-                </small>
-              </div>
-              <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
-                {{ $t('workshopAdmin.dashboard.queueBandingBody') }}
-              </p>
-            </RouterLink>
-          </div>
-          <p v-else class="text-[13px] text-ink-soft">
-            {{ $t('workshopAdmin.dashboard.queueEmpty') }}
-          </p>
         </div>
       </div>
 
-      <div v-if="hasKpis" class="grid gap-[18px]">
-        <div v-if="canFinance" class="card">
+      <div :class="isSplit ? 'dash-split' : 'dash-side'">
+        <div v-if="showWorklist" class="card">
           <div class="card-h">
-            <div>
-              <h2>{{ $t('workshopAdmin.dashboard.chartTitle', chartDays) }}</h2>
-              <div class="sub">
-                {{ $t('workshopAdmin.dashboard.chartTotal') }} ·
-                <b>{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</b>
-              </div>
-            </div>
-            <div
-              class="flex gap-1"
-              role="group"
-              :aria-label="$t('workshopAdmin.dashboard.periodGroup')"
-            >
-              <button
-                v-for="days in chartPeriodOptions"
-                :key="days"
-                class="mp-button min-h-8 px-2 text-xs"
-                :class="days === chartDays ? 'mp-button-primary' : 'mp-button-outline'"
-                type="button"
-                :disabled="finance.loading"
-                :aria-pressed="days === chartDays"
-                @click="setChartPeriod(days)"
-              >
-                {{ $t('workshopAdmin.dashboard.periodOption', { n: days }, days) }}
-              </button>
-            </div>
+            <h2>{{ $t('workshopAdmin.dashboard.waitTitle') }}</h2>
+            <span v-if="dashboardReady" class="meta">
+              {{
+                $t(
+                  'workshopAdmin.dashboard.waitMeta',
+                  { n: worklistRows.length },
+                  worklistRows.length,
+                )
+              }}
+              <!-- Every row here, and both station figures, are derived from one
+                   page of orders. Past that page the counts are lower bounds, so
+                   say which population they describe instead of printing a number
+                   that quietly stops growing. -->
+              <template v-if="activeOrdersCapped">
+                ·
+                {{ $t('workshopAdmin.dashboard.cappedNote', { n: ORDER_PAGE_LIMIT }) }}
+              </template>
+            </span>
           </div>
           <div class="card-b">
-            <div v-if="!dashboardReady" class="sk block h-[150px] w-full"></div>
-            <div v-else-if="chartRows.length === 0 || !hasIncome" class="st-empty !py-8">
-              <h3>{{ $t('workshopAdmin.dashboard.chartEmptyTitle') }}</h3>
-              <p>{{ $t('workshopAdmin.dashboard.chartEmptyBody') }}</p>
+            <div v-if="!dashboardReady" class="worklist">
+              <div v-for="n in 3" :key="'skw' + n" class="worklist-row">
+                <div>
+                  <span class="sk block h-4 w-56"></span>
+                  <span class="sk mt-2 block h-3.5 w-72"></span>
+                </div>
+              </div>
             </div>
-            <div v-else>
-              <p class="sr-only">{{ chartSummary }}</p>
-              <div class="chart-plot">
-                <span class="chart-max" aria-hidden="true">{{ formatTiyin(chartMax) }}</span>
+            <div v-else-if="worklistRows.length === 0" class="st-empty">
+              <h3>{{ $t('workshopAdmin.dashboard.waitEmptyTitle') }}</h3>
+              <p>{{ $t('workshopAdmin.dashboard.waitEmptyBody') }}</p>
+            </div>
+            <div v-else class="worklist">
+              <div v-for="row in worklistRows" :key="row.key" class="worklist-row">
+                <div class="min-w-0">
+                  <div class="worklist-title">
+                    <span>{{ row.title }}</span>
+                    <span v-if="row.chip" class="pill p-bad">{{ row.chip }}</span>
+                  </div>
+                  <div class="worklist-detail">{{ row.detail }}</div>
+                </div>
+                <RouterLink
+                  v-if="row.action"
+                  :to="row.action.to"
+                  class="worklist-action"
+                  :class="row.key === worklistPrimaryKey ? 'primary' : ''"
+                >
+                  {{ row.action.label }}
+                </RouterLink>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div :class="isSplit ? 'dash-side' : 'contents'">
+          <div v-if="showStations" class="card">
+            <div class="card-h">
+              <h2>{{ $t('workshopAdmin.dashboard.stationsTitle') }}</h2>
+              <RouterLink :to="stationsHref" class="link">
+                {{ $t('workshopAdmin.dashboard.stationsLink') }}
+              </RouterLink>
+            </div>
+            <div class="card-b">
+              <!-- Reporting rows, not links. The figure is the station's whole
+                   load — every order at that stage, whoever holds it — while
+                   `/workshop/cutting` is a personal terminal that lists only the
+                   viewer's own jobs, so a row carrying this number and opening
+                   that page would promise 12 and show 0 to an owner who does not
+                   cut. The header's «Navbatlar» link stays: it says "my queues"
+                   and goes where that is true. -->
+              <div v-for="station in stations" :key="station.key" class="station-row">
+                <div class="station-icon"><AppIcon :name="station.icon" /></div>
+                <div class="min-w-0 flex-1">
+                  <div class="station-name truncate">{{ station.name }}</div>
+                  <!-- Absent, not "nobody": a viewer who may not read the worker
+                       list gets the counts without the names. -->
+                  <div v-if="station.staff" class="station-staff truncate">{{ station.staff }}</div>
+                </div>
+                <div class="station-count">
+                  <!-- `N+` for the same reason the active-orders KPI carries it:
+                       the load is counted off one page of orders. -->
+                  <span v-if="dashboardReady">{{
+                    activeOrdersCapped ? `${station.count}+` : station.count
+                  }}</span>
+                  <span v-else class="sk block h-6 w-6"></span>
+                  <span class="sr-only">
+                    {{
+                      $t(
+                        'workshopAdmin.dashboard.stationQueueUnit',
+                        { n: station.count },
+                        station.count,
+                      )
+                    }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="canFinance" class="card">
+            <div class="card-h">
+              <h2>{{ $t('workshopAdmin.dashboard.salesTitle') }}</h2>
+              <span class="meta" :title="salesTotalParts.full">{{
+                $t(
+                  'workshopAdmin.dashboard.salesMeta',
+                  { n: chartDays, amount: salesTotal },
+                  chartDays,
+                )
+              }}</span>
+            </div>
+            <div class="card-b">
+              <div v-if="!dashboardReady" class="sk block h-[74px] w-full"></div>
+              <div v-else-if="chartRows.length === 0 || !hasIncome" class="st-empty">
+                <h3>{{ $t('workshopAdmin.dashboard.chartEmptyTitle') }}</h3>
+                <p>{{ $t('workshopAdmin.dashboard.chartEmptyBody') }}</p>
+              </div>
+              <div v-else>
+                <p class="sr-only">{{ chartSummary }}</p>
                 <svg
-                  class="chart workshop-sales-chart"
+                  class="sales-chart"
                   :viewBox="`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`"
                   preserveAspectRatio="none"
                   role="img"
                   :aria-label="chartSummary"
                 >
-                  <g class="grid" aria-hidden="true">
-                    <line x1="0" y1="34" :x2="CHART_WIDTH" y2="34" />
-                    <line x1="0" y1="72" :x2="CHART_WIDTH" y2="72" />
-                    <line x1="0" y1="110" :x2="CHART_WIDTH" y2="110" />
-                    <line x1="0" y1="148" :x2="CHART_WIDTH" y2="148" />
-                  </g>
-                  <g class="bars">
-                    <rect
-                      v-for="bar in chartBars"
-                      :key="bar.day"
-                      :class="bar.className"
-                      :x="bar.x"
-                      :y="bar.y"
-                      :width="bar.width"
-                      :height="bar.height"
-                      rx="2"
-                    >
-                      <title>{{ formatDate(bar.day) }} · {{ formatTiyin(bar.income_tiyin) }}</title>
-                    </rect>
-                  </g>
-                  <g aria-hidden="true">
-                    <line
-                      x1="0"
-                      :y1="CHART_BASELINE"
-                      :x2="CHART_WIDTH"
-                      :y2="CHART_BASELINE"
-                      class="axis"
-                    />
-                  </g>
-                </svg>
-              </div>
-              <!-- Dates live outside the SVG: preserveAspectRatio="none" would
-                     stretch/squash glyphs with the bars on wide/narrow screens. -->
-              <div class="chart-x" aria-hidden="true">
-                <span v-for="label in chartLabels" :key="label">{{ label }}</span>
-              </div>
-              <div class="chart-legend">
-                <span v-if="todayHasIncome">
-                  <i class="chart-key today"></i>{{ $t('workshopAdmin.dashboard.legendToday') }}
-                </span>
-                <span>
-                  <i class="chart-key peak"></i>{{ $t('workshopAdmin.dashboard.legendPeak') }}
-                </span>
-                <span>
-                  <i class="chart-key other"></i>{{ $t('workshopAdmin.dashboard.legendOther') }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="canOrders" class="card">
-          <div class="card-h">
-            <h2>{{ $t('workshopAdmin.dashboard.branchesTitle') }}</h2>
-            <RouterLink v-if="branchesHref" :to="branchesHref" class="more">
-              {{ $t('workshopAdmin.dashboard.branchesLink') }}
-            </RouterLink>
-          </div>
-          <div class="card-b">
-            <div
-              class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline grid-cols-[repeat(auto-fit,minmax(220px,1fr))]"
-            >
-              <template v-if="!dashboardReady">
-                <div v-for="n in 2" :key="'skb' + n" class="bg-elevated p-4">
-                  <span class="sk block h-3 w-24"></span>
-                  <span class="sk mt-3 block h-8 w-16"></span>
-                  <span class="sk mt-3 block h-3 w-32"></span>
-                </div>
-              </template>
-              <component
-                :is="branchHref(branch.id) ? RouterLink : 'div'"
-                v-for="branch in workshop.branches"
-                v-else
-                :key="branch.id"
-                :to="branchHref(branch.id)"
-                class="bg-elevated p-4"
-                :class="branchHref(branch.id) ? 'no-underline transition hover:bg-sunk' : ''"
-              >
-                <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                  {{ branch.name }}
-                </div>
-                <div class="mt-2 font-serif text-3xl font-semibold text-ink">
-                  {{ activeOrders.filter((order) => order.branch_id === branch.id).length }}
-                  <small class="font-sans text-sm text-ink-muted">
-                    {{
-                      $t(
-                        'workshopAdmin.dashboard.orderUnit',
-                        activeOrders.filter((order) => order.branch_id === branch.id).length,
-                      )
-                    }}
-                  </small>
-                </div>
-                <p class="mt-2 font-mono text-[11px] text-ink-muted">
-                  {{
-                    branch.status === 'temporarily_closed'
-                      ? $t('workshopAdmin.dashboard.branchClosed')
-                      : branch.address
-                  }}
-                </p>
-              </component>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="canInventory" class="card">
-          <div class="card-h">
-            <h2>{{ $t('workshopAdmin.dashboard.kpiLowStock') }}</h2>
-            <RouterLink v-if="inventoryHref" :to="inventoryHref" class="more">
-              {{ $t('workshopAdmin.dashboard.inventoryLink') }}
-            </RouterLink>
-          </div>
-          <div class="card-b">
-            <div v-if="workshop.inventoryLoading" class="grid gap-3">
-              <span class="sk-line"></span>
-              <span class="sk-line"></span>
-              <span class="sk-line"></span>
-            </div>
-            <div v-else-if="workshop.inventoryError" class="st-error !py-8">
-              <h3>{{ $t('workshopAdmin.dashboard.stockErrorTitle') }}</h3>
-              <p>{{ traceLine(workshop.inventoryTraceId) }}</p>
-            </div>
-            <div v-else-if="lowStock.length === 0" class="st-empty !py-8">
-              <h3>{{ $t('workshopAdmin.dashboard.lowStockEmptyTitle') }}</h3>
-              <p>{{ $t('workshopAdmin.dashboard.lowStockEmptyBody') }}</p>
-            </div>
-            <div v-else class="grid gap-x-8 md:grid-cols-2">
-              <div v-for="item in lowStock" :key="item.id" class="row-item">
-                <div class="flex min-w-0 items-center gap-3">
-                  <div
-                    class="sw relative overflow-hidden"
-                    :class="materialSwatchClass(item.material.dekor)"
+                  <rect
+                    v-for="bar in chartBars"
+                    :key="bar.day"
+                    :class="bar.className"
+                    :x="bar.x"
+                    :y="bar.y"
+                    :width="bar.width"
+                    :height="bar.height"
+                    rx="3"
                   >
-                    <AuthFileImage
-                      v-if="item.material.dekor.image_file_id"
-                      :file-id="item.material.dekor.image_file_id"
-                      alt=""
-                      class="absolute inset-0 h-full w-full object-cover"
-                    />
-                  </div>
-                  <div class="min-w-0">
-                    <div class="nm truncate">{{ item.material.label }}</div>
-                    <small class="text-ink-muted">
-                      {{
-                        $t('workshopAdmin.dashboard.lowStockMin', {
-                          value: formatStockQuantity(item.min_stock, item.display_unit),
-                        })
-                      }}
-                    </small>
-                  </div>
-                </div>
-                <!-- A negative balance is an unrecorded arrival, not a low
-                     shelf — it escalates from warn to danger (QAD-150). -->
-                <div class="meta" :class="item.on_hand < 0 ? 'danger-text' : 'warn-text'">
-                  {{ formatStockQuantity(item.on_hand, item.display_unit) }}
+                    <title>{{ formatDate(bar.day) }} · {{ formatTiyin(bar.income_tiyin) }}</title>
+                  </rect>
+                </svg>
+                <!-- Dates live outside the SVG: preserveAspectRatio="none" would
+                     stretch/squash glyphs with the bars on wide/narrow screens. -->
+                <div class="sales-axis" aria-hidden="true">
+                  <span v-for="label in chartLabels" :key="label">{{ label }}</span>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="canOrders" class="card">
-          <div class="card-h">
-            <div>
-              <h2>{{ $t('workshopAdmin.dashboard.recentTitle') }}</h2>
-              <div class="sub">
-                {{ $t('workshopAdmin.dashboard.recentMeta', { n: recentOrders.length }) }}
-              </div>
-            </div>
-            <RouterLink v-if="ordersHref" :to="ordersHref" class="more">
-              {{ $t('workshopAdmin.dashboard.recentAll') }}
-            </RouterLink>
-          </div>
-          <div class="card-b !p-0">
-            <div class="table-wrap">
-              <table class="tbl">
-                <thead>
-                  <tr>
-                    <th>{{ $t('workshopAdmin.dashboard.colOrder') }}</th>
-                    <th>{{ $t('workshopAdmin.dashboard.colClient') }}</th>
-                    <th>{{ $t('workshopAdmin.dashboard.colBranch') }}</th>
-                    <th>{{ $t('workshopAdmin.dashboard.colStatus') }}</th>
-                    <th>{{ $t('workshopAdmin.dashboard.colWhen') }}</th>
-                    <th class="right">{{ $t('workshopAdmin.dashboard.colTotal') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-if="!dashboardReady">
-                    <tr v-for="n in 4" :key="'skr' + n">
-                      <td colspan="6"><span class="sk sk-line" style="width: 100%"></span></td>
-                    </tr>
-                  </template>
-                  <template v-else>
-                    <tr
-                      v-for="order in recentOrders"
-                      :key="order.id"
-                      class="clickable"
-                      @click="openOrder(order.id)"
-                    >
-                      <td class="id">
-                        <RouterLink
-                          :to="rolePath(`/workshop/orders/${order.id}`)"
-                          class="no-underline"
-                        >
-                          {{ order.order_number }}
-                        </RouterLink>
-                      </td>
-                      <td class="nm">{{ order.contact_name }}</td>
-                      <td>{{ order.branch_name }}</td>
-                      <td>
-                        <span :class="orderPillClass(order.status)">
-                          <span class="pd"></span>{{ workshopStatusUz(order.status) }}
-                        </span>
-                      </td>
-                      <td class="text-ink-soft" :title="formatDate(order.created_at)">
-                        {{ formatRelative(order.created_at) }}
-                      </td>
-                      <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
-                    </tr>
-                    <tr v-if="recentOrders.length === 0">
-                      <td colspan="6">
-                        <div class="st-empty !border-0 !py-8">
-                          <h3>{{ $t('workshopAdmin.dashboard.recentEmptyTitle') }}</h3>
-                          <p>{{ $t('workshopAdmin.dashboard.recentEmptyBody') }}</p>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>

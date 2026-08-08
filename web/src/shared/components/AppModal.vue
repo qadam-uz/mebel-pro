@@ -38,12 +38,12 @@ const trap = useFocusTrap(panelRef, openRef, () => emit('close'))
         aria-modal="true"
         :aria-labelledby="`${id}-title`"
         tabindex="-1"
-        class="relative flex max-h-[min(90dvh,44rem)] w-full flex-col overflow-hidden rounded-lg border border-hairline-strong bg-elevated shadow-[0_28px_90px_-30px_rgb(15_27_45_/_55%)]"
+        class="relative flex max-h-[min(90dvh,44rem)] w-full flex-col overflow-hidden rounded-lg border border-hairline-strong bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
         :class="maxWidth"
         @keydown="trap.onKeydown"
       >
         <header class="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
-          <h2 :id="`${id}-title`" class="font-serif text-lg font-semibold text-ink">
+          <h2 :id="`${id}-title`" class="font-display text-lg font-semibold text-ink">
             {{ title }}
           </h2>
           <button

@@ -348,7 +348,7 @@ watch(
             </button>
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div class="font-mono text-sm font-extrabold text-ink">
+                <div class="text-sm font-extrabold text-ink">
                   {{ selectedDetail.record.code }}
                 </div>
                 <p class="mt-1 text-sm text-ink-muted">
@@ -398,13 +398,13 @@ watch(
                 </span>
               </div>
               <template v-if="showRaw">
-                <div class="mt-3 text-xs font-extrabold uppercase text-ink-muted">Kontekst</div>
+                <div class="mt-3 text-[12.5px] font-semibold text-ink-muted">Kontekst</div>
                 <pre
                   class="mt-1 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
                   >{{ contextText(occurrence.context) }}</pre
                 >
                 <template v-if="occurrence.stack">
-                  <div class="mt-3 text-xs font-extrabold uppercase text-ink-muted">Stack</div>
+                  <div class="mt-3 text-[12.5px] font-semibold text-ink-muted">Stack</div>
                   <pre
                     class="mt-1 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
                     >{{ occurrence.stack }}</pre

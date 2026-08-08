@@ -10,36 +10,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mebel Pro — panel kesish platformasi</title>
   <meta name="description"
-    content="Mebel panellarini kesish uchun onlayn platforma: ustaxonaga toʻliq boshqaruv, mijozga onlayn buyurtma.">
-  <meta name="theme-color" content="#F5F4EF">
+    content="Mebel panellarini kesish uchun onlayn platforma: ustaxonaga to'liq boshqaruv, mijozga onlayn buyurtma.">
+  <meta name="theme-color" content="#f1f2f4">
   <meta property="og:title" content="Mebel Pro — panel kesish platformasi">
   <meta property="og:description"
-    content="Mebel panellarini kesish uchun onlayn platforma: ustaxonaga toʻliq boshqaruv, mijozga onlayn buyurtma.">
+    content="Mebel panellarini kesish uchun onlayn platforma: ustaxonaga to'liq boshqaruv, mijozga onlayn buyurtma.">
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400..800&family=Wix+Madefor+Text:wght@400..800&display=swap"
     rel="stylesheet">
   <style>
     :root {
-      --bg: #F5F4EF;
-      --surface: #FFFFFF;
-      --ink: #23221C;
-      --slate: #3B382E;
-      --muted: #6E6A5E;
-      --line: #E7E4DA;
-      --line-soft: #EFEDE5;
-      --accent: #4341C6;
-      --accent-d: #322F96;
-      --accent-tint: #EDECFA;
-      --navy: #3B382E;
-      --navy-tint: #ECEAE1;
-      --panel: #ECE9E0;
-      --panel-line: #D0CCBE;
-      --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
-      --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      --radius: 16px;
+      /* This page is self-styled by design — it does not import the app's token
+         file, so the palette is mirrored here by hand. The names are the
+         landing's own; every value is a token from src/assets/main.css @theme,
+         named beside it. Change one there, change it here. */
+      --bg: #f1f2f4;              /* --color-bg */
+      --surface: #ffffff;         /* --color-elevated */
+      --panel: #f6f7f9;           /* --color-sunk — a second level inside a panel */
+      --ink: #0f1115;             /* --color-ink */
+      --slate: #565c66;           /* --color-ink-soft */
+      --muted: #666d79;           /* --color-ink-muted */
+      --line: #e4e6ea;            /* --color-hairline */
+      --panel-line: #e4e6ea;      /* --color-hairline — the diagram sheet's edge */
+      --line-strong: #c3c8d0;     /* --color-hairline-strong — a line that survives on --panel */
+      --accent: #22252a;          /* --color-accent — graphite carries every action */
+      --accent-hover: #34383f;    /* --color-accent-hover */
+      --on-accent: #f4f2ee;       /* --color-on-accent — bone, not white */
+      --navy: #0f1115;            /* --color-ink — the ustaxona card's family */
+      --navy-tint: #eef0f3;       /* --color-neutral-soft */
+      --signal: #ff5a1f;          /* --color-signal — a rule, a ring, a dot; never a fill, never under text */
+      --accent-tint: #ffe9e0;     /* --color-accent-soft — the "selected" fill */
+      --accent-d: #c53d0c;        /* --color-accent-deep — the orange that may carry words on a neutral */
+      --accent-strong: #a83408;   /* --color-accent-strong — orange text on the tint above */
+      --display: "Wix Madefor Display", "Wix Madefor Text", system-ui, sans-serif;
+      --sans: "Wix Madefor Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --radius: 18px;
       --maxw: 1080px;
     }
 
@@ -59,19 +67,28 @@
       color: var(--ink);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
       overflow-x: hidden
     }
 
+    /* Two families and no more: Display for headings, figures and the wordmark —
+       negatively tracked at every size, which is the voice — Text for the rest.
+       No serif, no mono. */
     h1,
     h2,
-    h3,
-    .serif {
-      font-family: var(--serif)
+    h3 {
+      font-family: var(--display);
+      letter-spacing: -.02em
     }
 
     a {
       color: inherit;
       text-decoration: none
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: var(--on-accent)
     }
 
     .wrap {
@@ -80,12 +97,12 @@
       padding: 0 24px
     }
 
+    /* Labels are sentence case in colour or grey — no uppercase, no wide
+       tracking. Orange carries words only as --accent-d on a neutral surface. */
     .eyebrow {
-      font-size: 12px;
+      font-size: 13.5px;
       font-weight: 600;
-      letter-spacing: .16em;
-      text-transform: uppercase;
-      color: var(--accent)
+      color: var(--accent-d)
     }
 
     /* ---------- NAV ---------- */
@@ -93,7 +110,7 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      background: rgba(244, 246, 248, .82);
+      background: rgba(241, 242, 244, .82);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--line)
     }
@@ -109,10 +126,10 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      font-family: var(--serif);
-      font-weight: 600;
+      font-family: var(--display);
+      font-weight: 700;
       font-size: 21px;
-      letter-spacing: -.01em;
+      letter-spacing: -.015em;
       color: var(--ink)
     }
 
@@ -120,7 +137,7 @@
       width: 28px;
       height: 28px;
       flex: 0 0 auto;
-      border-radius: 7px
+      border-radius: 6px
     }
 
     .nav__links {
@@ -134,28 +151,28 @@
       font-size: 14.5px;
       font-weight: 500;
       padding: 9px 14px;
-      border-radius: 9px;
+      border-radius: 10px;
       transition: color .18s, background .18s
     }
 
     .nav__link:hover {
       color: var(--ink);
-      background: var(--line-soft)
+      background: var(--panel)
     }
 
     .nav__cta {
-      color: #fff;
+      color: var(--on-accent);
       background: var(--accent);
       font-weight: 600;
       padding: 9px 17px;
-      border-radius: 9px;
+      border-radius: 11px;
       font-size: 14.5px;
       transition: transform .18s, background .18s;
       margin-left: 8px
     }
 
     .nav__cta:hover {
-      background: var(--accent-d);
+      background: var(--accent-hover);
       transform: translateY(-1px)
     }
 
@@ -175,14 +192,12 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-size: 11.5px;
+      font-size: 12.5px;
       font-weight: 600;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      color: var(--accent);
+      color: var(--accent-strong);
       background: var(--accent-tint);
       padding: 7px 15px;
-      border-radius: 100px;
+      border-radius: 999px;
       margin-bottom: 30px
     }
 
@@ -190,30 +205,24 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--accent)
+      background: var(--signal)
     }
 
     h1 {
       font-size: clamp(46px, 7vw, 82px);
       line-height: 1.02;
-      font-weight: 600;
-      letter-spacing: -.02em;
+      font-weight: 700;
+      letter-spacing: -.03em;
       margin-bottom: 22px
     }
 
-    h1 em {
-      font-style: italic;
-      color: var(--accent)
-    }
-
     .hero__lead {
-      font-family: var(--serif);
-      font-size: clamp(19px, 2.4vw, 23px);
+      font-size: clamp(17px, 2.1vw, 20px);
       font-weight: 400;
       color: var(--slate);
-      max-width: 24em;
+      max-width: 26em;
       margin: 0 auto 34px;
-      line-height: 1.45
+      line-height: 1.5
     }
 
     .hero__btns {
@@ -247,11 +256,11 @@
 
     .btn--primary {
       background: var(--accent);
-      color: #fff
+      color: var(--on-accent)
     }
 
     .btn--primary:hover {
-      background: var(--accent-d);
+      background: var(--accent-hover);
       transform: translateY(-1px)
     }
 
@@ -262,7 +271,7 @@
     }
 
     .btn--ghost:hover {
-      border-color: #D0CCBE;
+      border-color: var(--line-strong);
       transform: translateY(-1px)
     }
 
@@ -272,12 +281,13 @@
       margin: 56px auto 0
     }
 
+    /* A panel is white on the canvas, lifted by a soft wide shadow and carrying
+       NO border — the shadow is the edge. */
     .panel-card {
       background: var(--surface);
-      border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 22px;
-      box-shadow: 0 24px 54px rgba(15, 27, 42, .06);
+      box-shadow: 0 1px 2px rgba(15, 17, 21, .04), 0 10px 28px -22px rgba(15, 17, 21, .5);
       text-align: left
     }
 
@@ -289,25 +299,25 @@
     }
 
     .panel-card__title {
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 600;
       color: var(--slate)
     }
 
     .panel-card__algo {
-      font-size: 11.5px;
-      color: var(--accent);
+      font-size: 12.5px;
+      color: var(--accent-strong);
       background: var(--accent-tint);
       padding: 4px 11px;
-      border-radius: 100px;
-      font-weight: 500
+      border-radius: 999px;
+      font-weight: 600
     }
 
     .sheet-svg {
       width: 100%;
       height: auto;
       display: block;
-      border-radius: 9px
+      border-radius: 10px
     }
 
     .part {
@@ -325,7 +335,7 @@
       font-family: var(--sans);
       font-size: 9.5px;
       font-weight: 500;
-      fill: #8B8778;
+      fill: var(--muted);
       opacity: 0
     }
 
@@ -390,42 +400,42 @@
       animation-delay: 1.05s
     }
 
+    /* The readout is the second level inside the panel: a --panel fill and
+       divider lines, not another box with its own border. */
     .readout {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       margin-top: 18px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
+      background: var(--panel);
+      border-radius: 14px;
       overflow: hidden
     }
 
     .rstat {
-      padding: 14px 16px;
-      background: var(--surface)
+      padding: 14px 16px
     }
 
     .rstat+.rstat {
-      border-left: 1px solid var(--line)
+      border-left: 1px solid var(--line-strong)
     }
 
     .rstat__label {
-      font-size: 10.5px;
-      letter-spacing: .12em;
-      text-transform: uppercase;
+      font-size: 12.5px;
       color: var(--muted);
       margin-bottom: 4px;
       font-weight: 500
     }
 
     .rstat__val {
-      font-family: var(--serif);
-      font-weight: 600;
-      font-size: 22px;
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 24px;
+      letter-spacing: -.03em;
       color: var(--ink)
     }
 
     .rstat__val.accent {
-      color: var(--accent)
+      color: var(--accent-d)
     }
 
     @media(max-width:480px) {
@@ -433,13 +443,8 @@
         padding: 12px 10px
       }
 
-      .rstat__label {
-        font-size: 10px;
-        letter-spacing: .08em
-      }
-
       .rstat__val {
-        font-size: 19px
+        font-size: 20px
       }
     }
 
@@ -456,8 +461,8 @@
 
     .sec-head h2 {
       font-size: clamp(30px, 4.2vw, 44px);
-      font-weight: 600;
-      letter-spacing: -.02em;
+      font-weight: 700;
+      letter-spacing: -.028em;
       margin: 14px 0 12px;
       line-height: 1.08
     }
@@ -475,16 +480,16 @@
 
     .card {
       background: var(--surface);
-      border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 36px 34px 32px;
       position: relative;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      box-shadow: 0 1px 2px rgba(15, 17, 21, .05), 0 8px 22px -18px rgba(15, 17, 21, .5);
       opacity: 0;
       transform: translateY(18px);
-      transition: opacity .55s ease, transform .55s ease, box-shadow .25s ease, border-color .25s ease
+      transition: opacity .55s ease, transform .55s ease, box-shadow .25s ease
     }
 
     .card.in {
@@ -492,8 +497,9 @@
       transform: none
     }
 
+    /* A card deepens its shadow on hover; it never gains a border. */
     .card:hover {
-      box-shadow: 0 20px 48px rgba(15, 27, 42, .08)
+      box-shadow: 0 1px 2px rgba(15, 17, 21, .06), 0 14px 32px -20px rgba(15, 17, 21, .6)
     }
 
     .card__accent {
@@ -504,49 +510,44 @@
       height: 3px
     }
 
+    /* The two audiences read apart by family, not by button colour: the ustaxona
+       card is ink, the mijoz card is the orange signal — a 3px rule and a chip,
+       never a fill under text. Both buttons stay graphite: one action colour. */
     .card--shop .card__accent {
       background: var(--navy)
     }
 
     .card--client .card__accent {
-      background: var(--accent)
-    }
-
-    .card--shop:hover {
-      border-color: var(--navy)
-    }
-
-    .card--client:hover {
-      border-color: var(--accent)
+      background: var(--signal)
     }
 
     .tag {
       display: inline-flex;
       align-items: center;
+      /* The card is a flex column, so without this the chip stretches to the
+         full card width and stops reading as a chip. */
+      align-self: flex-start;
       gap: 7px;
-      font-size: 11px;
+      font-size: 12.5px;
       font-weight: 600;
-      letter-spacing: .1em;
-      text-transform: uppercase;
       padding: 6px 12px;
-      border-radius: 100px;
+      border-radius: 999px;
       margin-bottom: 18px
     }
 
     .card--shop .tag {
       background: var(--navy-tint);
-      color: var(--navy)
+      color: var(--slate)
     }
 
     .card--client .tag {
       background: var(--accent-tint);
-      color: var(--accent)
+      color: var(--accent-strong)
     }
 
     .card h3 {
       font-size: 26px;
-      font-weight: 600;
-      letter-spacing: -.01em;
+      font-weight: 700;
       margin-bottom: 9px
     }
 
@@ -582,7 +583,7 @@
     }
 
     .card--client .flist svg {
-      color: var(--accent)
+      color: var(--accent-d)
     }
 
     .card__btn {
@@ -595,7 +596,8 @@
       font-size: 15px;
       padding: 12px 22px;
       border-radius: 11px;
-      color: #fff;
+      background: var(--accent);
+      color: var(--on-accent);
       transition: transform .18s, background .18s
     }
 
@@ -608,23 +610,8 @@
     }
 
     .card__btn:hover {
+      background: var(--accent-hover);
       transform: translateY(-1px)
-    }
-
-    .card--shop .card__btn {
-      background: var(--navy)
-    }
-
-    .card--shop .card__btn:hover {
-      background: #26241E
-    }
-
-    .card--client .card__btn {
-      background: var(--accent)
-    }
-
-    .card--client .card__btn:hover {
-      background: var(--accent-d)
     }
 
     @media(max-width:760px) {
@@ -653,11 +640,9 @@
     }
 
     .step__n {
-      font-size: 12px;
+      font-size: 13.5px;
       font-weight: 600;
-      color: var(--accent);
-      letter-spacing: .12em;
-      text-transform: uppercase;
+      color: var(--accent-d);
       display: block;
       margin-bottom: 16px
     }
@@ -670,9 +655,8 @@
 
     .step h3 {
       font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      letter-spacing: -.01em
+      font-weight: 700;
+      margin-bottom: 8px
     }
 
     .step p {
@@ -706,11 +690,11 @@
     }
 
     .foot__brand {
-      font-family: var(--serif);
-      font-weight: 600;
+      font-family: var(--display);
+      font-weight: 700;
       font-size: 22px;
       margin-bottom: 9px;
-      letter-spacing: -.01em
+      letter-spacing: -.015em
     }
 
     .foot__tag {
@@ -737,7 +721,7 @@
     }
 
     .foot__links a:hover {
-      border-color: #D0CCBE;
+      border-color: var(--line-strong);
       color: var(--ink)
     }
 
@@ -750,8 +734,8 @@
 
     a:focus-visible,
     .btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 3px;
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
       border-radius: 6px
     }
 
@@ -784,10 +768,13 @@
     <div class="wrap nav__in">
       <a href="#" class="brand" aria-label="Mebel Pro — bosh sahifa"><svg class="brand__mark" viewBox="0 0 32 32"
           role="img" aria-label="Mebel Pro" xmlns="http://www.w3.org/2000/svg">
-          <rect width="32" height="32" rx="7" fill="#4341C6" />
-          <rect x="5" y="5" width="9" height="22" rx="2" fill="#F6E6CD" />
-          <rect x="16.5" y="5" width="10.5" height="10" rx="2" fill="#F6E6CD" />
-          <rect x="16.5" y="17" width="10.5" height="10" rx="2" fill="#D9A968" />
+          <!-- M, the cut, P — the same geometry as /favicon.svg, with the letters
+               as Wix Madefor Display 800 outlines because an inline SVG cannot
+               depend on the webfont having loaded. -->
+        <rect width="32" height="32" rx="7.0" fill="var(--accent)"/>
+        <path transform="translate(2.482 21.005) scale(0.014 -0.014)" d="M528 88H402L128 658L227 661V0H61V715H253L496 206H436L679 715H867V0H699V661L802 658Z" fill="var(--on-accent)"/>
+        <rect x="16.83" y="7.5" width="2.0" height="17.0" fill="var(--signal)"/>
+        <path transform="translate(20.334 21.005) scale(0.014 -0.014)" d="M234 0H62V715H361Q441 715 502.0 686.0Q563 657 597.0 605.5Q631 554 631 485Q631 417 597.0 365.0Q563 313 502.0 284.0Q441 255 361 255H224V398H361Q405 398 431.0 421.5Q457 445 457 485Q457 525 431.0 548.5Q405 572 361 572H234Z" fill="var(--on-accent)"/>
         </svg><span>Mebel Pro</span></a>
       <div class="nav__links">
         <a class="nav__link" href="#mahsulotlar">Ustaxona</a>
@@ -803,7 +790,7 @@
     <div class="wrap">
       <div class="badge"><span class="dot"></span> Onlayn platforma</div>
       <h1>Mebel Pro</h1>
-      <p class="hero__lead">Mebel va yogʻoch panellarini kesish ishlarini tizimlashtiruvchi ishonchli platforma.</p>
+      <p class="hero__lead">Mebel va yog'och panellarini kesish ishlarini tizimlashtiruvchi ishonchli platforma.</p>
       <div class="hero__btns">
         <a class="btn btn--primary" href="#mahsulotlar">Boshlash <span class="arw">&rarr;</span></a>
         <a class="btn btn--ghost" href="#qanday">Qanday ishlaydi</a>
@@ -817,15 +804,16 @@
           </div>
           <svg class="sheet-svg" id="sheet" viewBox="0 0 596 300" xmlns="http://www.w3.org/2000/svg" role="img"
             aria-label="Optimallashtirilgan kesish rejasi — qismlarning panelda joylashuvi">
-            <rect x="1" y="1" width="594" height="298" rx="6" fill="#ECE9E0" />
-            <rect x="1" y="1" width="594" height="298" rx="6" fill="none" stroke="#D0CCBE" stroke-width="1.3" />
+            <rect x="1" y="1" width="594" height="298" rx="6" fill="var(--panel)" />
+            <rect x="1" y="1" width="594" height="298" rx="6" fill="none" stroke="var(--panel-line)"
+              stroke-width="1.3" />
             <defs>
               <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-                <line x1="0" y1="0" x2="0" y2="7" stroke="#CBC7B8" stroke-width="1.5" />
+                <line x1="0" y1="0" x2="0" y2="7" stroke="var(--line-strong)" stroke-width="1.5" />
               </pattern>
             </defs>
             <rect x="410" y="166" width="180" height="126" fill="url(#hatch)" />
-            <g fill="#F8F7F2" stroke="#D0CCBE" stroke-width="1">
+            <g fill="var(--surface)" stroke="var(--line)" stroke-width="1">
               <rect class="part p1" x="10" y="10" width="186" height="92" />
               <rect class="part p2" x="204" y="10" width="186" height="92" />
               <rect class="part p3" x="398" y="10" width="188" height="60" />
@@ -834,18 +822,18 @@
               <rect class="part p6" x="138" y="110" width="120" height="92" />
               <rect class="part p7" x="138" y="210" width="264" height="82" />
             </g>
-            <rect class="part p3" x="266" y="110" width="136" height="92" fill="#4341C6" fill-opacity=".12"
-              stroke="#4341C6" stroke-width="1.5" />
-            <g stroke="#9C9787" stroke-width="1.1" stroke-dasharray="5 6">
+            <rect class="part p3" x="266" y="110" width="136" height="92" fill="var(--accent-tint)"
+              stroke="var(--signal)" stroke-width="1.5" />
+            <g stroke="var(--muted)" stroke-width="1.1" stroke-dasharray="5 6">
               <line class="cutline" x1="1" y1="108" x2="595" y2="108" />
               <line class="cutline" x1="396" y1="1" x2="396" y2="299" />
               <line class="cutline" x1="136" y1="108" x2="136" y2="299" />
             </g>
             <text class="plabel" x="103" y="60" text-anchor="middle">600&times;400</text>
             <text class="plabel" x="297" y="60" text-anchor="middle">600&times;400</text>
-            <text class="plabel" x="334" y="160" text-anchor="middle" fill="#4341C6">tanlangan</text>
+            <text class="plabel" x="334" y="160" text-anchor="middle" fill="var(--accent-strong)">tanlangan</text>
             <text class="plabel" x="70" y="205" text-anchor="middle">380&times;820</text>
-            <text class="plabel" x="500" y="232" text-anchor="middle" fill="#999380">isrof</text>
+            <text class="plabel" x="500" y="232" text-anchor="middle">isrof</text>
           </svg>
           <div class="readout">
             <div class="rstat">
@@ -873,7 +861,7 @@
         <div class="sec-head">
           <span class="eyebrow">Ikki tomon, bitta platforma</span>
           <h2>Kimlar uchun?</h2>
-          <p>Ustaxonaga toʻliq boshqaruv, mijozga onlayn buyurtma — hammasi bitta tizimda.</p>
+          <p>Ustaxonaga to'liq boshqaruv, mijozga onlayn buyurtma — hammasi bitta tizimda.</p>
         </div>
 
         <div class="cards">
@@ -887,11 +875,11 @@
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
-                </svg>Ombor va material hisobi — kam qolgani darhol koʻrinadi</li>
+                </svg>Ombor va material hisobi — kam qolgani darhol ko'rinadi</li>
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
-                </svg>Har bir filial material va narxlarini oʻzi belgilaydi</li>
+                </svg>Har bir filial material va narxlarini o'zi belgilaydi</li>
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
@@ -910,20 +898,20 @@
             <span class="tag">Onlayn buyurtma</span>
             <h3>Mijozlar uchun</h3>
             <p class="card__lead">Qismlarni kiriting — optimizator eng tejamkor kesish rejasini tuzadi. Narxni darhol
-              koʻrasiz, buyurtmani onlayn berasiz.</p>
+              ko'rasiz, buyurtmani onlayn berasiz.</p>
             <ul class="flist">
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
-                </svg>Kesish rejasini oʻzingiz tuzasiz — kromkagacha</li>
+                </svg>Kesish rejasini o'zingiz tuzasiz — kromkagacha</li>
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
-                </svg>Isrof foizi va narx oldindan koʻrinadi</li>
+                </svg>Isrof foizi va narx oldindan ko'rinadi</li>
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
-                </svg>Kesish xaritasini PDF koʻrinishida yuklab olasiz</li>
+                </svg>Kesish xaritasini PDF ko'rinishida yuklab olasiz</li>
               <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round" />
@@ -947,20 +935,20 @@
             <span class="step__n">01 &middot; Kiritish</span>
             <div class="step__line"></div>
             <h3>Qismlarni kiriting</h3>
-            <p>Har bir qism uchun oʻlcham, material va kromkani belgilaysiz — material oʻzingizniki yoki ustaxonaniki.
+            <p>Har bir qism uchun o'lcham, material va kromkani belgilaysiz — material o'zingizniki yoki ustaxonaniki.
             </p>
           </div>
           <div class="step">
             <span class="step__n">02 &middot; Hisoblash</span>
             <div class="step__line"></div>
             <h3>Optimizator hisoblaydi</h3>
-            <p>Bir nechta algoritm bir vaqtda ishlaydi — eng kam isrofli reja gʻolib boʻladi.</p>
+            <p>Bir nechta algoritm bir vaqtda ishlaydi — eng kam isrofli reja g'olib bo'ladi.</p>
           </div>
           <div class="step">
             <span class="step__n">03 &middot; Buyurtma</span>
             <div class="step__line"></div>
             <h3>Buyurtma va kesish</h3>
-            <p>Buyurtmadan soʻng narx oʻzgarmaydi. Ustaxona kesish xaritasi boʻyicha ishlaydi, siz holatni kuzatib,
+            <p>Buyurtmadan so'ng narx o'zgarmaydi. Ustaxona kesish xaritasi bo'yicha ishlaydi, siz holatni kuzatib,
               tayyor mahsulotni olasiz.</p>
           </div>
         </div>
@@ -982,7 +970,7 @@
           <a href="#qanday">Qanday ishlaydi</a>
         </div>
       </div>
-      <div class="foot__bar">&copy; 2026 Mebel Pro &middot; Toshkent, Oʻzbekiston</div>
+      <div class="foot__bar">&copy; 2026 Mebel Pro &middot; Toshkent, O'zbekiston</div>
     </div>
   </footer>
 

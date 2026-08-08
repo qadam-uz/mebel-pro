@@ -15,10 +15,15 @@ const props = withDefaults(
     options: ChoiceOption[]
     disabled?: boolean
     required?: boolean
+    // Visually hide the label block (it stays the radiogroup's accessible name)
+    // for a host whose own heading row already says what the choice is — the
+    // dashboard's 7 / 14 / 30 period switcher sits beside the page title.
+    hideLabel?: boolean
   }>(),
   {
     disabled: false,
     required: false,
+    hideLabel: false,
   },
 )
 
@@ -73,12 +78,18 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="min-w-0">
-    <span :id="`${id}-label`" class="mb-1 block text-sm font-bold text-ink">
+    <span
+      :id="`${id}-label`"
+      :class="hideLabel ? 'sr-only' : 'mb-1 block text-[13.5px] font-semibold text-ink'"
+    >
       {{ label }}
       <span v-if="required" class="mp-field-required" aria-hidden="true">*</span>
     </span>
+    <!-- A `track` trough with no border: the selected segment is a white chip
+         lifted 1px off it, so an outline round the whole row would only double
+         the edge the fill already draws. -->
     <div
-      class="grid auto-cols-fr grid-flow-col gap-1 rounded-md border border-hairline-strong bg-sunk p-1"
+      class="grid auto-cols-fr grid-flow-col gap-[3px] rounded-lg bg-track p-[3px]"
       :class="disabled ? 'cursor-not-allowed opacity-60' : ''"
       role="radiogroup"
       :aria-labelledby="`${id}-label`"
@@ -91,11 +102,11 @@ function onKeydown(event: KeyboardEvent) {
         :key="option.value"
         type="button"
         role="radio"
-        class="min-h-9 truncate rounded-sm px-3 text-sm font-bold transition"
+        class="truncate rounded-md px-[15px] py-[7px] text-[13.5px] font-semibold transition pointer-coarse:min-h-11"
         :class="[
           option.value === modelValue
-            ? 'bg-accent-soft text-accent-deep shadow-[inset_0_0_0_1px_var(--color-accent-tint)]'
-            : 'text-ink-soft hover:bg-elevated hover:text-ink',
+            ? 'bg-elevated text-ink shadow-[0_1px_2px_color-mix(in_srgb,var(--color-ink)_8%,transparent)]'
+            : 'text-ink-soft hover:text-ink',
           disabled || option.disabled ? 'cursor-not-allowed' : 'cursor-pointer',
         ]"
         :aria-checked="option.value === modelValue"

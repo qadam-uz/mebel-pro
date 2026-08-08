@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { nextStableId } from '@/shared/app/listboxNav'
@@ -11,17 +11,27 @@ const props = defineProps<{
   modelValue: string
   options: DropdownOption[]
   // Visually hide the eyebrow label (still read by screen readers) to keep the
-  // trigger compact — used by the workshop topbar branch picker.
+  // trigger compact, for a host whose surrounding row already says what the
+  // choice is.
   hideLabel?: boolean
-  // Filter-bar variant: external uppercase caption above the trigger (the
+  // Host-owned skin. `triggerClass` replaces the built-in trigger classes
+  // wholesale and `hintClass` the hint's, so a caller that also fills the
+  // `#trigger` slot — the workshop sidebar's two-line branch card — wears its
+  // own shape without forking the listbox, its keyboard contract, or its
+  // positioning.
+  triggerClass?: string
+  hintClass?: string
+  // Filter-bar variant: external sentence-case caption above the trigger (the
   // in-trigger eyebrow goes screen-reader-only) and the COMPACT skin — a lean
   // one-line trigger and option rows without icon tile, meta line, or status
-  // dots (only explicit `option.dot` markers render). The rich skin stays for
-  // the topbar: a one-line trigger (icon tile + label, topbar height) whose
-  // option rows keep the meta line and status dots.
+  // dots (only explicit `option.dot` markers render). Leaving it off gives the
+  // RICH skin — option rows that keep the meta line and status dots. Every
+  // filter-bar caller passes `topLabel`, so the rich skin's one remaining caller
+  // is the workshop sidebar's branch card (and the drawer's copy of it), which
+  // brings its own trigger through the slot.
   topLabel?: boolean
   // Inert mode: the selection still reads as the current context but cannot be
-  // changed here. Used by the workshop topbar on pages the branch context does
+  // changed here. Used by the workshop sidebar on pages the branch context does
   // not apply to — chrome that disappears between routes is more confusing than
   // chrome that says why it is inactive. `hint` explains the why.
   disabled?: boolean
@@ -33,6 +43,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const slots = useSlots()
 
 const DOT_CLASS: Record<NonNullable<DropdownOption['dot']>, string> = {
   success: 'bg-success',
@@ -65,6 +76,36 @@ const selected = computed(
 // Status filters mix dotted and dot-less options ("Hammasi") — reserve the dot
 // column for the whole list so labels stay aligned.
 const hasDots = computed(() => props.options.some((option) => option.dot))
+// A host that brings its own trigger owns its geometry as well as its skin.
+const hostSkinned = computed(() => Boolean(props.triggerClass || slots.trigger))
+const triggerClasses = computed(() => {
+  if (props.triggerClass) {
+    // Nothing is shared: a host that brings its own class owns the inert look
+    // too. The shared cue used to be appended here, and a utility outranks
+    // `@layer components`, so `opacity-60` won over the sidebar card's own inert
+    // treatment and rendered a full-width panel that read as broken rather than
+    // as inactive. The host still gets `disabled` on the button, so the
+    // behaviour is unchanged.
+    return [props.triggerClass]
+  }
+  return [
+    props.topLabel
+      ? [
+          'flex min-h-10 items-center gap-2 rounded-lg border bg-elevated px-3 text-left transition',
+          open.value ? 'border-accent' : 'border-hairline-strong hover:bg-sunk',
+        ]
+      : 'mp-surface flex min-h-10 min-w-52 items-center gap-2.5 rounded-lg border-hairline px-3 text-left shadow-none transition',
+    props.disabled ? 'cursor-not-allowed bg-sunk opacity-60' : '',
+  ]
+})
+// Minimum panel width. The built-in triggers are narrow by design, so the panel
+// widens past them to keep option rows readable; a host-skinned trigger already
+// sized itself (the 232px sidebar card) and the panel must match rather than
+// overhang the column it sits in.
+const panelMinWidth = computed(() => {
+  if (hostSkinned.value) return 0
+  return props.topLabel ? 200 : 260
+})
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
   return option ? `${listboxId}-${option.value}` : undefined
@@ -76,7 +117,7 @@ function updatePopoverPosition() {
   const rect = overlayRect(button)
   const { width: viewportWidth, height: viewportHeight } = overlayViewport()
   const panelWidth = Math.min(
-    Math.max(rect.width, props.topLabel ? 200 : 260),
+    Math.max(rect.width, panelMinWidth.value),
     Math.max(160, viewportWidth - 16),
   )
   const listHeight = Math.min(
@@ -189,27 +230,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- The hint sits BESIDE the trigger, not under it: stacking it would grow the
-       host row (the workshop topbar) on scoped routes only, so the chrome would
-       jump between pages — the exact thing keeping the picker visible avoids. -->
+  <!-- Where the hint goes is the host's call, via `hintClass`. In a filter row or
+       a form it sits BESIDE the trigger, because stacking it would grow the row
+       on scoped routes only and the controls would jump between pages. In the
+       sidebar column there is no row to grow, so the branch card stacks it
+       underneath. Either way it stays wired to the trigger by
+       `aria-describedby`. -->
   <div
     class="relative"
-    :class="topLabel ? 'flex flex-col gap-1' : 'inline-flex items-center gap-2.5'"
+    :class="
+      topLabel
+        ? 'flex flex-col gap-1'
+        : hostSkinned
+          ? 'flex flex-col'
+          : 'inline-flex items-center gap-2.5'
+    "
   >
     <span v-if="topLabel" class="mp-filter-dd-label" aria-hidden="true">{{ label }}</span>
     <button
       ref="buttonRef"
       type="button"
       :disabled="disabled"
-      :class="[
-        topLabel
-          ? [
-              'flex min-h-10 items-center gap-2 rounded-lg border bg-elevated px-3 text-left transition',
-              open ? 'border-accent' : 'border-hairline-strong hover:bg-sunk',
-            ]
-          : 'mp-surface flex h-10 min-w-52 items-center gap-2.5 rounded-[7px] border-hairline-strong px-3 text-left shadow-none transition',
-        disabled ? 'cursor-not-allowed bg-sunk opacity-60' : '',
-      ]"
+      :class="triggerClasses"
       :aria-expanded="disabled ? undefined : open"
       :aria-controls="disabled ? undefined : listboxId"
       :aria-haspopup="disabled ? undefined : 'listbox'"
@@ -218,53 +260,56 @@ onBeforeUnmount(() => {
       @click="open ? closeList() : openList()"
       @keydown="onButtonKeydown"
     >
-      <span
-        v-if="!topLabel"
-        class="grid size-7 place-items-center rounded-md"
-        :class="disabled ? 'bg-sunk text-ink-muted' : 'bg-accent-soft text-accent'"
-        aria-hidden="true"
-      >
-        <span class="mp-dot"></span>
-      </span>
-      <span
-        v-else-if="selected.dot"
-        class="size-2 shrink-0 rounded-full"
-        :class="DOT_CLASS[selected.dot]"
-        aria-hidden="true"
-      ></span>
-      <span class="min-w-0 flex-1">
+      <!-- The slot is INSIDE the button on purpose: a host swaps the trigger's
+           contents, never its behaviour — positioning, the two-stage Escape,
+           Tab-closes, focus return and the outside-click test all stay here. -->
+      <slot name="trigger" :selected="selected" :open="open" :disabled="disabled === true">
         <span
-          :class="
-            hideLabel || topLabel
-              ? 'sr-only'
-              : 'block text-[11px] font-bold uppercase tracking-[0.13em] text-ink-muted'
-          "
+          v-if="!topLabel"
+          class="grid size-7 place-items-center rounded-md"
+          :class="disabled ? 'bg-sunk text-ink-muted' : 'bg-accent-soft text-accent'"
+          aria-hidden="true"
         >
-          {{ label }}
+          <span class="mp-dot"></span>
         </span>
         <span
-          :class="
-            topLabel
-              ? 'block truncate text-[13px] font-semibold text-ink'
-              : 'block truncate text-sm font-bold text-ink'
-          "
-        >
-          {{ selected.label }}
+          v-else-if="selected.dot"
+          class="size-2 shrink-0 rounded-full"
+          :class="DOT_CLASS[selected.dot]"
+          aria-hidden="true"
+        ></span>
+        <span class="min-w-0 flex-1">
+          <span
+            :class="
+              hideLabel || topLabel ? 'sr-only' : 'block text-[12.5px] font-medium text-ink-muted'
+            "
+          >
+            {{ label }}
+          </span>
+          <span
+            :class="
+              topLabel
+                ? 'block truncate text-[13.5px] font-semibold text-ink'
+                : 'block truncate text-sm font-semibold text-ink'
+            "
+          >
+            {{ selected.label }}
+          </span>
         </span>
-      </span>
-      <svg class="size-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
-        <path
-          d="M5 7.5 10 12l5-4.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.8"
-        />
-      </svg>
+        <svg class="size-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
+          <path
+            d="M5 7.5 10 12l5-4.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.8"
+          />
+        </svg>
+      </slot>
     </button>
 
-    <span v-if="hint" :id="hintId" class="mp-dd-hint">{{ hint }}</span>
+    <span v-if="hint" :id="hintId" :class="hintClass ?? 'mp-dd-hint'">{{ hint }}</span>
 
     <Teleport to="body">
       <ul
@@ -273,7 +318,7 @@ onBeforeUnmount(() => {
         ref="listboxRef"
         role="listbox"
         tabindex="0"
-        class="fixed z-50 overflow-auto overscroll-contain rounded-lg border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="fixed z-50 overflow-auto overscroll-contain rounded-xl border border-hairline bg-elevated p-1 shadow-[0_1px_2px_color-mix(in_srgb,var(--color-ink)_6%,transparent),0_14px_32px_-20px_color-mix(in_srgb,var(--color-ink)_60%,transparent)]"
         :style="popoverStyle"
         :aria-label="label"
         :aria-activedescendant="activeOptionId"
@@ -287,7 +332,9 @@ onBeforeUnmount(() => {
           :aria-selected="option.value === selected.value"
           class="cursor-pointer items-center rounded-md px-3 py-2"
           :class="[
-            topLabel ? 'flex gap-2.5 text-[13px]' : 'grid grid-cols-[auto_1fr_auto] gap-3 text-sm',
+            topLabel
+              ? 'flex gap-2.5 text-[13.5px]'
+              : 'grid grid-cols-[auto_1fr_auto] gap-3 text-sm',
             index === activeIndex ? 'bg-sunk' : 'bg-elevated',
             option.value === selected.value ? 'text-accent' : 'text-ink',
           ]"
@@ -310,13 +357,20 @@ onBeforeUnmount(() => {
             :class="option.dot ? DOT_CLASS[option.dot] : 'bg-transparent'"
             aria-hidden="true"
           ></span>
-          <span :class="topLabel ? 'min-w-0 flex-1' : ''">
-            <span :class="topLabel ? 'block truncate font-semibold' : 'block font-bold'">
+          <!-- `min-w-0` in BOTH skins. A flex/grid child's automatic minimum size
+               is its content, so without it the `1fr` column refuses to shrink,
+               `truncate` never gets to ellipsise and a long branch name
+               ("Sergeli ishlab chiqarish sexi") pushes the panel into a sideways
+               scroll instead — worst on the rich skin, whose only caller now is
+               the workshop sidebar's 232px branch card, where the panel matches
+               the trigger rather than widening past it. -->
+          <span :class="topLabel ? 'min-w-0 flex-1' : 'min-w-0'">
+            <span class="block truncate font-semibold">
               {{ option.label }}
             </span>
             <span
               v-if="!topLabel && option.meta"
-              class="block font-mono text-[11px] text-ink-muted"
+              class="block truncate text-[12.5px] text-ink-muted"
             >
               {{ option.meta }}
             </span>

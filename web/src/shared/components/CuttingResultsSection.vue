@@ -227,7 +227,7 @@ async function choose(result: CuttingResult) {
 
     <div v-if="optimizeError" class="client-card-b">
       <div class="client-banner danger" role="alert">
-        <span class="font-mono font-black">!</span>
+        <span class="font-black">!</span>
         <span>
           {{ optimizeError }}
           <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
@@ -257,7 +257,7 @@ async function choose(result: CuttingResult) {
         >
           <template #banners>
             <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
-              <span class="font-mono font-black">!</span>
+              <span class="font-black">!</span>
               <span>{{ $t('cutting.result.invalidatedBanner') }}</span>
             </div>
 
@@ -272,7 +272,7 @@ async function choose(result: CuttingResult) {
             </div>
 
             <div v-if="!allPlaced" class="client-banner danger" role="alert">
-              <span class="font-mono font-black">!</span>
+              <span class="font-black">!</span>
               <span>
                 {{
                   $t(
@@ -288,7 +288,7 @@ async function choose(result: CuttingResult) {
 
         <aside class="order-2 xl:col-start-2 xl:row-start-1">
           <section class="rounded-lg border border-hairline bg-sunk p-4">
-            <h3 class="font-serif text-xl font-semibold text-ink">
+            <h3 class="font-display text-xl font-semibold text-ink">
               {{ $t('cutting.result.orderTitle') }}
             </h3>
 
@@ -308,9 +308,7 @@ async function choose(result: CuttingResult) {
                  and banding are charged on every sheet and metre. -->
             <div v-else-if="quote" class="mt-4 grid gap-4">
               <section v-if="receiptSheetLines.length">
-                <h4
-                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
-                >
+                <h4 class="pb-1.5 text-[12.5px] font-semibold text-ink-muted">
                   {{ $t('cutting.result.sectionSheets') }}
                 </h4>
                 <div
@@ -321,7 +319,7 @@ async function choose(result: CuttingResult) {
                 >
                   <p class="text-sm font-extrabold text-ink">
                     <span class="text-ink-muted">{{ index + 1 }}.</span> {{ line.material_name }}
-                    <span class="whitespace-nowrap font-mono"
+                    <span class="whitespace-nowrap"
                       >— {{ line.panels_used }} {{ $t('cutting.unit.sheet') }}</span
                     >
                   </p>
@@ -333,7 +331,7 @@ async function choose(result: CuttingResult) {
                       })
                     }}
                   </span>
-                  <span class="pt-0.5 text-right font-mono text-xs text-ink">
+                  <span class="pt-0.5 text-right text-xs text-ink">
                     {{ chargedSheets(line) }} {{ $t('cutting.unit.sheet') }} ×
                     {{ formatSom(line.unit_price_tiyin) }} =
                     <b class="font-extrabold">{{ formatSom(line.line_total_tiyin) }}</b>
@@ -342,9 +340,7 @@ async function choose(result: CuttingResult) {
               </section>
 
               <section v-if="receiptEdgeLines.length">
-                <h4
-                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
-                >
+                <h4 class="pb-1.5 text-[12.5px] font-semibold text-ink-muted">
                   {{ $t('cutting.result.sectionEdges') }}
                 </h4>
                 <div
@@ -356,14 +352,12 @@ async function choose(result: CuttingResult) {
                   <p class="text-sm font-extrabold text-ink">
                     <span class="text-ink-muted">{{ row.number ?? index + 1 }}.</span>
                     {{ row.line.material_name }}
-                    <span class="whitespace-nowrap font-mono"
-                      >— {{ metres(row.line.consumed_mm) }}</span
-                    >
+                    <span class="whitespace-nowrap">— {{ metres(row.line.consumed_mm) }}</span>
                   </p>
                   <span v-if="row.line.own" class="text-xs font-extrabold text-success">
                     {{ $t('cutting.own.tapeFree') }}
                   </span>
-                  <span v-else class="pt-0.5 text-right font-mono text-xs text-ink">
+                  <span v-else class="pt-0.5 text-right text-xs text-ink">
                     {{ metres(row.line.consumed_mm) }} ×
                     {{ formatSom(row.line.metre_price_tiyin) }} =
                     <b class="font-extrabold">{{ formatSom(row.line.material_cost_tiyin) }}</b>
@@ -372,9 +366,7 @@ async function choose(result: CuttingResult) {
               </section>
 
               <section>
-                <h4
-                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
-                >
+                <h4 class="pb-1.5 text-[12.5px] font-semibold text-ink-muted">
                   {{ $t('cutting.result.sectionServices') }}
                 </h4>
                 <div class="grid gap-2 border-t border-hairline-strong py-2.5">
@@ -382,7 +374,7 @@ async function choose(result: CuttingResult) {
                     <span class="text-sm text-ink">
                       {{ $t('cutting.result.serviceCutting') }}
                     </span>
-                    <span class="text-right font-mono text-xs text-ink">
+                    <span class="text-right text-xs text-ink">
                       {{ quote.panels_used }} {{ $t('cutting.unit.sheet') }} ×
                       {{ formatSom(quote.cutting_rate_tiyin) }} =
                       <b class="font-extrabold">{{ formatSom(quote.subtotal_cutting_tiyin) }}</b>
@@ -392,7 +384,7 @@ async function choose(result: CuttingResult) {
                     <span class="text-sm text-ink">
                       {{ $t('cutting.result.serviceEdgeBanding') }}
                     </span>
-                    <span class="text-right font-mono text-xs text-ink">
+                    <span class="text-right text-xs text-ink">
                       {{ metres(receiptEdgeServiceMm) }} ×
                       {{ formatSom(quote.edge_banding_rate_tiyin) }} =
                       <b class="font-extrabold">{{ formatSom(receiptEdgeServiceTiyin) }}</b>
@@ -405,7 +397,7 @@ async function choose(result: CuttingResult) {
                 <span class="text-base font-extrabold text-ink">
                   {{ $t('cutting.result.total') }}
                 </span>
-                <span class="font-mono text-xl font-extrabold text-ink">
+                <span class="text-xl font-extrabold text-ink">
                   {{ formatTiyin(quote.total_tiyin) }}
                 </span>
               </div>
@@ -415,7 +407,7 @@ async function choose(result: CuttingResult) {
 
               <button
                 type="button"
-                class="mp-button w-full border-accent bg-accent-soft text-accent-deep"
+                class="mp-button w-full border-accent-tint bg-accent-soft text-accent-strong"
                 @click="ownDialogOpen = true"
               >
                 {{ $t('cutting.own.open') }}

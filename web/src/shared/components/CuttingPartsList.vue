@@ -69,7 +69,7 @@ function isSelected(panelId: string, partRef: string) {
               class="grid w-full select-text grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition"
               :class="
                 isSelected(sheet.panelId, group.partRef)
-                  ? 'border-accent bg-accent-soft'
+                  ? 'border-accent-tint bg-accent-soft'
                   : 'border-hairline bg-elevated hover:border-accent-tint'
               "
               :aria-pressed="isSelected(sheet.panelId, group.partRef)"
@@ -79,17 +79,17 @@ function isSelected(panelId: string, partRef: string) {
                 <span class="block break-words text-sm font-bold leading-snug text-ink">
                   {{ group.name }}
                 </span>
-                <span class="mt-0.5 block font-mono text-xs text-ink-soft">
+                <span class="mt-0.5 block text-xs text-ink-soft">
                   {{ group.length_mm }} × {{ group.width_mm }} mm
                 </span>
               </span>
               <span class="shrink-0 text-right">
-                <span class="block font-mono text-sm font-bold text-ink">
+                <span class="block text-sm font-bold text-ink">
                   {{ group.count }} {{ $t('cutting.unit.piece', group.count) }}
                 </span>
                 <span
                   v-if="group.rotatedCount > 0"
-                  class="mt-0.5 block font-mono text-[11px] font-bold text-accent"
+                  class="mt-0.5 block text-[11px] font-bold text-accent-strong"
                 >
                   <span aria-hidden="true">↻ {{ group.rotatedCount }}</span>
                   <span class="sr-only">{{

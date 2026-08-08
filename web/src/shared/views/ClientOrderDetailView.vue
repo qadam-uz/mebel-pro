@@ -208,7 +208,7 @@ onMounted(() => {
       <section class="client-card mb-5 p-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 class="m-0 font-serif text-[28px] font-semibold leading-tight text-ink">
+            <h1 class="m-0 font-display text-[28px] font-semibold leading-tight text-ink">
               {{ order.order_number }}
             </h1>
             <p class="mt-2 text-sm text-ink-soft">
@@ -220,7 +220,7 @@ onMounted(() => {
             <span :class="clientStatusPillClass(order.status)">
               {{ clientStatusLabel(order.status) }}
             </span>
-            <div class="mt-2 font-mono text-xl font-bold text-ink">
+            <div class="mt-2 text-xl font-bold text-ink">
               {{ formatTiyin(order.total_tiyin) }}
             </div>
             <div class="text-xs font-semibold text-ink-muted">
@@ -470,28 +470,20 @@ onMounted(() => {
               <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
                 <div class="flex justify-between py-1 text-ink-soft">
                   <span>{{ $t('client.common.cuttingService') }}</span
-                  ><span class="font-mono text-ink">{{
-                    formatTiyin(order.subtotal_cutting_tiyin)
-                  }}</span>
+                  ><span class="text-ink">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</span>
                 </div>
                 <div class="flex justify-between py-1 text-ink-soft">
                   <span>{{ $t('client.common.material') }}</span
-                  ><span class="font-mono text-ink">{{
-                    formatTiyin(order.subtotal_materials_tiyin)
-                  }}</span>
+                  ><span class="text-ink">{{ formatTiyin(order.subtotal_materials_tiyin) }}</span>
                 </div>
                 <template v-if="order.subtotal_edge_banding_tiyin > 0">
                   <div class="flex justify-between py-1 text-ink-soft">
                     <span>{{ $t('client.orderDetail.edgeMaterial') }}</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(edgeCostSplit.materials)
-                    }}</span>
+                    ><span class="text-ink">{{ formatTiyin(edgeCostSplit.materials) }}</span>
                   </div>
                   <div class="flex justify-between py-1 text-ink-soft">
                     <span>{{ $t('client.orderDetail.edgeService') }}</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(edgeCostSplit.service)
-                    }}</span>
+                    ><span class="text-ink">{{ formatTiyin(edgeCostSplit.service) }}</span>
                   </div>
                 </template>
                 <div
@@ -499,17 +491,15 @@ onMounted(() => {
                   class="flex justify-between py-1 text-ink-soft"
                 >
                   <span>{{ $t('client.orderDetail.surcharge') }}</span
-                  ><span class="font-mono text-ink"
-                    >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
-                  >
+                  ><span class="text-ink">+ {{ formatTiyin(order.surcharge_tiyin) }}</span>
                 </div>
                 <div v-if="order.discount_tiyin > 0" class="flex justify-between py-1 text-success">
                   <span>{{ $t('client.orderDetail.discount') }}</span
-                  ><span class="font-mono">- {{ formatTiyin(order.discount_tiyin) }}</span>
+                  ><span>- {{ formatTiyin(order.discount_tiyin) }}</span>
                 </div>
                 <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
                   <span>{{ $t('client.common.total') }}</span
-                  ><span class="font-serif text-2xl">{{ formatTiyin(order.total_tiyin) }}</span>
+                  ><span class="font-display text-2xl">{{ formatTiyin(order.total_tiyin) }}</span>
                 </div>
               </div>
               <p class="mt-3 text-sm text-ink-muted">
@@ -547,13 +537,13 @@ onMounted(() => {
             </div>
             <div class="client-card-b space-y-3">
               <div v-if="order.note_workshop">
-                <div class="text-xs font-bold uppercase text-ink-muted">
+                <div class="text-[12.5px] font-semibold text-ink-muted">
                   {{ $t('client.orderDetail.noteWorkshop') }}
                 </div>
                 <p class="mt-1 text-sm text-ink">{{ order.note_workshop }}</p>
               </div>
               <div v-if="order.note_client">
-                <div class="text-xs font-bold uppercase text-ink-muted">
+                <div class="text-[12.5px] font-semibold text-ink-muted">
                   {{ $t('client.orderDetail.noteClient') }}
                 </div>
                 <p class="mt-1 text-sm text-ink">{{ order.note_client }}</p>
@@ -577,14 +567,14 @@ onMounted(() => {
                       phaseNodeClass(index) === 'done'
                         ? 'border-accent bg-accent'
                         : phaseNodeClass(index) === 'now'
-                          ? 'border-accent bg-elevated shadow-[0_0_0_4px_rgb(15_118_110_/_28%)]'
+                          ? 'border-signal bg-elevated shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-signal)_28%,transparent)]'
                           : 'border-hairline bg-elevated'
                     "
                   ></span>
                   <span class="text-sm font-bold text-ink">{{ label }}</span>
                 </div>
               </div>
-              <p v-if="statusSubtext(order.status)" class="mt-4 text-sm font-bold text-accent">
+              <p v-if="statusSubtext(order.status)" class="mt-4 text-sm font-bold text-ink">
                 {{ statusSubtext(order.status) }}
               </p>
             </div>
@@ -630,7 +620,7 @@ onMounted(() => {
         >
           <div class="client-card-h">
             <h2>{{ $t('client.common.parts') }}</h2>
-            <span class="font-mono text-sm text-ink-muted">
+            <span class="text-sm text-ink-muted">
               {{ $t('client.unit.parts', order.item_count) }} ·
               {{ $t('client.unit.materials', materialCount) }}
             </span>
@@ -656,7 +646,7 @@ onMounted(() => {
             <button
               v-if="result"
               type="button"
-              class="text-sm font-bold text-accent"
+              class="text-sm font-bold text-accent-deep"
               :disabled="orders.downloadingId === order.id"
               @click="orders.openClientPdf(order.id)"
             >
@@ -709,19 +699,17 @@ onMounted(() => {
               <div class="rounded-lg border border-hairline bg-sunk p-4 text-sm">
                 <div class="flex justify-between py-1 text-ink-soft">
                   <span>{{ $t('client.common.total') }}</span
-                  ><span class="font-mono text-ink">{{
-                    formatTiyin(order.settlement.total_tiyin)
-                  }}</span>
+                  ><span class="text-ink">{{ formatTiyin(order.settlement.total_tiyin) }}</span>
                 </div>
                 <div class="flex justify-between py-1 text-ink-soft">
                   <span>{{ $t('client.orderDetail.paid') }}</span
-                  ><span class="font-mono text-success"
+                  ><span class="text-success"
                     >- {{ formatTiyin(order.settlement.recorded_tiyin) }}</span
                   >
                 </div>
                 <div class="mt-2 flex justify-between border-t border-ink pt-3 font-bold text-ink">
                   <span>{{ $t('client.orderDetail.balance') }}</span
-                  ><span class="font-serif text-2xl">{{
+                  ><span class="font-display text-2xl">{{
                     formatTiyin(order.settlement.balance_tiyin)
                   }}</span>
                 </div>

@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import { safeRedirectPath } from '@/shared/app/redirect'
+import BrandMark from '@/shared/components/BrandMark.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -150,10 +151,10 @@ async function resendOtp() {
 <template>
   <main class="grid min-h-[var(--app-vh)] place-items-center bg-bg px-4 py-8">
     <section
-      class="client-card w-[min(100%,420px)] p-8 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      class="client-card w-[min(100%,420px)] p-8 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
     >
       <RouterLink :to="config.homePath" class="client-brand mb-7 inline-flex">
-        <img src="/favicon.svg" alt="" class="size-8" />
+        <BrandMark :size="32" />
         <span class="client-brand-name">Mebel Pro</span>
       </RouterLink>
 
@@ -164,7 +165,7 @@ async function resendOtp() {
 
       <form v-if="clientStep === 'phone'" class="space-y-4" novalidate @submit.prevent="sendOtp">
         <div>
-          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
+          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
             {{ $t('client.login.title') }}
           </h1>
           <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.subtitle') }}</p>
@@ -210,7 +211,7 @@ async function resendOtp() {
         @submit.prevent="verifyOtp"
       >
         <div>
-          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
+          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
             {{ $t('client.login.codeTitle') }}
           </h1>
           <i18n-t
@@ -229,7 +230,7 @@ async function resendOtp() {
           <span class="sr-only">{{ $t('client.login.codeLabel') }}</span>
           <input
             v-model="otpCode"
-            class="mp-input font-mono tracking-[0.5em]"
+            class="mp-input tracking-[0.5em]"
             type="text"
             inputmode="numeric"
             autocomplete="one-time-code"
@@ -278,12 +279,12 @@ async function resendOtp() {
         </button>
 
         <div class="flex justify-between gap-3 border-t border-hairline pt-4 text-sm font-bold">
-          <button type="button" class="text-accent" @click="editPhone">
+          <button type="button" class="text-accent-deep" @click="editPhone">
             ← {{ $t('client.login.editPhone') }}
           </button>
           <button
             type="button"
-            class="text-accent disabled:opacity-50"
+            class="text-accent-deep disabled:opacity-50"
             :disabled="resendLeft > 0 || isSubmitting"
             @click="resendOtp"
           >
@@ -298,7 +299,7 @@ async function resendOtp() {
 
       <form v-else class="space-y-4" novalidate @submit.prevent="verifyOtp">
         <div>
-          <h1 class="font-serif text-3xl font-semibold leading-tight text-ink">
+          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
             {{ $t('client.login.nameTitle') }}
           </h1>
           <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.nameSubtitle') }}</p>
@@ -344,7 +345,7 @@ async function resendOtp() {
         </button>
 
         <div class="flex border-t border-hairline pt-4 text-sm font-bold">
-          <button type="button" class="text-accent" @click="editPhone">
+          <button type="button" class="text-accent-deep" @click="editPhone">
             ← {{ $t('client.login.editPhone') }}
           </button>
         </div>

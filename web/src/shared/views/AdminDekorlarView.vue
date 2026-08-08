@@ -622,7 +622,7 @@ onMounted(async () => {
                     class="mp-filter-chip"
                     :class="
                       form.tur === option.value
-                        ? 'border-accent bg-accent-soft text-accent'
+                        ? 'border-accent-tint bg-accent-soft text-accent-strong'
                         : undefined
                     "
                     :aria-pressed="form.tur === option.value"

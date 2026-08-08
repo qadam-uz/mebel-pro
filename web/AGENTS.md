@@ -150,9 +150,10 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   error (named cause + retry), success. Every load that can hang gets a timeout → error path;
   no infinite spinners.
 - **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
-  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
-  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
-  reads as a control and gets clicked.
+  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`): the tile sits exactly where a
+  button would, so an arrow or a plus inside it reads as a control and gets clicked. The tile
+  itself is built not to be one — a `sunk` fill with an `ink-muted` glyph, deliberately *not*
+  the accent-on-accent-soft pairing a primary button and a station tile use.
 - **The keyboard reaches and operates everything** a mouse can, in an order matching the
   layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
   nothing in its place. Modals trap focus and return it to the trigger on close.
@@ -166,14 +167,34 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   progress during async work so they can't double-fire. Destructive actions name their
   consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.
 - **Color is never the only signal** (pair with text/icon/position); text contrast ≥ 4.5:1
-  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area.
-- **One primary action per screen**, visually dominant. Body text stays at the 14px base
-  (dense back-office by design); captions never below 10.5px. No horizontal page scroll on
-  any viewport (self-contained scrollable tables excepted).
+  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area — the desktop
+  chrome draws its utilities at 38px and grows them under `@media (pointer: coarse)`, which is
+  where the 44px has to be met. This bar **outranks the design handoff**: three palette values
+  sit a shade off the specified hex precisely to clear the 4.5:1 floor, and `DESIGN.md` names
+  all three.
+- **One primary action per screen**, visually dominant — *plus* the shell's single global
+  create. `+ Yangi buyurtma` lives in the workshop sidebar because it belongs to the app rather
+  than to any one page, so a workshop screen carries its own primary action alongside it. A
+  screen that already has the shell's action does **not** add a second copy: the Buyurtmalar
+  list has no create button in its filter row.
+- Body text stays at the 14px base (dense back-office by design); **12.5px is the floor**, and
+  there is no serif or monospace face to reach for — two Wix Madefor families are the whole
+  system. No horizontal page scroll on any viewport (self-contained scrollable tables
+  excepted).
 - **Motion is cause-and-effect, not decoration**: ~150–300ms, `transform`/`opacity` only,
   gone under `prefers-reduced-motion` (the global CSS already honors it).
 
 ## Building against the system
+
+### Token names are stable; their values are not
+
+The palette is remapped **in place** — a token keeps its name and takes a new value. So
+`text-accent` means graphite where it once meant the old brand colour, `bg-accent-soft` is an
+orange tint, and `font-mono` no longer changes the font family at all. Nothing breaks and nothing
+fails a gate: a class that was correct before a retheme can be wrong after it and still lint,
+typecheck, build, and pass every unit test. Treat a token-value change as a **visual** change —
+after one, open the affected screens and read the computed value, because this class of defect is
+invisible to the check gates by construction.
 
 ### Measuring under the root zoom
 
@@ -191,6 +212,26 @@ panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--ap
 the compensation, and the ratio behind it (`--app-zoom`) is written down once. Raw `vh` / `vw`
 are still fine for a *cap* that only needs to stay under the viewport
 (`max-height: min(90vh, …)` on a modal).
+
+### The workshop frame scrolls in two places
+
+At **≥921px** the workshop shell is a fixed frame: the sidebar and the content column each
+scroll on their own inside `var(--app-vh)`, and the document does not scroll at all. Below 921px
+the frame is off and the page scrolls as any other page does. Three consequences, each of which
+has to be carried deliberately:
+
+- **`scrollLock` pins `document.body`, which under the frame is not the scroller.** The body pin
+  (`position: fixed` + the `body.modal-open` class) is what stops iOS Safari scrolling behind a
+  modal, but it cannot reach an inner scroller — so the `body.modal-open` rule in
+  `assets/main.css` pins the frame's content scroller as well. Every overlay goes through
+  `shared/app/scrollLock.ts`; none rolls its own `overflow: hidden`.
+- **`@media print` has to reset the frame** to `height: auto; overflow: visible`, or a printed
+  document — the akt sverka, say — clips to one screen's worth of rows.
+- **A teleported popover has to hear the inner scroller.** A `scroll` event does not bubble, so a
+  listener on `window` never fires for an element that scrolls; the shared overlays register
+  their reposition handler in the **capture** phase (`addEventListener('scroll', …, true)`),
+  which does see it. Drop that flag and every dropdown detaches from its trigger the moment the
+  content column moves.
 
 ### Popovers escape their container
 

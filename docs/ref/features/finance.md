@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-28
+updated: 2026-08-08
 order: 55
 ---
 
@@ -117,14 +117,18 @@ clears its stamp, so reverted work doesn't appear. Read-only; `view_finance_repo
 ## Finance summary
 
 Computed by the backend over a period (date range) and a branch filter (or
-workshop-wide), and surfaced on the workshop home (**Asosiy**) dashboard as KPI tiles —
-there is no standalone finance-reports page. Read-only; visible with
-`view_finance_reports` or `manage_finance`.
+workshop-wide), and read by the workshop home (**Asosiy**) — there is no standalone
+finance-reports page. Read-only; visible with `view_finance_reports` or `manage_finance`.
 
 - **Income** — sum of `recorded` income in the period, split `order_payment` vs `other`.
 - **Expenses** — sum of `recorded` expenses by category and total, in the period.
 - **Net** — income − expenses.
 - **Per-branch breakdown** — the three lines above, per branch.
+
+Asosiy takes the **income** side of this: today's income as a KPI card, and income per day as the
+*Savdo* chart ([`workshop.md`](workshop.md#workshop-home-asosiy)). The expense and net lines are
+computed and returned but reach no screen today — Asosiy's KPI row carries four cards, and neither
+the ledger pages nor Qarzdorlik carries a period summary row. A known gap, not a decision.
 
 ## Debts (Qarzdorlik)
 
@@ -223,12 +227,12 @@ existing report semantics.
 ## UX
 
 A **Moliya** nav group in the workshop app. The income · expenses · net summary is not a
-page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI tiles
-(visible with `manage_finance` or `view_finance_reports`). The group's own pages:
+page of its own — the workshop home (**Asosiy**) reads it for today's income and the *Savdo*
+chart (visible with `manage_finance` or `view_finance_reports`). The group's own pages:
 
 - **Income & expenses** (`/workshop/finance/expenses`, with an income deep-link at
   `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The active branch
-  comes from the topbar context picker (the app-wide convention) — there is no per-page
+  comes from the sidebar's branch picker (the app-wide convention) — there is no per-page
   branch filter, no branch field in the forms, and no branch column in the tables. New
   records stamp the context branch; editing preserves the record's original branch.
   Workshop-level rows (`branch_id` null) stay visible to the owner in every branch
@@ -312,9 +316,9 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   expense modal with the supplier pre-picked, or the income modal on the client side),
   **Tuzatish kiritish** (the adjustment form — direction in words per side, amount, date,
   mandatory note; adjustment rows carry their own void action), **Chop etish** (browser
-  print) and **PDF** (the file to hand over). The dashboard adds *Ta'minotchilarga
-  qarzimiz* and *Mijozlar qarzi* KPI tiles, and the Ombor suppliers tab shows each
-  supplier's balance to users who could open this page anyway.
+  print) and **PDF** (the file to hand over). *Mijozlar qarzi* is also a KPI card on Asosiy;
+  the supplier side is read here and on the Ombor suppliers tab, which shows each supplier's
+  balance to users who could open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per
@@ -323,7 +327,7 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   expense" shortcut was dropped as redundant). Empty: "No production in this period."
 
 Because the income / expense ledgers require `manage_finance`, a `view_finance_reports`-only
-user sees the home summary tiles and worker-production report, but not the ledger pages.
+user sees the home's money figures and the worker-production report, but not the ledger pages.
 
 States: dashboards, lists, and detail all have loading / empty / error; mutating actions
 confirm; mandatory reasons block submit until filled; receipt upload uses the shared

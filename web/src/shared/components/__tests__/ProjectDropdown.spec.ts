@@ -164,6 +164,115 @@ describe('ProjectDropdown', () => {
     wrapper.unmount()
   })
 
+  // The sidebar branch card wears its own two-line skin. What must NOT come with
+  // it is a second copy of the listbox, so the slot swaps the trigger's contents
+  // while every behaviour stays in the primitive.
+  it('host-skinned trigger: slot content replaces the default, keyboard still selects', async () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: {
+        label: 'Filial',
+        modelValue: 'a',
+        options,
+        triggerClass: 'workshop-branch',
+        hintClass: 'workshop-branch-hint',
+        hint: "Bu sahifa butun ustaxona bo'yicha",
+      },
+      slots: {
+        trigger: `<template #trigger="{ selected, open }">
+          <span class="branch-name">Oq Daraxt</span>
+          <span class="branch-meta">{{ selected.label }}</span>
+          <span class="branch-open">{{ open ? 'on' : 'off' }}</span>
+        </template>`,
+      },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+
+    // The host's classes replace the baked ones outright.
+    expect(button.classes()).toContain('workshop-branch')
+    expect(button.classes()).not.toContain('mp-surface')
+    // Default trigger markup is gone; the slot's is what renders.
+    expect(button.find('.mp-dot').exists()).toBe(false)
+    expect(button.get('.branch-meta').text()).toBe('A branch')
+    expect(button.get('.branch-open').text()).toBe('off')
+    // The hint follows the host too, and stays wired to the trigger.
+    const hint = wrapper.get('.workshop-branch-hint')
+    expect(button.attributes('aria-describedby')).toBe(hint.attributes('id'))
+
+    await button.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(button.get('.branch-open').text()).toBe('on')
+    const listbox = document.querySelector('[role="listbox"]') as HTMLUListElement
+    await new DOMWrapper(listbox).trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['b'])
+    expect(document.activeElement).toBe(button.element)
+    wrapper.unmount()
+  })
+
+  // A 260px floor is right for the primitive's own narrow trigger and wrong for a
+  // 232px sidebar card: the panel would hang over the column it belongs to.
+  it('host-skinned trigger: the panel matches the trigger instead of the 260px floor', async () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1440)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900)
+    const wrapper = mount(ProjectDropdown, {
+      props: { label: 'Filial', modelValue: 'a', options, triggerClass: 'workshop-branch' },
+      slots: { trigger: '<span>Oq Daraxt</span>' },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+    vi.spyOn(button.element, 'getBoundingClientRect').mockReturnValue({
+      x: 16,
+      y: 96,
+      width: 232,
+      height: 52,
+      top: 96,
+      right: 248,
+      bottom: 148,
+      left: 16,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    await button.trigger('click')
+    await nextTick()
+
+    const listbox = document.querySelector('[role="listbox"]') as HTMLUListElement
+    expect(listbox.style.width).toBe('232px')
+    wrapper.unmount()
+  })
+
+  // The panel no longer widens past a host-skinned trigger, so the option rows are
+  // the narrowest they have ever been and truncation is load-bearing. `truncate`
+  // alone does nothing inside a grid column whose automatic minimum size is its
+  // content — without `min-w-0` a long branch name scrolls the panel sideways.
+  it('rich-skin option rows can actually shrink: min-w-0 on the text column', async () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: {
+        label: 'Filial',
+        modelValue: 'a',
+        options: [
+          {
+            value: 'a',
+            label: 'Sergeli ishlab chiqarish sexi',
+            meta: "Sergeli tumani, Yangi Sergeli ko'chasi 42",
+            status: 'active',
+          },
+        ],
+        triggerClass: 'workshop-branch',
+      },
+      slots: { trigger: '<span>Oq Daraxt</span>' },
+      attachTo: document.body,
+    })
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+
+    const row = document.querySelector('[role="option"]') as HTMLLIElement
+    const text = row.children[1] as HTMLSpanElement
+    expect(text.className).toContain('min-w-0')
+    expect((text.children[0] as HTMLElement).className).toContain('truncate')
+    expect((text.children[1] as HTMLElement).className).toContain('truncate')
+    wrapper.unmount()
+  })
+
   it('stops Escape from bubbling out of an open listbox (two-stage close)', async () => {
     const wrapper = mount(ProjectDropdown, {
       props: { label: 'Branch', modelValue: 'a', options },

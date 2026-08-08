@@ -68,8 +68,8 @@ defineEmits<{ select: [] }>()
       ></span
     ><span
       v-if="quote || error"
-      class="shrink-0 text-right font-mono text-sm font-bold"
-      :class="error ? 'text-ink-muted' : 'text-accent'"
+      class="shrink-0 text-right text-sm font-bold"
+      :class="error ? 'text-ink-muted' : 'text-ink'"
       >{{ quote ? formatTiyin(quote.total_tiyin) : '—'
       }}<small v-if="quote" class="mt-1 block text-[10px] text-ink-muted">{{
         $t('workshopAdmin.branchRow.unit', { n: quote.panels_used }, quote.panels_used)

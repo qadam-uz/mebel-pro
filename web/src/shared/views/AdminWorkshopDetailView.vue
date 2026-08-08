@@ -233,13 +233,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       <div class="admin-card-b">
         <dl class="grid gap-4 sm:grid-cols-2">
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Nomi</dt>
+            <dt class="text-[12.5px] font-semibold text-ink-muted">Nomi</dt>
             <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Rahbar</dt>
+            <dt class="text-[12.5px] font-semibold text-ink-muted">Rahbar</dt>
             <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
-              <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
+              <span class="text-sm">{{ admin.detail.owner.login }}</span>
               <button
                 type="button"
                 class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
@@ -251,13 +251,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Yaratildi</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">
+            <dt class="text-[12.5px] font-semibold text-ink-muted">Yaratildi</dt>
+            <dd class="mt-1 text-sm text-ink">
               {{ adminDate(admin.detail.workshop.created_at) }}
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Holat</dt>
+            <dt class="text-[12.5px] font-semibold text-ink-muted">Holat</dt>
             <dd class="mt-1">
               <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
                 {{ workshopStatusLabel(admin.detail.workshop.status) }}
@@ -332,7 +332,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <article class="admin-row-item">
           <span class="admin-pill admin-pill-success">Rahbar</span>
           <span>
-            <b class="font-mono">{{ admin.detail.owner.login }}</b>
+            <b>{{ admin.detail.owner.login }}</b>
           </span>
           <span class="admin-mono text-ink-muted">{{ admin.detail.owner.id.slice(0, 8) }}</span>
         </article>

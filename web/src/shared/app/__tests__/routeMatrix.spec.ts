@@ -105,7 +105,7 @@ describe('role route matrix', () => {
 
   it('formats page titles with role identity', () => {
     expect(roleDocumentTitle('Buyurtmalar', workshopConfig)).toBe(
-      'Buyurtmalar — Mebel Pro · Boshqaruv',
+      'Buyurtmalar — Mebel Pro · Ustaxona',
     )
     expect(roleDocumentTitle(undefined, adminConfig)).toBe('Asosiy — Mebel Pro · Superadmin')
   })

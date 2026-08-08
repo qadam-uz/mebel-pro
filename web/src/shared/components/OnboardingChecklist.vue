@@ -91,7 +91,7 @@ function openStep(step: ChecklistStep) {
         <h2 id="onboarding-checklist-title">{{ $t('shell.onboarding.title') }}</h2>
         <p class="sub">{{ remainingText }}</p>
       </div>
-      <span class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-deep">
+      <span class="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-bold text-accent-strong">
         {{ $t('shell.onboarding.progress', { done: doneCount, total: steps.length }) }}
       </span>
     </div>
@@ -110,7 +110,7 @@ function openStep(step: ChecklistStep) {
       >
         <span
           class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
-          :class="step.done ? 'bg-success text-white' : 'bg-accent-tint text-accent-deep'"
+          :class="step.done ? 'bg-success text-white' : 'bg-accent-tint text-accent-strong'"
           aria-hidden="true"
         >
           <Icon v-if="step.done" name="check" class="!size-4" />

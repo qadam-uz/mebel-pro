@@ -8,8 +8,24 @@ export interface EdgeRegistryColorStyle {
   soft: string
 }
 
+/**
+ * Tape colours, and they are *categorical* — their only job is telling one edge
+ * tape apart from another on the job sheet, so they deliberately do not mirror
+ * the brand tokens. One rule binds them: no entry may be a retired brand colour
+ * (entry 1 was the old ultramarine `#4341c6`, which would read as chrome beside
+ * the new graphite). Entry 1 sits in the largest hue gap the ramp had — between
+ * amber and green — so the two most-used tapes never look alike.
+ *
+ * `fg` is pure white and deliberately NOT the bone `--color-on-accent`
+ * (`#f4f2ee`). Bone is specified for text on GRAPHITE, where it takes the glare
+ * off a near-black field; on a saturated mid-tone it just costs contrast. The
+ * number these fills carry renders at 12px, so it owes the full 4.5:1 — and bone
+ * puts `#15803d` at 4.49:1 and `#a16207` at 4.40:1, both under the floor, while
+ * white clears it at 5.02:1 and 4.92:1. The one entry light enough to fail with
+ * either (`#ca8a04`) pairs with ink instead.
+ */
 export const EDGE_REGISTRY_COLOR_STYLES = [
-  { bg: '#4341c6', fg: '#ffffff', soft: '#e3e2f9' },
+  { bg: '#49740e', fg: '#ffffff', soft: '#ecfccb' },
   { bg: '#D85A30', fg: '#ffffff', soft: '#fde2d6' },
   { bg: '#2563eb', fg: '#ffffff', soft: '#dbeafe' },
   { bg: '#7c3aed', fg: '#ffffff', soft: '#ede9fe' },
@@ -93,6 +109,9 @@ export function registryColorStyle(number: number): EdgeRegistryColorStyle {
   const fixed = EDGE_REGISTRY_COLOR_STYLES[number - 1]
   if (fixed) return fixed
   const hue = (((number - 1) * 137.508) % 360).toFixed(3)
+  // Same ramp, same reason for white — see EDGE_REGISTRY_COLOR_STYLES. At 42%
+  // lightness the generated fills sit in exactly the band where bone drops under
+  // 4.5:1.
   return {
     bg: `hsl(${hue} 45% 42%)`,
     fg: '#ffffff',

@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-08
 order: 70
 ---
 
@@ -205,7 +205,9 @@ Money, dates, phones (`+998XXXXXXXXX`) and dimensions (millimetres) keep fixed d
 conventions across all three locales; only the unit words change (`so'm` / `сўм` / `сум`). The
 superadmin app is deliberately not localized — its audience is the platform's own operators.
 
-Copy rules, the term glossary, and the Cyrillic font substitution are the design system's:
+Type needs no per-locale handling: both app faces ship a real Cyrillic subset, so there is no
+font substitution and no locale-conditional family. Copy rules and the term glossary are the
+design system's:
 [`web/DESIGN.md`](https://github.com/qadam-uz/mebel-pro/blob/main/web/DESIGN.md).
 
 ## Next

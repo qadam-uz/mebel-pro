@@ -111,7 +111,7 @@ onMounted(() => {
     <div v-if="cutting.loading || sortedDrafts.length > 0" class="client-section-title">
       <h2>{{ $t('client.drafts.all') }}</h2>
       <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
-      <span v-else class="font-mono text-sm text-ink-muted">
+      <span v-else class="text-sm text-ink-muted">
         <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }}
         {{ $t('client.drafts.capacityUnit') }}
       </span>
@@ -149,7 +149,7 @@ onMounted(() => {
       <article
         v-for="draft in sortedDrafts"
         :key="draft.id"
-        class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+        class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         role="link"
         tabindex="0"
         :aria-label="draftTitle(draft)"
@@ -160,16 +160,16 @@ onMounted(() => {
           <Icon name="scissors" />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="truncate font-mono text-sm font-bold text-ink">
+          <div class="truncate text-sm font-bold text-ink">
             {{ draftTitle(draft) }}
           </div>
           <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
             <span
-              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b>
+              ><b class="text-ink">{{ draftParts(draft) }}</b>
               {{ $t('client.unit.part', draftParts(draft)) }}</span
             >
             <span
-              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b>
+              ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
               {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
             >
             <span>{{ formatRelativeDate(draft.updated_at) }}</span>

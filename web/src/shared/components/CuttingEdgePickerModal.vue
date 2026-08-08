@@ -647,7 +647,7 @@ onBeforeUnmount(() => {
                   :title="partDisplayName"
                   >{{ partDisplayName }}</span
                 >
-                <span class="font-mono text-[11px] font-bold text-ink-soft">
+                <span class="text-[11px] font-bold text-ink-soft">
                   <template v-if="part">{{ part.length_mm }} × {{ part.width_mm }}</template>
                 </span>
               </div>
@@ -732,7 +732,7 @@ onBeforeUnmount(() => {
                 class="inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                 :class="
                   edgePickerPatternKey === pattern.key
-                    ? 'border-accent bg-accent-soft text-accent'
+                    ? 'border-accent-tint bg-accent-soft text-accent-strong'
                     : 'border-hairline-strong bg-elevated text-ink hover:border-ink-soft'
                 "
                 :disabled="pattern.sides.length > 0 && !activeEdgeId"
@@ -771,7 +771,7 @@ onBeforeUnmount(() => {
             class="flex min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition"
             :class="
               thickenedState
-                ? 'border-accent bg-accent-soft'
+                ? 'border-accent-tint bg-accent-soft'
                 : 'border-hairline-strong bg-elevated hover:border-ink-soft'
             "
             @click="toggleThickened()"
@@ -850,7 +850,7 @@ onBeforeUnmount(() => {
                     }}</span>
                     <span
                       v-if="activeEdgeId === entry.materialId"
-                      class="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
+                      class="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12.5px] font-semibold text-accent-strong"
                     >
                       {{ $t('cutting.edge.current') }}
                     </span>
@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
                       {{ $t('cutting.edge.tooNarrow') }}
                     </span>
                   </span>
-                  <span class="font-mono text-[11.5px] text-ink-muted">
+                  <span class="text-[11.5px] text-ink-muted">
                     {{ entry.meta.join(' · ') }}
                   </span>
                 </span>
@@ -890,7 +890,7 @@ onBeforeUnmount(() => {
               class="rounded-full border px-3 py-1.5 text-xs font-bold transition"
               :class="
                 edgePickerThickness === 'all'
-                  ? 'border-accent bg-accent text-white'
+                  ? 'border-accent bg-accent text-on-accent'
                   : 'border-hairline-strong bg-elevated text-ink-soft hover:border-ink-soft'
               "
               @click="edgePickerThickness = 'all'"
@@ -904,7 +904,7 @@ onBeforeUnmount(() => {
               class="rounded-full border px-3 py-1.5 text-xs font-bold transition"
               :class="
                 edgePickerThickness === thickness
-                  ? 'border-accent bg-accent text-white'
+                  ? 'border-accent bg-accent text-on-accent'
                   : 'border-hairline-strong bg-elevated text-ink-soft hover:border-ink-soft'
               "
               @click="edgePickerThickness = thickness"
@@ -924,7 +924,7 @@ onBeforeUnmount(() => {
               v-for="{ material, rank } in catalogMatchedEdges"
               :key="material.id"
               type="button"
-              class="flex items-center gap-3 rounded-md border border-hairline bg-elevated px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+              class="flex items-center gap-3 rounded-md border border-hairline bg-elevated px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-sunk"
               @click="selectPickerMaterial(material.id)"
             >
               <span
@@ -943,7 +943,7 @@ onBeforeUnmount(() => {
                 </span>
               </span>
               <span
-                class="shrink-0 rounded-full border border-hairline bg-sunk px-2 py-0.5 text-[10.5px] font-bold text-accent"
+                class="shrink-0 rounded-full border border-hairline bg-sunk px-2 py-0.5 text-[10.5px] font-bold text-ink"
               >
                 {{ rank === 0 ? $t('cutting.edge.matchDecor') : $t('cutting.edge.matchColor') }}
               </span>
@@ -956,7 +956,7 @@ onBeforeUnmount(() => {
               v-for="{ material } in catalogOtherEdges"
               :key="material.id"
               type="button"
-              class="flex items-center gap-3 rounded-md border border-hairline bg-elevated px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+              class="flex items-center gap-3 rounded-md border border-hairline bg-elevated px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-sunk"
               @click="selectPickerMaterial(material.id)"
             >
               <span

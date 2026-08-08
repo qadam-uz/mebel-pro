@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
         role="dialog"
         :aria-label="$t('forms.date.pickDay')"
         tabindex="-1"
-        class="fixed z-[84] max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)] outline-none"
+        class="fixed z-[84] max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)] outline-none"
         :style="panelStyle"
         @keydown="onPanelKeydown"
       >

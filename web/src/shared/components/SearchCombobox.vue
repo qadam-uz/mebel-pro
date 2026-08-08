@@ -477,7 +477,7 @@ onBeforeUnmount(() => {
           :id="`${id}-listbox`"
           ref="listRef"
           role="listbox"
-          class="fixed z-[90] overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+          class="fixed z-[90] overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
           :style="panelStyle"
           :aria-labelledby="`${id}-label`"
           @keydown.esc.stop.prevent="closeList(true)"
@@ -500,10 +500,7 @@ onBeforeUnmount(() => {
             <span class="min-w-0">
               <slot name="option" :option="option" :selected="option.value === modelValue">
                 <span class="block break-words font-bold">{{ option.label }}</span>
-                <span
-                  v-if="option.meta"
-                  class="block truncate font-mono text-[11px] text-ink-muted"
-                >
+                <span v-if="option.meta" class="block truncate text-[11px] text-ink-muted">
                   {{ option.meta }}
                 </span>
               </slot>
