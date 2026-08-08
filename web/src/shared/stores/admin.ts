@@ -395,17 +395,37 @@ export const useAdminStore = defineStore('admin', () => {
     },
   )
 
+  // A list read carries a server snapshot taken when it *started*. If a mutation
+  // lands while it is in flight, that snapshot predates the change — assigning it
+  // on arrival silently reverts the screen. Provisioning a workshop on a slow
+  // connection did exactly that: the new row appeared, then vanished when the
+  // page's own initial read completed, with no error and nothing to retry.
+  // Every writer bumps this; a read whose generation is stale keeps its result.
+  let workshopsGeneration = 0
+
+  function invalidateWorkshopReads() {
+    workshopsGeneration += 1
+  }
+
   async function loadWorkshops() {
+    const generation = workshopsGeneration
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      workshops.value = await api.get<WorkshopListItem[]>('/platform/workshops', authInit())
+      const rows = await api.get<WorkshopListItem[]>('/platform/workshops', authInit())
+      if (generation !== workshopsGeneration) return
+      workshops.value = rows
     } catch (errorValue) {
+      // A superseded read must not paint an error over state that is fine.
+      if (generation !== workshopsGeneration) return
       const captured = captureApiError(errorValue, 'workshops_load_failed')
       error.value = captured.code
       traceId.value = captured.traceId
     } finally {
+      // Always cleared, even when the result was dropped: a mutation does not
+      // start a new read, so nothing else would ever lower this flag and the
+      // screen would keep its skeleton forever.
       loading.value = false
     }
   }
@@ -454,6 +474,7 @@ export const useAdminStore = defineStore('admin', () => {
       owner_login: lastProvision.value.owner.login,
       branch_count: 1,
     }
+    invalidateWorkshopReads()
     workshops.value = [listed, ...workshops.value]
     return lastProvision.value
   }
@@ -481,6 +502,9 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   function patchWorkshop(updated: WorkshopSummary) {
+    // Same reasoning as `provision`: a block or unblock that lands during a list
+    // read must survive that read's arrival, not be rolled back by it.
+    invalidateWorkshopReads()
     // block/unblock return the lean WorkshopSummary; merge so the AB-37 list-only
     // fields (owner_login, branch_count) survive the status change.
     workshops.value = workshops.value.map((row) =>
