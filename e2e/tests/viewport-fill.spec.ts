@@ -106,15 +106,28 @@ test('workshop sidebar fills the viewport and keeps every nav item reachable (QA
 
   await expectFillsViewport(page, '.workshop-sidebar')
 
-  // The sidebar clips its overflow, so the nav between the pinned brand header
-  // and the pinned user card has to be the scroller — otherwise the last groups
-  // are not merely below the fold, they are unreachable. An owner has the most
-  // nav entries, which is why this runs as one.
-  const nav = await page.evaluate(() => {
+  // The sidebar clips its overflow, so the nav has to be the scroller and
+  // everything around it has to stay put — otherwise the last groups are not
+  // merely below the fold, they are unreachable. The redesign put four fixed
+  // blocks around the nav instead of two (brand, branch card, `+ Yangi
+  // buyurtma`, and the account button at the bottom); each of them is the only
+  // way to reach what it does, so each is asserted pinned by name. An owner has
+  // the most nav entries, which is why this runs as one.
+  const pinnedBlocks = ['.workshop-brand', '.workshop-branch-card', '.workshop-create']
+
+  const nav = await page.evaluate((pinned) => {
     const sidebar = document.querySelector('.workshop-sidebar')!
     const region = sidebar.querySelector(':scope > .workshop-nav') as HTMLElement
     const links = Array.from(region.querySelectorAll('a'))
-    const brandTop = sidebar.querySelector(':scope > .workshop-brand')!.getBoundingClientRect().top
+    const missing = pinned.filter((selector) => !sidebar.querySelector(`:scope > ${selector}`))
+    const tops = new Map(
+      pinned
+        .filter((selector) => !missing.includes(selector))
+        .map((selector) => [
+          selector,
+          sidebar.querySelector(`:scope > ${selector}`)!.getBoundingClientRect().top,
+        ]),
+    )
     const cardBottom = sidebar
       .querySelector(':scope > .workshop-user-card')!
       .getBoundingClientRect().bottom
@@ -135,22 +148,28 @@ test('workshop sidebar fills the viewport and keeps every nav item reachable (QA
       unreachable,
       overflowY: getComputedStyle(region).overflowY,
       overscrollBehaviorY: getComputedStyle(region).overscrollBehaviorY,
-      // Header and footer must not have moved while the nav scrolled, and the
-      // page behind the nav must not have scrolled either.
-      brandStayedPinned:
-        sidebar.querySelector(':scope > .workshop-brand')!.getBoundingClientRect().top === brandTop,
+      missing,
+      // Head and foot must not have moved while the nav scrolled, and the page
+      // behind the nav must not have scrolled either.
+      drifted: [...tops]
+        .filter(
+          ([selector, top]) =>
+            sidebar.querySelector(`:scope > ${selector}`)!.getBoundingClientRect().top !== top,
+        )
+        .map(([selector]) => selector),
       cardStayedPinned:
         sidebar.querySelector(':scope > .workshop-user-card')!.getBoundingClientRect().bottom ===
         cardBottom,
       pageScrollTop: document.scrollingElement?.scrollTop ?? 0,
     }
-  })
+  }, pinnedBlocks)
 
   expect(nav.linkCount).toBeGreaterThan(0)
   expect(nav.unreachable, 'nav links that cannot be scrolled into view').toEqual([])
   expect(nav.overflowY).toBe('auto')
   expect(nav.overscrollBehaviorY).toBe('contain')
-  expect(nav.brandStayedPinned).toBe(true)
+  expect(nav.missing, 'sidebar blocks the shell did not render').toEqual([])
+  expect(nav.drifted, 'sidebar blocks that scrolled away with the nav').toEqual([])
   expect(nav.cardStayedPinned).toBe(true)
   expect(nav.pageScrollTop).toBe(0)
 
