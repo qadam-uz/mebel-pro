@@ -520,7 +520,7 @@ test('owner attaches two dekorlar of different turlar in one pass', async ({
   expect(new Set(carried.map((row) => row.dekor.tur))).toEqual(new Set(['ldsp', 'kromka']))
 })
 
-test('an unpriced format warns the workshop and is hidden from the client picker', async ({
+test('an unpriced format is flagged for the workshop and still offered to the client', async ({
   page,
   request,
 }, testInfo) => {
@@ -551,7 +551,9 @@ test('an unpriced format warns the workshop and is hidden from the client picker
     page.getByRole('row').filter({ hasText: '2800×2070×18 mm' }).getByText("Narx yo'q"),
   ).toHaveCount(0)
 
-  // Client side: the same branch, the same dekor — only the priced format.
+  // Client side: the same branch, the same dekor — BOTH formats. Hiding the
+  // unpriced one showed clients a fraction of the shelf (one real branch carrying
+  // 518 formats offered two); the money is guarded at order confirm instead.
   const clientLogin = await request.post('/api/v1/auth/client/otp/request', {
     data: { phone: phoneFor(id, 70) },
   })
@@ -567,7 +569,11 @@ test('an unpriced format warns the workshop and is hidden from the client picker
   await expectOk(options)
   const ids = ((await options.json()) as Array<{ id: string }>).map((row) => row.id)
   expect(ids).toContain(priced.id)
-  expect(ids).not.toContain(unpriced.id)
+  expect(ids).toContain(unpriced.id)
+
+  const rows = (await options.json()) as Array<{ id: string; price_unset: boolean }>
+  expect(rows.find((row) => row.id === unpriced.id)?.price_unset).toBe(true)
+  expect(rows.find((row) => row.id === priced.id)?.price_unset).toBe(false)
 })
 
 test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({
