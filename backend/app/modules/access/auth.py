@@ -19,7 +19,7 @@ from app.core.security import (
     record_login_failure,
     record_login_success,
     validate_password,
-    verify_password,
+    verify_password_async,
 )
 from app.models.enums import AuthenticatedPrincipalType, UserStatus, WorkshopStatus
 from app.modules.access.contracts import PlatformUser, Session, WorkshopUser
@@ -152,7 +152,7 @@ async def change_password(
             "Authentication required",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
-    if not verify_password(current_password, user.password_hash):
+    if not await verify_password_async(current_password, user.password_hash):
         raise APIError(
             "invalid_current_password",
             "Current password is invalid",
@@ -195,7 +195,7 @@ async def _authenticate_user(
         raise _invalid_credentials()
 
     state = _login_state(user)
-    password_valid = verify_password(password, user.password_hash)
+    password_valid = await verify_password_async(password, user.password_hash)
     if not password_valid:
         if user.status is UserStatus.ACTIVE and not is_locked(state, now=current):
             _set_login_state(user, record_login_failure(state, now=current))

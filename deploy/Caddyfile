@@ -56,7 +56,14 @@ app.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
+			# the port, so every deploy leaves a window where this upstream refuses
+			# connections. Without a retry window Caddy turns that into a hard 502
+			# for real users on every merge to main. Retry instead of failing.
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 
 	@client_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
@@ -75,7 +82,14 @@ workshop.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
+			# the port, so every deploy leaves a window where this upstream refuses
+			# connections. Without a retry window Caddy turns that into a hard 502
+			# for real users on every merge to main. Retry instead of failing.
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 
 	@workshop_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
@@ -106,7 +120,14 @@ admin.{$BASE_DOMAIN} {
 
 	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
 	handle @backend {
-		reverse_proxy backend:8000
+		reverse_proxy backend:8000 {
+			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
+			# the port, so every deploy leaves a window where this upstream refuses
+			# connections. Without a retry window Caddy turns that into a hard 502
+			# for real users on every merge to main. Retry instead of failing.
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 
 	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*

@@ -199,6 +199,7 @@ const CLIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   'invalid_name',
   'profile_update_failed',
   'password_change_failed',
+  'request_timeout',
 ])
 
 /**

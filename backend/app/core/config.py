@@ -94,6 +94,19 @@ class Settings(BaseSettings):
     # derived from the POSTGRES_* values above.
     DATABASE_URL: str | None = None
 
+    # Connection pool. These were SQLAlchemy's defaults (5 + 10 overflow, and a
+    # 30 s wait); the wait is the one that mattered — on exhaustion a request
+    # blocked for half a minute and then succeeded, which reads as "the app
+    # froze" and is invisible in logs. A shorter timeout turns that into a
+    # fast, traceable 500. Postgres here is shared infrastructure, so the
+    # ceiling (POOL_SIZE + MAX_OVERFLOW) is deliberately modest.
+    DB_POOL_SIZE: int = 10
+    DB_POOL_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT_SECONDS: int = 10
+    # Recycle below any idle-connection reaping by the DB or a network hop, so a
+    # dead socket is replaced rather than discovered mid-request.
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_database_uri(self) -> str:
