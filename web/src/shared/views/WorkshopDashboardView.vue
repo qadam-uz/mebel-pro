@@ -332,10 +332,16 @@ async function loadDashboard() {
     const captured = captureApiError(errorValue, 'branch_context_load_failed')
     recordDashboardError(dashboardSections().branches, captured.code, captured.traceId)
   })
-  // Each section already records its own failure, so none of them rejects here.
-  await Promise.all([loadOrderSection(), loadFinanceSection(), loadInventorySection()])
-  dashboardLoading.value = false
-  dashboardReady.value = true
+  // `allSettled`, not `all`: each section is written to record its own failure
+  // and resolve, but one that ever threw would take the other two down with it
+  // and — before the `finally` below — leave the skeleton up for good. The
+  // sections are independent, so a thrown one must not hide the rest.
+  try {
+    await Promise.allSettled([loadOrderSection(), loadFinanceSection(), loadInventorySection()])
+  } finally {
+    dashboardLoading.value = false
+    dashboardReady.value = true
+  }
 }
 
 // The shell resolves the branch context asynchronously and then writes
