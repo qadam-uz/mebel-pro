@@ -17,6 +17,7 @@ import { traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import BranchMap from '@/shared/components/BranchMap.vue'
 import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -69,8 +70,12 @@ const branchForm = reactive({
   phone: '',
   kerfMm: '',
   edgeTrimMm: '',
+  ownMaterialAllowed: false,
 })
 const additionalPhones = ref<string[]>([])
+// The map picker owns the pin; the form only carries what it reports back.
+const mapPoint = ref<{ latitude: number; longitude: number } | null>(null)
+
 // Per-row phone errors surface from the first save attempt on, then stay live so
 // fixing or removing a row clears its message.
 const phonesValidated = ref(false)
@@ -218,10 +223,17 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
+  // Round-trip the stored pin back into a link so the field shows what is saved
+  // rather than sitting empty on a branch that already has coordinates.
+  mapPoint.value =
+    branch.latitude != null && branch.longitude != null
+      ? { latitude: Number(branch.latitude), longitude: Number(branch.longitude) }
+      : null
   additionalPhones.value = [...branch.additional_phones]
   phonesValidated.value = false
   branchForm.kerfMm = String(branch.kerf_mm)
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
+  branchForm.ownMaterialAllowed = branch.own_material_allowed
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
   // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
@@ -263,8 +275,11 @@ async function saveBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       additional_phones: additionalPhones.value,
+      latitude: mapPoint.value ? String(mapPoint.value.latitude) : null,
+      longitude: mapPoint.value ? String(mapPoint.value.longitude) : null,
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
+      own_material_allowed: branchForm.ownMaterialAllowed,
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: cuttingRateTiyin.value,
@@ -467,6 +482,14 @@ onMounted(refreshBranch)
               </span>
             </label>
           </div>
+          <div class="field">
+            <span>{{ $t('workshopAdmin.branches.map.label') }}</span>
+            <BranchMap
+              :latitude="mapPoint?.latitude ?? null"
+              :longitude="mapPoint?.longitude ?? null"
+              @update:point="mapPoint = $event"
+            />
+          </div>
           <label class="field" for="branch-detail-phone">
             <span>{{ $t('workshopAdmin.branches.phone') }}</span>
             <PhoneInput
@@ -592,6 +615,30 @@ onMounted(refreshBranch)
             </div>
             <p class="mt-2 text-xs text-ink-muted">
               {{ $t('workshopAdmin.branchDetail.usableArea') }}
+            </p>
+          </fieldset>
+          <!-- Its own group: this is not a saw property but a policy about what
+               the shop takes in at the door, and it changes what the client is
+               offered in the cutting wizard. -->
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">
+              {{ $t('workshopAdmin.branchDetail.materialSettings') }}
+            </legend>
+            <label
+              class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink-soft"
+              for="branch-detail-own-material"
+            >
+              <input
+                id="branch-detail-own-material"
+                v-model="branchForm.ownMaterialAllowed"
+                type="checkbox"
+                class="size-4 accent-accent"
+                :aria-describedby="'branch-detail-own-material-hint'"
+              />
+              <span>{{ $t('workshopAdmin.branchDetail.ownMaterial') }}</span>
+            </label>
+            <p id="branch-detail-own-material-hint" class="mt-2 text-xs text-ink-muted">
+              {{ $t('workshopAdmin.branchDetail.ownMaterialHint') }}
             </p>
           </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">

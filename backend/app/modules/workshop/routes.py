@@ -55,6 +55,7 @@ async def branch_context_route(
                 closed_reason=context.branch.closed_reason,
                 kerf_mm=context.branch.kerf_mm,
                 edge_trim_mm=context.branch.edge_trim_mm,
+                own_material_allowed=context.branch.own_material_allowed,
                 permissions=sorted(context.permissions),
             )
             for context in contexts

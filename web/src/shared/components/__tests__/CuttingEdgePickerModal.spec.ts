@@ -85,6 +85,7 @@ const part: CuttingPart = {
   material_id: panel.id,
   material_source: 'shop',
   follow_grain: false,
+  thickened: false,
   length_mm: 300,
   width_mm: 200,
   quantity: 1,

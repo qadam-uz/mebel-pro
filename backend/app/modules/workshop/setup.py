@@ -131,6 +131,7 @@ async def create_branch(
         status=BranchStatus.ACTIVE,
         kerf_mm=payload.kerf_mm,
         edge_trim_mm=payload.edge_trim_mm,
+        own_material_allowed=payload.own_material_allowed,
     )
     db.add(branch)
     await db.flush()
@@ -206,6 +207,11 @@ async def update_branch(
         branch.kerf_mm = payload.kerf_mm
     if "edge_trim_mm" in payload.model_fields_set and payload.edge_trim_mm is not None:
         branch.edge_trim_mm = payload.edge_trim_mm
+    if (
+        "own_material_allowed" in payload.model_fields_set
+        and payload.own_material_allowed is not None
+    ):
+        branch.own_material_allowed = payload.own_material_allowed
     await record_action(
         db,
         actor=actor_from_principal(principal),

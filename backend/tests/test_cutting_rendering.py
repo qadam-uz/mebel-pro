@@ -9,12 +9,14 @@ transposition of its formulas into reportlab's bottom-left-origin space.
 # copy (multiplication sign in dimensions, U+21BB rotation marker)
 
 import uuid
+from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from app.modules.cutting import rendering
 from app.modules.cutting.schemas import CuttingOffcutResponse, CuttingPlacementResponse
+from reportlab.pdfgen import canvas
 
 
 def _placement(**overrides: Any) -> CuttingPlacementResponse:
@@ -244,3 +246,45 @@ def test_panel_fill_percent() -> None:
     panel = SimpleNamespace(waste_area_mm2=2_800 * 2_070 // 4)
     assert rendering._panel_fill_percent(panel, 2800, 2070) == "75.0%"  # type: ignore[arg-type]
     assert rendering._panel_fill_percent(panel, 0, 2070) == "-"  # type: ignore[arg-type]
+
+
+# --- thickening stamp ----------------------------------------------------
+
+
+def test_thickened_flag_reads_the_part_snapshot_and_defaults_off() -> None:
+    """Drafts predating the flag arrive without the key at all — an absent
+    `thickened` must read as "not thickened", never as a stamp."""
+    assert rendering._is_thickened({"thickened": True}) is True
+    assert rendering._is_thickened({"thickened": False}) is False
+    assert rendering._is_thickened({}) is False  # legacy snapshot
+    assert rendering._is_thickened(None) is False  # placement with no known part
+
+
+def test_thickening_stamp_prints_only_for_a_thickened_part() -> None:
+    """The stamp is the only place the drawing carries the instruction to glue a
+    strip under the part — if it silently stopped printing, the shop would build
+    the wrong thing and nothing else on the sheet would say so."""
+    rendering._register_fonts()
+    plain = _placement(part_ref="plain", length_mm=600, width_mm=400)
+    thick = _placement(part_ref="thick", length_mm=600, width_mm=400)
+    result = SimpleNamespace(
+        parts_snapshot=[
+            {"part_ref": "plain", "length_mm": 600, "width_mm": 400},
+            {"part_ref": "thick", "length_mm": 600, "width_mm": 400, "thickened": True},
+        ],
+        material_snapshots={"m": {"panel_length_mm": 2750, "panel_width_mm": 1830}},
+    )
+    panel = SimpleNamespace(branch_material_id="m", placements=[plain, thick], offcuts=[])
+
+    drawn: list[str] = []
+    pdf = canvas.Canvas(BytesIO(), pagesize=(600, 400))
+    original = pdf.drawCentredString
+
+    def spy(x: float, y: float, text: str, *args: Any, **kwargs: Any) -> None:
+        drawn.append(text)
+        original(x, y, text, *args, **kwargs)
+
+    pdf.drawCentredString = spy  # type: ignore[method-assign]
+    rendering.draw_sheet_map(pdf, (0.0, 0.0, 560.0, 360.0), result, panel)  # type: ignore[arg-type]
+
+    assert drawn.count(rendering._THICKENING_MARK) == 1

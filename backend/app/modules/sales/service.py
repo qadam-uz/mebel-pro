@@ -7,11 +7,12 @@ import math
 import re
 import uuid
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
+from types import MappingProxyType
 from typing import Any, cast
 
 from fastapi import status
@@ -45,7 +46,11 @@ from app.modules.catalog.contracts import (
     Manufacturer,
     is_tape,
 )
-from app.modules.cutting.api import cutting_result_response, get_workshop_draft
+from app.modules.cutting.api import (
+    clamp_own_claim,
+    cutting_result_response,
+    get_workshop_draft,
+)
 from app.modules.cutting.contracts import (
     CuttingDraft,
     CuttingPanel,
@@ -86,6 +91,8 @@ from app.modules.sales.schemas import (
     WorkshopOrderDiscountRequest,
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
+    WorkshopOrderOwnMaterialRequest,
+    WorkshopOrderPricesRequest,
     WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
@@ -134,6 +141,7 @@ class PricingSnapshot:
     # Itemized quote breakdown (CB-117) — only consumed by the quote response.
     panels_used: int
     cutting_rate_tiyin: int
+    edge_banding_rate_tiyin: int
     material_lines: list[MaterialPriceLine]
     edge_lines: list[EdgePriceLine]
 
@@ -342,14 +350,14 @@ async def quote_client_order(
     branch_id: uuid.UUID,
 ) -> OrderQuoteResponse:
     client = await _client(db, principal)
-    branch, _ = await _active_branch_for_order(db, branch_id)
+    branch, workshop = await _active_branch_for_order(db, branch_id)
     _, result = await _client_orderable_draft_result(
         db,
         client_id=client.id,
         draft_id=draft_id,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
-    return _build_quote_response(draft_id, branch, pricing)
+    return _build_quote_response(draft_id, branch, pricing, workshop)
 
 
 async def _workshop_order_branch(
@@ -416,7 +424,7 @@ async def quote_workshop_order(
         allow_revision=True,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
-    return _build_quote_response(draft_id, branch, pricing)
+    return _build_quote_response(draft_id, branch, pricing, workshop)
 
 
 async def place_workshop_order(
@@ -631,6 +639,11 @@ async def apply_order_edit(
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
     order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
     order.total_tiyin = pricing.total_tiyin
+    # A revision re-prices the whole snapshot at the branch's current rates, so
+    # per-line prices agreed for the superseded content go with it — the same
+    # rule that already clears the discount and the surcharge above.
+    overrides_cleared = bool(order.price_overrides)
+    order.price_overrides = {}
 
     edger_cleared = False
     if order.assigned_edger_user_id is not None and not _parts_have_banding(result.parts_snapshot):
@@ -650,6 +663,8 @@ async def apply_order_edit(
         metadata["discount_cleared_tiyin"] = previous_discount
     if surcharge_cleared:
         metadata["surcharge_cleared_tiyin"] = previous_surcharge
+    if overrides_cleared:
+        metadata["price_overrides_cleared"] = True
     if edger_cleared:
         metadata["edger_assignment_cleared"] = True
     await _append_order_event(
@@ -696,6 +711,7 @@ def _build_quote_response(
     draft_id: uuid.UUID,
     branch: Branch,
     pricing: PricingSnapshot,
+    workshop: Workshop | None = None,
 ) -> OrderQuoteResponse:
     return OrderQuoteResponse(
         draft_id=draft_id,
@@ -703,12 +719,17 @@ def _build_quote_response(
         branch_name=branch.name,
         branch_address=branch.address,
         branch_phone=branch.phone,
+        workshop_name=workshop.name if workshop is not None else "",
+        branch_additional_phones=list(branch.additional_phones or []),
+        branch_latitude=branch.latitude,
+        branch_longitude=branch.longitude,
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         total_tiyin=pricing.total_tiyin,
         panels_used=pricing.panels_used,
         cutting_rate_tiyin=pricing.cutting_rate_tiyin,
+        edge_banding_rate_tiyin=pricing.edge_banding_rate_tiyin,
         material_lines=pricing.material_lines,
         edge_lines=pricing.edge_lines,
     )
@@ -1646,7 +1667,7 @@ async def complete_cutting(
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
     shortfall = False
-    for branch_material_id, quantity in panel_demands.items():
+    for branch_material_id, quantity in _stock_movements(panel_demands):
         transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
@@ -1833,6 +1854,185 @@ async def cancel_workshop_order(
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
 
+async def set_order_prices(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderPricesRequest,
+) -> OrderDetailResponse:
+    """Set the unit prices this order is billed at, and re-price it.
+
+    Counters negotiate the *rate*, not the plan: "these sheets at 250 000, not
+    300 000". So this replaces the branch rate card for this order only —
+    per-sheet material price, per-metre tape price, the cutting rate and the
+    banding rate — and leaves every quantity to the optimiser. A discount could
+    reach the same total, but only as one opaque lump on the bottom line; the
+    receipt has to show the price the client was actually quoted per sheet.
+
+    Editable while `new` or `confirmed`, the same window as a discount. Past
+    that the order is in production against the price it was accepted at.
+    """
+
+    order = await _locked_workshop_order_for_action(
+        db, principal=principal, order_id=order_id, permission=Permission.MANAGE_ORDERS
+    )
+    _expect_version(order, payload.version)
+    _expect_editable_status(order)
+    result = await _order_result(db, order)
+
+    overrides = PriceOverrides(
+        cutting_rate_tiyin=payload.cutting_rate_tiyin,
+        edge_banding_rate_tiyin=payload.edge_banding_rate_tiyin,
+        material_prices=dict(payload.material_prices),
+    )
+    previous = dict(order.price_overrides or {})
+    stored = overrides.stored()
+    order.price_overrides = stored
+    await db.flush()
+
+    pricing = await _price_result(db, branch_id=order.branch_id, result=result, overrides=overrides)
+    await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
+    _add_order_items(db, order=order, pricing=pricing)
+    previous_total = order.total_tiyin
+    order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
+    order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
+    order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
+    subtotal = _pre_discount_total(order)
+    # Same rule as the own-material action: a negotiated discount survives, and
+    # is only clamped when the smaller subtotal can no longer carry it.
+    discount_clamped = order.discount_tiyin > subtotal
+    if discount_clamped:
+        order.discount_tiyin = subtotal
+    order.total_tiyin = subtotal - order.discount_tiyin + order.surcharge_tiyin
+
+    _bump_order(order)
+    metadata: dict[str, Any] = {
+        "prices_set": True,
+        "previous_price_overrides": previous,
+        "price_overrides": stored,
+        "previous_total_tiyin": previous_total,
+        "total_tiyin": order.total_tiyin,
+    }
+    if discount_clamped:
+        metadata["discount_clamped_tiyin"] = order.discount_tiyin
+    await _append_order_event(
+        db,
+        order=order,
+        from_status=order.status,
+        to_status=order.status,
+        actor_type=ActorType.WORKSHOP_USER,
+        actor_user_id=principal.principal_id,
+        reason=None,
+        metadata=metadata,
+    )
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.prices",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Set unit prices on {order.order_number}",
+        details={"price_overrides": stored, "total_tiyin": order.total_tiyin},
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def set_order_own_material(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderOwnMaterialRequest,
+) -> OrderDetailResponse:
+    """Record what the client supplies on a placed order, and re-price it.
+
+    The counter learns "I'll bring my own sheets" at any point up to the saw —
+    often at approval, when the operator reads the order back to the client. So
+    this is a first-class order action rather than a reason to send staff
+    through the whole revision editor: the layout does not move, only who pays
+    for the sheets it uses.
+
+    Editable while `new` or `confirmed`, the same window as a discount and a
+    revision. Past that the material may already be cut, and the stock seam has
+    run against the old split.
+    """
+
+    order = await _locked_workshop_order_for_action(
+        db, principal=principal, order_id=order_id, permission=Permission.MANAGE_ORDERS
+    )
+    _expect_version(order, payload.version)
+    _expect_editable_status(order)
+    result = await _order_result(db, order)
+
+    claim = {str(material_id): count for material_id, count in payload.own_panel_counts.items()}
+    applied = clamp_own_claim(claim, result.panels_used_by_material)
+    previous = dict(result.own_panel_counts or {})
+    if applied == previous:
+        return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    # The confirmed result is normally frozen history; this action is the one
+    # sanctioned way to move it, which is why it re-prices in the same
+    # transaction rather than leaving the split and the money out of step.
+    result.own_panel_counts = applied
+    await db.flush()
+
+    pricing = await _price_result(
+        db,
+        branch_id=order.branch_id,
+        result=result,
+        overrides=PriceOverrides.from_stored(order.price_overrides),
+    )
+    await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
+    _add_order_items(db, order=order, pricing=pricing)
+    previous_total = order.total_tiyin
+    order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
+    order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
+    order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
+    subtotal = _pre_discount_total(order)
+    # A negotiated discount survives the change — the operator adjusted who
+    # supplies material, not the deal. It is only clamped when the smaller
+    # subtotal can no longer carry it, which keeps `discount <= subtotal`.
+    discount_clamped = order.discount_tiyin > subtotal
+    if discount_clamped:
+        order.discount_tiyin = subtotal
+    order.total_tiyin = subtotal - order.discount_tiyin + order.surcharge_tiyin
+
+    _bump_order(order)
+    metadata: dict[str, Any] = {
+        "own_material_set": True,
+        "previous_own_panel_counts": previous,
+        "own_panel_counts": applied,
+        "previous_total_tiyin": previous_total,
+        "total_tiyin": order.total_tiyin,
+    }
+    if discount_clamped:
+        metadata["discount_clamped_tiyin"] = order.discount_tiyin
+    await _append_order_event(
+        db,
+        order=order,
+        from_status=order.status,
+        to_status=order.status,
+        actor_type=ActorType.WORKSHOP_USER,
+        actor_user_id=principal.principal_id,
+        reason=None,
+        metadata=metadata,
+    )
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.own_material",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Set client-supplied material on {order.order_number}",
+        details={"own_panel_counts": applied, "total_tiyin": order.total_tiyin},
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
 async def apply_discount(
     db: AsyncSession,
     *,
@@ -1998,7 +2198,7 @@ async def _cancel_order(
 async def _restore_cutting_step(db: AsyncSession, order: Order) -> dict[uuid.UUID, int]:
     result = await _order_result(db, order)
     demands = _panel_stock_demands(result)
-    for branch_material_id, quantity in demands.items():
+    for branch_material_id, quantity in _stock_movements(demands):
         await restore_order_stock(
             db,
             branch_id=order.branch_id,
@@ -2255,6 +2455,62 @@ async def _order_summary_responses(
     return responses
 
 
+def _order_cutting_rate(order: Order, result: CuttingResult | None) -> int:
+    """Per-sheet cutting rate this order is billed at.
+
+    Derived from the frozen subtotal rather than stored twice: the sheets the
+    layout uses are known, and dividing keeps the printed multiplication
+    reconciling with the total even for orders placed before the agreed-price
+    field existed.
+    """
+
+    agreed = PriceOverrides.from_stored(order.price_overrides).cutting_rate_tiyin
+    if agreed is not None:
+        return agreed
+    if result is None:
+        return 0
+    panels = sum(int(value) for value in result.panels_used_by_material.values())
+    return order.subtotal_cutting_tiyin // panels if panels else 0
+
+
+def _order_edge_rate(
+    order: Order,
+    result: CuttingResult | None,
+    items: Sequence[OrderItem],
+) -> int:
+    """Per-metre banding rate this order is billed at.
+
+    With no agreed rate it is derived: the labour share is the edge subtotal
+    minus what the tape itself cost, and the tape cost comes from the same
+    frozen item snapshots the receipt lines read — not live branch pricing,
+    which may have moved since.
+    """
+
+    agreed = PriceOverrides.from_stored(order.price_overrides).edge_banding_rate_tiyin
+    if agreed is not None:
+        return agreed
+    if result is None:
+        return 0
+    banded_mm = sum(_edge_banded_millimetres(result).values())
+    if banded_mm <= 0:
+        return 0
+    edge_prices: dict[uuid.UUID, int] = {}
+    for item in items:
+        for edge in (item.edge_top, item.edge_bottom, item.edge_left, item.edge_right):
+            if edge is None or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
+                continue
+            snapshot = edge.get("snapshot") or {}
+            edge_prices.setdefault(
+                uuid.UUID(str(edge["material_id"])), int(snapshot.get("price_tiyin") or 0)
+            )
+    material = sum(
+        _millimetre_price(mm, edge_prices.get(material_id, 0))
+        for material_id, mm in _edge_stock_demands(result).items()
+    )
+    labour = max(0, order.subtotal_edge_banding_tiyin - material)
+    return labour * 1000 // banded_mm
+
+
 def _order_summary_base(
     *,
     order: Order,
@@ -2279,6 +2535,9 @@ def _order_summary_base(
         "branch_name": branch.name,
         "branch_address": branch.address,
         "branch_phone": branch.phone,
+        "branch_additional_phones": list(branch.additional_phones or []),
+        "branch_latitude": branch.latitude,
+        "branch_longitude": branch.longitude,
         "cutting_result_id": order.cutting_result_id,
         "status": order.status,
         "version": order.version,
@@ -2287,6 +2546,11 @@ def _order_summary_base(
         "subtotal_cutting_tiyin": order.subtotal_cutting_tiyin,
         "subtotal_materials_tiyin": order.subtotal_materials_tiyin,
         "subtotal_edge_banding_tiyin": order.subtotal_edge_banding_tiyin,
+        # Read back off the order's own agreement, falling back to what the
+        # items were priced with — never live branch pricing, which may have
+        # moved since (the whole point of the frozen snapshot).
+        "cutting_rate_tiyin": _order_cutting_rate(order, result),
+        "edge_banding_rate_tiyin": _order_edge_rate(order, result, items),
         "discount_tiyin": order.discount_tiyin,
         "discount_reason": order.discount_reason,
         "discount_applied_by_user_id": order.discount_applied_by_user_id,
@@ -2453,12 +2717,20 @@ def _order_price_lines(
     def _edge_line_label(material_id: uuid.UUID) -> str:
         return edge_label(result.material_snapshots.get(str(material_id), {}), material_id)
 
+    own_panels = _own_panels_used(result)
+    own_edge_mm = {
+        uuid.UUID(material_id): int(quantity)
+        for material_id, quantity in result.edge_consumed_own_by_material.items()
+        if int(quantity) > 0
+    }
     panel_lines = [
         OrderPriceLine(
             material_id=material_id,
             material_name=_panel_line_label(material_id),
             kind="panel",
             panels_used=quantity,
+            own_panels=own_panels.get(material_id, 0),
+            unit_price_tiyin=panel_prices.get(material_id, 0),
             line_total_tiyin=panel_prices.get(material_id, 0) * quantity,
         )
         for material_id, quantity in _panel_stock_demands(result).items()
@@ -2469,10 +2741,26 @@ def _order_price_lines(
             material_name=_edge_line_label(material_id),
             kind="edge",
             consumed_mm=consumed_mm,
+            own_mm=own_edge_mm.pop(material_id, 0),
+            unit_price_tiyin=edge_prices.get(material_id, 0),
             line_total_tiyin=_millimetre_price(consumed_mm, edge_prices.get(material_id, 0)),
         )
         for material_id, consumed_mm in _edge_stock_demands(result).items()
     ]
+    # A tape the client supplies entirely has no shop demand, so it has no line
+    # above — but the order still has to say the client is bringing it.
+    edge_lines.extend(
+        OrderPriceLine(
+            material_id=material_id,
+            material_name=_edge_line_label(material_id),
+            kind="edge",
+            consumed_mm=0,
+            own_mm=own_mm,
+            unit_price_tiyin=edge_prices.get(material_id, 0),
+            line_total_tiyin=0,
+        )
+        for material_id, own_mm in own_edge_mm.items()
+    )
     panel_lines.sort(key=lambda line: line.material_name)
     edge_lines.sort(key=lambda line: line.material_name)
     return panel_lines + edge_lines
@@ -2659,18 +2947,73 @@ def _branch_material_label(
     return material_label(snapshot, branch_material.id)
 
 
+@dataclass(frozen=True)
+class PriceOverrides:
+    """Unit prices staff agreed for one order, standing in for the branch card.
+
+    `None` / an absent material means "no agreement here — use the branch's
+    price", which is why every field is optional rather than a full copy of the
+    rate card: an override has to survive a branch re-pricing its catalog.
+    """
+
+    cutting_rate_tiyin: int | None = None
+    edge_banding_rate_tiyin: int | None = None
+    material_prices: Mapping[uuid.UUID, int] = MappingProxyType({})
+
+    @classmethod
+    def from_stored(cls, raw: dict[str, Any] | None) -> PriceOverrides:
+        raw = raw or {}
+        prices = raw.get("material_prices") or {}
+        return cls(
+            cutting_rate_tiyin=_optional_int(raw.get("cutting_rate_tiyin")),
+            edge_banding_rate_tiyin=_optional_int(raw.get("edge_banding_rate_tiyin")),
+            material_prices={
+                uuid.UUID(str(material_id)): int(price) for material_id, price in prices.items()
+            },
+        )
+
+    def stored(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if self.cutting_rate_tiyin is not None:
+            out["cutting_rate_tiyin"] = self.cutting_rate_tiyin
+        if self.edge_banding_rate_tiyin is not None:
+            out["edge_banding_rate_tiyin"] = self.edge_banding_rate_tiyin
+        if self.material_prices:
+            out["material_prices"] = {
+                str(material_id): price for material_id, price in self.material_prices.items()
+            }
+        return out
+
+    def material_price(self, material_id: uuid.UUID, branch_price: int) -> int:
+        return int(self.material_prices.get(material_id, branch_price))
+
+
+def _optional_int(value: Any) -> int | None:
+    return None if value is None else int(value)
+
+
+NO_PRICE_OVERRIDES = PriceOverrides()
+
+
 async def _price_result(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
     result: CuttingResult,
+    overrides: PriceOverrides = NO_PRICE_OVERRIDES,
 ) -> PricingSnapshot:
     pricing = await db.get(BranchPricing, branch_id)
-    if pricing is None or pricing.cutting_rate_tiyin is None:
-        raise APIError("missing_cutting_rate", "Branch cutting rate is not set")
+    cutting_rate = overrides.cutting_rate_tiyin
+    if cutting_rate is None:
+        if pricing is None or pricing.cutting_rate_tiyin is None:
+            raise APIError("missing_cutting_rate", "Branch cutting rate is not set")
+        cutting_rate = int(pricing.cutting_rate_tiyin)
     panel_demands = _panel_stock_demands(result)
     edge_demands = _edge_stock_demands(result)
-    if edge_demands and pricing.edge_banding_rate_tiyin is None:
+    edge_rate_value = overrides.edge_banding_rate_tiyin
+    if edge_rate_value is None:
+        edge_rate_value = None if pricing is None else pricing.edge_banding_rate_tiyin
+    if edge_demands and edge_rate_value is None:
         raise APIError("missing_edge_banding_rate", "Branch edge banding rate is not set")
     branch_materials = await _active_branch_materials(
         db,
@@ -2687,28 +3030,34 @@ async def _price_result(
         if material_id not in branch_materials:
             raise APIError("branch_does_not_carry_edge", "Branch does not carry an edge material")
 
-    subtotal_cutting = sum(int(value) for value in result.panels_used_by_material.values()) * int(
-        pricing.cutting_rate_tiyin
+    subtotal_cutting = (
+        sum(int(value) for value in result.panels_used_by_material.values()) * cutting_rate
     )
     subtotal_materials = sum(
-        branch_materials[material_id].price_tiyin * quantity
+        overrides.material_price(material_id, branch_materials[material_id].price_tiyin) * quantity
         for material_id, quantity in panel_demands.items()
     )
     edge_material_total = sum(
-        _millimetre_price(edge_demands[material_id], branch_materials[material_id].price_tiyin)
+        _millimetre_price(
+            edge_demands[material_id],
+            overrides.material_price(material_id, branch_materials[material_id].price_tiyin),
+        )
         for material_id in edge_demands
     )
+    # Labour is charged on every banded millimetre, the client's own tape
+    # included: gluing someone else's tape is still the workshop's work. Only
+    # the tape *material* is free, which is what `edge_demands` already scopes.
     # Sum per-material labor (not _millimetre_price of the global sum): integer
     # floor-division isn't distributive, so per-material must be summed for the
     # itemized edge_lines (CB-117) to reconcile exactly with this subtotal.
+    edge_labour_mm = _edge_banded_millimetres(result)
     edge_labor_total = sum(
-        _millimetre_price(edge_demands[material_id], int(pricing.edge_banding_rate_tiyin or 0))
-        for material_id in edge_demands
+        _millimetre_price(mm, int(edge_rate_value or 0)) for mm in edge_labour_mm.values()
     )
-    priced_parts = _priced_parts(result, branch_materials)
+    priced_parts = _priced_parts(result, branch_materials, overrides)
     subtotal_edge = edge_material_total + edge_labor_total
     total = subtotal_cutting + subtotal_materials + subtotal_edge
-    edge_rate = int(pricing.edge_banding_rate_tiyin or 0)
+    edge_rate = int(edge_rate_value or 0)
 
     # There is no stored material name left to concatenate, so quote lines use
     # the same canonical formatter as every other surface — panels and tapes
@@ -2719,26 +3068,37 @@ async def _price_result(
     def _edge_line_name(material_id: uuid.UUID) -> str:
         return edge_label(result.material_snapshots.get(str(material_id), {}), material_id)
 
+    own_panels = _own_panels_used(result)
     material_lines = [
         MaterialPriceLine(
             material_id=material_id,
             material_name=_panel_line_name(material_id),
-            panels_used=quantity,
+            # `panels_used` is what the layout needs; `own_panels` is how many of
+            # those the client brings. The charged count is the difference, which
+            # is exactly `quantity` — the demand this line was built from.
+            panels_used=quantity + own_panels.get(material_id, 0),
+            own_panels=own_panels.get(material_id, 0),
             unit_price_tiyin=branch_materials[material_id].price_tiyin,
             line_total_tiyin=branch_materials[material_id].price_tiyin * quantity,
         )
         for material_id, quantity in panel_demands.items()
     ]
     edge_lines = []
-    for material_id in edge_demands:
-        mm = edge_demands[material_id]
-        material_cost = _millimetre_price(mm, branch_materials[material_id].price_tiyin)
+    for material_id, mm in edge_labour_mm.items():
+        shop_mm = edge_demands.get(material_id, 0)
+        material_cost = (
+            _millimetre_price(shop_mm, branch_materials[material_id].price_tiyin)
+            if shop_mm > 0
+            else 0
+        )
         service_cost = _millimetre_price(mm, edge_rate)
         edge_lines.append(
             EdgePriceLine(
                 material_id=material_id,
                 material_name=_edge_line_name(material_id),
                 consumed_mm=mm,
+                own=shop_mm == 0,
+                metre_price_tiyin=branch_materials[material_id].price_tiyin,
                 material_cost_tiyin=material_cost,
                 service_cost_tiyin=service_cost,
                 line_total_tiyin=material_cost + service_cost,
@@ -2751,7 +3111,8 @@ async def _price_result(
         total_tiyin=total,
         priced_parts=priced_parts,
         panels_used=sum(int(value) for value in result.panels_used_by_material.values()),
-        cutting_rate_tiyin=int(pricing.cutting_rate_tiyin),
+        cutting_rate_tiyin=cutting_rate,
+        edge_banding_rate_tiyin=edge_rate,
         material_lines=material_lines,
         edge_lines=edge_lines,
     )
@@ -2760,9 +3121,10 @@ async def _price_result(
 def _priced_parts(
     result: CuttingResult,
     branch_materials: dict[uuid.UUID, BranchMaterial],
+    overrides: PriceOverrides = NO_PRICE_OVERRIDES,
 ) -> list[PricedPart]:
     priced: list[PricedPart] = []
-    panel_line_prices = _panel_line_prices(result, branch_materials)
+    panel_line_prices = _panel_line_prices(result, branch_materials, overrides)
     for index, part in enumerate(result.parts_snapshot):
         material_id = uuid.UUID(str(part["material_id"]))
         material_source = MaterialSource(str(part["material_source"]))
@@ -2772,8 +3134,12 @@ def _priced_parts(
             else 0
         )
         material_snapshot = dict(result.material_snapshots.get(str(material_id), {}))
+        # The snapshot carries the price this order is billed at, agreed or
+        # listed — it is what the receipt reads back.
         material_snapshot["price_tiyin"] = (
-            branch_materials[material_id].price_tiyin if material_id in branch_materials else 0
+            overrides.material_price(material_id, branch_materials[material_id].price_tiyin)
+            if material_id in branch_materials
+            else 0
         )
         edge_snapshots: dict[str, dict[str, Any] | None] = {}
         edge_cost = 0
@@ -2788,7 +3154,9 @@ def _priced_parts(
             side_mm = _side_length_mm(part, field) * quantity
             side_consumed_mm = side_mm + 30 * quantity if edge_source is MaterialSource.SHOP else 0
             price = (
-                branch_materials[edge_material_id].price_tiyin
+                overrides.material_price(
+                    edge_material_id, branch_materials[edge_material_id].price_tiyin
+                )
                 if edge_source is MaterialSource.SHOP and edge_material_id in branch_materials
                 else 0
             )
@@ -2815,6 +3183,7 @@ def _priced_parts(
 def _panel_line_prices(
     result: CuttingResult,
     branch_materials: dict[uuid.UUID, BranchMaterial],
+    overrides: PriceOverrides = NO_PRICE_OVERRIDES,
 ) -> list[int]:
     panel_demands = _panel_stock_demands(result)
     area_by_material: dict[uuid.UUID, int] = {}
@@ -2839,16 +3208,31 @@ def _panel_line_prices(
         total_area = area_by_material.get(material_id, 0)
         if area == 0 or total_area == 0:
             continue
-        material_total = branch_materials[material_id].price_tiyin * panel_demands.get(
-            material_id,
-            0,
-        )
+        material_total = overrides.material_price(
+            material_id, branch_materials[material_id].price_tiyin
+        ) * panel_demands.get(material_id, 0)
         allocated = material_total * area // total_area
         if index == last_index_by_material.get(material_id):
             allocated = material_total - running_by_material.get(material_id, 0)
         allocations[index] = allocated
         running_by_material[material_id] = running_by_material.get(material_id, 0) + allocated
     return allocations
+
+
+def _own_panels_used(result: CuttingResult) -> dict[uuid.UUID, int]:
+    """Sheets this layout actually draws from the client's own stack.
+
+    The stored number is a claim, so it is clamped to what the layout uses: a
+    client who owns seven sheets and needs five brings five, and the other two
+    stay a claim for the edit that needs them.
+    """
+    own: dict[uuid.UUID, int] = {}
+    for material_id_text, claimed in (result.own_panel_counts or {}).items():
+        used = int(result.panels_used_by_material.get(material_id_text, 0))
+        capped = min(int(claimed), used)
+        if capped > 0:
+            own[uuid.UUID(material_id_text)] = capped
+    return own
 
 
 def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
@@ -2868,7 +3252,45 @@ def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
             continue
         total_area = area_by_material.get(material_id, shop_area)
         demands[material_id] = max(1, math.ceil(int(panels_used) * shop_area / total_area))
+    # Client-supplied sheets come off the top of the demand: the workshop buys
+    # only what the client did not bring. The key survives at zero so the branch
+    # still has to carry the material — the client picked it from that catalog,
+    # and the cutting plan names it either way.
+    for material_id, own in _own_panels_used(result).items():
+        if material_id in demands:
+            demands[material_id] = max(0, demands[material_id] - own)
     return demands
+
+
+def _stock_movements(demands: dict[uuid.UUID, int]) -> list[tuple[uuid.UUID, int]]:
+    """The subset of a demand map that is an actual stock movement.
+
+    A demand of zero is a real entry, not an absent one: `_panel_stock_demands`
+    keeps the key so pricing still checks the branch carries the material, which
+    is exactly what happens when the client brings every sheet of it. But a
+    zero-quantity consume/restore is not a movement, and `inventory` rejects one
+    outright (`invalid_quantity`) — so an order fully supplied by the client
+    used to fail at **Cutting done**, and again on revert. Filter here rather
+    than loosening that guard: zero is meaningless for every other caller of it.
+    """
+
+    return [(material_id, quantity) for material_id, quantity in demands.items() if quantity > 0]
+
+
+def _edge_banded_millimetres(result: CuttingResult) -> dict[uuid.UUID, int]:
+    """Every banded millimetre per tape, whoever supplied the roll.
+
+    Material cost follows `_edge_stock_demands` (shop only); labour follows this,
+    because the gluing is the workshop's work either way.
+    """
+    totals: dict[uuid.UUID, int] = {}
+    for source in (result.edge_consumed_shop_by_material, result.edge_consumed_own_by_material):
+        for material_id, quantity in (source or {}).items():
+            if int(quantity) <= 0:
+                continue
+            key = uuid.UUID(material_id)
+            totals[key] = totals.get(key, 0) + int(quantity)
+    return totals
 
 
 def _edge_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:

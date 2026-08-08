@@ -108,16 +108,42 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   filtered out of the **client-facing** listing, so a client can only pick something the branch
   can quote; the **workshop-facing** listing keeps them and the picker marks them with a
   "Narx yo'q" pill, because staff can see the gap and fix it.
-- **All materials are workshop-supplied.** The data model keeps a per-part
-  `material_source` and a per-side edge `source` (`shop` / `own` — the optimiser, pricing,
-  and the workshop side still understand both, and historical orders may carry `own`), but
-  the client flow no longer offers the choice: the editor always writes `shop`, and a
-  legacy draft saved with `own` parts or sides is normalized back to `shop` when it loads.
+- **Material is workshop-supplied unless the branch takes the client's own.** The per-part
+  `material_source` and per-side edge `source` (`shop` / `own`) are always written `shop` by
+  the editor, and a legacy draft saved otherwise is normalized back on load — the parts list
+  is not where ownership is expressed. Ownership is claimed **per material, after the run**,
+  because the two numbers it needs (how many sheets this layout uses, what they cost) do not
+  exist until the optimiser has answered: the draft carries `own_panel_counts` per panel
+  material and `own_edge_material_ids` per tape. The stored number is the client's **claim,
+  not a cap** — a result applies `min(claim, panels_used)`, so a claim survives a re-optimise
+  that needs fewer sheets and still applies to one that needs more.
+  Whether a **client** may make the claim unattended is the branch's call:
+  `own_material_allowed` is off until the owner turns it on ([`workshop.md`](workshop.md)),
+  the client editor hides the affordance where it is off, and the server drops any claim the
+  client path sends to a disallowing branch — including a stale one, on the next write, when
+  a branch switches the setting off. **Staff are not gated by it**: the walk-in editor and
+  the order-side action ([`orders.md`](orders.md#pricing)) always accept a claim, because
+  the setting is a self-serve policy rather than a rule about what the shop floor will take.
+  What ownership changes is only the **bill and the stock seam**, never the layout: own sheets
+  come off the material demand and never touch stock, while cutting and banding labour are
+  charged on every sheet and every banded millimetre regardless of who supplied them
+  ([`orders.md`](orders.md#pricing)).
 - **Edge tape is a branch material too** — a `kromka` dekor in one thickness × tape width.
   Each side of a part is either `null` (no banding) or one of those formats. The picker UX
   pins decor-matching edges at the top of one material list, then prefers tape widths that
   cover the selected panel thickness with the closest fit. Narrow tapes sink to the bottom and
   show a warning, but stay selectable (see _UX_).
+- **Thickening (`УТ`) is an instruction, not geometry.** A part may be flagged `thickened`
+  (utolshenie / obmanka): the workshop glues a strip of the same panel underneath so the
+  visible edge reads twice as thick. The strip is **never planned** — it is not placed, not
+  counted in panels used, not priced, and flipping the flag does not invalidate a result.
+  What it does change is the tape: the banded edge is now 2× the panel thickness, so the
+  picker ranks and warns against the doubled figure. The flag is **per part**, not per side,
+  so every banded side of a thickened part is judged against that doubled edge — a
+  deliberate simplification, since a part thickened on one side only is the rarer case and
+  the drawing shows which sides carry tape. It is set in the edge dialog (the tape it forces
+  is that dialog's subject) and stamped `УТ` in the parts list glyph, at the centre of the
+  part on the drawing, and at the centre of the part on the PDF map.
 
 ### The optimiser
 

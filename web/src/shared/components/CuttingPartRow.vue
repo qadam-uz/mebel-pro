@@ -226,13 +226,24 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="button"
             :data-part-index="index"
             data-cell="edge"
-            class="size-8 rounded-md bg-sunk/30 transition hover:bg-sunk"
+            class="grid size-8 place-items-center rounded-md bg-sunk/30 text-[9px] font-black leading-none text-ink transition hover:bg-sunk"
             :style="edgeGlyphStyle()"
-            :title="$t('cutting.column.edge')"
-            :aria-label="$t('cutting.edge.sidesAria')"
+            :title="part.thickened ? $t('cutting.thickening.label') : $t('cutting.column.edge')"
+            :aria-label="
+              part.thickened
+                ? `${$t('cutting.edge.sidesAria')} · ${$t('cutting.thickening.label')}`
+                : $t('cutting.edge.sidesAria')
+            "
             aria-haspopup="dialog"
             @click="emit('open-edge-picker', $event)"
-          ></button>
+          >
+            <!-- The glyph already draws the four sides as borders; the stamp
+                 sits inside it because thickening is a property of the part,
+                 not of a side. -->
+            <span v-if="part.thickened" aria-hidden="true">{{
+              $t('cutting.thickening.mark')
+            }}</span>
+          </button>
         </div>
         <div
           class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-8 @min-[680px]:row-start-1 @min-[680px]:flex @min-[680px]:justify-end"

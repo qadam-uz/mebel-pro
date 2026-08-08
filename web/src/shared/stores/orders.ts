@@ -31,12 +31,18 @@ export interface OrderQuote {
   branch_name: string
   branch_address: string
   branch_phone: string
+  /** Who does the work — the branch alone reads as an address with no owner. */
+  workshop_name: string
+  branch_additional_phones: string[]
+  branch_latitude: string | null
+  branch_longitude: string | null
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
   total_tiyin: number
   panels_used: number
   cutting_rate_tiyin: number
+  edge_banding_rate_tiyin: number
   material_lines: MaterialPriceLine[]
   edge_lines: EdgePriceLine[]
 }
@@ -44,7 +50,10 @@ export interface OrderQuote {
 export interface MaterialPriceLine {
   material_id: string
   material_name: string
+  /** What the layout needs. `own_panels` of these come from the client, so the
+   *  workshop charges the difference — which is what `line_total_tiyin` holds. */
   panels_used: number
+  own_panels: number
   unit_price_tiyin: number
   line_total_tiyin: number
 }
@@ -52,7 +61,12 @@ export interface MaterialPriceLine {
 export interface EdgePriceLine {
   material_id: string
   material_name: string
+  /** Every banded millimetre. When `own`, the client brought the roll: the tape
+   *  is free but the gluing is still charged. */
   consumed_mm: number
+  own: boolean
+  /** The branch's price per metre, so the receipt can show the multiplication. */
+  metre_price_tiyin: number
   material_cost_tiyin: number
   service_cost_tiyin: number
   line_total_tiyin: number
@@ -116,8 +130,16 @@ export interface OrderPriceLine {
   material_id: string
   material_name: string
   kind: 'panel' | 'edge'
+  /** What the workshop supplies, and therefore charges for. */
   panels_used: number | null
   consumed_mm: number | null
+  /** Price per sheet (panel) or per metre (edge) this order is billed at —
+   *  the branch's, or whatever staff agreed for this order. */
+  unit_price_tiyin: number
+  /** What the client brings alongside it — kept separate so a fully
+   *  client-supplied material does not read as a free `0 sheets` line. */
+  own_panels: number
+  own_mm: number
   line_total_tiyin: number
 }
 
@@ -174,6 +196,9 @@ export interface OrderSummary {
   branch_name: string
   branch_address: string
   branch_phone: string
+  branch_additional_phones: string[]
+  branch_latitude: string | null
+  branch_longitude: string | null
   cutting_result_id: string
   status: OrderStatus
   version: number
@@ -182,6 +207,9 @@ export interface OrderSummary {
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
+  /** The service rates this order is billed at (branch's, or agreed). */
+  cutting_rate_tiyin: number
+  edge_banding_rate_tiyin: number
   discount_tiyin: number
   discount_reason: string | null
   discount_applied_by_user_id: string | null
@@ -590,6 +618,29 @@ export const useOrdersStore = defineStore('orders', () => {
     return await api.get<OrderDetail>(`/workshop/orders/${id}`, authInit())
   }
 
+  /** What the client supplies, set at the counter. The whole claim, not a
+   *  delta — an omitted material means the client brings none of it. */
+  /** The unit prices this order is billed at. The whole agreement, not a
+   *  patch: an omitted material goes back to the branch's price. */
+  async function setPrices(
+    id: string,
+    payload: {
+      version: number
+      cutting_rate_tiyin?: number | null
+      edge_banding_rate_tiyin?: number | null
+      material_prices?: Record<string, number>
+    },
+  ) {
+    return await mutate(`/workshop/orders/${id}/prices`, payload)
+  }
+
+  async function setOwnMaterial(
+    id: string,
+    payload: { version: number; own_panel_counts: Record<string, number> },
+  ) {
+    return await mutate(`/workshop/orders/${id}/own-material`, payload)
+  }
+
   async function discount(id: string, payload: unknown) {
     return await mutate(`/workshop/orders/${id}/discount`, payload)
   }
@@ -774,6 +825,8 @@ export const useOrdersStore = defineStore('orders', () => {
     beginRevision,
     applyRevision,
     fetchWorkshopOrder,
+    setPrices,
+    setOwnMaterial,
     discount,
     surcharge,
     updateNote,

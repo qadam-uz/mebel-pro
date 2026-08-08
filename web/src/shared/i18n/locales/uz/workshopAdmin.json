@@ -168,7 +168,13 @@
     "colBranch": "Filial",
     "colAddress": "Manzil",
     "colPhone": "Telefon",
-    "colStatus": "Holat"
+    "colStatus": "Holat",
+    "map": {
+      "aria": "Filial joylashuvi xaritasi",
+      "hint": "Filial joyini xaritada bosib belgilang. Nishonni sudrab aniqlashtirish mumkin.",
+      "clear": "Joyni olib tashlash",
+      "label": "Joylashuv"
+    }
   },
   "branchDetail": {
     "back": "← Filiallar",
@@ -187,6 +193,9 @@
     "edgeTrim": "Chetki qirqim, mm",
     "edgeTrimError": "Chetki qirqimni {min}–{max} mm oralig'ida kiriting.",
     "usableArea": "Listning ishlatiladigan yuzasi = list − 2× chetki qirqim.",
+    "materialSettings": "Material sozlamalari",
+    "ownMaterial": "Mijoz ilovada o'z materialini belgilay olsin",
+    "ownMaterialHint": "Yoqilsa, mijoz chizma chekida o'zi olib keladigan listlarni o'zi belgilay oladi — ular material narxiga kirmaydi, lekin kesish va kromka xizmati baribir hisoblanadi. O'chirilsa, faqat mijozga ko'rsatilmaydi: operator buyurtmada baribir belgilay oladi.",
     "saved": "Filial saqlandi.",
     "statusTitle": "Holat",
     "statusActiveMeta": "mijozlarga ko'rinadi",

@@ -60,7 +60,10 @@ function draft(id = 'draft-1'): CuttingDraft {
     preferred_branch_id: null,
     kerf_mm: 4,
     edge_trim_mm: 5,
+    own_material_allowed: false,
     parts_snapshot: [],
+    own_panel_counts: {},
+    own_edge_material_ids: [],
     chosen_result_id: null,
     revision_of_order_id: null,
     created_at: '2026-07-08T00:00:00Z',
@@ -241,6 +244,8 @@ describe('cutting store scope', () => {
       source: 'imported_map',
       status: 'candidate',
       parts_snapshot: [],
+      own_panel_counts: {},
+      own_edge_material_ids: [],
       panels: [],
     } as unknown as CuttingResult
     const updated = draft('draft-1')

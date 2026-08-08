@@ -255,6 +255,8 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   // one way — the part is pinned to it; `rotate` is the same panel released.
   // Drawn as a pair so the cell reads as one control in either state.
   grain: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 6v12M15 6v12"/>',
+  'map-pin':
+    '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/>',
 }
 

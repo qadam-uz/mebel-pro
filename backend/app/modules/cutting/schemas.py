@@ -37,6 +37,12 @@ class CuttingPart(BaseModel):
     material_id: uuid.UUID
     material_source: MaterialSource = MaterialSource.SHOP
     follow_grain: bool = True
+    # Thickening (utolshenie / obmanka, stamped "UT" on the drawing): a second
+    # strip of the same panel is glued under this part so its banded edge reads
+    # twice as thick. Purely an instruction to the workshop — it never enters
+    # the layout, so the strip is not planned, priced, or counted. It does
+    # raise the edge tape the part needs: the visible edge is 2x the panel.
+    thickened: bool = False
     length_mm: int
     width_mm: int
     quantity: int
@@ -64,6 +70,7 @@ class CuttingDraftPart(BaseModel):
     material_id: uuid.UUID | None = None
     material_source: MaterialSource = MaterialSource.SHOP
     follow_grain: bool = True
+    thickened: bool = False
     length_mm: int = 0
     width_mm: int = 0
     quantity: int = 0
@@ -87,6 +94,20 @@ class CuttingDraftPatchRequest(BaseModel):
     name: str | None = Field(default=None, max_length=64)
     preferred_branch_id: uuid.UUID | None = None
     parts_snapshot: list[CuttingDraftPart] | None = None
+    # Client-supplied material (cutting.md, "Own material"). Sheets are claimed
+    # per catalog material; the claim is not capped to the current layout, since
+    # the next edit may need the sheets this one does not.
+    own_panel_counts: dict[uuid.UUID, int] | None = None
+    own_edge_material_ids: list[uuid.UUID] | None = None
+
+    @field_validator("own_panel_counts")
+    @classmethod
+    def reject_negative_counts(
+        cls, value: dict[uuid.UUID, int] | None
+    ) -> dict[uuid.UUID, int] | None:
+        if value and any(count < 0 for count in value.values()):
+            raise ValueError("own panel count cannot be negative")
+        return value
 
     @field_validator("name", mode="before")
     @classmethod
@@ -169,6 +190,11 @@ class CuttingResultResponse(APIModel):
     kerf_mm: int
     edge_trim_mm: int
     panels_used_by_material: dict[str, int]
+    # How many of those sheets the client supplies, per panel branch material —
+    # already clamped to this layout and frozen once confirmed. The edge
+    # equivalents below have always been serialized; sheets were the asymmetry,
+    # which left every order surface unable to say what the client must bring.
+    own_panel_counts: dict[str, int] = Field(default_factory=dict)
     waste_percentage: Decimal
     total_cut_length_mm: int
     total_edge_length_mm: int
@@ -197,7 +223,13 @@ class CuttingDraftResponse(APIModel):
     # snapshot; a branch edit changes these on the next fetch.
     kerf_mm: int
     edge_trim_mm: int
+    # Whether the draft's branch takes client-supplied sheets, resolved the same
+    # way — so the editor can hide the own-material affordance instead of
+    # offering a claim the server will drop on save.
+    own_material_allowed: bool = False
     parts_snapshot: list[dict[str, Any]]
+    own_panel_counts: dict[str, int] = Field(default_factory=dict)
+    own_edge_material_ids: list[str] = Field(default_factory=list)
     chosen_result_id: uuid.UUID | None
     # Set only on an order's revision draft (orders.md: "Revising a placed
     # order") — the editor switches to revision mode when present.

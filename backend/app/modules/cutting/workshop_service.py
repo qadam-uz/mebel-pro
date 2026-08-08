@@ -245,6 +245,8 @@ async def update_workshop_draft(
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
     parts_snapshot: list[CuttingDraftPart] | None,
+    own_panel_counts: dict[uuid.UUID, int] | None = None,
+    own_edge_material_ids: list[uuid.UUID] | None = None,
 ) -> CuttingDraftResponse:
     draft = await _workshop_draft(db, principal=principal, draft_id=draft_id)
     resolved_branch_id = preferred_branch_id
@@ -272,6 +274,11 @@ async def update_workshop_draft(
         preferred_branch_id_set=preferred_branch_id_set,
         preferred_branch_id=resolved_branch_id,
         parts_snapshot=parts_snapshot,
+        own_panel_counts=own_panel_counts,
+        own_edge_material_ids=own_edge_material_ids,
+        # Staff arrange client material at the counter regardless of the
+        # branch's self-serve policy.
+        client_self_serve=False,
     )
 
 

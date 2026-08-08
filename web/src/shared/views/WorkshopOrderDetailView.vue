@@ -14,6 +14,7 @@ import {
   revisionTimelineDetails,
   type WorkshopAdjustmentKind,
 } from '@/shared/app/workshopOrderDetail'
+import { ownMaterialRows } from '@/shared/app/ownMaterial'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   orderPillClass,
@@ -27,7 +28,9 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import OrderOwnMaterialModal from '@/shared/components/OrderOwnMaterialModal.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
+import OrderPricesModal from '@/shared/components/OrderPricesModal.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -373,6 +376,66 @@ const panelLines = computed<OrderPriceLine[]>(
 const edgeLines = computed<OrderPriceLine[]>(
   () => order.value?.price_lines.filter((line) => line.kind === 'edge') ?? [],
 )
+// What the client owes the shop floor. Sits in the production card, not the
+// receipt: it is a precondition for starting work, not a line of the bill.
+const ownRows = computed(() => ownMaterialRows(order.value?.price_lines ?? []))
+// Staff may arrange client-supplied sheets whatever the branch's self-serve
+// policy says — that setting governs the client app, not the counter.
+const pricesOpen = ref(false)
+const pricesSubmitError = ref<string | null>(null)
+// Every millimetre the order bands, whoever supplies the tape — the figure the
+// banding rate multiplies, so the editor can show what it is changing.
+const bandedMm = computed(() => {
+  const current = result.value
+  if (!current) return 0
+  return (
+    Object.values(current.edge_consumed_shop_by_material).reduce((sum, v) => sum + v, 0) +
+    Object.values(current.edge_consumed_own_by_material).reduce((sum, v) => sum + v, 0)
+  )
+})
+const panelsUsed = computed(() =>
+  result.value
+    ? Object.values(result.value.panels_used_by_material).reduce((sum, v) => sum + v, 0)
+    : 0,
+)
+
+async function savePrices(payload: {
+  cutting_rate_tiyin: number | null
+  edge_banding_rate_tiyin: number | null
+  material_prices: Record<string, number>
+}) {
+  const current = order.value
+  if (!current) return
+  pricesSubmitError.value = null
+  try {
+    await orders.setPrices(current.id, { version: current.version, ...payload })
+  } catch {
+    pricesSubmitError.value = t('orders.prices.saveFailed')
+    return
+  }
+  pricesOpen.value = false
+  toast.success(t('orders.prices.saved'))
+}
+
+const ownEditOpen = ref(false)
+const ownSubmitError = ref<string | null>(null)
+
+async function saveOwnMaterial(ownPanelCounts: Record<string, number>) {
+  const current = order.value
+  if (!current) return
+  ownSubmitError.value = null
+  try {
+    await orders.setOwnMaterial(current.id, {
+      version: current.version,
+      own_panel_counts: ownPanelCounts,
+    })
+  } catch {
+    ownSubmitError.value = t('orders.own.saveFailed')
+    return
+  }
+  ownEditOpen.value = false
+  toast.success(t('orders.own.saved'))
+}
 
 function edgeMaterialTotal(current: OrderDetail) {
   return current.items.reduce((sum, item) => sum + item.edge_cost_tiyin, 0)
@@ -1076,6 +1139,39 @@ onBeforeUnmount(() => {
                button pins to the bottom edge as a footer (mt-auto) so the
                free height collects in one deliberate gap, not between items. -->
           <div class="card-b flex min-h-0 flex-col !pb-0">
+            <!-- Before the assignment controls: the shop cannot start until
+                 this arrives, so it has to be read before a cutter is picked. -->
+            <div v-if="ownRows.length > 0" class="banner warn mt-4 mb-1">
+              <div class="grow">
+                <b>{{ $t('orders.own.title') }}</b>
+                <ul class="mt-1 grid gap-0.5">
+                  <li v-for="row in ownRows" :key="row.materialId" class="text-sm">
+                    {{ row.materialName }} —
+                    <span class="font-mono font-bold">{{ row.amount }}</span>
+                  </li>
+                </ul>
+                <small class="mt-1 block text-ink-muted">{{ $t('orders.own.body') }}</small>
+                <button
+                  v-if="canEditOrder"
+                  type="button"
+                  class="mp-button mt-2 min-h-11"
+                  @click="ownEditOpen = true"
+                >
+                  {{ $t('orders.own.edit') }}
+                </button>
+              </div>
+            </div>
+            <!-- The counter usually hears "I'll bring my own" at approval, so
+                 the entry point has to exist before any claim does — not only
+                 as an edit on a banner that isn't there yet. -->
+            <button
+              v-else-if="canEditOrder"
+              type="button"
+              class="mp-button mt-4 mb-1 min-h-11 self-start"
+              @click="ownEditOpen = true"
+            >
+              {{ $t('orders.own.edit') }}
+            </button>
             <div class="flex flex-col gap-1 py-4">
               <FormSelect
                 v-if="canAssignCutter"
@@ -1191,13 +1287,27 @@ onBeforeUnmount(() => {
                   >
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
-                      }}<small class="block text-xs text-ink-muted">{{
-                        $t(
-                          'orders.unit.sheets',
-                          { n: line.panels_used ?? 0 },
-                          line.panels_used ?? 0,
-                        )
-                      }}</small></span
+                      }}<small class="block text-xs text-ink-muted">
+                        <!-- With an own claim the charged count alone is
+                             misleading — a fully client-supplied material would
+                             read as `0 list` for free. Name both halves. -->
+                        <template v-if="line.own_panels > 0">{{
+                          $t('orders.own.sheetsSplit', {
+                            own: line.own_panels,
+                            shop: line.panels_used ?? 0,
+                          })
+                        }}</template>
+                        <template v-else>{{
+                          $t(
+                            'orders.unit.sheets',
+                            { n: line.panels_used ?? 0 },
+                            line.panels_used ?? 0,
+                          )
+                        }}</template>
+                        <template v-if="line.unit_price_tiyin > 0">
+                          × {{ formatTiyin(line.unit_price_tiyin) }}
+                        </template>
+                      </small></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
@@ -1210,14 +1320,28 @@ onBeforeUnmount(() => {
                   >
                     <span class="min-w-0 text-ink"
                       >{{ line.material_name
-                      }}<small class="block text-xs text-ink-muted">{{
-                        metres(line.consumed_mm ?? 0)
-                      }}</small></span
+                      }}<small class="block text-xs text-ink-muted">
+                        {{ metres(line.consumed_mm ?? 0) }}
+                        <template v-if="line.unit_price_tiyin > 0">
+                          × {{ formatTiyin(line.unit_price_tiyin) }}
+                        </template>
+                        <template v-if="line.own_mm > 0">
+                          · {{ $t('orders.own.tapeOwn', { metres: metres(line.own_mm) }) }}
+                        </template>
+                      </small></span
                     >
                     <span class="shrink-0 font-mono whitespace-nowrap text-ink">{{
                       formatTiyin(line.line_total_tiyin)
                     }}</span>
                   </div>
+                  <button
+                    v-if="canEditOrder"
+                    type="button"
+                    class="mp-button mt-1 min-h-11 self-start"
+                    @click="pricesOpen = true"
+                  >
+                    {{ $t('orders.prices.open') }}
+                  </button>
                 </template>
                 <template v-else>
                   <!-- Snapshot lines missing (no cutting result) — aggregate rows. -->
@@ -1534,6 +1658,30 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </AppModal>
+
+    <OrderPricesModal
+      v-if="order"
+      :open="pricesOpen"
+      :price-lines="order.price_lines"
+      :cutting-rate-tiyin="order.cutting_rate_tiyin"
+      :edge-banding-rate-tiyin="order.edge_banding_rate_tiyin"
+      :panels-used="panelsUsed"
+      :banded-mm="bandedMm"
+      :busy="orders.actionLoading"
+      :submit-error="pricesSubmitError"
+      @save="savePrices"
+      @close="pricesOpen = false"
+    />
+
+    <OrderOwnMaterialModal
+      v-if="order"
+      :open="ownEditOpen"
+      :panel-lines="panelLines"
+      :busy="orders.actionLoading"
+      :submit-error="ownSubmitError"
+      @save="saveOwnMaterial"
+      @close="ownEditOpen = false"
+    />
 
     <OrderPriceAdjustmentModal
       v-if="order"

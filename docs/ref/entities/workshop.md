@@ -64,6 +64,7 @@ whether clients see it and order from it.
 | `closed_reason` | text? | shown when `temporarily_closed` |
 | `kerf_mm` | int | the branch saw's kerf width; 1–20 mm; default `4`. Resolved into every cutting optimisation run scoped to this branch ([`cutting.md`](../features/cutting.md)) |
 | `edge_trim_mm` | int | edge trim per side (usable panel area = panel − 2× this); 0–50 mm; default `5` |
+| `own_material_allowed` | bool | whether a **client** may claim their own sheets self-serve in the app; default `false`. Off until the owner turns it on — accepting client material changes what the shop stores and what has to arrive before the saw starts, so it is opted into, never inherited. Gates the client's cutting editor and the client write path on the server. **Not** a shop-floor ban: staff always may arrange client material — in the staff editor and on a placed order ([`orders.md`](../features/orders.md#pricing)) |
 | `created_at` / `updated_at` | timestamp | |
 
 Lifecycle: `active` — visible to clients, accepts new orders & cutting; `temporarily_closed` —

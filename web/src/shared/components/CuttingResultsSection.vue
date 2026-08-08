@@ -5,11 +5,15 @@ import { RouterLink } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
-import { resultPanelCount } from '@/shared/app/cuttingResultsDisplay'
-import { formatTiyin } from '@/shared/formatters'
+import {
+  deriveSnapshotEdgeRegistry,
+  edgeRegistryEntryByMaterial,
+} from '@/shared/app/cuttingResultsDisplay'
+import { formatSom, formatTiyin } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
+import CuttingOwnMaterialDialog from '@/shared/components/CuttingOwnMaterialDialog.vue'
 import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
 import {
   metres,
@@ -61,15 +65,82 @@ const footerResult = computed(
     chosenResult.value,
 )
 const activeResultIsChosen = computed(() => chosenResult.value?.id === props.draft.chosen_result_id)
-const orderPanelCount = computed(() =>
-  footerResult.value ? resultPanelCount(footerResult.value) : 0,
+// The receipt shows its own arithmetic — `2 × 300 000 = 600 000` — because a
+// rolled-up subtotal asks to be trusted while a visible multiplication can be
+// checked. Everything below comes from the quote as it already ships (CB-117);
+// nothing is recomputed here beyond joining the edge lines to their registry
+// number so the card, the drawing and the PDF all call a tape by ①②.
+const receiptSheetLines = computed(() => quote.value?.material_lines ?? [])
+const receiptEdgeRegistry = computed(() =>
+  deriveSnapshotEdgeRegistry(footerResult.value?.parts_snapshot ?? []),
 )
-const orderEdgeLength = computed(() =>
-  metres(
-    sumRecord(footerResult.value?.edge_consumed_shop_by_material) +
-      sumRecord(footerResult.value?.edge_consumed_own_by_material),
-  ),
+const receiptEdgeLines = computed(() =>
+  (quote.value?.edge_lines ?? [])
+    .map((line) => {
+      const entry =
+        edgeRegistryEntryByMaterial(receiptEdgeRegistry.value, line.material_id, 'shop') ??
+        edgeRegistryEntryByMaterial(receiptEdgeRegistry.value, line.material_id, 'own')
+      return { line, number: entry?.number ?? null }
+    })
+    .sort((left, right) => (left.number ?? 999) - (right.number ?? 999)),
 )
+// Client-supplied material. The claim lives on the draft so it survives a
+// re-optimise; what a given layout charges is `min(claim, panels_used)`, which
+// the quote already applied — the card only renders the split.
+const ownDialogOpen = ref(false)
+const ownPanelCounts = computed(() => props.draft.own_panel_counts ?? {})
+const ownEdgeMaterialIds = computed(() => props.draft.own_edge_material_ids ?? [])
+
+function ownSheets(line: { material_id: string; own_panels?: number }) {
+  return line.own_panels ?? 0
+}
+
+function chargedSheets(line: { panels_used: number; own_panels?: number }) {
+  return Math.max(0, line.panels_used - (line.own_panels ?? 0))
+}
+
+const ownSavingTiyin = computed(() => {
+  const sheets = receiptSheetLines.value.reduce(
+    (sum, line) => sum + ownSheets(line) * line.unit_price_tiyin,
+    0,
+  )
+  // An own tape carries no material cost in the quote, so its saving is what the
+  // shop rate would have charged for the same length.
+  const tape = receiptEdgeLines.value.reduce((sum, row) => {
+    if (!row.line.own) return sum
+    const paid = receiptEdgeLines.value.find((other) => !other.line.own)
+    const rate =
+      paid && paid.line.consumed_mm > 0 ? paid.line.material_cost_tiyin / paid.line.consumed_mm : 0
+    return sum + Math.round(rate * row.line.consumed_mm)
+  }, 0)
+  return sheets + tape
+})
+
+async function saveOwnMaterial(payload: {
+  own_panel_counts: Record<string, number>
+  own_edge_material_ids: string[]
+}) {
+  try {
+    await cutting.updateDraft(props.draft.id, payload)
+  } catch {
+    toast.danger(t('cutting.error.saveFailed'))
+    return
+  }
+  ownDialogOpen.value = false
+  // Ownership never moves a part, so the layout stands; only what it costs
+  // changed, which means the quote — not the optimiser — has to re-run.
+  await reloadQuote()
+}
+
+// Edge labour is one figure across every tape; the per-tape split the quote
+// carries is the material share, which already sits on its own row above.
+const receiptEdgeServiceTiyin = computed(() =>
+  (quote.value?.edge_lines ?? []).reduce((sum, line) => sum + line.service_cost_tiyin, 0),
+)
+const receiptEdgeServiceMm = computed(() =>
+  (quote.value?.edge_lines ?? []).reduce((sum, line) => sum + line.consumed_mm, 0),
+)
+
 const placedCount = computed(() =>
   chosenResult.value
     ? chosenResult.value.panels.reduce((sum, panel) => sum + panel.placements.length, 0)
@@ -95,30 +166,28 @@ watch(
     () => props.draft.chosen_result_id,
     () => footerResult.value?.status,
   ],
-  async () => {
-    const branchId = props.branchId
-    const resultId = props.draft.chosen_result_id
-    if (!branchId || !resultId || footerResult.value?.status === 'invalidated') {
-      quote.value = null
-      quoteError.value = null
-      return
-    }
-    quoteLoading.value = true
-    quoteError.value = null
-    try {
-      quote.value = await props.quoteForDraft(props.draft.id, branchId)
-    } catch (errorValue) {
-      quote.value = null
-      quoteError.value = clientErrorLabel(apiErrorCode(errorValue), t('cutting.error.quoteFailed'))
-    } finally {
-      quoteLoading.value = false
-    }
-  },
+  () => void reloadQuote(),
   { immediate: true },
 )
 
-function sumRecord(record: Record<string, number> | undefined) {
-  return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
+async function reloadQuote() {
+  const branchId = props.branchId
+  const resultId = props.draft.chosen_result_id
+  if (!branchId || !resultId || footerResult.value?.status === 'invalidated') {
+    quote.value = null
+    quoteError.value = null
+    return
+  }
+  quoteLoading.value = true
+  quoteError.value = null
+  try {
+    quote.value = await props.quoteForDraft(props.draft.id, branchId)
+  } catch (errorValue) {
+    quote.value = null
+    quoteError.value = clientErrorLabel(apiErrorCode(errorValue), t('cutting.error.quoteFailed'))
+  } finally {
+    quoteLoading.value = false
+  }
 }
 
 async function choose(result: CuttingResult) {
@@ -178,7 +247,7 @@ async function choose(result: CuttingResult) {
 
     <div v-if="chosenResult" class="grid gap-5 p-5">
       <div
-        class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_250px] 2xl:grid-cols-[minmax(0,1fr)_300px]"
+        class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_312px] 2xl:grid-cols-[minmax(0,1fr)_352px]"
       >
         <CuttingResultOverview
           class="order-1 min-w-0 xl:col-start-1 xl:row-start-1"
@@ -223,25 +292,6 @@ async function choose(result: CuttingResult) {
               {{ $t('cutting.result.orderTitle') }}
             </h3>
 
-            <dl class="mt-4 grid grid-cols-2 gap-4 border-b border-hairline pb-4">
-              <div>
-                <dt class="text-xs font-bold uppercase text-ink-muted">
-                  {{ $t('cutting.result.sheets') }}
-                </dt>
-                <dd class="mt-1 font-serif text-xl font-semibold text-ink">
-                  {{ orderPanelCount }} {{ $t('cutting.unit.piece', orderPanelCount) }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs font-bold uppercase text-ink-muted">
-                  {{ $t('cutting.result.edgeTitle') }}
-                </dt>
-                <dd class="mt-1 font-serif text-xl font-semibold text-ink">
-                  {{ orderEdgeLength }}
-                </dd>
-              </div>
-            </dl>
-
             <div v-if="!branchId" class="py-4 text-sm text-ink-muted">
               {{ $t('cutting.result.priceNeedsBranch') }}
             </div>
@@ -251,32 +301,126 @@ async function choose(result: CuttingResult) {
             <div v-else-if="quoteError" class="py-4 text-sm font-bold text-danger" role="alert">
               {{ quoteError }}
             </div>
-            <dl v-else-if="quote" class="divide-y divide-hairline py-2">
-              <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">{{ $t('cutting.result.lineCutting') }}</dt>
-                <dd class="font-mono font-bold text-ink">
-                  {{ formatTiyin(quote.subtotal_cutting_tiyin) }}
-                </dd>
-              </div>
-              <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">{{ $t('cutting.result.materialsTitle') }}</dt>
-                <dd class="font-mono font-bold text-ink">
-                  {{ formatTiyin(quote.subtotal_materials_tiyin) }}
-                </dd>
-              </div>
-              <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <dt class="text-ink-soft">{{ $t('cutting.result.edgeTitle') }}</dt>
-                <dd class="font-mono font-bold text-ink">
-                  {{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}
-                </dd>
-              </div>
-              <div class="flex items-center justify-between gap-4 py-4">
-                <dt class="text-lg font-extrabold text-ink">{{ $t('cutting.result.total') }}</dt>
-                <dd class="font-mono text-lg font-extrabold text-ink">
+
+            <!-- A receipt, not a summary: each row carries the multiplication
+                 behind it, so the client can check the price instead of taking
+                 it on faith. Services sit in their own section because cutting
+                 and banding are charged on every sheet and metre. -->
+            <div v-else-if="quote" class="mt-4 grid gap-4">
+              <section v-if="receiptSheetLines.length">
+                <h4
+                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                >
+                  {{ $t('cutting.result.sectionSheets') }}
+                </h4>
+                <div
+                  v-for="(line, index) in receiptSheetLines"
+                  :key="line.material_id"
+                  class="grid gap-0.5 border-t py-2.5"
+                  :class="index === 0 ? 'border-hairline-strong' : 'border-hairline'"
+                >
+                  <p class="text-sm font-extrabold text-ink">
+                    <span class="text-ink-muted">{{ index + 1 }}.</span> {{ line.material_name }}
+                    <span class="whitespace-nowrap font-mono"
+                      >— {{ line.panels_used }} {{ $t('cutting.unit.sheet') }}</span
+                    >
+                  </p>
+                  <span v-if="ownSheets(line)" class="text-xs font-extrabold text-success">
+                    {{
+                      $t('cutting.own.sheetsSplit', {
+                        own: ownSheets(line),
+                        shop: chargedSheets(line),
+                      })
+                    }}
+                  </span>
+                  <span class="pt-0.5 text-right font-mono text-xs text-ink">
+                    {{ chargedSheets(line) }} {{ $t('cutting.unit.sheet') }} ×
+                    {{ formatSom(line.unit_price_tiyin) }} =
+                    <b class="font-extrabold">{{ formatSom(line.line_total_tiyin) }}</b>
+                  </span>
+                </div>
+              </section>
+
+              <section v-if="receiptEdgeLines.length">
+                <h4
+                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                >
+                  {{ $t('cutting.result.sectionEdges') }}
+                </h4>
+                <div
+                  v-for="(row, index) in receiptEdgeLines"
+                  :key="row.line.material_id"
+                  class="grid gap-0.5 border-t py-2.5"
+                  :class="index === 0 ? 'border-hairline-strong' : 'border-hairline'"
+                >
+                  <p class="text-sm font-extrabold text-ink">
+                    <span class="text-ink-muted">{{ row.number ?? index + 1 }}.</span>
+                    {{ row.line.material_name }}
+                    <span class="whitespace-nowrap font-mono"
+                      >— {{ metres(row.line.consumed_mm) }}</span
+                    >
+                  </p>
+                  <span v-if="row.line.own" class="text-xs font-extrabold text-success">
+                    {{ $t('cutting.own.tapeFree') }}
+                  </span>
+                  <span v-else class="pt-0.5 text-right font-mono text-xs text-ink">
+                    {{ metres(row.line.consumed_mm) }} ×
+                    {{ formatSom(row.line.metre_price_tiyin) }} =
+                    <b class="font-extrabold">{{ formatSom(row.line.material_cost_tiyin) }}</b>
+                  </span>
+                </div>
+              </section>
+
+              <section>
+                <h4
+                  class="pb-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                >
+                  {{ $t('cutting.result.sectionServices') }}
+                </h4>
+                <div class="grid gap-2 border-t border-hairline-strong py-2.5">
+                  <div class="grid gap-0.5">
+                    <span class="text-sm text-ink">
+                      {{ $t('cutting.result.serviceCutting') }}
+                    </span>
+                    <span class="text-right font-mono text-xs text-ink">
+                      {{ quote.panels_used }} {{ $t('cutting.unit.sheet') }} ×
+                      {{ formatSom(quote.cutting_rate_tiyin) }} =
+                      <b class="font-extrabold">{{ formatSom(quote.subtotal_cutting_tiyin) }}</b>
+                    </span>
+                  </div>
+                  <div v-if="receiptEdgeServiceTiyin > 0" class="grid gap-0.5">
+                    <span class="text-sm text-ink">
+                      {{ $t('cutting.result.serviceEdgeBanding') }}
+                    </span>
+                    <span class="text-right font-mono text-xs text-ink">
+                      {{ metres(receiptEdgeServiceMm) }} ×
+                      {{ formatSom(quote.edge_banding_rate_tiyin) }} =
+                      <b class="font-extrabold">{{ formatSom(receiptEdgeServiceTiyin) }}</b>
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <div class="flex items-baseline justify-between gap-2.5 border-t border-ink pt-3">
+                <span class="text-base font-extrabold text-ink">
+                  {{ $t('cutting.result.total') }}
+                </span>
+                <span class="font-mono text-xl font-extrabold text-ink">
                   {{ formatTiyin(quote.total_tiyin) }}
-                </dd>
+                </span>
               </div>
-            </dl>
+              <p v-if="ownSavingTiyin > 0" class="text-right text-xs font-extrabold text-success">
+                {{ $t('cutting.own.saved', { amount: formatTiyin(ownSavingTiyin) }) }}
+              </p>
+
+              <button
+                type="button"
+                class="mp-button w-full border-accent bg-accent-soft text-accent-deep"
+                @click="ownDialogOpen = true"
+              >
+                {{ $t('cutting.own.open') }}
+              </button>
+            </div>
             <p v-else class="py-4 text-sm text-ink-muted">
               {{ $t('cutting.result.priceUnavailable') }}
             </p>
@@ -313,6 +457,17 @@ async function choose(result: CuttingResult) {
               </span>
             </p>
           </section>
+
+          <CuttingOwnMaterialDialog
+            :open="ownDialogOpen"
+            :saving="cutting.saving"
+            :sheet-lines="receiptSheetLines"
+            :edge-lines="receiptEdgeLines"
+            :own-panel-counts="ownPanelCounts"
+            :own-edge-material-ids="ownEdgeMaterialIds"
+            @close="ownDialogOpen = false"
+            @save="saveOwnMaterial"
+          />
         </aside>
       </div>
     </div>

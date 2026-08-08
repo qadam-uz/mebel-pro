@@ -270,6 +270,9 @@ export function buildImportedParts(
     material_id: picked(panelPicks, part.material_key, 'panel'),
     material_source: 'shop',
     follow_grain: part.follow_grain,
+    // No import format carries a thickening instruction — it is entered in the
+    // editor, so an imported part always starts plain.
+    thickened: false,
     length_mm: part.length_mm,
     width_mm: part.width_mm,
     quantity: part.quantity,
@@ -307,6 +310,9 @@ export function buildMapImportedParts(
     material_id: picked(panelPicks, part.material_key, 'panel'),
     material_source: 'shop',
     follow_grain: part.follow_grain,
+    // No import format carries a thickening instruction — it is entered in the
+    // editor, so an imported part always starts plain.
+    thickened: false,
     length_mm: part.length_mm,
     width_mm: part.width_mm,
     quantity: part.quantity,

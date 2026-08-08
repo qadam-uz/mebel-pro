@@ -30,6 +30,7 @@ export interface BranchContextItem {
   closed_reason: string | null
   kerf_mm: number
   edge_trim_mm: number
+  own_material_allowed: boolean
   permissions: string[]
 }
 
@@ -82,6 +83,7 @@ export interface ManagedBranch {
   closed_reason: string | null
   kerf_mm: number
   edge_trim_mm: number
+  own_material_allowed: boolean
   created_at: string
   updated_at: string
 }

@@ -37,6 +37,11 @@ export interface CuttingPart {
   material_id: string
   material_source: MaterialSource
   follow_grain: boolean
+  // Thickening (utolshenie / obmanka, stamped "УТ"): a strip of the same panel
+  // is glued under the part so its banded edge reads twice as thick. A workshop
+  // instruction only — it never enters the layout, so nothing is cut, counted
+  // or priced for it. It does double the thickness the edge tape must cover.
+  thickened: boolean
   length_mm: number
   width_mm: number
   quantity: number
@@ -87,6 +92,9 @@ export interface CuttingResult {
   kerf_mm: number
   edge_trim_mm: number
   panels_used_by_material: Record<string, number>
+  /** How many of those sheets the client supplies, per panel material —
+   *  clamped to this layout and frozen once the order is placed. */
+  own_panel_counts: Record<string, number>
   waste_percentage: string
   total_cut_length_mm: number
   total_edge_length_mm: number
@@ -114,7 +122,17 @@ export interface CuttingDraft {
   // branch (or the platform defaults for a branch-less draft) on every read.
   kerf_mm: number
   edge_trim_mm: number
+  /** Whether this draft's branch takes client-supplied sheets at all. Resolved
+   *  server-side from the branch; the server drops any claim a disallowing
+   *  branch receives, so the editor hides the affordance rather than offering
+   *  a choice that will not survive the save. */
+  own_material_allowed: boolean
   parts_snapshot: CuttingPart[]
+  /** Client-supplied material: sheets claimed per catalog material, and the
+   *  tapes the client brings on their own roll. The sheet number is a claim,
+   *  not a cap — a result applies `min(claim, panels_used)`. */
+  own_panel_counts: Record<string, number>
+  own_edge_material_ids: string[]
   chosen_result_id: string | null
   // Set only on an order's revision draft — the editor switches to revision
   // mode (orders.md "Revising a placed order") when present.
@@ -407,6 +425,8 @@ export const useCuttingStore = defineStore('cutting', () => {
       name?: string | null
       preferred_branch_id?: string | null
       parts_snapshot?: CuttingPart[]
+      own_panel_counts?: Record<string, number>
+      own_edge_material_ids?: string[]
     },
   ) {
     saving.value = true

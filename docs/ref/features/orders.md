@@ -272,8 +272,41 @@ Driven entirely by this state machine; the mechanics live in
   marked (one inventory transaction per edge material the order's `edge_length_snapshot`
   carries with shop millimetres — these are **consumed** metres when displayed/priced, see *Pricing*). A
   revert re-increments exactly what its step decremented.
+- **Staff set the unit prices, up to production.** A counter negotiates the *rate* — "these
+  sheets at 250 000, not 300 000" — so `manage_orders` may replace the branch rate card for
+  one order while it is `new` or `confirmed`: the per-sheet price of each panel material, the
+  per-metre price of each tape, the cutting rate and the banding rate. **Quantities are never
+  editable**: how many sheets a layout needs is the optimiser's answer, and retyping it would
+  put the bill and the cutting plan out of step. A discount can reach the same total, but only
+  as one lump on the bottom line; the receipt has to show the price the client was quoted per
+  sheet, which is why this is its own action rather than a bigger discount.
+  The agreement is stored on the order, not only in the item snapshots, because the order
+  re-prices for other reasons too — without a home there, the next re-price would quietly
+  restore the branch's list price under the agreed one. A **revision** does clear it: that
+  re-prices the whole snapshot at current rates by definition, the same rule that already
+  clears the discount and the surcharge. Every change appends a same-status event carrying the
+  old and new agreement and the old and new total.
+- **Staff set it on the order, up to production.** The counter usually hears "I'll bring my
+  own" while reading the order back at approval, so `manage_orders` may set the client's
+  sheet counts on a `new` or `confirmed` order — the same window as a discount. The layout
+  does not move; only who pays for the sheets it uses, so the order re-prices in the same
+  transaction and appends a same-status event. A negotiated discount survives, clamped only
+  if the smaller subtotal can no longer carry it. Past `confirmed` the sheets may be cut and
+  the stock seam has already run, so the claim is frozen with them. **The branch's
+  `own_material_allowed` does not gate this** — that setting is about what a client may
+  arrange unattended in the app ([`workshop.md`](workshop.md)), not what the shop can take
+  in at the counter.
+- **The order names what the client owes.** Each price line carries the client's share
+  (`own_panels` / `own_mm`) beside the charged figure rather than folded into it, so a
+  material the client supplies entirely reads as "you bring 4 sheets" instead of a free
+  `0 sheets` line. Both order screens surface the list before anything else: the workshop's
+  in the production card, above the cutter picker, because the shop cannot start without it;
+  the client's above the tabs, because it is the only thing on that page they must act on.
 - **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
-  and no `shop` edge sides skips this seam entirely.
+  and no `shop` edge sides skips this seam entirely. A material the client supplies **every**
+  sheet of nets to a zero demand rather than disappearing — pricing still has to check the
+  branch carries it — and a zero demand is skipped at the seam rather than written as a
+  no-op movement.
 - **After decrement, material is spent.** Cancelling an order whose panels/edges were
   already decremented does **not** restore them (they were physically cut); the loss is
   the workshop's, recorded offline.

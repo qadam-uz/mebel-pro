@@ -60,6 +60,12 @@ _LABEL_FONT_SHRINK_STEP_PT = 0.1
 # the placement's own box, so it alone was blocking a label a genuinely
 # fitting font would otherwise print.
 _LABEL_TEXT_PADDING_PT = 1.0
+# The shop-floor shorthand for a part that gets a strip glued underneath
+# (utolshenie / obmanka). Cyrillic on purpose: it is what the operators read.
+_THICKENING_MARK = "УТ"
+# Rough printed width of the two-glyph stamp as a multiple of its font size,
+# used to shrink it into a narrow placement without a metrics round-trip.
+_THICKENING_TEXT_W_FACTOR = 1.5
 
 # Print equivalents of the web tokens the visualiser uses. Structure stays
 # grayscale for print; colour is reserved for the offcut semantics.
@@ -249,6 +255,48 @@ def draw_sheet_map(
                 pdf.drawCentredString(
                     x + w / 2, y + h / 2 - 0.36 * label.font_pt, label.length_text
                 )
+
+        if _is_thickened(row[0] if row else None):
+            _draw_thickening_mark(pdf, x, y, w, h, label, label_font_pt)
+
+
+def _is_thickened(part: dict[str, Any] | None) -> bool:
+    return bool(part.get("thickened")) if part else False
+
+
+def _draw_thickening_mark(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    label: _DimensionLabelPlan | None,
+    sheet_font_pt: float,
+) -> None:
+    """The `УТ` stamp: this part gets a strip glued under it (утолщение).
+
+    It owns the centre of the placement. When the dimensions were small enough
+    to collapse into the centre too, the stamp drops just under them rather
+    than overprinting; when nothing else fits, the stamp still prints — the
+    register carries every size anyway, but the thickening instruction exists
+    nowhere else on the drawing.
+    """
+    font_pt = min(sheet_font_pt, label.font_pt if label else sheet_font_pt)
+    if _THICKENING_TEXT_W_FACTOR * font_pt + _LABEL_TEXT_PADDING_PT > w:
+        font_pt = max(
+            _MIN_LABEL_FONT_FLOOR_PT,
+            (w - _LABEL_TEXT_PADDING_PT) / _THICKENING_TEXT_W_FACTOR,
+        )
+    centre_taken = label is not None and label.mode != "edges"
+    baseline = y + h / 2 - 0.36 * font_pt
+    if centre_taken:
+        baseline -= font_pt * 1.15
+        if baseline < y + _LABEL_TEXT_PADDING_PT:
+            return
+    pdf.setFillColor(_INK_SOFT)
+    pdf.setFont(_FONT_BOLD, font_pt)
+    pdf.drawCentredString(x + w / 2, baseline, _THICKENING_MARK)
+    pdf.setFont(_FONT_REGULAR, font_pt)
 
 
 def _rect_points(
