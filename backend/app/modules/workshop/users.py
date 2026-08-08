@@ -1,6 +1,7 @@
 """Workshop owner/staff use cases."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -464,6 +465,31 @@ async def grants_for_user(db: AsyncSession, user_id: uuid.UUID) -> list[Permissi
             )
         ).all()
     )
+
+
+async def grants_for_users(
+    db: AsyncSession, user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, list[PermissionGrant]]:
+    """Grants for many users in one query, keyed by user id.
+
+    The list endpoint used to call `grants_for_user` once per row from inside a
+    list comprehension — one serial round trip per staff member, and the global
+    search hit that endpoint on every keystroke. Users without grants are present
+    with an empty list, so callers need no `.get(..., [])` dance.
+    """
+    grants: dict[uuid.UUID, list[PermissionGrant]] = {user_id: [] for user_id in user_ids}
+    if not user_ids:
+        return grants
+    rows = (
+        await db.scalars(
+            select(PermissionGrant)
+            .where(PermissionGrant.workshop_user_id.in_(user_ids))
+            .order_by(PermissionGrant.branch_id, PermissionGrant.permission)
+        )
+    ).all()
+    for grant in rows:
+        grants[grant.workshop_user_id].append(grant)
+    return grants
 
 
 async def _replace_grants(
