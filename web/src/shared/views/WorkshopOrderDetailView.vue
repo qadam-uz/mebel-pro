@@ -201,7 +201,8 @@ const unpricedMissing = computed(() => {
 const startCuttingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'confirmed') return null
-  if (!current.assigned_cutter_user_id) return t('orders.detail.cutterNotChosen')
+  if (!current.assigned_cutter_user_id)
+    return t('orders.detail.startHint', { reason: t('orders.detail.cutterNotChosen') })
   return null
 })
 // Start is gated like completion: the assigned master, or the office on-behalf.
@@ -216,7 +217,8 @@ const canStartCutting = computed(() => {
 const startBandingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'edge_banding' || current.banding_started_at) return null
-  if (!current.assigned_edger_user_id) return t('orders.detail.edgerNotChosen')
+  if (!current.assigned_edger_user_id)
+    return t('orders.detail.startHint', { reason: t('orders.detail.edgerNotChosen') })
   return null
 })
 const workerOptions = computed<ChoiceOption[]>(() =>
@@ -1006,8 +1008,12 @@ onBeforeUnmount(() => {
         </div>
         <!-- The disabled-primary hint rides directly under the action row it
              explains — below the meta line it read as a stray caption. -->
+        <!-- The hint is rendered as the action supplied it. It used to be wrapped
+             in a "— can start once assigned" suffix, which was true when only the
+             two production starts had hints and became nonsense the moment
+             Approve gained one. Each action now owns its whole sentence. -->
         <p v-if="primaryAction?.hint" class="od-hint">
-          {{ $t('orders.detail.startHint', { reason: primaryAction.hint }) }}
+          {{ primaryAction.hint }}
         </p>
         <div class="od-meta">
           <span
