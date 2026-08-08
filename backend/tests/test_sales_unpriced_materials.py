@@ -249,6 +249,71 @@ async def test_placing_and_reading_stay_open_with_an_unpriced_material(
     assert client_read.status_code == 200, client_read.text
 
 
+async def test_a_second_prices_call_cannot_un_price_a_confirmed_order(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """`material_prices` replaces the stored map — it does not merge into it.
+
+    So a follow-up call that only edits the cutting rate drops every material
+    override with it, including the one that was the sole price a material had.
+    On a confirmed order that silently takes money back off the bill.
+    """
+    order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
+    priced = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "material_prices": {str(material_id): 250_000}},
+    )
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(owner_access),
+        json={"version": priced.json()["version"]},
+    )
+    assert approved.status_code == 200, approved.text
+    confirmed_total = approved.json()["total_tiyin"]
+
+    # Edit only the cutting rate — the material override goes with it.
+    refused = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": approved.json()["version"], "cutting_rate_tiyin": 60_000},
+    )
+
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["code"] == "order_has_unpriced_materials"
+    reread = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(owner_access))
+    assert reread.json()["total_tiyin"] == confirmed_total, "the bill must be untouched"
+
+
+async def test_a_new_order_may_still_be_re_priced_to_nothing(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The rule is about orders that already owe money.
+
+    A `new` order landing back at zero is the ordinary state this whole feature
+    creates; confirm is still ahead of it. Only past `new` does a re-price have
+    to keep the bill whole.
+    """
+    order, owner_access, material_id = await _order_placed_with_an_unpriced_panel(
+        client, db_session
+    )
+
+    repriced = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/prices",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "cutting_rate_tiyin": 60_000},
+    )
+
+    assert repriced.status_code == 200, repriced.text
+    assert [row["material_id"] for row in repriced.json()["unpriced_materials"]] == [
+        str(material_id)
+    ]
+
+
 async def test_a_staff_walk_in_order_does_not_auto_confirm_while_unpriced(
     client: AsyncClient,
     db_session: AsyncSession,

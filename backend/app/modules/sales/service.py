@@ -657,20 +657,10 @@ async def apply_order_edit(
     # Clearing them can un-price the order: an override is how staff price a
     # material the branch never priced, so a revision could drop a CONFIRMED
     # order back to a zero-priced line — past the confirm guard, with money
-    # already owed. Re-check against the new content and the now-empty
-    # overrides, and refuse rather than write that state.
-    if unpriced := await order_unpriced_material_ids(db, order, result):
-        raise APIError(
-            "order_has_unpriced_materials",
-            "Set a price for every material before saving this revision",
-            details={
-                "material_ids": [str(material_id) for material_id in unpriced],
-                "material_names": [
-                    material_label(result.material_snapshots.get(str(material_id), {}), material_id)
-                    for material_id in unpriced
-                ],
-            },
-        )
+    # already owed. Checked with the same rule as the other two re-pricing
+    # actions, which also means a revision of a `new` order may still be
+    # unpriced; confirm is still ahead of it.
+    await _expect_still_priced_after_repricing(db, order, result)
 
     edger_cleared = False
     if order.assigned_edger_user_id is not None and not _parts_have_banding(result.parts_snapshot):
@@ -1325,6 +1315,42 @@ async def approve_order(
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
 
+async def _expect_still_priced_after_repricing(
+    db: AsyncSession,
+    order: Order,
+    result: CuttingResult,
+) -> None:
+    """A re-price must not leave an order that already owes money billing zero.
+
+    Three actions re-price an existing order in place — setting order prices,
+    changing who supplies the material, and applying a revision — and each
+    rewrites the frozen snapshots the confirm guard reads. On a `new` order
+    landing back at zero is fine; the confirm guard is still ahead of it. Past
+    `new` the guard has already run, the client already owes the total, and
+    silently re-freezing a material at zero would take the money back out with
+    no one deciding to.
+
+    Call AFTER the re-price and the item rewrite, so it reads what was actually
+    stored rather than what was intended.
+    """
+    if order.status is OrderStatus.NEW:
+        return
+    unpriced = await order_unpriced_material_ids(db, order, result)
+    if not unpriced:
+        return
+    raise APIError(
+        "order_has_unpriced_materials",
+        "This change would leave a material on a confirmed order with no price",
+        details={
+            "material_ids": [str(material_id) for material_id in unpriced],
+            "material_names": [
+                material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+                for material_id in unpriced
+            ],
+        },
+    )
+
+
 async def _expect_every_material_priced(db: AsyncSession, order: Order) -> None:
     """Refuse to confirm while any material on the order resolves to zero.
 
@@ -1961,6 +1987,11 @@ async def set_order_prices(
     pricing = await _price_result(db, branch_id=order.branch_id, result=result, overrides=overrides)
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
     _add_order_items(db, order=order, pricing=pricing)
+    await db.flush()
+    # `material_prices` REPLACES the stored map rather than merging into it, so a
+    # call that only edits the cutting rate drops every material override with
+    # it — including the one that was the sole price a material had.
+    await _expect_still_priced_after_repricing(db, order, result)
     previous_total = order.total_tiyin
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
@@ -2053,6 +2084,11 @@ async def set_order_own_material(
     )
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
     _add_order_items(db, order=order, pricing=pricing)
+    await db.flush()
+    # Returning sheets the client had claimed turns a demand this order was
+    # exempt from into one it sells. The exemption was correct while the
+    # quantity was zero; the price has to exist now that it is not.
+    await _expect_still_priced_after_repricing(db, order, result)
     previous_total = order.total_tiyin
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
