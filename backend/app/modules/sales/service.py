@@ -77,6 +77,7 @@ from app.modules.sales.schemas import (
     OrderStatusEventResponse,
     OrderStockWarning,
     OrderSummaryResponse,
+    OrderUnpricedMaterial,
     ProductionEdgeSide,
     ProductionJobCard,
     ProductionJobDetail,
@@ -516,15 +517,24 @@ async def place_workshop_order(
     # Auto-confirm in the same call — the creator is the approver. _transition
     # writes the new→confirmed event (staff actor) + the standard order.confirmed
     # client notification; set confirmed_at like approve_order does.
-    order.confirmed_at = now
-    await _transition(
-        db,
-        principal=principal,
-        order=order,
-        to_status=OrderStatus.CONFIRMED,
-        reason=None,
-        metadata={},
-    )
+    #
+    # Unless something is still unpriced. The auto-confirm rests on "the creator
+    # is the approver — there is nothing left to verify", and an unpriced
+    # material is exactly something left to decide. Skipping it here leaves the
+    # order at `new`, where the detail screen names the gap and Approve is the
+    # button that closes it — the same path a client's order takes. Confirming
+    # anyway would bill the material at zero, which is the one outcome this
+    # whole feature exists to prevent.
+    if not await order_unpriced_material_ids(db, order, result):
+        order.confirmed_at = now
+        await _transition(
+            db,
+            principal=principal,
+            order=order,
+            to_status=OrderStatus.CONFIRMED,
+            reason=None,
+            metadata={},
+        )
     await db.flush()
     return cast(
         OrderDetailResponse,
@@ -644,6 +654,13 @@ async def apply_order_edit(
     # rule that already clears the discount and the surcharge above.
     overrides_cleared = bool(order.price_overrides)
     order.price_overrides = {}
+    # Clearing them can un-price the order: an override is how staff price a
+    # material the branch never priced, so a revision could drop a CONFIRMED
+    # order back to a zero-priced line — past the confirm guard, with money
+    # already owed. Checked with the same rule as the other two re-pricing
+    # actions, which also means a revision of a `new` order may still be
+    # unpriced; confirm is still ahead of it.
+    await _expect_still_priced_after_repricing(db, order, result)
 
     edger_cleared = False
     if order.assigned_edger_user_id is not None and not _parts_have_banding(result.parts_snapshot):
@@ -1285,6 +1302,7 @@ async def approve_order(
     )
     _expect_version(order, payload.version)
     _expect_status(order, {OrderStatus.NEW})
+    await _expect_every_material_priced(db, order)
     order.confirmed_at = datetime.now(UTC)
     await _transition(
         db,
@@ -1295,6 +1313,81 @@ async def approve_order(
         metadata={},
     )
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def _expect_still_priced_after_repricing(
+    db: AsyncSession,
+    order: Order,
+    result: CuttingResult,
+) -> None:
+    """A re-price must not leave an order that already owes money billing zero.
+
+    Three actions re-price an existing order in place — setting order prices,
+    changing who supplies the material, and applying a revision — and each
+    rewrites the frozen snapshots the confirm guard reads. On a `new` order
+    landing back at zero is fine; the confirm guard is still ahead of it. Past
+    `new` the guard has already run, the client already owes the total, and
+    silently re-freezing a material at zero would take the money back out with
+    no one deciding to.
+
+    Call AFTER the re-price and the item rewrite, so it reads what was actually
+    stored rather than what was intended.
+    """
+    if order.status is OrderStatus.NEW:
+        return
+    unpriced = await order_unpriced_material_ids(db, order, result)
+    if not unpriced:
+        return
+    raise APIError(
+        "order_has_unpriced_materials",
+        "This change would leave a material on a confirmed order with no price",
+        details={
+            "material_ids": [str(material_id) for material_id in unpriced],
+            "material_names": [
+                material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+                for material_id in unpriced
+            ],
+        },
+    )
+
+
+async def _expect_every_material_priced(db: AsyncSession, order: Order) -> None:
+    """Refuse to confirm while any material on the order resolves to zero.
+
+    Both catalogs list materials a branch carries but has not priced, because a
+    branch registers its format list long before it prices it and clients still
+    need to see the whole shelf. Nothing else stands between that and an order
+    line charging nothing, so this is the guard: a draft may hold an unpriced
+    material, and a quote may show one, but confirming — the step that turns an
+    order into money owed — may not.
+
+    Reads prices directly rather than calling `_price_result`, for two reasons.
+    Re-pricing also re-runs the "does the branch still carry this" check, which
+    deliberately does NOT apply once an order exists — QAD-150 requires that a
+    material deactivated after the order was placed cannot block recording the
+    work. And the stored `OrderItem` rows cannot answer it either: they floor
+    their unit price (`panel_price // quantity`), so a real but tiny price reads
+    as zero, and edge materials have no row of their own at all — their cost is
+    folded into a panel line's `edge_cost_tiyin`.
+
+    So the materials are fetched by id **without** the active filter: a
+    deactivated material still has to be paid for.
+    """
+    result = await _order_result(db, order)
+    unpriced = await order_unpriced_material_ids(db, order, result)
+    if not unpriced:
+        return
+    raise APIError(
+        "order_has_unpriced_materials",
+        "Set a price for every material before confirming",
+        details={
+            "material_ids": [str(material_id) for material_id in unpriced],
+            "material_names": [
+                material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+                for material_id in unpriced
+            ],
+        },
+    )
 
 
 async def assign_order_workers(
@@ -1894,6 +1987,11 @@ async def set_order_prices(
     pricing = await _price_result(db, branch_id=order.branch_id, result=result, overrides=overrides)
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
     _add_order_items(db, order=order, pricing=pricing)
+    await db.flush()
+    # `material_prices` REPLACES the stored map rather than merging into it, so a
+    # call that only edits the cutting rate drops every material override with
+    # it — including the one that was the sole price a material had.
+    await _expect_still_priced_after_repricing(db, order, result)
     previous_total = order.total_tiyin
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
@@ -1986,6 +2084,11 @@ async def set_order_own_material(
     )
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
     _add_order_items(db, order=order, pricing=pricing)
+    await db.flush()
+    # Returning sheets the client had claimed turns a demand this order was
+    # exempt from into one it sells. The exemption was correct while the
+    # quantity was zero; the price has to exist now that it is not.
+    await _expect_still_priced_after_repricing(db, order, result)
     previous_total = order.total_tiyin
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
@@ -2653,6 +2756,22 @@ async def _order_response(
             if include_revision
             else None
         ),
+        # What the confirm guard will refuse on, computed the same way, so the
+        # screen can name and price the gap before anyone hits the wall. Detail
+        # only — list responses never pay for this query.
+        unpriced_materials=(
+            [
+                OrderUnpricedMaterial(
+                    material_id=material_id,
+                    material_label=material_label(
+                        result.material_snapshots.get(str(material_id), {}), material_id
+                    ),
+                )
+                for material_id in await order_unpriced_material_ids(db, order, result)
+            ]
+            if result is not None
+            else []
+        ),
     )
 
 
@@ -3078,8 +3197,18 @@ async def _price_result(
             # is exactly `quantity` — the demand this line was built from.
             panels_used=quantity + own_panels.get(material_id, 0),
             own_panels=own_panels.get(material_id, 0),
-            unit_price_tiyin=branch_materials[material_id].price_tiyin,
-            line_total_tiyin=branch_materials[material_id].price_tiyin * quantity,
+            # Through the override, like `subtotal_materials` above. Reading the
+            # branch price straight made the itemized breakdown disagree with the
+            # total the moment an override existed — invisible while overrides
+            # were a rare negotiation, and permanent now that pricing an
+            # unpriced material *is* an override.
+            unit_price_tiyin=overrides.material_price(
+                material_id, branch_materials[material_id].price_tiyin
+            ),
+            line_total_tiyin=overrides.material_price(
+                material_id, branch_materials[material_id].price_tiyin
+            )
+            * quantity,
         )
         for material_id, quantity in panel_demands.items()
     ]
@@ -3087,7 +3216,11 @@ async def _price_result(
     for material_id, mm in edge_labour_mm.items():
         shop_mm = edge_demands.get(material_id, 0)
         material_cost = (
-            _millimetre_price(shop_mm, branch_materials[material_id].price_tiyin)
+            # Same override-aware read as the panel lines and the subtotal.
+            _millimetre_price(
+                shop_mm,
+                overrides.material_price(material_id, branch_materials[material_id].price_tiyin),
+            )
             if shop_mm > 0
             else 0
         )
@@ -3116,6 +3249,105 @@ async def _price_result(
         material_lines=material_lines,
         edge_lines=edge_lines,
     )
+
+
+async def order_unpriced_material_ids(
+    db: AsyncSession,
+    order: Order,
+    result: CuttingResult,
+) -> list[uuid.UUID]:
+    """Materials this order sells that still resolve to no price.
+
+    Shared by the confirm guard and the order-detail response, so the screen
+    that has to fix the gap and the check that enforces it can never disagree
+    about which materials are missing a price.
+
+    Prices come from the order's OWN frozen snapshots, never the live rate card.
+    The money an order bills is frozen at placement (`material_snapshot`,
+    `edge_snapshots`), so reading the catalog answers a different question than
+    the one that matters and gets it wrong in both directions:
+
+    - money escapes — an order placed while a material was unpriced bills 0 for
+      it forever; if the branch prices its catalog afterwards, a live read says
+      "priced" and confirm lets the zero-priced order through.
+    - work is blocked — an order placed at a correct 250 000 is refused because
+      the branch happens to have unpriced that material since.
+
+    The frozen price is the one the client owes, so the frozen price is what is
+    checked. `set_order_prices` rewrites these snapshots when staff price an
+    order, which is why an override lifts the block.
+
+    Which materials are SOLD still comes from the cutting result's demands, so
+    a sheet the client supplied entirely (demand 0) stays exempt.
+    """
+    panel_demands = _panel_stock_demands(result)
+    edge_demands = _edge_stock_demands(result)
+    if not (set(panel_demands) | set(edge_demands)):
+        return []
+    items = (await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))).all()
+    return _unpriced_material_ids(
+        panel_demands=panel_demands,
+        edge_demands=edge_demands,
+        frozen_prices=_frozen_material_prices(items),
+    )
+
+
+def _frozen_material_prices(items: Sequence[OrderItem]) -> dict[uuid.UUID, int]:
+    """The per-material prices this order actually billed, from its own items.
+
+    Panels carry theirs on `material_snapshot`; an edge material has no item row
+    of its own — its cost is folded into a panel line's `edge_cost_tiyin` — so
+    its frozen price is read from that line's per-side `edge_snapshots`.
+
+    A material appearing on several lines is priced once, so the max is taken
+    rather than the last seen: a single priced line is proof the order billed
+    for it, and only "nowhere priced" should read as unpriced.
+    """
+    prices: dict[uuid.UUID, int] = {}
+
+    def _record(material_id: uuid.UUID, price: int) -> None:
+        prices[material_id] = max(prices.get(material_id, 0), price)
+
+    for item in items:
+        if item.material_source is MaterialSource.SHOP:
+            _record(item.branch_material_id, int(item.material_snapshot.get("price_tiyin") or 0))
+        for field in _edge_fields():
+            edge = getattr(item, field, None)
+            if not edge or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
+                continue
+            _record(
+                uuid.UUID(str(edge["material_id"])),
+                int((edge.get("snapshot") or {}).get("price_tiyin") or 0),
+            )
+    return prices
+
+
+def _unpriced_material_ids(
+    *,
+    panel_demands: dict[uuid.UUID, int],
+    edge_demands: dict[uuid.UUID, int],
+    frozen_prices: dict[uuid.UUID, int],
+) -> list[uuid.UUID]:
+    """Materials this order *sells* that it froze at a price of zero.
+
+    `frozen_prices` is what the order actually billed, taken from its own item
+    snapshots — not the branch's current rate card. An order-level override
+    lifts the block because `set_order_prices` re-prices and rewrites those
+    snapshots, so the frozen number becomes the agreed one.
+
+    A demand of zero is not unpriced. `_panel_stock_demands` keeps a material's
+    key at zero when the client supplied every sheet of it themselves — the
+    workshop sells none of it and charges nothing for it, and requiring a price
+    there would block an order that is entirely correct.
+    """
+    unpriced: set[uuid.UUID] = set()
+    for demands in (panel_demands, edge_demands):
+        for material_id, quantity in demands.items():
+            if quantity <= 0:
+                continue
+            if frozen_prices.get(material_id, 0) <= 0:
+                unpriced.add(material_id)
+    return sorted(unpriced, key=str)
 
 
 def _priced_parts(

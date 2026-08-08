@@ -10,6 +10,10 @@ from app.modules.support.audit import (
     scrub_sensitive,
     scrub_text,
 )
+from app.modules.support.image_variants import (
+    ImageVariant,
+    resolve_variant,
+)
 from app.modules.support.notifications import (
     list_notifications,
     mark_all_notifications_read,
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
         S3FileStorage,
         StoredObject,
         attach_file,
+        build_image_variants,
         create_uploaded_file,
         file_storage,
         get_file_for_read,
@@ -40,6 +45,7 @@ _FILE_EXPORTS = {
     "S3FileStorage",
     "StoredObject",
     "attach_file",
+    "build_image_variants",
     "create_uploaded_file",
     "file_storage",
     "get_file_for_read",
@@ -59,10 +65,12 @@ __all__ = [
     "IMAGE_CONTENT_TYPES",
     "RECEIPT_CONTENT_TYPES",
     "FileStorage",
+    "ImageVariant",
     "InMemoryFileStorage",
     "S3FileStorage",
     "StoredObject",
     "attach_file",
+    "build_image_variants",
     "create_uploaded_file",
     "file_storage",
     "get_file_for_read",
@@ -74,6 +82,7 @@ __all__ = [
     "record_action",
     "record_status_change",
     "replace_attached_file",
+    "resolve_variant",
     "scrub_sensitive",
     "scrub_text",
     "unread_count",

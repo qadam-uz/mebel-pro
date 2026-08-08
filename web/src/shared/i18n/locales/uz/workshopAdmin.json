@@ -382,6 +382,7 @@
     "order_action_failed": "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",
     "order_version_conflict": "Buyurtma boshqa joyda o'zgargan. Ma'lumot yangilandi, qayta urinib ko'ring.",
     "order_edit_not_allowed": "Bu buyurtmani endi tahrirlab bo'lmaydi — ishlab chiqarish boshlangan yoki buyurtma yopilgan.",
+    "order_has_unpriced_materials": "Buyurtmadagi ba'zi materiallarga narx belgilanmagan. \"Narxlarni belgilash\" orqali kiriting va qayta tasdiqlang.",
     "order_revision_not_found": "Bu buyurtmada ochiq tahrir topilmadi.",
     "order_revision_branch_locked": "Tahrir buyurtmaning filialida qoladi — filialni o'zgartirib bo'lmaydi.",
     "order_revision_failed": "Tahrirni boshlab bo'lmadi. Qayta urinib ko'ring.",

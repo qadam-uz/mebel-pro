@@ -260,6 +260,15 @@ export interface OrderDetail extends OrderSummary {
   // True only on a cutting-done / banding-done response whose consume drove a
   // branch balance below zero. The transition already succeeded (QAD-150).
   stock_shortfall: boolean
+  // Materials on this order the branch never priced. The catalogs list unpriced
+  // formats on purpose, so an order can arrive carrying one; while this is
+  // non-empty the backend refuses to confirm (`order_has_unpriced_materials`).
+  unpriced_materials: OrderUnpricedMaterial[]
+}
+
+export interface OrderUnpricedMaterial {
+  material_id: string
+  material_label: string
 }
 
 export const activeWorkshopStatuses: OrderStatus[] = [

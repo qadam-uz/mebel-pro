@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-08
 order: 25
 ---
 
@@ -122,9 +122,11 @@ both `uzunlik` and `eni` and rejects `kromka_eni_mm`.
 
 **Price 0 means unpriced, not free.** A branch routinely registers its whole format list
 before it knows prices, so `price_tiyin` defaults to `0` and attaching without a price is
-legal. Responses carry a derived `price_unset` flag: client-facing listings **drop** those
-rows, workshop-facing ones **keep and flag** them, so the gap is visible exactly where it is
-fixable. `min_stock` is an **alert threshold, not a stock policy** — nothing stops the branch
+legal. Responses carry a derived `price_unset` flag, and **every** listing keeps and flags
+those rows — client-facing ones included, so a client sees the whole shelf rather than the
+priced fraction of it. What stops an unpriced format becoming a free order line sits at order
+confirmation, not here ([`orders.md`](../features/orders.md#pricing)).
+`min_stock` is an **alert threshold, not a stock policy** — nothing stops the branch
 holding less, nothing reserves the quantity, and the low-stock notification fires when
 `on_hand ≤ min_stock`, so `0` warns only once the material is gone. The rules behind both
 defaults, and what the attach form prefills, are in

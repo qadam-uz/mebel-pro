@@ -104,10 +104,12 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   structural**: the catalog reads require a branch, a branch is required before the parts
   editor opens (see _Branch selector_), and every row the picker shows is carried by
   construction. There is no browse-the-whole-catalog mode, no "carried only" toggle, and no
-  "this branch does not carry it" badge — the concept has no input left. Unpriced formats are
-  filtered out of the **client-facing** listing, so a client can only pick something the branch
-  can quote; the **workshop-facing** listing keeps them and the picker marks them with a
-  "Narx yo'q" pill, because staff can see the gap and fix it.
+  "this branch does not carry it" badge — the concept has no input left. Unpriced formats
+  appear in **both** listings, marked with a "Narx yo'q" pill: the branch's shelf is what the
+  picker shows, and a client picking one is not a problem to prevent here — confirming the
+  resulting order is refused until staff price it
+  ([`orders.md`](orders.md#pricing)). Stock is not a filter either, so a material with no
+  balance — or a negative one — stays pickable.
 - **Material is workshop-supplied unless the branch takes the client's own.** The per-part
   `material_source` and per-side edge `source` (`shop` / `own`) are always written `shop` by
   the editor, and a legacy draft saved otherwise is normalized back on load — the parts list

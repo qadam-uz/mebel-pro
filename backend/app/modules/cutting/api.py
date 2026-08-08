@@ -20,7 +20,11 @@ from app.modules.cutting.optimizer import (
     PlacementResult,
     run_optimizer,
 )
-from app.modules.cutting.pdf_document import PdfContext, render_cutting_pdf
+from app.modules.cutting.pdf_document import (
+    PdfContext,
+    render_cutting_pdf,
+    render_cutting_pdf_async,
+)
 from app.modules.cutting.service import (
     choose_result,
     clamp_own_claim,
@@ -89,6 +93,7 @@ __all__ = [
     "optimize_workshop_draft",
     "parse_import_file",
     "render_cutting_pdf",
+    "render_cutting_pdf_async",
     "run_optimizer",
     "update_draft",
     "update_workshop_draft",

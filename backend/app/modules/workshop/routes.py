@@ -1,11 +1,13 @@
 """Workshop owner/staff routes."""
 
 import uuid
+from collections.abc import Sequence
 
 from fastapi import APIRouter, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import UserStatus
+from app.modules.access.contracts import PermissionGrant
 from app.modules.access.schemas import PermissionGrantResponse, SessionResponse
 from app.modules.workshop.api import (
     block_user,
@@ -13,6 +15,7 @@ from app.modules.workshop.api import (
     create_user,
     get_user,
     grants_for_user,
+    grants_for_users,
     list_user_sessions,
     list_users,
     replace_user_grants,
@@ -78,7 +81,11 @@ async def users_index(
         branch_id=branch_id,
         status=status,
     )
-    return [await _user_response(db, row) for row in rows]
+    # One grants query for the whole page. This was `[await _user_response(db, row)
+    # for row in rows]` — a serial round trip per staff member, and the global
+    # search calls this endpoint on every keystroke.
+    grants = await grants_for_users(db, [row.id for row in rows])
+    return [_user_response_with_grants(row, grants[row.id]) for row in rows]
 
 
 @router.post(
@@ -221,7 +228,21 @@ async def _user_response(db: Session, user: object) -> WorkshopUserResponse:
 
     if not isinstance(user, WorkshopUser):
         raise TypeError("expected WorkshopUser")
-    grants = await grants_for_user(db, user.id)
+    return _user_response_with_grants(user, await grants_for_user(db, user.id))
+
+
+def _user_response_with_grants(
+    user: object, grants: Sequence[PermissionGrant]
+) -> WorkshopUserResponse:
+    """Shape one user, given grants already in hand.
+
+    Split out so the list endpoint can fetch every row's grants in one query
+    instead of one per row.
+    """
+    from app.modules.access.contracts import WorkshopUser
+
+    if not isinstance(user, WorkshopUser):
+        raise TypeError("expected WorkshopUser")
     return WorkshopUserResponse(
         id=user.id,
         workshop_id=user.workshop_id,

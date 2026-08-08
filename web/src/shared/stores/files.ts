@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId } from '@/shared/api/client'
+import { api, apiTraceId, withQuery } from '@/shared/api/client'
 import { useAuthStore } from '@/shared/stores/auth'
 
 export interface UploadedFile {
@@ -47,10 +47,16 @@ export const useFilesStore = defineStore('files', () => {
   // pins the decoded blob until revoked, so the caller MUST call `revoke()` when
   // the image is gone (e.g. onBeforeUnmount). Returning the revoke makes that
   // ownership contract explicit and impossible to forget silently.
-  async function loadObjectUrl(fileId: string): Promise<{ url: string; revoke: () => void }> {
-    const blob = await api.blob(`/files/${fileId}`, {
-      accessToken: auth.accessToken,
-    })
+  async function loadObjectUrl(
+    fileId: string,
+    size: 'sm' | 'md' | 'original' = 'original',
+  ): Promise<{ url: string; revoke: () => void }> {
+    // `original` sends no parameter, keeping the URL — and therefore the browser
+    // cache entry — identical to what shipped before renditions existed.
+    const blob = await api.blob(
+      size === 'original' ? `/files/${fileId}` : withQuery(`/files/${fileId}`, { size }),
+      { accessToken: auth.accessToken },
+    )
     const url = URL.createObjectURL(blob)
     return { url, revoke: () => URL.revokeObjectURL(url) }
   }

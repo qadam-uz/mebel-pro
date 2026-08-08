@@ -27,7 +27,7 @@ from app.modules.finance.api import (
     list_payable_orders,
     list_payable_supplier_invoices,
     list_supplier_debts,
-    render_statement_pdf,
+    render_statement_pdf_async,
     update_expense,
     update_income,
     void_adjustment,
@@ -278,7 +278,7 @@ async def supplier_debt_statement_pdf(
         date_to=date_to,
         branch_id=branch_id,
     )
-    return _statement_pdf_response(statement, side="suppliers")
+    return await _statement_pdf_response(statement, side="suppliers")
 
 
 @router.get("/debts/clients", response_model=DebtListResponse)
@@ -334,7 +334,7 @@ async def client_debt_statement_pdf(
         date_to=date_to,
         branch_id=branch_id,
     )
-    return _statement_pdf_response(statement, side="clients")
+    return await _statement_pdf_response(statement, side="clients")
 
 
 @router.post(
@@ -388,13 +388,15 @@ async def production_show(
     )
 
 
-def _statement_pdf_response(statement: DebtStatementResponse, *, side: StatementSide) -> Response:
-    """The akt sverka as a file. Rendered in-process, same as the cutting maps."""
+async def _statement_pdf_response(
+    statement: DebtStatementResponse, *, side: StatementSide
+) -> Response:
+    """The akt sverka as a file. Rendered in a worker thread, like the cutting maps."""
 
     slug = _ascii_slug(statement.name) or statement.counterparty_id.hex[:8]
     filename = f"akt-sverka-{slug}.pdf"
     return Response(
-        render_statement_pdf(statement, StatementPdfContext(side=side)),
+        await render_statement_pdf_async(statement, StatementPdfContext(side=side)),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )

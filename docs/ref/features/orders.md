@@ -390,6 +390,18 @@ missing format ([`catalog-inventory.md`](catalog-inventory.md)). The relevant er
 `missing_cutting_rate`, `missing_edge_banding_rate`, `branch_does_not_carry_panel`,
 `branch_does_not_carry_edge`.
 
+**An unpriced material stops the order at confirm, not before.** Both catalogs list formats
+the branch carries but has not priced, so an order can arrive selling one. A draft may hold
+it and a quote may show it — confirming is the step that turns an order into money owed, so
+that is where the line is drawn: `new → confirmed` is refused with
+`order_has_unpriced_materials` while any material the order **sells** resolves to zero, and
+the error names them. Staff clear it with an order-level price, which prices the material for
+this order without touching the branch's rate card. Two cases deliberately pass: a material
+the client supplied entirely (the workshop sells none of it, so it needs no price), and a
+material deactivated after the order was placed (it still has to be paid for, and re-checking
+the catalog here would resurrect the failure the [stock seam](#the-stock-seam) exists to
+avoid).
+
 ## UX — client app
 
 The client app's home (`/c`) is an **order-status-first dashboard**, with the cutting wizard

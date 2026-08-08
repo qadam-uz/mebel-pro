@@ -187,10 +187,22 @@ const edgerSub = computed<SlotSub>(() => {
 // What still blocks the start tap — surface the gap instead of a dead click.
 // The edger is deliberately not required here: its gate sits at the banding
 // start, so the saw never waits on a later stage's staffing.
+// A branch may carry a format long before it prices it, and both catalogs show
+// those rows — so an order can arrive selling one. Confirming is what turns the
+// order into money owed, so that is where the backend draws the line; this is
+// the same list, named on screen while it can still be fixed.
+const unpricedMaterials = computed(() => order.value?.unpriced_materials ?? [])
+const unpricedMissing = computed(() => {
+  const current = order.value
+  if (!current || current.status !== 'new' || unpricedMaterials.value.length === 0) return null
+  return t('orders.detail.unpricedBlocksApprove', { count: unpricedMaterials.value.length })
+})
+
 const startCuttingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'confirmed') return null
-  if (!current.assigned_cutter_user_id) return t('orders.detail.cutterNotChosen')
+  if (!current.assigned_cutter_user_id)
+    return t('orders.detail.startHint', { reason: t('orders.detail.cutterNotChosen') })
   return null
 })
 // Start is gated like completion: the assigned master, or the office on-behalf.
@@ -205,7 +217,8 @@ const canStartCutting = computed(() => {
 const startBandingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'edge_banding' || current.banding_started_at) return null
-  if (!current.assigned_edger_user_id) return t('orders.detail.edgerNotChosen')
+  if (!current.assigned_edger_user_id)
+    return t('orders.detail.startHint', { reason: t('orders.detail.edgerNotChosen') })
   return null
 })
 const workerOptions = computed<ChoiceOption[]>(() =>
@@ -279,6 +292,11 @@ const primaryAction = computed<PrimaryAction | null>(() => {
       key: 'approve',
       label: t('orders.action.approve'),
       busyLabel: t('orders.busy.approving'),
+      // Gated like startCutting: the backend refuses this transition while any
+      // material on the order has no price, so the button says so instead of
+      // letting the operator discover it from a failed request.
+      disabled: unpricedMaterials.value.length > 0,
+      hint: unpricedMissing.value,
       run: approve,
     }
   if (current.status === 'confirmed' && (canManageOrders.value || canCompleteCutting.value))
@@ -990,8 +1008,12 @@ onBeforeUnmount(() => {
         </div>
         <!-- The disabled-primary hint rides directly under the action row it
              explains — below the meta line it read as a stray caption. -->
+        <!-- The hint is rendered as the action supplied it. It used to be wrapped
+             in a "— can start once assigned" suffix, which was true when only the
+             two production starts had hints and became nonsense the moment
+             Approve gained one. Each action now owns its whole sentence. -->
         <p v-if="primaryAction?.hint" class="od-hint">
-          {{ $t('orders.detail.startHint', { reason: primaryAction.hint }) }}
+          {{ primaryAction.hint }}
         </p>
         <div class="od-meta">
           <span
@@ -1334,13 +1356,35 @@ onBeforeUnmount(() => {
                       formatTiyin(line.line_total_tiyin)
                     }}</span>
                   </div>
+                  <!-- Named where the money is, not as a toast on a failed
+                       confirm: these are the rows blocking the order, and the
+                       button that fixes them is the one already here. -->
+                  <div
+                    v-if="unpricedMaterials.length"
+                    class="mt-2 grid gap-1 rounded-lg border border-warning/40 bg-warning-soft/40 px-3 py-2"
+                  >
+                    <span class="text-xs font-black text-warning">
+                      {{ $t('orders.prices.unpricedTitle', { count: unpricedMaterials.length }) }}
+                    </span>
+                    <span
+                      v-for="material in unpricedMaterials"
+                      :key="material.material_id"
+                      class="truncate text-xs text-ink"
+                    >
+                      {{ material.material_label }}
+                    </span>
+                  </div>
                   <button
                     v-if="canEditOrder"
                     type="button"
                     class="mp-button mt-1 min-h-11 self-start"
                     @click="pricesOpen = true"
                   >
-                    {{ $t('orders.prices.open') }}
+                    {{
+                      unpricedMaterials.length
+                        ? $t('orders.prices.setMissing')
+                        : $t('orders.prices.open')
+                    }}
                   </button>
                 </template>
                 <template v-else>

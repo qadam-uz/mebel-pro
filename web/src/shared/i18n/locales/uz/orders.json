@@ -66,6 +66,8 @@
   },
   "prices": {
     "open": "Narxlarni o'zgartirish",
+    "setMissing": "Narxlarni belgilash",
+    "unpricedTitle": "{count} ta materialga narx belgilanmagan",
     "title": "Buyurtma narxlari",
     "body": "Har bir qatorning birlik narxini o'zgartiring. Miqdorlar chizmadan keladi va o'zgarmaydi.",
     "perSheet": "{n} list uchun · bir list narxi",
@@ -213,6 +215,7 @@
     "edgerPending": "Hali tayinlanmagan — kromka boshlanishidan oldin tanlang.",
     "edgerRequired": "Kromka ustasi tayinlanmaguncha ish boshlanmaydi.",
     "cutterNotChosen": "Kesuvchi tanlanmagan",
+    "unpricedBlocksApprove": "{count} ta materialga narx belgilanmagan — tasdiqlashdan oldin narxlarni kiriting",
     "edgerNotChosen": "Kromka yopishtiruvchi tanlanmagan",
     "unassigned": "Tayinlanmagan",
     "unknownWorker": "Noma'lum xodim",

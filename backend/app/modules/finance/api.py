@@ -28,6 +28,7 @@ from app.modules.finance.service import (
 from app.modules.finance.statement_pdf import (
     StatementPdfContext,
     render_statement_pdf,
+    render_statement_pdf_async,
 )
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "list_payable_supplier_invoices",
     "list_supplier_debts",
     "render_statement_pdf",
+    "render_statement_pdf_async",
     "update_expense",
     "update_income",
     "void_adjustment",
