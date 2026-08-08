@@ -32,6 +32,15 @@ class File(UUIDPrimaryKey, Timestamped, Base):
     entity_type: Mapped[str | None]
     entity_id: Mapped[uuid.UUID | None]
     sort_order: Mapped[int | None]
+    # Which downscaled renditions exist for this image, as {"sm": "<key>", ...}.
+    # Recorded rather than probed: without it every `?size=sm` read would have to
+    # ask the object store for a key that may not exist, 404, and retry with the
+    # original — an extra round trip per thumbnail on a page holding fifty. Empty
+    # for PDFs, for images already smaller than a rendition, and for anything
+    # uploaded before the backfill ran.
+    variant_keys: Mapped[dict[str, str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql")
+    )
     uploaded_by_type: Mapped[AuthenticatedPrincipalType] = mapped_column(
         enum_type(AuthenticatedPrincipalType, "authenticated_principal_type"),
         nullable=False,

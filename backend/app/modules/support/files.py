@@ -5,10 +5,11 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Protocol
 
+import anyio.to_thread
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -33,6 +34,11 @@ from app.modules.catalog.contracts import BranchMaterial, Dekor
 from app.modules.finance.contracts import Expense, Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.support.contracts import File as StoredFile
+from app.modules.support.image_variants import (
+    ImageDecodeError,
+    resize_image,
+    variant_storage_key,
+)
 from app.modules.workshop.contracts import Branch, Workshop
 
 ALLOWED_UPLOAD_CONTENT_TYPES = frozenset(
@@ -187,11 +193,61 @@ async def create_uploaded_file(
         storage_status=FileStorageStatus.STORED,
         uploaded_by_type=principal.principal_type,
         uploaded_by_id=principal.principal_id,
+        variant_keys=await build_image_variants(
+            storage, storage_key=stored.key, content_type=stored.content_type, content=content
+        ),
     )
     db.add(row)
     await db.flush()
     await db.refresh(row)
     return row
+
+
+async def build_image_variants(
+    storage: FileStorage,
+    *,
+    storage_key: str,
+    content_type: str,
+    content: bytes,
+) -> dict[str, str] | None:
+    """Store downscaled renditions beside `storage_key`; return their keys.
+
+    Best effort by design. The original is already saved by the time this runs,
+    and every read falls back to it, so a failure here costs a larger download —
+    never a lost upload. Raising instead would mean one unreadable image could
+    block an operator from attaching a photo at all.
+
+    Shared with the backfill command, which is why it takes the key and bytes
+    rather than a row.
+    """
+    if content_type not in IMAGE_CONTENT_TYPES:
+        return None
+    try:
+        # CPU-bound: a 2160x2160 source decodes and resamples in tens of
+        # milliseconds, and this process runs one event loop for every tenant.
+        rendered = await anyio.to_thread.run_sync(resize_image, content)
+    except ImageDecodeError as exc:
+        logger.warning("image_variant_decode_failed", storage_key=storage_key, reason=str(exc))
+        return None
+
+    keys: dict[str, str] = {}
+    for item in rendered:
+        key = variant_storage_key(storage_key, item.variant)
+        try:
+            await anyio.to_thread.run_sync(
+                partial(storage.put, key, item.content, item.content_type)
+            )
+        except FileStorageUnavailable as exc:
+            # Keep whatever did land: a half-populated map is valid, and the read
+            # path falls back to the original for anything missing.
+            logger.warning(
+                "image_variant_write_failed",
+                storage_key=key,
+                storage_error=str(exc),
+            )
+            continue
+        keys[item.variant.value] = key
+    return keys or None
 
 
 def _storage_error_code(exc: Exception) -> str:

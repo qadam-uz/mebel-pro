@@ -29,7 +29,7 @@ from app.modules.cutting.api import (
     optimize_draft,
     optimize_workshop_draft,
     parse_import_file,
-    render_cutting_pdf,
+    render_cutting_pdf_async,
     update_draft,
     update_workshop_draft,
     workshop_catalog_materials,
@@ -191,7 +191,9 @@ async def client_cutting_results_pdf(
     context = await cutting_result_pdf_context(db, result)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(result, context), media_type="application/pdf", headers=headers
+        await render_cutting_pdf_async(result, context),
+        media_type="application/pdf",
+        headers=headers,
     )
 
 
@@ -344,7 +346,9 @@ async def workshop_cutting_results_pdf(
     context = await cutting_result_pdf_context(db, result)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(result, context), media_type="application/pdf", headers=headers
+        await render_cutting_pdf_async(result, context),
+        media_type="application/pdf",
+        headers=headers,
     )
 
 

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.core.trace import get_trace_id
-from app.modules.cutting.api import PdfContext, cutting_result_response, render_cutting_pdf
+from app.modules.cutting.api import PdfContext, cutting_result_response, render_cutting_pdf_async
 from app.modules.cutting.schemas import CuttingDraftResponse
 from app.modules.sales.api import (
     apply_discount,
@@ -173,7 +173,7 @@ async def client_order_cutting_pdf(
     result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(
+        await render_cutting_pdf_async(
             await cutting_result_response(db, result),
             PdfContext(
                 order_number=order.order_number,
@@ -473,7 +473,7 @@ async def workshop_order_cutting_pdf(
     result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
     headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(
+        await render_cutting_pdf_async(
             await cutting_result_response(db, result),
             PdfContext(
                 order_number=order.order_number,

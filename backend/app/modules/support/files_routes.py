@@ -10,9 +10,11 @@ from fastapi.responses import Response
 from app.api.deps import AccountReadyPrincipal, Session
 from app.modules.support.api import (
     FileStorage,
+    ImageVariant,
     create_uploaded_file,
     file_storage,
     get_file_for_read,
+    resolve_variant,
 )
 from app.modules.support.files_schemas import FileResponse
 
@@ -62,10 +64,27 @@ async def files_show(
     principal: AccountReadyPrincipal,
     db: Session,
     storage: FileStorageDep,
+    size: ImageVariant | None = None,
 ) -> Response:
     row = await get_file_for_read(db, principal=principal, file_id=file_id)
-    etag = _file_etag(row.storage_key)
-    headers = {"Cache-Control": _FILE_CACHE_CONTROL, "ETag": etag}
+    # Resolved before the validator is built, because the key IS the validator.
+    # `sm` and the original are different bytes under one file id, so an ETag that
+    # ignored `size` would let a cache answer one with the other.
+    key, media_type = resolve_variant(
+        requested=size,
+        variant_keys=row.variant_keys,
+        original_key=row.storage_key,
+        original_content_type=row.content_type,
+    )
+    etag = _file_etag(key)
+    headers = {
+        "Cache-Control": _FILE_CACHE_CONTROL,
+        "ETag": etag,
+        # Same URL, different body per `size`. Without this a shared cache keyed
+        # on the URL alone could serve the wrong rendition; `private` already
+        # rules those out, and this states the contract regardless.
+        "Vary": "Accept-Encoding",
+    }
 
     # Revalidation hit: the permission check above already ran, so this is safe —
     # and it skips both the object-store round trip and the body transfer.
@@ -75,8 +94,8 @@ async def files_show(
     # `storage.open` is a blocking boto3 call. Inline it would stall the whole
     # event loop for the duration of the download — a catalog page opens ~50 of
     # these at once, so every other request in the process queues behind them.
-    content = await anyio.to_thread.run_sync(storage.open, row.storage_key)
-    return Response(content=content, media_type=row.content_type, headers=headers)
+    content = await anyio.to_thread.run_sync(storage.open, key)
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 def _etag_matches(header: str | None, etag: str) -> bool:

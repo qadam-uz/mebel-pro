@@ -18,9 +18,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from functools import partial
 from io import BytesIO
 from typing import Literal, NamedTuple
 
+import anyio.to_thread
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -76,6 +78,18 @@ class _Row(NamedTuple):
 class StatementPdfContext:
     side: StatementSide
     generated_at: datetime | None = None
+
+
+async def render_statement_pdf_async(
+    statement: DebtStatementResponse,
+    context: StatementPdfContext,
+) -> bytes:
+    """`render_statement_pdf` off the event loop — see `render_cutting_pdf_async`.
+
+    A reconciliation statement can run to many pages, and reportlab draws them
+    all synchronously on whatever thread calls it.
+    """
+    return await anyio.to_thread.run_sync(partial(render_statement_pdf, statement, context))
 
 
 def render_statement_pdf(

@@ -12,9 +12,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from io import BytesIO
 from typing import Any, NamedTuple
 
+import anyio.to_thread
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -158,6 +160,19 @@ class SummarySection:
     headers: list[str]
     widths: Sequence[float]
     rows: list[list[str]]
+
+
+async def render_cutting_pdf_async(
+    result: CuttingResultResponse, context: PdfContext | None = None
+) -> bytes:
+    """`render_cutting_pdf` off the event loop.
+
+    reportlab lays out every part of every panel and rasterises the diagram —
+    pure CPU, and it grows with the size of the cut. This process runs one event
+    loop for every tenant, so drawing inline stalls every other request for the
+    duration, exactly as the cutting optimizer did before it was offloaded.
+    """
+    return await anyio.to_thread.run_sync(partial(render_cutting_pdf, result, context))
 
 
 def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None = None) -> bytes:
