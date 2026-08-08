@@ -522,15 +522,24 @@ async def place_workshop_order(
     # Auto-confirm in the same call — the creator is the approver. _transition
     # writes the new→confirmed event (staff actor) + the standard order.confirmed
     # client notification; set confirmed_at like approve_order does.
-    order.confirmed_at = now
-    await _transition(
-        db,
-        principal=principal,
-        order=order,
-        to_status=OrderStatus.CONFIRMED,
-        reason=None,
-        metadata={},
-    )
+    #
+    # Unless something is still unpriced. The auto-confirm rests on "the creator
+    # is the approver — there is nothing left to verify", and an unpriced
+    # material is exactly something left to decide. Skipping it here leaves the
+    # order at `new`, where the detail screen names the gap and Approve is the
+    # button that closes it — the same path a client's order takes. Confirming
+    # anyway would bill the material at zero, which is the one outcome this
+    # whole feature exists to prevent.
+    if not await order_unpriced_material_ids(db, order, result):
+        order.confirmed_at = now
+        await _transition(
+            db,
+            principal=principal,
+            order=order,
+            to_status=OrderStatus.CONFIRMED,
+            reason=None,
+            metadata={},
+        )
     await db.flush()
     return cast(
         OrderDetailResponse,
@@ -650,6 +659,23 @@ async def apply_order_edit(
     # rule that already clears the discount and the surcharge above.
     overrides_cleared = bool(order.price_overrides)
     order.price_overrides = {}
+    # Clearing them can un-price the order: an override is how staff price a
+    # material the branch never priced, so a revision could drop a CONFIRMED
+    # order back to a zero-priced line — past the confirm guard, with money
+    # already owed. Re-check against the new content and the now-empty
+    # overrides, and refuse rather than write that state.
+    if unpriced := await order_unpriced_material_ids(db, order, result):
+        raise APIError(
+            "order_has_unpriced_materials",
+            "Set a price for every material before saving this revision",
+            details={
+                "material_ids": [str(material_id) for material_id in unpriced],
+                "material_names": [
+                    material_label(result.material_snapshots.get(str(material_id), {}), material_id)
+                    for material_id in unpriced
+                ],
+            },
+        )
 
     edger_cleared = False
     if order.assigned_edger_user_id is not None and not _parts_have_banding(result.parts_snapshot):

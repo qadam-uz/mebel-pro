@@ -156,6 +156,52 @@ async def test_placing_and_reading_stay_open_with_an_unpriced_material(
     assert client_read.status_code == 200, client_read.text
 
 
+async def test_a_staff_walk_in_order_does_not_auto_confirm_while_unpriced(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The one path that reaches CONFIRMED without going through Approve.
+
+    A staff-placed order is created and confirmed in one call — the creator is
+    the approver. That reasoning holds only when there is nothing left to
+    decide, and an unpriced material is something left to decide, so the
+    auto-confirm is skipped and the order waits at `new`. Without this the
+    guard is trivially bypassed: place the order from the counter instead.
+    """
+    from tests.test_workshop_order_create_api import (
+        _materials,
+        _optimized_workshop_draft,
+        _priced_workshop,
+        _resolve_client,
+    )
+
+    access, _, branch_id, _ = await _priced_workshop(db_session)
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    client_id = await _resolve_client(client, access, phone="+998901112255", name="Walk-in")
+    draft_id = await _optimized_workshop_draft(
+        client, access, client_id=client_id, branch_id=branch_id, panel=panel, edge=edge
+    )
+    # Unpriced only AFTER the draft exists, so the picker and optimize steps are
+    # untouched — this test is about the confirm decision, not about selection.
+    await _unprice(db_session, panel.id)
+
+    placed = await client.post(
+        "/api/v1/workshop/orders",
+        headers=_auth(access),
+        json={
+            "draft_id": draft_id,
+            "branch_id": str(branch_id),
+            "contact_name": "Walk-in",
+            "contact_phone": "+998901112255",
+        },
+    )
+
+    assert placed.status_code == 201, placed.text
+    body = placed.json()
+    assert body["status"] == "new", "an unpriced staff order must not auto-confirm"
+    assert [row["material_id"] for row in body["unpriced_materials"]] == [str(panel.id)]
+
+
 async def test_order_detail_names_the_materials_confirm_will_refuse_on(
     client: AsyncClient,
     db_session: AsyncSession,
