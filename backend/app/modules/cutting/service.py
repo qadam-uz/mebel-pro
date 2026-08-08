@@ -6,8 +6,10 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from typing import Any
 
+import anyio.to_thread
 from fastapi import status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -499,7 +501,16 @@ async def _apply_optimize(
     )
     draft.parts_snapshot = parts
     try:
-        optimizer_result = run_optimizer(optimizer_parts, panel_specs, params=params)
+        # Offloaded to a worker thread: `run_optimizer` is pure CPU with a 10 s
+        # budget (OPTIMIZATION_TIMEOUT_SECONDS), and the app runs a single event
+        # loop. Called inline it stalls *every* other request in the process for
+        # the whole optimization — a search typed while someone presses Optimize
+        # simply hangs. Only plain data crosses the boundary (parts, panel specs,
+        # cut params); the AsyncSession stays on the loop and is not touched
+        # until the result comes back.
+        optimizer_result = await anyio.to_thread.run_sync(
+            partial(run_optimizer, optimizer_parts, panel_specs, params=params)
+        )
     except OptimizerError as exc:
         raise APIError(
             exc.code,

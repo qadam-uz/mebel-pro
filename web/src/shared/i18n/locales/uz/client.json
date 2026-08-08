@@ -262,6 +262,7 @@
   },
   "error": {
     "fallback": "Amal bajarilmadi. Qayta urinib ko'ring.",
+    "request_timeout": "Internet aloqasi sekin — javob kelmadi. Qayta urinib ko'ring.",
     "permission_denied": "Bu amal uchun ruxsat yo'q.",
     "order_version_conflict": "Buyurtma holati o'zgardi — sahifani yangilab, qayta urinib ko'ring.",
     "order_not_found": "Buyurtma topilmadi.",

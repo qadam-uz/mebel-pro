@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
@@ -126,8 +127,20 @@ class InMemoryFileStorage:
         self.contents.pop(key, None)
 
 
-def file_storage() -> FileStorage:
+@lru_cache(maxsize=1)
+def _s3_storage() -> S3FileStorage:
     return S3FileStorage()
+
+
+def file_storage() -> FileStorage:
+    """FastAPI dependency for the object store.
+
+    Memoised: building a boto3 client parses botocore's bundled service models,
+    which cost far more than the request that needs it. This ran per request
+    before — including per image on a catalog page. botocore clients are safe to
+    share across threads, which matters now that reads run in the threadpool.
+    """
+    return _s3_storage()
 
 
 async def create_uploaded_file(

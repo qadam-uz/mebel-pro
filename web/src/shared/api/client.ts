@@ -2,8 +2,21 @@
 
 const API_PREFIX = '/api/v1'
 
+// `fetch` has no timeout of its own: a connection the network drops without an
+// RST never settles, so the promise stays pending for the life of the tab. Every
+// screen that awaits one keeps its skeleton up forever — the reported "search
+// freezes and never comes back". A ceiling turns that into an error state the UI
+// already knows how to render, which is what `web/CLAUDE.md`'s UX bar requires
+// ("every load that can hang gets a timeout → error path; no infinite spinners").
+const DEFAULT_TIMEOUT_MS = 20_000
+// Blobs are PDFs and images over links this app is explicitly built for; they
+// deserve room that a JSON read does not.
+const BLOB_TIMEOUT_MS = 120_000
+
 export interface ApiRequestInit extends RequestInit {
   accessToken?: string | null
+  /** Override the request ceiling. `null` disables it — use only for streams. */
+  timeoutMs?: number | null
 }
 
 export class ApiError extends Error {
@@ -13,6 +26,65 @@ export class ApiError extends Error {
   ) {
     super(`API ${status}`)
     this.name = 'ApiError'
+  }
+}
+
+/** The request hit its ceiling. Distinct from a caller's own cancellation. */
+export class ApiTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`API timeout after ${timeoutMs}ms`)
+    this.name = 'ApiTimeoutError'
+  }
+}
+
+/**
+ * True when a rejection is a deliberate cancellation rather than a failure.
+ *
+ * A superseded search aborts its predecessor; that predecessor must not paint an
+ * error, because nothing went wrong and a newer request already owns the screen.
+ */
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+/**
+ * One signal that fires when the caller's signal fires or the deadline passes.
+ *
+ * Hand-rolled rather than `AbortSignal.any()` + `AbortSignal.timeout()`: those
+ * need Safari 17.4+, and this app's users are exactly the people on older
+ * phones. Returns the cleanup so the timer never outlives its request.
+ */
+function requestSignal(
+  callerSignal: AbortSignal | null | undefined,
+  timeoutMs: number | null,
+): { signal: AbortSignal | undefined; timedOut: () => boolean; cleanup: () => void } {
+  if (!callerSignal && timeoutMs === null) {
+    return { signal: undefined, timedOut: () => false, cleanup: () => {} }
+  }
+  const controller = new AbortController()
+  let didTimeOut = false
+
+  const onCallerAbort = () => controller.abort(callerSignal?.reason)
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort(callerSignal.reason)
+    else callerSignal.addEventListener('abort', onCallerAbort, { once: true })
+  }
+
+  const timer =
+    timeoutMs === null
+      ? undefined
+      : setTimeout(() => {
+          didTimeOut = true
+          controller.abort()
+        }, timeoutMs)
+
+  return {
+    signal: controller.signal,
+    timedOut: () => didTimeOut,
+    cleanup: () => {
+      if (timer !== undefined) clearTimeout(timer)
+      callerSignal?.removeEventListener('abort', onCallerAbort)
+    },
   }
 }
 
@@ -49,7 +121,11 @@ export function captureApiError(
   fallback: string,
 ): { code: string; traceId: string | null } {
   let code = fallback
-  if (error instanceof ApiError) {
+  if (error instanceof ApiTimeoutError) {
+    // Its own code: "the connection is slow, try again" is actionable, where the
+    // generic fallback reads as a bug in the app.
+    code = 'request_timeout'
+  } else if (error instanceof ApiError) {
     code = error.status === 403 ? 'permission_denied' : (apiErrorCode(error) ?? fallback)
   }
   return { code, traceId: apiTraceId(error) }
@@ -118,7 +194,7 @@ function runRefresh(): Promise<string | null> {
 }
 
 async function request<T>(path: string, init: ApiRequestInit = {}, retrying = false): Promise<T> {
-  const { accessToken, headers, ...requestInit } = init
+  const { accessToken, headers, timeoutMs, signal, ...requestInit } = init
   const mergedHeaders = new Headers(headers)
   const isFormData = typeof FormData !== 'undefined' && requestInit.body instanceof FormData
   if (!mergedHeaders.has('Content-Type') && requestInit.body !== undefined && !isFormData) {
@@ -127,11 +203,27 @@ async function request<T>(path: string, init: ApiRequestInit = {}, retrying = fa
   if (accessToken) {
     mergedHeaders.set('Authorization', `Bearer ${accessToken}`)
   }
-  const res = await fetch(`${API_PREFIX}${path}`, {
-    credentials: 'include',
-    headers: mergedHeaders,
-    ...requestInit,
-  })
+  // An upload rides the same slow link a blob download does, so it gets the same
+  // headroom unless the caller says otherwise.
+  const ceiling =
+    timeoutMs === undefined ? (isFormData ? BLOB_TIMEOUT_MS : DEFAULT_TIMEOUT_MS) : timeoutMs
+  const attempt = requestSignal(signal, ceiling)
+  let res: Response
+  try {
+    res = await fetch(`${API_PREFIX}${path}`, {
+      credentials: 'include',
+      headers: mergedHeaders,
+      signal: attempt.signal,
+      ...requestInit,
+    })
+  } catch (error) {
+    // Our own deadline, not the caller's cancellation — report it as a failure so
+    // the calling screen leaves its loading state and shows a retry.
+    if (attempt.timedOut() && isAbortError(error)) throw new ApiTimeoutError(ceiling as number)
+    throw error
+  } finally {
+    attempt.cleanup()
+  }
   const isJson = res.headers.get('content-type')?.includes('application/json')
   const text = res.status === 204 ? '' : await res.text()
   const body = isJson && text.length > 0 ? JSON.parse(text) : text
@@ -162,16 +254,27 @@ async function request<T>(path: string, init: ApiRequestInit = {}, retrying = fa
 }
 
 async function requestBlob(path: string, init: ApiRequestInit = {}): Promise<Blob> {
-  const { accessToken, headers, ...requestInit } = init
+  const { accessToken, headers, timeoutMs, signal, ...requestInit } = init
   const mergedHeaders = new Headers(headers)
   if (accessToken) {
     mergedHeaders.set('Authorization', `Bearer ${accessToken}`)
   }
-  const res = await fetch(`${API_PREFIX}${path}`, {
-    credentials: 'include',
-    headers: mergedHeaders,
-    ...requestInit,
-  })
+  const ceiling = timeoutMs === undefined ? BLOB_TIMEOUT_MS : timeoutMs
+  const attempt = requestSignal(signal, ceiling)
+  let res: Response
+  try {
+    res = await fetch(`${API_PREFIX}${path}`, {
+      credentials: 'include',
+      headers: mergedHeaders,
+      signal: attempt.signal,
+      ...requestInit,
+    })
+  } catch (error) {
+    if (attempt.timedOut() && isAbortError(error)) throw new ApiTimeoutError(ceiling as number)
+    throw error
+  } finally {
+    attempt.cleanup()
+  }
   if (!res.ok) {
     const isJson = res.headers.get('content-type')?.includes('application/json')
     const text = await res.text()

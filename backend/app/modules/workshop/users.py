@@ -109,6 +109,10 @@ async def list_users(
             or_(
                 func.lower(WorkshopUser.full_name).like(pattern),
                 func.lower(WorkshopUser.login).like(pattern),
+                # Phone is how a workshop actually identifies staff, and the
+                # global search matched it client-side before that filter moved
+                # here — leaving it out would have silently dropped those hits.
+                func.lower(WorkshopUser.phone).like(pattern),
             )
         )
     if branch_id is not None:

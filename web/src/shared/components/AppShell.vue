@@ -376,13 +376,15 @@ function focusWorkshopSearch() {
   })
 }
 
-function runWorkshopSearchNow() {
+// Returns the run so a caller that needs the results (Enter) can await it.
+// Fire-and-forget is still correct for the debounce path.
+function runWorkshopSearchNow(): Promise<void> {
   window.clearTimeout(workshopSearchTimer)
   if (!canSearchWorkshop.value || !hasWorkshopSearchQuery.value) {
     workshopSearch.reset()
-    return
+    return Promise.resolve()
   }
-  void workshopSearch.search({
+  return workshopSearch.search({
     query: workshopSearchQuery.value,
     branchId: normalizedSearchBranchId.value,
     includeOrders: canSearchOrders.value,
@@ -401,9 +403,13 @@ function queueWorkshopSearch() {
   workshopSearchTimer = window.setTimeout(runWorkshopSearchNow, 220)
 }
 
-function submitWorkshopSearch() {
+async function submitWorkshopSearch() {
   workshopSearchOpen.value = true
-  runWorkshopSearchNow()
+  // Awaited, not fired and forgotten: reading the store on the next line used to
+  // see the *previous* query's results, because the debounce (220 ms) plus the
+  // request had not finished. Pressing Enter right after typing therefore did
+  // nothing, or opened the order matching what you typed a moment earlier.
+  await runWorkshopSearchNow()
   const results = workshopSearch.results
   if (workshopSearchResultCount.value !== 1) return
   const order = results.orders[0]
@@ -769,6 +775,7 @@ onBeforeUnmount(() => {
             class="workshop-search-panel"
             role="dialog"
             :aria-label="$t('shell.search.resultsAria')"
+            :aria-busy="workshopSearch.loading"
           >
             <div v-if="!canSearchWorkshop" class="workshop-search-empty">
               {{ $t('shell.search.noPermission') }}
@@ -776,7 +783,14 @@ onBeforeUnmount(() => {
             <div v-else-if="!hasWorkshopSearchQuery" class="workshop-search-empty">
               {{ $t('shell.search.minChars') }}
             </div>
-            <div v-else-if="workshopSearch.loading" class="workshop-search-empty">
+            <!-- Only blank on the FIRST search. Once there are results, keep them
+                 on screen while the next query loads: `loading` stays true until
+                 the slowest of four requests lands, so tearing them out meant the
+                 panel went empty on every typing pause. -->
+            <div
+              v-else-if="workshopSearch.loading && workshopSearchResultCount === 0"
+              class="workshop-search-empty"
+            >
               {{ $t('shell.search.searching') }}
             </div>
             <template v-else>

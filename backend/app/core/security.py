@@ -5,6 +5,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+import anyio.to_thread
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
@@ -40,6 +41,17 @@ def verify_password(password: str, password_hash: str) -> bool:
         return _hasher.verify(password_hash, password)
     except VerifyMismatchError:
         return False
+
+
+async def verify_password_async(password: str, password_hash: str) -> bool:
+    """`verify_password` off the event loop.
+
+    Argon2's defaults are 64 MiB and ~95 ms of CPU per verify. The app runs a
+    single event loop, so an inline verify stalls every other in-flight request
+    for that long — and a login burst serialises. Async callers use this; the
+    sync form stays for tests and CLI paths that have no loop to block.
+    """
+    return await anyio.to_thread.run_sync(verify_password, password, password_hash)
 
 
 def generate_token() -> str:

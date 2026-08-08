@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ApiError,
+  ApiTimeoutError,
   api,
   apiTraceId,
   captureApiError,
   configureSession,
+  isAbortError,
   withQuery,
 } from '@/shared/api/client'
 
@@ -210,5 +212,67 @@ describe('shared API client', () => {
       status: 401,
     })
     expect(refresh).not.toHaveBeenCalled()
+  })
+
+  // A dropped connection never settles `fetch`, so before this the calling screen
+  // kept its skeleton up for the life of the tab — the reported "search freezes".
+  it('rejects with ApiTimeoutError when a request outlives its ceiling', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            const signal = (init as RequestInit).signal
+            signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+
+      const pending = api.get('/workshop/orders', { timeoutMs: 5_000 })
+      const assertion = expect(pending).rejects.toBeInstanceOf(ApiTimeoutError)
+      await vi.advanceTimersByTimeAsync(5_000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('maps a timeout to request_timeout so the UI can name the cause', () => {
+    expect(captureApiError(new ApiTimeoutError(20_000), 'orders_load_failed')).toEqual({
+      code: 'request_timeout',
+      traceId: null,
+    })
+  })
+
+  // A superseded search aborts its predecessor. That is not a failure, and the
+  // screen must not paint an error for it — only `isAbortError` can tell them
+  // apart once both arrive as a rejected promise.
+  it('reports a caller cancellation as an abort, not a timeout', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          const signal = (init as RequestInit).signal
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+    )
+    const controller = new AbortController()
+
+    const pending = api.get('/workshop/orders', { signal: controller.signal })
+    controller.abort()
+
+    await expect(pending).rejects.toSatisfy(isAbortError)
+    await expect(pending).rejects.not.toBeInstanceOf(ApiTimeoutError)
+  })
+
+  it('leaves the request alone when the ceiling is disabled', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ status: 'ok' }, 200))
+
+    await api.get('/readyz', { timeoutMs: null })
+
+    // No signal means no timer was armed — a stream can outlive any ceiling.
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined()
   })
 })

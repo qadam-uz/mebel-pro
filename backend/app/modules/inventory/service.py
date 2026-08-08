@@ -138,6 +138,7 @@ async def list_stock(
     branch_id: uuid.UUID,
     search: str | None = None,
     low_stock_only: bool = False,
+    limit: int | None = None,
 ) -> list[StockRecord]:
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
     query = (
@@ -164,6 +165,11 @@ async def list_stock(
         # The threshold lives on the branch material, which `_material_join` has
         # already joined — so the single source of truth costs nothing here.
         query = query.where(StockItem.on_hand <= BranchMaterial.min_stock)
+    if limit is not None:
+        # Callers that only render a few rows (the global search preview) say so.
+        # Unbounded is still the default: the inventory table itself pages in the
+        # client and a silent cap there would hide stock.
+        query = query.limit(limit)
     return [
         StockRecord(
             stock_item=item,

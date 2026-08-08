@@ -38,6 +38,10 @@ from app.modules.inventory.schemas import (
 
 router = APIRouter(prefix="/workshop/branches/{branch_id}", tags=["inventory"])
 SUPPLIER_STATUS_QUERY = Query(default=None, alias="status")
+# Opt-in cap for callers that render a preview rather than the table (the global
+# search shows five rows). Default stays unbounded so the inventory screen, which
+# pages client-side, keeps seeing every row.
+STOCK_LIMIT_QUERY = Query(default=None, ge=1, le=200)
 
 
 @router.get("/stock", response_model=list[StockItemResponse])
@@ -47,6 +51,7 @@ async def stock_index(
     db: Session,
     search: str | None = None,
     low_stock: bool = False,
+    limit: int | None = STOCK_LIMIT_QUERY,
 ) -> list[StockItemResponse]:
     rows = await list_stock(
         db,
@@ -54,6 +59,7 @@ async def stock_index(
         branch_id=branch_id,
         search=search,
         low_stock_only=low_stock,
+        limit=limit,
     )
     return [_stock_response(row) for row in rows]
 

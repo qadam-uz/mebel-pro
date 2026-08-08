@@ -388,22 +388,40 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranchContext.value = value && value !== 'none' ? value : null
   }
 
+  // The "already loaded" guard below only covers callers that arrive *after* a
+  // load finished. The shell and the dashboard both ask on startup, within the
+  // same round trip of each other, so both saw `branchContextLoaded === false`
+  // and both fetched. Sharing the in-flight promise makes concurrent callers
+  // wait on one request instead of issuing their own.
+  let branchContextInFlight: Promise<void> | null = null
+
   async function loadBranchContext(options: { force?: boolean } = {}) {
     if (branchContextLoaded.value && !options.force) return
-    error.value = null
-    traceId.value = null
+    if (branchContextInFlight && !options.force) return branchContextInFlight
+    const run = (async () => {
+      error.value = null
+      traceId.value = null
+      try {
+        const response = await api.get<{ branches: BranchContextItem[] }>(
+          '/workshop/branch-context',
+          authInit(),
+        )
+        branches.value = response.branches
+        branchContextLoaded.value = true
+      } catch (errorValue) {
+        branchContextLoaded.value = false
+        error.value = 'branch_context_load_failed'
+        traceId.value = apiTraceId(errorValue)
+        throw error.value
+      }
+    })()
+    branchContextInFlight = run
     try {
-      const response = await api.get<{ branches: BranchContextItem[] }>(
-        '/workshop/branch-context',
-        authInit(),
-      )
-      branches.value = response.branches
-      branchContextLoaded.value = true
-    } catch (errorValue) {
-      branchContextLoaded.value = false
-      error.value = 'branch_context_load_failed'
-      traceId.value = apiTraceId(errorValue)
-      throw error.value
+      await run
+    } finally {
+      // Cleared only if this run is still the current one, so a `force` reload
+      // started meanwhile keeps its own promise available to later callers.
+      if (branchContextInFlight === run) branchContextInFlight = null
     }
   }
 
@@ -1110,6 +1128,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
 
   return {
     branches,
+    // Exposed so a view can wait for the shell's branch pick before loading,
+    // instead of loading once without it and again once it lands.
+    branchContextLoaded,
     selectedBranchContext,
     settings,
     managedBranches,

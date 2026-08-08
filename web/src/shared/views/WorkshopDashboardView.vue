@@ -271,6 +271,60 @@ async function loadFinanceSummary() {
   }
 }
 
+// Orders, finance and inventory are independent of each other, so their loads
+// run side by side — eight serialised round trips became four. Within a group
+// the calls stay sequential on purpose: each store shares one `loading`/`error`
+// pair across its actions, so two of its loads in parallel would race those
+// flags and clear a skeleton (or an error) that still belongs to the other.
+async function loadOrderSection() {
+  if (!canOrders.value && !canProduction.value) return
+  const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
+  const orderBranchId = contextBranchFor(visibleOrderBranches)
+  await orders.loadWorkshopOrders({
+    status: 'active',
+    limit: 100,
+    branch_id: orderBranchId,
+  })
+  if (orders.error) recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
+  if (!canOrders.value) return
+  await orders.loadRecentWorkshopOrders({ branch_id: orderBranchId, limit: 8 })
+  if (orders.error) {
+    recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
+  }
+}
+
+async function loadFinanceSection() {
+  await loadFinanceSummary()
+  // Best-effort tiles: a failed debts load must not take the dashboard down.
+  if (!canManageFinance.value) return
+  await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
+  await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
+}
+
+async function loadInventorySection() {
+  const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
+  const inventoryBranchIds =
+    inventoryContextBranchId !== null
+      ? [inventoryContextBranchId]
+      : inventoryBranches.value.map((branch) => branch.id)
+  if (!canInventory.value || inventoryBranchIds.length === 0) return
+  workshop.inventoryLoading = true
+  try {
+    await workshop.loadLowStock(inventoryBranchIds)
+    // Best-effort tile — a failed valuation must not take the dashboard down.
+    await workshop.loadStockValue(inventoryBranchIds).catch(() => undefined)
+    workshop.inventoryError = null
+    workshop.inventoryTraceId = null
+  } catch (errorValue) {
+    const captured = captureApiError(errorValue, 'inventory_load_failed')
+    workshop.inventoryError = captured.code
+    workshop.inventoryTraceId = captured.traceId
+    recordDashboardError(dashboardSections().inventory, captured.code, captured.traceId)
+  } finally {
+    workshop.inventoryLoading = false
+  }
+}
+
 async function loadDashboard() {
   dashboardLoading.value = true
   dashboardFailures.value = []
@@ -278,65 +332,53 @@ async function loadDashboard() {
     const captured = captureApiError(errorValue, 'branch_context_load_failed')
     recordDashboardError(dashboardSections().branches, captured.code, captured.traceId)
   })
-  if (canOrders.value || canProduction.value) {
-    const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
-    const orderBranchId = contextBranchFor(visibleOrderBranches)
-    await orders.loadWorkshopOrders({
-      status: 'active',
-      limit: 100,
-      branch_id: orderBranchId,
-    })
-    if (orders.error) recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
-    if (canOrders.value) {
-      await orders.loadRecentWorkshopOrders({
-        branch_id: orderBranchId,
-        limit: 8,
-      })
-      if (orders.error) {
-        recordDashboardError(dashboardSections().orders, orders.error, orders.traceId)
-      }
-    }
+  // `allSettled`, not `all`: each section is written to record its own failure
+  // and resolve, but one that ever threw would take the other two down with it
+  // and — before the `finally` below — leave the skeleton up for good. The
+  // sections are independent, so a thrown one must not hide the rest.
+  try {
+    await Promise.allSettled([loadOrderSection(), loadFinanceSection(), loadInventorySection()])
+  } finally {
+    dashboardLoading.value = false
+    dashboardReady.value = true
   }
-  await loadFinanceSummary()
-  // Best-effort tiles: a failed debts load must not take the dashboard down.
-  if (canManageFinance.value) {
-    await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
-    await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
-  }
-  const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
-  const inventoryBranchIds =
-    inventoryContextBranchId !== null
-      ? [inventoryContextBranchId]
-      : inventoryBranches.value.map((branch) => branch.id)
-  if (canInventory.value && inventoryBranchIds.length > 0) {
-    workshop.inventoryLoading = true
-    try {
-      await workshop.loadLowStock(inventoryBranchIds)
-      // Best-effort tile — a failed valuation must not take the dashboard down.
-      await workshop.loadStockValue(inventoryBranchIds).catch(() => undefined)
-      workshop.inventoryError = null
-      workshop.inventoryTraceId = null
-    } catch (errorValue) {
-      const captured = captureApiError(errorValue, 'inventory_load_failed')
-      workshop.inventoryError = captured.code
-      workshop.inventoryTraceId = captured.traceId
-      recordDashboardError(dashboardSections().inventory, captured.code, captured.traceId)
-    } finally {
-      workshop.inventoryLoading = false
-    }
-  }
-  dashboardLoading.value = false
-  dashboardReady.value = true
 }
 
-onMounted(loadDashboard)
+// The shell resolves the branch context asynchronously and then writes
+// `selectedBranchContext`. Loading on mount ran the whole chain once with no
+// branch selected — which queries *every* branch — and the watcher ran it again
+// a moment later with one, so every dashboard request went out twice with the
+// second reply discarding the first. Wait for the context, then load once.
+// `undefined` means "no load has happened yet", distinct from a null context.
+let loadedForContext: string | null | undefined
+
+function loadDashboardFor(context: string | null) {
+  loadedForContext = context
+  void loadDashboard()
+}
 
 watch(
-  () => workshop.selectedBranchContext,
-  () => {
-    void loadDashboard()
+  () => [workshop.branchContextLoaded, workshop.selectedBranchContext] as const,
+  ([contextLoaded, context]) => {
+    if (!contextLoaded) return
+    if (loadedForContext !== undefined && context === loadedForContext) return
+    loadDashboardFor(context)
   },
+  // `post` so the shell's own watcher has already written its branch pick for
+  // this tick; otherwise we would load with a context that is about to change.
+  { immediate: true, flush: 'post' },
 )
+
+onMounted(async () => {
+  try {
+    await workshop.loadBranchContext()
+  } catch {
+    // The context failed, so the watcher above will never fire. Load anyway —
+    // the dashboard renders the failure per section, which is far better than
+    // a skeleton that never resolves.
+    if (loadedForContext === undefined) loadDashboardFor(workshop.selectedBranchContext)
+  }
+})
 </script>
 
 <template>
