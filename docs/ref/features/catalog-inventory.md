@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-08
 order: 50
 ---
 
@@ -127,8 +127,9 @@ branch's stock item for it (zero on hand).
 - **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
   not selectable in a new cutting; stock and history stay. No delete.
 
-Clients see a format only when the dekor and the branch material are **both** `active`
-**and** the row is priced.
+Clients see a format when the dekor and the branch material are **both** `active`. Price and
+stock are not conditions: an unpriced or out-of-stock row is listed and labelled, never
+hidden.
 
 ### Attaching a dekor to a branch
 
@@ -185,9 +186,15 @@ learns the numbers afterwards.
   invented a price or didn't register the material at all — and an invented price is worse
   than a missing one, because it can be sold at. `price_tiyin` now defaults to `0`, `0` means
   **unpriced** (never free), and the gap is made visible instead of prevented: an unpriced row
-  carries a **"Narx yo'q"** warning pill in the workshop table, and is **excluded from every
-  client-facing listing** — a client can never see, pick or order a material with no price.
-  Revisit if unpriced rows start accumulating unnoticed; the pill is the only pressure today.
+  carries a **"Narx yo'q"** warning pill wherever it appears.
+- **Unpriced rows are listed to clients, not hidden.** They were excluded from every
+  client-facing listing, on the reasoning that a client should never pick something the branch
+  cannot quote. In practice a branch prices a handful of the formats it registers: one branch
+  carrying 518 formats offered clients two, the owner saw a full catalog, and neither screen
+  explained the difference. Clients now browse the whole shelf with the gap labelled, and the
+  money is guarded one step later — confirming an order that sells an unpriced material is
+  refused until staff price it ([`orders.md`](orders.md)). Revisit if clients start ordering
+  unpriced materials often enough that the pricing step becomes the bottleneck.
 - **`min_stock` defaults to `0`.** The column default is `0`, the API default is `0`, and
   leaving the input empty saves `0` — a row with no monitoring rather than a refused attach.
   The attach form still **prefills** 5 for a sheet and 50 m for a tape, editable per row,
@@ -319,8 +326,9 @@ now-redundant branch column:
   (o'lcham×qalinlik, narx, min qoldiq, qoldiq, holat, ⋯ menu). A group collapses. The
   grouping mirrors how the shelf is actually organised — one decor, several thicknesses —
   and stops the identity columns repeating on every row. A row whose price is unset carries
-  a **"Narx yo'q"** warning pill; the row is still there, still stockable, just invisible to
-  clients. Filters: search, `tur`, status; the table pages with a *load-more* control.
+  a **"Narx yo'q"** warning pill; the row is still there, still stockable, and still listed to
+  clients — the pill is the same one they see. Filters: search, `tur`, status; the table pages
+  with a *load-more* control.
   **+ Material** opens the two-step attach sheet (dekor picker → format chips + price /
   threshold table). Row: Edit (modal) · client visibility toggled by a status switch in the
   row itself. No Delete.
@@ -377,8 +385,9 @@ now-redundant branch column:
 
 The **cutting material picker** — the same component in the client and workshop apps — reads
 this same catalog, branch-scoped and grouped by dekor; it is specified in
-[`cutting.md`](cutting.md). The client-facing listing excludes unpriced rows, so a client
-never picks a material the branch cannot quote.
+[`cutting.md`](cutting.md). Both apps list every format the branch carries, unpriced ones
+included and marked; stock is not a filter either, so an out-of-stock or negative-balance
+material is still pickable.
 
 States: loading (skeletons); empty (nothing attached yet → "add materials to this
 branch"); error (`trace_id`). Accessibility: low-stock and "Narx yo'q" are chip + colour, not
@@ -405,8 +414,9 @@ colour alone; modals manage focus; owner-only controls are visibly gated for non
 - **Wrong format shape for the `tur`** — `kromka` with a sheet size, or a panel-shaped dekor
   with a tape width, is rejected with a message naming the material. The rule needs `tur`,
   which lives on `dekorlar`, so it is a service-layer check, not a DB constraint.
-- **A dekor attached with no price** — allowed; the row shows **"Narx yo'q"** in the workshop
-  table and is excluded from every client-facing listing until priced.
+- **A dekor attached with no price** — allowed; the row shows **"Narx yo'q"** everywhere it
+  appears, clients included, and can be ordered. The order cannot be **confirmed** until the
+  price exists ([`orders.md`](orders.md)).
 - **`shop` material short when an operator verifies an order** — a **warning**,
   never a block; the operator prompts the warehouseman ([`orders.md`](orders.md)).
 - **Order cancelled mid-production after material was consumed** — stock is **not**

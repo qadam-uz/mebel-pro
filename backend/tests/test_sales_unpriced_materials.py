@@ -156,6 +156,28 @@ async def test_placing_and_reading_stay_open_with_an_unpriced_material(
     assert client_read.status_code == 200, client_read.text
 
 
+async def test_order_detail_names_the_materials_confirm_will_refuse_on(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The screen has to know before it hits the wall.
+
+    Detail reports exactly what the guard checks, from the same helper, so the
+    workshop can price the gap instead of discovering it on a failed confirm.
+    """
+    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    material_id = await _panel_material_id(db_session, order["id"])
+
+    before = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(owner_access))
+    await _unprice(db_session, material_id)
+    after = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(owner_access))
+
+    assert before.json()["unpriced_materials"] == []
+    listed = after.json()["unpriced_materials"]
+    assert [row["material_id"] for row in listed] == [str(material_id)]
+    assert listed[0]["material_label"], "the operator needs a name, not a uuid"
+
+
 async def test_the_itemized_breakdown_reads_through_the_override(
     client: AsyncClient,
     db_session: AsyncSession,

@@ -263,6 +263,18 @@ class OrderEdgeMaterialDemand(APIModel):
     consumed_mm: int
 
 
+class OrderUnpricedMaterial(APIModel):
+    """A material this order sells that the branch has not priced.
+
+    The catalogs list unpriced formats on purpose, so an order can reach the
+    workshop carrying one. Confirming it is refused until staff set a price, and
+    this is what the screen reads to show which ones and offer the form.
+    """
+
+    material_id: uuid.UUID
+    material_label: str
+
+
 class OrderPriceLine(APIModel):
     """One material's share of the order price, rebuilt from order-time
     snapshots (item snapshot prices x cutting-result demands) so the itemized
@@ -393,6 +405,9 @@ class OrderDetailResponse(OrderSummaryResponse):
     # just recorded drove a branch balance below zero. Informational: the
     # transition already succeeded (QAD-150).
     stock_shortfall: bool = False
+    # Materials on this order the branch has not priced. Non-empty means confirm
+    # will be refused until every one is given a price.
+    unpriced_materials: list[OrderUnpricedMaterial] = Field(default_factory=list)
 
 
 # --- Production terminal (worker-scoped, money-free) -------------------------

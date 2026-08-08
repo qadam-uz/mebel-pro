@@ -77,6 +77,7 @@ from app.modules.sales.schemas import (
     OrderStatusEventResponse,
     OrderStockWarning,
     OrderSummaryResponse,
+    OrderUnpricedMaterial,
     ProductionEdgeSide,
     ProductionJobCard,
     ProductionJobDetail,
@@ -1326,27 +1327,7 @@ async def _expect_every_material_priced(db: AsyncSession, order: Order) -> None:
     deactivated material still has to be paid for.
     """
     result = await _order_result(db, order)
-    panel_demands = _panel_stock_demands(result)
-    edge_demands = _edge_stock_demands(result)
-    material_ids = set(panel_demands) | set(edge_demands)
-    if not material_ids:
-        return
-    rows = (
-        await db.scalars(
-            select(BranchMaterial).where(
-                # Scoped to the branch for the same reason `_active_branch_materials`
-                # is: it stops another branch's format id being priced here.
-                BranchMaterial.branch_id == order.branch_id,
-                BranchMaterial.id.in_(material_ids),
-            )
-        )
-    ).all()
-    unpriced = _unpriced_material_ids(
-        panel_demands=panel_demands,
-        edge_demands=edge_demands,
-        branch_materials={row.id: row for row in rows},
-        overrides=PriceOverrides.from_stored(order.price_overrides),
-    )
+    unpriced = await order_unpriced_material_ids(db, order, result)
     if not unpriced:
         return
     raise APIError(
@@ -2718,6 +2699,22 @@ async def _order_response(
             if include_revision
             else None
         ),
+        # What the confirm guard will refuse on, computed the same way, so the
+        # screen can name and price the gap before anyone hits the wall. Detail
+        # only — list responses never pay for this query.
+        unpriced_materials=(
+            [
+                OrderUnpricedMaterial(
+                    material_id=material_id,
+                    material_label=material_label(
+                        result.material_snapshots.get(str(material_id), {}), material_id
+                    ),
+                )
+                for material_id in await order_unpriced_material_ids(db, order, result)
+            ]
+            if result is not None
+            else []
+        ),
     )
 
 
@@ -3200,6 +3197,45 @@ async def _price_result(
             branch_materials=branch_materials,
             overrides=overrides,
         ),
+    )
+
+
+async def order_unpriced_material_ids(
+    db: AsyncSession,
+    order: Order,
+    result: CuttingResult,
+) -> list[uuid.UUID]:
+    """Materials this order sells that still resolve to no price.
+
+    Shared by the confirm guard and the order-detail response, so the screen
+    that has to fix the gap and the check that enforces it can never disagree
+    about which materials are missing a price.
+
+    Materials are fetched WITHOUT the active filter: a material deactivated
+    after the order was placed still has to be paid for, and re-running the
+    "does the branch still carry this" check here would resurrect the failure
+    QAD-150 exists to prevent.
+    """
+    panel_demands = _panel_stock_demands(result)
+    edge_demands = _edge_stock_demands(result)
+    material_ids = set(panel_demands) | set(edge_demands)
+    if not material_ids:
+        return []
+    rows = (
+        await db.scalars(
+            select(BranchMaterial).where(
+                # Scoped to the branch for the same reason `_active_branch_materials`
+                # is: it stops another branch's format id being priced here.
+                BranchMaterial.branch_id == order.branch_id,
+                BranchMaterial.id.in_(material_ids),
+            )
+        )
+    ).all()
+    return _unpriced_material_ids(
+        panel_demands=panel_demands,
+        edge_demands=edge_demands,
+        branch_materials={row.id: row for row in rows},
+        overrides=PriceOverrides.from_stored(order.price_overrides),
     )
 
 
