@@ -1317,9 +1317,15 @@ async def test_price_is_optional_on_attach_and_flags_the_gap(
     """A branch registers its whole format list before it knows prices.
 
     `price_tiyin` used to be required on attach and a 0 was rejected. It now
-    defaults to 0, meaning "not priced yet" — the row is flagged `price_unset`
-    for staff and dropped entirely from client-facing listings, so an unpriced
-    format can never become a free order line.
+    defaults to 0, meaning "not priced yet", and the row is flagged
+    `price_unset`.
+
+    Such rows used to be dropped from client-facing listings. They are not any
+    more: hiding them showed clients a fraction of the shelf — one real branch
+    carrying 518 formats offered two — so the client sees the whole catalog with
+    the gap labelled. What stops an unpriced format becoming a free order line
+    moved to confirm time (`order_has_unpriced_materials`, covered in
+    tests/test_sales_unpriced_materials.py).
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
@@ -1345,7 +1351,9 @@ async def test_price_is_optional_on_attach_and_flags_the_gap(
         headers=_auth(tokens.access_token),
     )
     assert client_view.status_code == 200
-    assert client_view.json() == []
+    # Visible to the client, and honestly labelled rather than hidden.
+    assert [row["id"] for row in client_view.json()] == [attached["id"]]
+    assert client_view.json()[0]["price_tiyin"] == 0
 
     priced = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{attached['id']}",

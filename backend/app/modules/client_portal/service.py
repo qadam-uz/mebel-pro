@@ -222,7 +222,9 @@ async def _branch_material_previews(
         .where(
             BranchMaterial.branch_id.in_(branch_ids),
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            BranchMaterial.price_tiyin > 0,
+            # No price gate — kept identical to `client_branch_materials` so this
+            # preview's "+N more" count can never disagree with the list it
+            # links to.
             Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
@@ -261,9 +263,13 @@ async def client_branch_materials(
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            # Same gate as the branch-card preview, so the "+N more" count and
-            # this list can never disagree. See _branch_material_previews.
-            BranchMaterial.price_tiyin > 0,
+            # No price gate: a branch registers its format list long before it
+            # prices it, and a client browsing the shelf should see what the
+            # branch actually works with. The row carries `price_unset` so the
+            # screen can label it, and confirming an order that sells an
+            # unpriced material is blocked in `sales` instead. The branch-card
+            # preview drops the same gate, so its "+N more" count still agrees
+            # with this list — see _branch_material_previews.
             Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
