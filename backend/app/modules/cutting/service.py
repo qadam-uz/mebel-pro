@@ -673,9 +673,13 @@ async def client_catalog_materials(
     """The client's material picker — always a single branch's own shelf.
 
     `branch_id` is required: since the reshape a "material" *is* a branch's
-    format of a dekor, so there is nothing to browse platform-wide. A client
-    never sees an unpriced row (`price_tiyin == 0` means "not priced yet") —
-    quoting one would produce a free order line.
+    format of a dekor, so there is nothing to browse platform-wide.
+
+    Unpriced rows are included. A branch registers its whole format list long
+    before it prices it, so hiding them showed clients a fraction of the shelf —
+    one branch carrying 518 formats offered two. The row carries `price_unset`
+    so the picker can say so, and `_expect_every_material_priced` (sales) stops
+    the resulting order at confirm until staff price what they are selling.
     """
     require_client(principal)
     await visible_branch(db, branch_id)
@@ -685,7 +689,7 @@ async def client_catalog_materials(
         branch_id=branch_id,
         search=search,
         manufacturer_id=manufacturer_id,
-        include_unpriced=False,
+        include_unpriced=True,
         limit=limit,
     )
 

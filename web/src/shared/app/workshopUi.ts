@@ -151,6 +151,7 @@ const WORKSHOP_ERROR_CODES: ReadonlySet<string> = new Set([
   'order_action_failed',
   'order_version_conflict',
   'order_edit_not_allowed',
+  'order_has_unpriced_materials',
   'order_revision_not_found',
   'order_revision_branch_locked',
   'order_revision_failed',

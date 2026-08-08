@@ -3,8 +3,9 @@
 import uuid
 
 from fastapi import status
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
@@ -204,44 +205,80 @@ async def _branch_material_previews(
     db: AsyncSession,
     branch_ids: list[uuid.UUID],
 ) -> tuple[dict[uuid.UUID, list[ClientBranchMaterialPreview]], dict[uuid.UUID, int]]:
-    """Top-N carried-material previews + total counts for many branches in ONE
-    query, so the branches list avoids the per-branch N+1 (CB-13).
+    """Top-N carried-material previews + total counts for many branches.
 
     One dekor now fans out to one row per format a branch carries, so both the
     preview and `materials_total` count *formats*, not decors — a branch with
     one decor in three thicknesses reports three.
+
+    Two bounded queries rather than one unbounded read. This used to hydrate
+    every matching row across every visible branch into three ORM entities and
+    count them in Python, to keep six of them — tolerable while the price gate
+    trimmed the set, wasteful the moment that gate came off (one real branch
+    carries 518 formats, and this runs on every keystroke of the branch search).
+    The count is now `COUNT(*)` grouped by branch, and the previews are cut to
+    `_BRANCH_PREVIEW_LIMIT` per branch by a window function before any row
+    leaves Postgres.
     """
     previews: dict[uuid.UUID, list[ClientBranchMaterialPreview]] = {}
     totals: dict[uuid.UUID, int] = {}
     if not branch_ids:
         return previews, totals
-    query = (
-        select(BranchMaterial, Dekor, Manufacturer)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
-        .where(
-            BranchMaterial.branch_id.in_(branch_ids),
-            BranchMaterial.status == MaterialStatus.ACTIVE,
-            BranchMaterial.price_tiyin > 0,
-            Dekor.holat == MaterialStatus.ACTIVE,
-            Manufacturer.status == MaterialStatus.ACTIVE,
-        )
-        .order_by(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm)
-    )
-    for branch_material, dekor, manufacturer in (await db.execute(query)).all():
-        branch_id = branch_material.branch_id
-        totals[branch_id] = totals.get(branch_id, 0) + 1
-        bucket = previews.setdefault(branch_id, [])
-        if len(bucket) < _BRANCH_PREVIEW_LIMIT:
-            bucket.append(
-                ClientBranchMaterialPreview(
-                    id=branch_material.id,
-                    manufacturer_name=manufacturer.name,
-                    name=branch_material_label(branch_material, dekor, manufacturer),
-                    price_tiyin=branch_material.price_tiyin,
-                    display_unit=display_unit(dekor.tur),
-                )
+
+    def _visible() -> Select[tuple[BranchMaterial, Dekor, Manufacturer]]:
+        return (
+            select(BranchMaterial, Dekor, Manufacturer)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            .where(
+                BranchMaterial.branch_id.in_(branch_ids),
+                BranchMaterial.status == MaterialStatus.ACTIVE,
+                # No price gate — kept identical to `client_branch_materials` so
+                # this preview's "+N more" count can never disagree with the
+                # list it links to.
+                Dekor.holat == MaterialStatus.ACTIVE,
+                Manufacturer.status == MaterialStatus.ACTIVE,
             )
+        )
+
+    counted = await db.execute(
+        _visible()
+        .with_only_columns(BranchMaterial.branch_id, func.count())
+        .group_by(BranchMaterial.branch_id)
+    )
+    totals = {branch_id: int(total) for branch_id, total in counted.all()}
+
+    ranked = (
+        _visible()
+        .add_columns(
+            func.row_number()
+            .over(
+                partition_by=BranchMaterial.branch_id,
+                order_by=(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm),
+            )
+            .label("rank")
+        )
+        .subquery()
+    )
+    top = aliased(BranchMaterial, ranked)
+    top_dekor = aliased(Dekor, ranked)
+    top_manufacturer = aliased(Manufacturer, ranked)
+    rows = await db.execute(
+        select(top, top_dekor, top_manufacturer)
+        .select_from(ranked)
+        .where(ranked.c.rank <= _BRANCH_PREVIEW_LIMIT)
+        .order_by(ranked.c.rank)
+    )
+    for branch_material, dekor, manufacturer in rows.all():
+        previews.setdefault(branch_material.branch_id, []).append(
+            ClientBranchMaterialPreview(
+                id=branch_material.id,
+                manufacturer_name=manufacturer.name,
+                name=branch_material_label(branch_material, dekor, manufacturer),
+                price_tiyin=branch_material.price_tiyin,
+                display_unit=display_unit(dekor.tur),
+            )
+        )
     return previews, totals
 
 
@@ -261,9 +298,13 @@ async def client_branch_materials(
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            # Same gate as the branch-card preview, so the "+N more" count and
-            # this list can never disagree. See _branch_material_previews.
-            BranchMaterial.price_tiyin > 0,
+            # No price gate: a branch registers its format list long before it
+            # prices it, and a client browsing the shelf should see what the
+            # branch actually works with. The row carries `price_unset` so the
+            # screen can label it, and confirming an order that sells an
+            # unpriced material is blocked in `sales` instead. The branch-card
+            # preview drops the same gate, so its "+N more" count still agrees
+            # with this list — see _branch_material_previews.
             Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )

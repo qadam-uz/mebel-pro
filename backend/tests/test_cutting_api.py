@@ -1180,9 +1180,11 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     picker returns is carried by construction. The old `branch_carried` flag and
     the `carried_only=false` browse mode are both deleted.
 
-    An UNPRICED format is dropped for a client (quoting one would produce a free
-    order line) but kept, flagged, for staff — the gap is visible where it is
-    fixable.
+    An UNPRICED format is returned to BOTH pickers, flagged `price_unset`.
+    Dropping it for clients hid most of the shelf — one real branch carrying 518
+    formats offered two — and quoting one no longer risks a free order line,
+    because `sales` refuses to confirm an order that sells an unpriced material
+    (tests/test_sales_unpriced_materials.py).
     """
     _, _, branch_id, _ = await _workshop_owner_access(db_session)
     panel, edge, other_panel = await _materials(db_session, branch_id=branch_id)
@@ -1207,7 +1209,11 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     assert panels.status_code == 200
     # `tape=false` (the default) means every panel-shaped dekor, not one `tur`:
     # the LDSP and the MDF row both belong in a panel picker.
-    assert {row["id"] for row in panels.json()} == {str(panel.id), str(other_panel.id)}
+    assert {row["id"] for row in panels.json()} == {
+        str(panel.id),
+        str(other_panel.id),
+        str(unpriced.id),
+    }
     by_id = {row["id"]: row for row in panels.json()}
     assert by_id[str(panel.id)]["price_tiyin"] == 250000
     assert by_id[str(panel.id)]["price_unset"] is False
@@ -1216,8 +1222,10 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     assert by_id[str(panel.id)]["tur"] == "ldsp"
     assert by_id[str(other_panel.id)]["tur"] == "mdf"
     assert by_id[str(other_panel.id)]["tolali"] is True
-    # The unpriced row never reaches a client.
-    assert str(unpriced.id) not in by_id
+    # The unpriced row reaches the client too, carrying the flag the picker
+    # renders as "Narx yo'q" — visible shelf, honest label.
+    assert by_id[str(unpriced.id)]["price_unset"] is True
+    assert by_id[str(unpriced.id)]["price_tiyin"] == 0
     # Kromka is its own shape, and it carries a tape width instead of a size.
     assert [row["id"] for row in tapes.json()] == [str(edge.id)]
     assert tapes.json()[0]["kromka_eni_mm"] == 19
