@@ -131,6 +131,7 @@ async def create_branch(
         status=BranchStatus.ACTIVE,
         kerf_mm=payload.kerf_mm,
         edge_trim_mm=payload.edge_trim_mm,
+        edge_overhang_mm=payload.edge_overhang_mm,
         own_material_allowed=payload.own_material_allowed,
     )
     db.add(branch)
@@ -207,6 +208,8 @@ async def update_branch(
         branch.kerf_mm = payload.kerf_mm
     if "edge_trim_mm" in payload.model_fields_set and payload.edge_trim_mm is not None:
         branch.edge_trim_mm = payload.edge_trim_mm
+    if "edge_overhang_mm" in payload.model_fields_set and payload.edge_overhang_mm is not None:
+        branch.edge_overhang_mm = payload.edge_overhang_mm
     if (
         "own_material_allowed" in payload.model_fields_set
         and payload.own_material_allowed is not None

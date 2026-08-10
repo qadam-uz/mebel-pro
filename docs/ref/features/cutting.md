@@ -177,17 +177,17 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **Kerf and edge trim are per-branch settings**, not global constants — each branch owns its
   saw's kerf and its own edge trim (usable area = panel − 2× edge trim), editable by the
   workshop owner on the branch form ([`workshop.md`](workshop.md)). Platform defaults for a new
-  branch: kerf 4 mm, edge trim 5 mm. Every optimisation run resolves both from the draft's
-  branch; a branch-less draft falls back to the platform defaults.
+  branch: kerf 4 mm, edge trim 5 mm, edge overhang 30 mm. Every optimisation run resolves all
+  three from the draft's branch; a branch-less draft falls back to the platform defaults.
 - **Edge-banding length is computed here.** For each part edge with a banding material set,
   the edge length is the part's length (top/bottom) or width (left/right). Totals roll up
   **by edge material** (`edge_length_by_material`, integer millimetres) — this is the
   **geometric banded length**.
-  The metres an order actually **bills and consumes** add a fixed per-side trim overhang
-  (masters glue tape long, then trim it flush) — a system constant, the same at every branch
-  — so the **consumed** figure is geometry + that trim; see [`orders.md`](orders.md#pricing)
-  for the rule. The optimiser emits the geometry, and because the overhang is constant the
-  consumed metres are known without a branch.
+  The metres an order actually **bills and consumes** add the branch's per-side glue-and-trim
+  overhang (masters glue tape long, then trim it flush), once per banded side — so the
+  **consumed** figure is geometry + that allowance; see [`orders.md`](orders.md#pricing) for
+  the rule. The optimiser emits both, resolving the overhang from the same branch it resolves
+  kerf and trim from.
 - **No stock check at cutting time.** The optimiser says only "N panels needed of material
   X" and "L metres needed of edge material Y." Stock is never a gate: the operator sees a
   non-blocking low-stock warning at order verification and the inventory module

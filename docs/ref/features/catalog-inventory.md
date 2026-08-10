@@ -279,7 +279,7 @@ stock; it only decrements it.
 
 **The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed**
 when the order's **Cutting done** is marked; `shop` edge consumed length (geometric
-banded length + the standard per-side trim overhang) is decremented in **integer
+banded length + the branch's per-side glue-and-trim overhang) is decremented in **integer
 millimetres**, per edge material, when **Banding done** is marked. A revert re-increments
 exactly what its step decremented. `own`-source panels and `own`-source edge sides never
 touch stock.
@@ -339,9 +339,10 @@ now-redundant branch column:
   (`edge_banding_rate_tiyin`, per metre, all thicknesses); it's the home future branch
   settings land in. Edits the branch's [Branch pricing](#branch-pricing) row. Save +
   unsaved-changes guard; "not set yet" empty state on a new branch (the rates start unset).
-  The raw edge **material** price lives on each `kromka` branch material — not here;
-  the edge **trim overhang** is a fixed system constant ([`orders.md`](orders.md#pricing)),
-  not a branch setting.
+  The raw edge **material** price lives on each `kromka` branch material — not here.
+  The edge **glue-and-trim overhang** is a branch setting too, but it sits with the branch's
+  other shop-floor millimetres on the branch form ([`workshop.md`](workshop.md)), not with
+  the rates.
 - **Stock** (`manage_inventory`) — table: material (label + image + manufacturer
   chip), on-hand, min-stock, unit; low-stock rows highlighted (chip + colour), and a
   "low-stock only" toggle chip. A **negative** balance escalates from the low-stock warning
@@ -427,7 +428,7 @@ colour alone; modals manage focus; owner-only controls are visibly gated for non
   write-off if the count needs correcting.
 - **Edge-roll remnant too short to band a side** — it can't be joined to the next
   roll (the seam would show), so the master discards it and records an `adjust`
-  write-off. Unlike the per-side trim overhang ([`orders.md`](orders.md#pricing)),
+  write-off. Unlike the per-side glue-and-trim overhang ([`orders.md`](orders.md#pricing)),
   which the client pays, a remnant is unattributable to any single order and is
   **absorbed by the workshop** — never billed.
 - **Operator reverts a completed job** — the system `restore`s exactly the quantity

@@ -128,10 +128,13 @@ Visibility for read operations:
 - **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number together
   with the order-number prefix it produces (`#26-1-…`), so one branch page is enough to decode a
   printed document. Below it, an owner-only editable branch form: branch contact, pricing
-  (entered in so'm), cutting settings (kerf + edge trim, in mm), material settings (whether
-  the branch takes a client's own sheets), and status controls. It does
-  not duplicate materials, stock, staff, or order management; those stay in their own sidebar
-  sections.
+  (entered in so'm), cutting settings (kerf + edge trim, in mm), edge settings (the
+  glue-and-trim overhang, in mm), material settings (whether the branch takes a client's own
+  sheets), and status controls. It does not duplicate materials, stock, staff, or order
+  management; those stay in their own sidebar sections. Edge settings are their own group
+  rather than a third cutting setting: the overhang is consumed at the bander, and it is the
+  one branch millimetre that moves what the client is billed for tape
+  ([`orders.md`](orders.md#pricing)).
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.
 

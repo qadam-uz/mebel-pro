@@ -104,6 +104,7 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "closed_reason": None,
             "kerf_mm": 4,
             "edge_trim_mm": 5,
+            "edge_overhang_mm": 30,
             "own_material_allowed": False,
             "permissions": ["manage_orders"],
         }
@@ -697,7 +698,7 @@ async def test_owner_edits_branch_cutting_settings_within_bounds(
     updated = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}",
         headers=_auth(owner_access),
-        json={"kerf_mm": 3, "edge_trim_mm": 12},
+        json={"kerf_mm": 3, "edge_trim_mm": 12, "edge_overhang_mm": 45},
     )
     reloaded = await client.get(
         f"/api/v1/workshop/branches/{branch_id}", headers=_auth(owner_access)
@@ -705,11 +706,14 @@ async def test_owner_edits_branch_cutting_settings_within_bounds(
 
     assert defaults.json()["kerf_mm"] == 4
     assert defaults.json()["edge_trim_mm"] == 5
+    assert defaults.json()["edge_overhang_mm"] == 30
     assert updated.status_code == 200
     assert updated.json()["kerf_mm"] == 3
     assert updated.json()["edge_trim_mm"] == 12
+    assert updated.json()["edge_overhang_mm"] == 45
     assert reloaded.json()["kerf_mm"] == 3
     assert reloaded.json()["edge_trim_mm"] == 12
+    assert reloaded.json()["edge_overhang_mm"] == 45
 
 
 @pytest.mark.parametrize(
@@ -719,6 +723,8 @@ async def test_owner_edits_branch_cutting_settings_within_bounds(
         {"kerf_mm": 21},
         {"edge_trim_mm": -1},
         {"edge_trim_mm": 51},
+        {"edge_overhang_mm": -1},
+        {"edge_overhang_mm": 101},
     ],
 )
 async def test_owner_branch_patch_rejects_out_of_bounds_cutting_settings(

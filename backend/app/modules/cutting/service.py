@@ -82,14 +82,18 @@ IMPORTED_MAP_ALGORITHM_VERSION = "map-1"
 
 
 async def _resolve_cut_params(db: AsyncSession, branch_id: uuid.UUID | None) -> CutParams:
-    """The draft's branch owns kerf/trim (workshop.md, cutting.md) — a
-    branch-less draft falls back to the platform defaults."""
+    """The draft's branch owns kerf/trim/edge overhang (workshop.md,
+    cutting.md) — a branch-less draft falls back to the platform defaults."""
     if branch_id is None:
         return DEFAULT_CUT_PARAMS
     branch = await db.get(Branch, branch_id)
     if branch is None:
         return DEFAULT_CUT_PARAMS
-    return CutParams(kerf_mm=branch.kerf_mm, edge_trim_mm=branch.edge_trim_mm)
+    return CutParams(
+        kerf_mm=branch.kerf_mm,
+        edge_trim_mm=branch.edge_trim_mm,
+        edge_overhang_mm=branch.edge_overhang_mm,
+    )
 
 
 async def create_draft(
@@ -200,6 +204,7 @@ async def _commit_imported_map_for_draft(
         material_snapshots=material_snapshots,
         panel_materials=panel_materials,
         layout=payload.map_layout,
+        edge_overhang_mm=params.edge_overhang_mm,
     )
     draft.chosen_result_id = result.id
     draft.updated_at = result.created_at
@@ -412,7 +417,7 @@ async def _refresh_candidate_results_for_neutral_parts(
         require_non_empty=True,
         params=params,
     )
-    metrics = edge_metrics(optimizer_parts)
+    metrics = edge_metrics(optimizer_parts, edge_overhang_mm=params.edge_overhang_mm)
     edge_snapshot_ids = {
         str(edge.material_id)
         for part in optimizer_parts
@@ -997,6 +1002,7 @@ async def _create_imported_map_result(
     material_snapshots: dict[str, dict[str, Any]],
     panel_materials: dict[str, _PanelPick],
     layout: ImportMapLayout,
+    edge_overhang_mm: int,
 ) -> CuttingResult:
     now = datetime.now(UTC)
     panels_used: dict[str, int] = {}
@@ -1061,12 +1067,14 @@ async def _create_imported_map_result(
             )
         )
 
-    metrics = edge_metrics(optimizer_parts)
+    metrics = edge_metrics(optimizer_parts, edge_overhang_mm=edge_overhang_mm)
     waste_percentage = (
         Decimal(total_sheet_area - total_part_area) / Decimal(total_sheet_area)
         if total_sheet_area
         else Decimal("0")
     )
+    # Kerf and trim are read back off the imported geometry, but the glue-and-trim
+    # overhang leaves no trace in a MAP file — it stays the branch's setting.
     kerf_mm, edge_trim_mm = derive_map_cut_params(layout)
     result = CuttingResult(
         draft_id=draft.id,

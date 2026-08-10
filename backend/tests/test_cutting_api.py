@@ -344,6 +344,42 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert action_count == 5
 
 
+async def test_optimize_consumes_the_branch_edge_overhang_not_the_platform_default(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # The bander's glue-and-trim allowance is a per-branch setting: the same
+    # geometry must consume more tape at a branch that trims longer.
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    branch = await db_session.get(Branch, branch_id)
+    assert branch is not None
+    branch.edge_overhang_mm = 50
+    await db_session.flush()
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": _parts(panel.id, edge.id)},
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize",
+        headers=_auth(access),
+    )
+
+    assert optimized.status_code == 200
+    result = optimized.json()["results"][0]
+    # Geometry is unchanged — the allowance never touches the drawn edge.
+    assert result["edge_length_shop_by_material"] == {str(edge.id): 440}
+    assert result["edge_length_own_by_material"] == {str(edge.id): 240}
+    # 2 shop sides of 220 mm and 2 own sides of 120 mm, each +50 mm.
+    assert result["edge_consumed_shop_by_material"] == {str(edge.id): 540}
+    assert result["edge_consumed_own_by_material"] == {str(edge.id): 340}
+
+
 async def _big_panel(db: AsyncSession, *, branch_id: uuid.UUID) -> MaterialFixture:
     """A panel generous enough that different branch edge-trims still leave room
     to place the parts (per-branch kerf/trim, cutting.md)."""

@@ -35,6 +35,7 @@ type BranchField =
   | 'edgeBandingRate'
   | 'kerfMm'
   | 'edgeTrimMm'
+  | 'edgeOverhangMm'
 type StatusField = 'reason'
 
 const route = useRoute()
@@ -70,6 +71,7 @@ const branchForm = reactive({
   phone: '',
   kerfMm: '',
   edgeTrimMm: '',
+  edgeOverhangMm: '',
   ownMaterialAllowed: false,
 })
 const additionalPhones = ref<string[]>([])
@@ -82,18 +84,21 @@ const phonesValidated = ref(false)
 const phoneRowErrors = computed(() =>
   phonesValidated.value ? additionalPhoneErrors(additionalPhones.value, branchForm.phone) : [],
 )
-// Integers only — kerf/trim are millimetres, never fractional (bounds mirror
-// the backend CheckConstraints: kerf 1-20, trim 0-50).
+// Integers only — kerf/trim/overhang are millimetres, never fractional (bounds
+// mirror the backend CheckConstraints: kerf 1-20, trim 0-50, overhang 0-100).
 const KERF_MM_MIN = 1
 const KERF_MM_MAX = 20
 const EDGE_TRIM_MM_MIN = 0
 const EDGE_TRIM_MM_MAX = 50
+const EDGE_OVERHANG_MM_MIN = 0
+const EDGE_OVERHANG_MM_MAX = 100
 function parseMm(value: string): number | null {
   if (!/^\d+$/.test(value.trim())) return null
   return Number(value.trim())
 }
 const kerfMmValue = computed(() => parseMm(branchForm.kerfMm))
 const edgeTrimMmValue = computed(() => parseMm(branchForm.edgeTrimMm))
+const edgeOverhangMmValue = computed(() => parseMm(branchForm.edgeOverhangMm))
 const pricingForm = reactive({
   cuttingRateSom: '',
   edgeBandingRateSom: '',
@@ -137,6 +142,7 @@ const branchFieldOrder: BranchField[] = [
   'edgeBandingRate',
   'kerfMm',
   'edgeTrimMm',
+  'edgeOverhangMm',
 ]
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
@@ -147,6 +153,7 @@ const branchFieldIds: Record<BranchField, string> = {
   edgeBandingRate: 'branch-detail-edge-rate',
   kerfMm: 'branch-detail-kerf-mm',
   edgeTrimMm: 'branch-detail-edge-trim-mm',
+  edgeOverhangMm: 'branch-detail-edge-overhang-mm',
 }
 const statusFieldErrors = reactive<FieldErrors<StatusField>>({})
 const statusFieldOrder: StatusField[] = ['reason']
@@ -198,6 +205,15 @@ function validateBranchForm() {
           max: EDGE_TRIM_MM_MAX,
         })
       : undefined
+  branchFieldErrors.edgeOverhangMm =
+    edgeOverhangMmValue.value === null ||
+    edgeOverhangMmValue.value < EDGE_OVERHANG_MM_MIN ||
+    edgeOverhangMmValue.value > EDGE_OVERHANG_MM_MAX
+      ? t('workshopAdmin.branchDetail.edgeOverhangError', {
+          min: EDGE_OVERHANG_MM_MIN,
+          max: EDGE_OVERHANG_MM_MAX,
+        })
+      : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   const firstPhoneRowError = phoneRowErrors.value.findIndex(Boolean)
@@ -233,6 +249,7 @@ function syncForms() {
   phonesValidated.value = false
   branchForm.kerfMm = String(branch.kerf_mm)
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
+  branchForm.edgeOverhangMm = String(branch.edge_overhang_mm)
   branchForm.ownMaterialAllowed = branch.own_material_allowed
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
@@ -279,6 +296,7 @@ async function saveBranch() {
       longitude: mapPoint.value ? String(mapPoint.value.longitude) : null,
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
+      edge_overhang_mm: edgeOverhangMmValue.value,
       own_material_allowed: branchForm.ownMaterialAllowed,
     })
     await workshop.updateBranchPricing(branchId.value, {
@@ -306,6 +324,7 @@ async function saveBranch() {
           additional_phones: 'phones',
           kerf_mm: 'kerfMm',
           edge_trim_mm: 'edgeTrimMm',
+          edge_overhang_mm: 'edgeOverhangMm',
         },
       ),
     )
@@ -615,6 +634,42 @@ onMounted(refreshBranch)
             </div>
             <p class="mt-2 text-xs text-ink-muted">
               {{ $t('workshopAdmin.branchDetail.usableArea') }}
+            </p>
+          </fieldset>
+          <!-- Its own group, not a third "cutting setting": the overhang is
+               consumed at the bander, and it is the one branch number that
+               moves what the client is billed for tape. -->
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">
+              {{ $t('workshopAdmin.branchDetail.edgeSettings') }}
+            </legend>
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="field" for="branch-detail-edge-overhang-mm">
+                <span>{{ $t('workshopAdmin.branchDetail.edgeOverhang') }}</span>
+                <input
+                  id="branch-detail-edge-overhang-mm"
+                  v-model="branchForm.edgeOverhangMm"
+                  class="mp-input"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!branchFieldErrors.edgeOverhangMm"
+                  :aria-describedby="
+                    branchFieldErrors.edgeOverhangMm
+                      ? 'branch-detail-edge-overhang-mm-error'
+                      : 'branch-detail-edge-overhang-mm-hint'
+                  "
+                />
+                <span
+                  v-if="branchFieldErrors.edgeOverhangMm"
+                  id="branch-detail-edge-overhang-mm-error"
+                  class="mp-field-error"
+                >
+                  {{ branchFieldErrors.edgeOverhangMm }}
+                </span>
+              </label>
+            </div>
+            <p id="branch-detail-edge-overhang-mm-hint" class="mt-2 text-xs text-ink-muted">
+              {{ $t('workshopAdmin.branchDetail.edgeOverhangHint') }}
             </p>
           </fieldset>
           <!-- Its own group: this is not a saw property but a policy about what
