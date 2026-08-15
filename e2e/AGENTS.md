@@ -3,27 +3,22 @@
 End-to-end browser tests with **Playwright** (TypeScript). Standalone pnpm
 package — it tests the running `web` app (which talks to the running `backend`).
 
-## Toolchain
-
-| Concern   | Tool                                  |
-| --------- | ------------------------------------- |
-| Runner    | `@playwright/test` (Playwright 1.5x)  |
-| Language  | TypeScript (Playwright transpiles; `tsc` only for `pnpm typecheck`) |
-| Browsers  | Chromium by default (`projects` in `playwright.config.ts`) |
-| PM        | pnpm                                  |
+`@playwright/test`, Chromium only (`projects` in `playwright.config.ts`); Playwright
+transpiles TS itself — `tsc` runs only for `pnpm typecheck`.
 
 ## Commands
 
 ```bash
-pnpm install                 # deps
 pnpm install:browsers        # one-time: download Chromium (+ OS deps)
-pnpm test                    # run the suite (boots web+backend dev servers, see below)
+pnpm test                    # run the suite (boots the whole stack itself, see below); single spec: pnpm test tests/x.spec.ts
 pnpm test:ui                 # interactive UI mode
 pnpm test:headed             # headed browser
-pnpm report                  # open last HTML report
-pnpm codegen                 # record a test against localhost:5173
 pnpm typecheck               # tsc --noEmit
 ```
+
+Host prerequisites for `pnpm test`: Docker running, `uv sync` done in `../backend`,
+`pnpm install` done in `../web` — the webServer commands shell into both sibling projects,
+and a missing toolchain there fails the boot as an unrelated-looking timeout.
 
 ## How it runs
 
@@ -36,11 +31,23 @@ declared — both the config and the specs read them from there):
   backend CLI (`app.cli seed-platform-user`) to create a platform user; that runs on the host,
   outside the app under test, so it needs the database's own address.
 - When `E2E_BASE_URL` is **unset**, Playwright's `webServer` boots the local stack:
-  1. Docker Compose starts Postgres + MinIO, creates the MinIO bucket, recreates the database
-     named in the DSN (`mebel_e2e` by default), migrates it, then runs
-     `uv --directory ../backend run fastapi dev app/main.py --port 8000`.
+  1. Docker Compose (pinned to `--env-file ../deploy/.env.dev.example` — your real
+     `deploy/.env` is deliberately **not** read) starts Postgres + MinIO, creates the MinIO
+     bucket, recreates the database named in the DSN (`mebel_e2e` by default), migrates it,
+     then runs `uv --directory ../backend run fastapi dev app/main.py --port 8000` with
+     `OTP_DEV_CODES` + `OTP_RATE_LIMITS_ENABLED=false` set.
   2. `pnpm --dir ../web dev` runs Vite on :5173, which proxies `/api` → :8000.
-  `reuseExistingServer` is on locally, so if you already have them running it won't double-start.
+- ⚠️ **Stop the docker dev stack's `backend` and `web` containers before `pnpm test`.**
+  `reuseExistingServer` health-checks :8000/:5173 and adopts *anything* answering there —
+  skipping the `mebel_e2e` recreate/migration and the OTP env entirely. An adopted docker
+  backend reads the demo DB `mebel` with rate limits on, so seeding lands in a database the
+  API never opens and every spec fails on its first login (401s) — it reads like a sweeping
+  regression but is stack adoption. The docker `postgres`/`minio` may stay up: the run
+  shares them (same compose project `mebel-pro`) and only owns its own database.
+- A host Postgres already listening on :5432 also breaks the run silently: the DB recreate
+  runs *inside* the container (`compose exec postgres psql`) while the backend and the
+  seeding CLI connect to `localhost:5432` — a host server shadows the container and the two
+  halves talk to different Postgreses.
 - `CI` env: retries=2, single worker, `github` + `html` reporters, `forbidOnly`.
 
 ### Running against an external stack
@@ -78,13 +85,14 @@ e2e/
   playwright.config.ts   # base URL, projects (browsers), webServer, reporters
   env.ts                 # E2E_BASE_URL / E2E_DATABASE_URL — declared once, imported everywhere
   tsconfig.json          # for `pnpm typecheck` only
-  tests/                 # *.spec.ts — one file per flow/feature
-    smoke.spec.ts
-    access-and-provisioning.spec.ts
-    catalog-and-inventory.spec.ts
-    cutting-drafts.spec.ts
-    order-production.spec.ts
+  tests/                 # *.spec.ts — one file per flow/feature (`ls tests/` for the inventory);
+                         # helpers.ts is the shared seeding/login module
 ```
+
+`tests/helpers.ts` carries the shared credentials and **bilingual UI-copy locator regexes**
+(e.g. `/^(Password|Parol)$/`). Web copy changes must keep these in sync — and since the web
+pre-push gate does not run Playwright, that drift ships silently unless you grep
+`e2e/tests/` and run the touched spec.
 
 ## Conventions
 
@@ -92,5 +100,4 @@ e2e/
 - Prefer **role/label/text locators** (`getByRole`, `getByLabel`, `getByText`) over CSS/XPath — they survive refactors and assert accessibility.
 - Use web-first assertions (`await expect(locator).toBeVisible()`) — they auto-retry; never `waitForTimeout`.
 - Keep tests independent and parallel-safe (`fullyParallel`): no shared mutable state, each test sets up what it needs. If a flow needs seeded data, do it via the API (`request` fixture) in a setup step, not the UI.
-- This package is for *integration through the browser*. Component-level and pure-logic tests belong in `web/` (Vitest), API tests in `backend/` (pytest). Don't duplicate those here — see the **testing-practices** skill for where a given test belongs.
-- `pnpm typecheck && pnpm test` must pass; keep the suite green before pushing.
+- This package is for *integration through the browser*. Don't duplicate lower-layer tests here — see the **testing-practices** skill for where a given test belongs.

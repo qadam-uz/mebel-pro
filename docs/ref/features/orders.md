@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-15
 order: 30
 ---
 
@@ -66,10 +66,11 @@ parameterizes the client flow, it doesn't fork it. The flow:
    is `active`; otherwise it renders disabled with a hint to switch branch. It lives in the
    sidebar rather than on the Orders screen because it is the app's most-run task and belongs
    to no single list.
-2. **Walk-in resolve** — phone-first find-or-create: the staffer enters the client's phone;
-   an existing client's registered name comes back and must be explicitly **confirmed**
-   before continuing; the name is asked only when the number is new; a blocked client is
-   rejected. Semantics, guardrails, and the decision rationale live in
+2. **Walk-in resolve** — phone-first find-or-create: the phone is looked up as the staffer
+   types (a read-only lookup, separate from the create); a match fills the registered name
+   into a read-only field with a caption, on the same screen — there is no second confirm
+   step; the name is asked only when the number is new; a blocked account reads as a miss. Semantics,
+   guardrails, and the decision rationale live in
    [`access-management.md`](access-management.md#staff-resolved-walk-ins-find-or-create).
 3. **Shared editor** — the client app's editor in fixed-branch mode: the branch is locked
    to the entry branch and frozen into the draft at creation, and a persistent strip names

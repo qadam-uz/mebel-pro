@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-13
+updated: 2026-08-15
 order: 80
 ---
 
@@ -744,7 +744,7 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **`impossible_grain`** — a locked part (`follow_grain=true`) can't fit in its forced
   orientation → the row is flagged.
 - **`too_many_parts` / `too_many_panels_needed`** — over the caps → reject; split the job.
-- **`optimization_timeout`** — no result within 5 s → retry or simplify.
+- **`optimization_timeout`** — no result within 10 s → retry or simplify.
 - **`draft_limit_exceeded`** — > 50 open drafts → delete some first.
 - **Unsupported import file** — the wizard accepts `.csv` and БАЗИС-Мебельщик
   **Спецификация в XML** `.xml`; `.xlsx`, legacy `.xls`, proprietary CAD files, PDFs,

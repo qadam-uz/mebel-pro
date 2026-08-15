@@ -12,6 +12,12 @@ cd deploy && cp .env.dev.example .env && docker compose up -d --build
 # API :8000 · web :5173 · Postgres :5432 · MinIO :9000
 ```
 
+**Two web surfaces can coexist.** The harness browser preview (`.claude/launch.json`) runs
+its own host Vite on **:5199** (`--strictPort`, chosen so the docker `web` on :5173 can't
+collide or get adopted); it still proxies `/api` to `localhost:8000`, so a backend must be up
+(docker or host). Screenshot the port you actually launched — :5173 is the docker container's
+instance, :5199 is the preview's.
+
 **Worktree gotcha:** compose reuses existing `mebel-pro-*` containers whose bind
 mounts point at whichever checkout created them. From a worktree, force the
 mounts onto your tree and confirm:
@@ -36,8 +42,27 @@ TOKEN=$(curl -s -X POST $API/auth/client/otp/verify -H 'Content-Type: applicatio
 ```
 
 Workshop token: `POST $API/auth/workshop/login` with `{"login":"owner","password":"OwnerDemo123"}`
-(field is `login`, not `username`). Auth is header-only — the SPA keeps tokens in
-memory, so in-page `fetch(..., {credentials:'include'})` gets 401; mint your own token.
+(field is `login`, not `username`). API calls are header-only — the SPA keeps access tokens
+in memory, so an in-page `fetch` of an API route without the header 401s; mint your own token
+for direct API work.
+
+## Logging the SPA in from the browser pane
+
+Typing into the login form via automation is unreliable (v-model misses the synthetic input
+on the workshop login). The recipe that works: run the login **as an in-page fetch, then
+reload** — login sets an HttpOnly refresh cookie, and the app silently refreshes from it on
+load:
+
+```js
+await fetch('/api/v1/auth/workshop/login', {
+  method: 'POST', credentials: 'include',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({login: 'owner', password: 'OwnerDemo123'}),
+})
+location.reload()
+```
+
+Same shape for the client SPA via the OTP endpoints (dev code `000000`).
 
 Useful surfaces: `GET /client/cutting-drafts/{id}`, `GET /client/cutting-results/{id}/pdf`,
 `GET /client/orders/{id}/cutting/pdf`, `GET /workshop/orders/{id}/cutting/pdf`.

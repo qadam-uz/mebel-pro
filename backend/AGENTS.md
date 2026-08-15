@@ -12,7 +12,7 @@ migrations via Alembic, settings via `pydantic-settings`. Managed with **uv**.
 | Web framework  | FastAPI (`fastapi[standard]` → uvicorn, CLI)          |
 | ORM            | SQLAlchemy 2.0 (async, typed `Mapped[...]`)           |
 | DB driver      | asyncpg (Postgres); aiosqlite in tests                |
-| Object store   | MinIO / S3-compatible, via **boto3** (`files` module) |
+| Object store   | MinIO / S3-compatible, via **boto3** (`support` module) |
 | Migrations     | Alembic (async env, autogenerate)                     |
 | Settings       | pydantic-settings (`app/core/config.py`)              |
 | Lint + format  | **ruff** (one tool for both)                          |
@@ -26,12 +26,11 @@ Run everything through `uv run` (no manual venv activation needed).
 
 ```bash
 uv sync                                  # install/refresh deps from uv.lock
-uv sync --upgrade                         # bump within constraints, update lock
 uv add <pkg>            / uv add --dev <pkg>
 
 uv run fastapi dev app/main.py            # dev server, autoreload, :8000
 
-uv run pytest                             # full suite + coverage
+uv run pytest                             # full suite + coverage (single file first while iterating)
 
 uv run ruff check . --fix                 # lint (autofix)
 uv run ruff format .                       # format
@@ -39,9 +38,16 @@ uv run mypy app                            # type check
 
 uv run alembic revision --autogenerate -m "add products"
 uv run alembic upgrade head
+
+uv run python -m app.cli                  # maintenance CLI: seed-platform-user · seed-error-record · backfill-image-variants
 ```
 
-Pre-commit equivalent (run before pushing): `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`.
+Run from `backend/` — `Settings` reads `.env` relative to the **CWD**, so a server started
+from the repo root silently loads no env file (`OTP_DEV_CODES` reverts to empty — the
+`000000` dev login stops working — and `DEBUG` to `false`). With `DEBUG=true`, `app.cli` shares stdout with SQLAlchemy echo
+logs — when piping to `jq`, grep for the line starting with `{` first.
+
+Pre-push gate (canonical copy in the root `AGENTS.md`): `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`.
 
 ## Layout
 
@@ -51,31 +57,49 @@ backend/
   uv.lock                 # pinned, committed
   alembic.ini             # script_location = app/migrations; URL injected at runtime
   app/
-    main.py               # create_app() factory + module-level `app`; lifespan hook
-    docs_site.py          # serves the repo's docs/ as HTML at /docs (Markdown rendered live); also exports `require_docs_auth`
-    docs_assets/          # docs-site assets: style.css (theme) + docs.js (on-this-page scroll-spy)
-    core/
-      config.py           # Settings (env / .env); `settings` singleton; sqlalchemy_database_uri; MINIO_*; DOCS_DIR; DOCS_AUTH_*
-      db.py               # async engine, SessionLocal, get_session() dependency
+    main.py               # create_app(): trace middleware, error handlers, lifespan (starts the platform scheduler task)
+    cli.py                # the maintenance CLI behind `uv run python -m app.cli`
+    docs_site.py          # serves the repo's docs/ as HTML at /docs; exports `require_docs_auth`
+    docs_assets/          # docs-site theme + scroll-spy JS
+    core/                 # config.py (Settings) · db.py · errors.py (APIError + handlers) · logging.py (structlog)
+                          #   trace.py (trace-ID middleware) · principal.py (AuthenticatedPrincipal, grants)
+                          #   security.py (argon2) · pdf.py + fonts/ (reportlab, DejaVu) · search_fold.py · material_label.py
     api/
-      deps.py             # Annotated DI aliases — `Session = Annotated[AsyncSession, Depends(get_session)]`
+      deps.py             # DI aliases: `Session` (function-scoped — commit completes before the response) + the auth
+                          #   surface (get_current_principal, Principal, AccountReadyPrincipal, has_permission)
       router.py           # api_router; mounts module-owned routers
       routes/             # meta-only routes (health.py); no domain route implementations
-    models/
-      __init__.py         # exports Base + import_all_models() metadata bootstrap
-      base.py             # DeclarativeBase `Base` + mixins (UUIDPrimaryKey, Timestamped)
-      enums.py            # shared enum/value definitions used across modules
-    schemas/              # shared schema base/meta responses only
-    modules/              # domain modules; models, routes, schemas, public api.py/contracts.py, private service files
+    models/               # shared infra only: Base + mixins (base.py), shared enums (enums.py),
+                          #   import_all_models() registry (__init__.py) — NO domain model files
+    schemas/              # shared schema bases only (APIModel in common.py)
+    modules/              # domain modules — access, catalog, client_portal, cutting, finance,
+                          #   inventory, platform, sales, support, workshop
     services/             # retired layer-first package; keep empty, do not add domain files
     migrations/           # Alembic: env.py (async), script.py.mako, versions/
-  tests/
-    conftest.py           # db_session (in-memory sqlite, schema via metadata.create_all) + httpx client w/ get_session override
-    test_*.py
-  Dockerfile              # multi-stage; uv installs deps into the system interpreter (no venv in the image); non-root runtime; CMD runs `alembic upgrade head` then uvicorn
-  .env.dev.example        # local non-Docker env, dev defaults (Compose uses deploy/.env)
+  tests/                  # conftest.py (in-memory sqlite + httpx client w/ get_session override),
+                          #   factories.py, fixtures/, test_*.py
+  Dockerfile              # multi-stage; compiles a pinned PackingSolver from source (sha256-checked);
+                          #   uv installs deps into the system interpreter (no venv); non-root;
+                          #   CMD runs `alembic upgrade head` then uvicorn
+  .env.dev.example        # local non-Docker env — copy to `.env` (Compose uses deploy/.env instead)
   .env.prod.example       # same shape, secrets as {{change-me}}
 ```
+
+File inventories drift — `ls` a directory before trusting any list here.
+
+Subsystem pointers (all born module-first; each lives where the roster says):
+
+- **Auth/authz** — bearer-token sessions, OTP login via Telegram Gateway (rate limits in
+  `Settings.OTP_*`), login IP throttle, argon2 hashing; the `access` module owns it
+  (auth.py, authz.py, otp.py, sessions.py, login_throttle.py) with the principal/permission
+  types in `core/principal.py` and the DI surface in `api/deps.py`.
+- **Files & images** — the `support` module owns object storage (files.py, files_routes.py)
+  and sm/md image renditions (image_variants.py, Pillow); notifications live here too.
+- **Cutting** — `cutting-engine` (pinned wheel; the dev compose stack can override it from
+  a sibling checkout — see `deploy/AGENTS.md`) plus a PackingSolver binary built in the
+  Dockerfile; cut-file import parsers under `modules/cutting/imports/`.
+- **PDFs** — reportlab through `core/pdf.py` (bundled DejaVu fonts); cutting documents and
+  finance statements render server-side and are never stored.
 
 ## Conventions
 
@@ -113,14 +137,18 @@ backend/
   Domain files under `app/models/` or `app/schemas/` are also retired. Add
   domain code under `app/modules/<module>/`; the boundary test enforces this.
 - **Config**: add new settings to `Settings` in `app/core/config.py` with a default following the repo's Convention-over-Configuration rule (non-security → leans dev, security → leans prod/locked; secrets have no default). Surface each in all four templates — `.env.dev.example` + `.env.prod.example` here and in `deploy/`. Read config via the `settings` singleton.
-- **Errors**: raise `fastapi.HTTPException` (or a subclass) for client-facing failures; let unexpected errors propagate (they 500 + log).
+- **Errors**: raise `APIError(code, message, status_code=…, details=…)` from
+  `app/core/errors.py` for client-facing failures — **not** `fastapi.HTTPException` (no
+  module file uses it). Registered handlers shape every error into the envelope
+  `{code, message, trace_id[, details]}`; let unexpected errors propagate — they 500 with a
+  structured log and a record in the platform error monitor.
 - **API prefix**: everything under `settings.API_V1_PREFIX` (`/api/v1`). `GET /api/v1/healthz` (liveness) and `/readyz` (DB-check) already exist.
 - **Built-in pages**: `/docs` serves the project's `docs/` Markdown tree rendered live (`app/docs_site.py`; directory = `settings.DOCS_DIR`, default `<repo>/docs`; no build step — edit a file and refresh `:8000/docs`). The OpenAPI UIs moved to **`/api-docs`** (Swagger) and `/api-redoc` (ReDoc); the schema stays at `/api/v1/openapi.json`. **All four are behind HTTP Basic** with the same credentials — `settings.DOCS_AUTH_USERNAME` / `DOCS_AUTH_PASSWORD` (dev default `docs`/`docs`; change in any non-local deploy). Health endpoints (`/api/v1/healthz`, `/readyz`) stay open.
 - **Lint/type clean** is required: `ruff check`, `ruff format --check`, `mypy app` must all pass. Prefer fixing over `# noqa` / `# type: ignore`; when you must suppress, scope it to the line with a reason.
 
 ## Database / object store / running locally
 
-- Postgres is expected on `localhost:5432` (db `mebel`, user/pass `mebel/mebel`) and MinIO on `localhost:9000` (key/secret `mebel/mebel`, bucket `mebel`) — `cd deploy && docker compose up -d postgres minio createbuckets` brings up both (the `createbuckets` one-shot creates the bucket and exits).
+- Postgres is expected on `localhost:5432` (db `mebel`, user/pass `mebel/mebel`) and MinIO on `localhost:9000` (key/secret `mebel/mebel-secret`, bucket `mebel`) — `cd deploy && docker compose up -d postgres minio createbuckets` brings up both (the `createbuckets` one-shot creates the bucket and exits). A host Postgres already on :5432 shadows the container for every `localhost` DSN — see the root `AGENTS.md` traps.
 - Then `uv run alembic upgrade head` and `uv run fastapi dev app/main.py`. The MinIO endpoint / access key / bucket come from `MINIO_*` in `.env` (defaults already point at the local MinIO).
 - Tests need **no** database and **no** object store — they use in-memory SQLite and should stub/fake S3. Point `DATABASE_URL` at a real Postgres to run the suite against it. Two infra-gated suites are skipped by default and run in CI against the Compose data services: `POSTGRES_CONCURRENCY=1` (+ a throwaway Postgres `DATABASE_URL` — the test drops/recreates all tables) and `MINIO_CONTRACT=1` (needs the local MinIO). A gated test must keep an executing home in CI — see the **testing-practices** skill.
 

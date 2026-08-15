@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-15
 order: 20
 ---
 
@@ -50,8 +50,10 @@ that's a considered substitution.
 - **Automatic payroll / compensation engine** — v1 stores no pay rates and computes no
   salary; it reports raw per-worker production and the accountant books salary as an
   expense by hand.
-- **Post-placement order modification** — a wrong order is cancelled (with a reason) and
-  re-ordered; there is no edit / re-price path.
+- **Client-side post-placement order modification** — a client's wrong order is cancelled
+  (with a reason) and re-ordered. Staff with `manage_orders` do have a pre-production
+  revision path (`new`/`confirmed` only) that re-freezes pricing at current rates — see
+  [`ref/features/orders.md`](ref/features/orders.md) → Revising a placed order.
 - **SMS, email, and bot notifications** — v1 is in-app only.
 - **Delivery fulfilment** — v1 is **pickup-only**. The delivery model (address capture,
   fixed-fee zones, driver flow, distance-based pricing, the `process_delivery` grant) is

@@ -134,21 +134,12 @@ type, components, and the words the product uses. How to build against it, and t
 has to clear before it ships, are working instructions and live in
 [`AGENTS.md`](./AGENTS.md).
 
-The frontmatter tokens are the machine-readable source; they mirror `@theme` in
-`src/assets/main.css` one-to-one (`colors.accent` → `--color-accent`). Change a value there and
-here together. Shared primitives live under `src/shared/components/`.
-
-## Overview
-
-A working tool for furniture workshops in Uzbekistan — operators, workshop staff, and clients
-who cut panels, move stock, and track money all day. The language is **dense, calm, and
-utilitarian**: data-first tables, compact controls (a 40px button, a 44px form field), one clear
-action per screen.
-
-The surface is a **cool neutral** — near-white panels floating on a light grey canvas, separated
-by whitespace and a soft shadow rather than by ruled lines. Everything a person can *do* is
-**graphite**; a single **orange signal** marks the one thing that wants attention. Nothing
-decorates: every colour, weight, and elevation step encodes state or hierarchy.
+`@theme` in `src/assets/main.css` is the single source of token **values**. The frontmatter's
+`colors` / `fonts` / `rounded` (xs–2xl) / `shadow` blocks mirror it (`colors.accent` →
+`--color-accent`) — change a value there and here together. The frontmatter's `typography`,
+`spacing`, `components`, and `rounded.full` entries have **no** `@theme` counterpart (there is
+no `--spacing-*` and no `--radius-full`; 999px is written per-rule) — don't go looking for
+those tokens in CSS. Shared primitives live under `src/shared/components/`.
 
 ## Colors
 
@@ -188,12 +179,15 @@ semantic `--color-*` tokens.
   `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a retheme must
   stay a token-file change.
 
-**Three values sit a shade off the handoff, and deliberately.** `AGENTS.md` sets a hard 4.5:1
-floor for text, and the handoff's own numbers miss it in three places: `ink-muted` is `#666d79`
-rather than `#6b7280` (which gives 4.32:1 on the canvas), `danger` is `#c9302a` rather than
-`#d0342c` (4.36:1 on `danger-soft`), and text on **either** orange tint is `accent-strong`
-rather than `accent-deep` (4.44:1 on `accent-soft`). All three are visually indistinguishable
-from the specified value; none of them changes the design.
+The contrast floor: text ≥ **4.5:1**; large text, UI marks, and the focus affordance ≥
+**3:1**.
+
+**Three values sit a shade off the handoff, and deliberately** — the handoff's own numbers
+miss the hard 4.5:1 text-contrast floor: `ink-muted` (`#666d79`, not `#6b7280`), `danger`
+(`#c9302a`, not `#d0342c`), and text on **either** orange tint (`accent-strong`, not
+`accent-deep`). The exact ratios are commented at each value in `main.css`. All three are
+visually indistinguishable from the specified value — do not "correct" them back to the
+handoff hex.
 
 ## Typography
 
@@ -208,22 +202,19 @@ from the specified value; none of them changes the design.
   that tightening *is* the voice. Never use it for controls, tables, or labels.
 - **Numbers are the Text face's tabular figures.** `font-variant-numeric: tabular-nums` is set
   on `body`, so every digit in the app lines up by default and no column needs a second family.
-  No call site writes `font-mono` any more, but `--font-mono` is **not** an alias of the text
-  face — it stays a real monospace stack, because Tailwind's Preflight resolves
-  `code, kbd, samp, pre` through it and the superadmin's stack traces and JSON dumps have to keep
-  their columns. **Money stays compactly scaled** (`formatTiyinParts` / `formatTiyinRow`): a KPI row
-  reads on one ruler — `4,12 mln so'm`, not `4 120 000` beside `540 855` — and the exact figure
-  lives on the element's `title`.
+  `--font-mono` stays a real mono stack and `--font-serif` is a dead alias of Display (so a
+  stray `font-serif` class silently renders Display instead of erroring) — the why for both is
+  commented at their declarations in `main.css`. **Money stays compactly scaled**
+  (`formatTiyinParts` / `formatTiyinRow`): a KPI row reads on one ruler — `4,12 mln so'm`, not
+  `4 120 000` beside `540 855` — and the exact figure lives on the element's `title`.
 - **Weight carries meaning**: form input *values* render semibold (600) with placeholders pinned
   to regular — a filled field must read as data, a hint must not. This spans all three apps and
   the composed controls (PhoneInput, FormSelect, SearchCombobox selected values);
   `textarea.mp-input` reason fields stay regular. Buttons are 600.
-- **Labels are sentence case in grey**, at normal-to-semibold weight. The old uppercase,
-  wide-tracked label is gone from the system — small caps at 11px with 0.08em tracking read as a
-  systems console, not as a calm tool.
-- **All three locales use the same two families.** Wix Madefor ships a real `cyrillic` subset in
-  both, so `ru` and `uz-Cyrl` need no font swap — there is no per-locale `--font-sans` override
-  any more, and no risk of a browser mixing two faces inside one word.
+- **Labels are sentence case in grey**, at normal-to-semibold weight — never uppercase or
+  wide-tracked.
+- **All three locales use the same two families** — Wix Madefor ships a real `cyrillic`
+  subset, so there is no per-locale font override.
 
 ## Layout
 
@@ -238,9 +229,9 @@ from the specified value; none of them changes the design.
   layout, and below 921px the sidebar becomes the drawer, which carries **the sidebar's whole
   content** (branch card, create action, nav, account) because those controls exist nowhere else.
 - **The fixed frame is desktop-only.** Below 921px the page reverts to document scrolling with a
-  sticky header, so iOS URL-bar collapse, `scrollLock` and pull-to-refresh keep working; and
-  `@media print` resets the frame to `height: auto; overflow: visible` or a printed document
-  clips to one screen.
+  sticky header, so iOS URL-bar collapse, `scrollLock` and pull-to-refresh keep working (the
+  print reset and other frame mechanics are `AGENTS.md`'s "The workshop frame scrolls in two
+  places").
 - **Panels sit in a grid with a 16–20px gutter**, `align-items: start`, and never touch. A
   dashboard's two-column split is `minmax(0, 1.65fr) minmax(0, 1fr)`, collapsing to one column
   below 1100px with the **work list first**. A KPI row is `repeat(4, minmax(0, 1fr))` above
@@ -284,17 +275,16 @@ Interactive lift is subtle — buttons raise 1px on hover (`translateY(-1px)`), 
 and lose all elevation when disabled. A clickable card deepens its shadow instead of gaining a
 border. Coloured glows are gone: nothing separates with a tinted halo any more.
 
-Two overlay layers, and the order matters: dropdown/popover panels teleport at **z-50**; the
-modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS Safari
-can't scroll behind) **and** pins the desktop frame's inner scroller, which the body pin alone
-cannot reach.
+**The overlay z-ladder** — pick the tier that matches what the surface sits above, and don't
+invent new ones: inline listboxes **z-30/40** · teleported dropdown/listbox panels **z-50** ·
+the action menu and the onboarding spotlight **z-60** · admin modal scrim **z-70** · the
+modal layer **z-80** · `DateField`'s calendar over a modal **z-84** · `ConfirmDialog` raised
+from inside a modal **z-85** · toasts and `SearchCombobox`'s panel **z-90**. Scroll-locking and overlay
+positioning mechanics are `AGENTS.md`'s sections.
 
 Desktop paints at `zoom: 90%` on the root (≥769px) — the density the back-office is designed
-for. Full-bleed surfaces size from the **`--app-vh` / `--app-vw`** tokens rather than raw
-viewport units, which do not participate in the zoom. The `lg` / `xl` / `2xl` breakpoints are
-pre-divided by that ratio (922 / 1152 / 1382), so a hand-written `@media (min-width: 1024px)`
-fires 11% later than the `lg:` utility — use the utility. Measuring and positioning under the
-zoom is an implementation concern: see [`AGENTS.md`](./AGENTS.md).
+for. Everything about measuring, positioning, viewport units, and breakpoints under the zoom
+is owned by `AGENTS.md` → "Measuring under the root zoom".
 
 ## Shapes
 
@@ -356,7 +346,8 @@ off-scale values.
   button, and because auto-apply is invisible by itself, the bar must prove it worked: while
   any filter is active, a `role="status"` line under the bar shows the live result count
   ("Filtr bo'yicha N ta buyurtma topildi", "Yangilanmoqda…" while refreshing) — a silent list
-  swap reads as "nothing happened". Every filter **clears itself** — dropdowns via their
+  swap reads as "nothing happened". The shipped primitive is **`FilterStatus.vue`** with the
+  shared strings under `forms.filterStatus.*` — don't reimplement it per page. Every filter **clears itself** — dropdowns via their
   default option, text filters via an inline ✕ shown only when non-empty — so a control that
   clears one field is always inside that field. A bar-level **reset-all** ("Hammasini
   tozalash") is a convenience for the multi-filter case only: it appears from the **second**
@@ -394,7 +385,9 @@ off-scale values.
   row. `<tr @click>` has none of those and is not the pattern. A second action moves into the
   row's `⋯` menu and keeps its word — a destructive action is never a bare glyph. Anything
   that stays independently clickable inside the row (a status switch, the `⋯` trigger) sits
-  above the stretched layer with `.row-above`, never on the cell holding `.row-open`.
+  above the stretched layer with `.row-above`, never on the cell holding `.row-open` — except
+  the `⋯` menu itself: `.mp-action-menu-wrap` is auto-lifted by the same CSS rule, no manual
+  `.row-above` needed.
 - **Headline figures** — two treatments, and the page picks by weight. `.kpi` cards are for a
   dashboard, where the numbers *are* the page: an 18px-radius white panel, a sentence-case
   `ink-soft` label, the figure in Display below it, and one caption line under that — a green
@@ -454,7 +447,7 @@ module-evaluation time. The superadmin app is Uzbek-only and keeps a literal map
 unhandled 500s, transport errors. A code that reaches the fallback is a missing entry, not a
 shrug. When a call site catches an error, it passes `apiErrorCode(error)` through the role's
 resolver and keeps its own action-specific sentence as the fallback; a bare `catch {}` that
-throws the code away is the bug QAD-123 found and QAD-163 swept.
+throws the code away is a bug.
 
 **3. No blame, no apology, no filler.** No `Iltimos`, no exclamation marks, no
 `muvaffaqiyatli` — a success toast *is* the success, so it states the outcome
@@ -552,18 +545,14 @@ an "add" dialog reads as the whole and hides the part. `format` never reaches a 
 locale.
 
 `joylashtirish` belongs to the cutting result and nothing else — a part fitted onto a sheet
-(`Joylashtirildi 12/14`, `Fayldan joylashuv`). The `new` order status used to borrow the same
-word, so a client read `Joylashtirildi 12/14` on the result screen and then saw their order
-sitting in a stage called `Joylashtirildi` — one meaning a placed part, the other a submitted
-order. Submitting is `Yuborildi`.
+(`Joylashtirildi 12/14`, `Fayldan joylashuv`); an order being submitted is `Yuborildi`
+(decision record: the `new` status once borrowed `Joylashtirildi` and clients read one word
+with two meanings).
 
-`joylashtirildi` counts **parts**, `ishlatildi` measures **sheet area** — the two now sit one
-row apart in the table and read alike, so keep them apart on screen: `Joylashtirildi 25/25`
-answers "did every detail fit", `73% ishlatildi` answers "how much of this board did we use".
-The screen said `KIM` until 2026-08 — the nesting engineer's abbreviation, which no operator
-reading the result uses — and `To'ldirish` was rejected in prototype review because an operator
-read it as the amount *still to be filled*. `ishlatildi` is a statement about a board already
-cut, which is what the sheet on that screen is.
+`joylashtirildi` counts **parts**, `ishlatildi` measures **sheet area** — keep them apart on
+screen: `Joylashtirildi 25/25` answers "did every detail fit", `73% ishlatildi` answers "how
+much of this board did we use". Rejected in review: `KIM` (engineer's abbreviation) and
+`To'ldirish` (operators read it as the amount *still to be filled*).
 
 ## Brand
 
@@ -603,7 +592,9 @@ There is no pictorial logo. The name **is** the mark, with a single cut running 
 - Open create/edit in `AppModal`; seed inline-listbox selects inside it.
 - Right-align money/quantities with tabular figures and the unit beneath.
 - Focus ring on everything interactive: 3px graphite outline, 2px offset, and keep the 5px
-  light halo — it is the only thing that makes the ring visible on a graphite fill.
+  light halo — it is the only thing that makes the ring visible on a graphite fill. **Text
+  fields are the one exception** (per the handoff): `input`/`textarea`/`select` focus is the
+  border turning `accent`, no ring — the global rule in `main.css` carves them out.
 
 **Don't**
 

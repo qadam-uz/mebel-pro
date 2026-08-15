@@ -1,100 +1,46 @@
 # Web — `mebel-pro/web`
 
-The web client. Vite build, TypeScript everywhere, Pinia for state, Vue Router
-for routing, Tailwind v4 for styling. Package manager: **pnpm**.
+The web client: Vue 3.5 + Vite 7 + TypeScript + Pinia + Vue Router + Tailwind v4 + Vitest,
+managed with **pnpm** (`packageManager` pinned, `engine-strict`, Node 22+). HTTP goes through
+a native-fetch wrapper, not axios. Versions and scripts live in `package.json` — read it
+rather than a table here.
 
-## Target shape vs. current state
+Current build state (rationale in [`docs/architecture.md`](../docs/architecture.md)):
 
-The target — a static SEO landing + three Vue SPAs (**client** / **workshop** /
-**superadmin**) sharing primitives, the API client, tokens, and i18n — and the
-rationale live in [`docs/architecture.md`](../docs/architecture.md). This file
-covers only the **current build state**:
-
-- **Static landing exists** — `web/landing/index.html`, its own Vite entry
-  (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at
-  the apex by the Caddy edge; _not_ part of the Vue tree.
-- **The Vue side is three role SPAs** — `web/client/index.html`,
-  `web/workshop/index.html`, and `web/admin/index.html`, each mounting its own
-  entry under `src/apps/<role>/main.ts` with role routes in
-  `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/`.
-
-## Toolchain
-
-| Concern      | Tool                                                                                                     |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| Runtime / PM | Node **22+**, **pnpm** (`packageManager` pinned; `engine-strict`)                                        |
-| Build / dev  | **Vite 7** (`@vitejs/plugin-vue`)                                                                        |
-| Framework    | Vue **3.5** (`<script setup lang="ts">`, Composition API)                                                |
-| Routing      | Vue Router 4 (`createWebHistory`)                                                                        |
-| State        | Pinia (setup-style stores)                                                                               |
-| Styling      | Tailwind CSS **v4** (`@tailwindcss/vite`; config-less, `@import "tailwindcss"` in `src/assets/main.css`) |
-| Types        | TypeScript (project references: `tsconfig.{app,node,vitest}.json`); `vue-tsc` for `.vue`                 |
-| Lint         | **ESLint 9** flat config (`eslint-plugin-vue`, `@vue/eslint-config-typescript`, prettier-skip)           |
-| Format       | **Prettier** (no semicolons, single quotes, width 100)                                                   |
-| Unit tests   | **Vitest** + `@vue/test-utils` + jsdom                                                                   |
-| HTTP         | native `fetch` wrapper — `src/shared/api/client.ts` (no axios)                                           |
-
-E2E tests live in the sibling `e2e/` package (Playwright), not here.
+- **Static landing** — `web/landing/index.html`, its own Vite entry, served at the apex by
+  the Caddy edge; _not_ part of the Vue tree. `web/index.html` is only a meta-refresh
+  redirect to `/landing/`.
+- **Three role SPAs** — `web/client/index.html`, `web/workshop/index.html`,
+  `web/admin/index.html`, each mounting `src/apps/<role>/main.ts` with routes in
+  `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/` (api client, stores,
+  components, composables, views, i18n, app helpers). File inventories drift — `ls` before
+  trusting a list.
 
 ## Commands
 
 ```bash
-pnpm install                 # install (use --frozen-lockfile in CI)
 pnpm dev                     # Vite dev server, :5173, /api proxied → :8000
 pnpm build                   # vue-tsc --build && vite build  → dist/
-
-pnpm test                    # run unit tests once (test:watch / test:coverage exist)
-
-pnpm typecheck               # vue-tsc --build --force (no emit)
-pnpm i18n:check              # every literal t()/$t() key resolves in the uz catalog
-pnpm lint                    # eslint . --fix
-pnpm lint:check              # eslint . (no fix — CI)
-pnpm format                  # prettier --write src/
-pnpm format:check            # prettier --check src/
+pnpm test [src/path]         # Vitest once; single file/dir first while iterating
+pnpm i18n:check              # every LITERAL t()/$t() key resolves in the uz catalog (see Copy)
+pnpm lint / pnpm format      # autofix variants; *:check variants are the CI/pre-push form
 ```
 
-Pre-push gate: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm i18n:check && pnpm test && pnpm build`.
+The pre-push gate is owned by the root `AGENTS.md` (lint:check → format:check → typecheck →
+i18n:check → test → build; `build` re-runs `vue-tsc`). Fix issues rather than disabling
+rules; scope any `eslint-disable` to the line, with a reason. Adding deps: `pnpm add [-D] <pkg>`;
+a dep with a postinstall build script must be added to `pnpm.onlyBuiltDependencies` in
+`package.json` or its script is silently skipped.
 
-Adding deps: `pnpm add <pkg>` / `pnpm add -D <pkg>`. If a dep needs a postinstall build script, add it to `pnpm.onlyBuiltDependencies` in `package.json` (already lists `esbuild`).
-
-## Layout
-
-```
-web/
-  landing/index.html        # static SEO landing entry
-  client/index.html         # client SPA entry
-  workshop/index.html       # workshop SPA entry
-  admin/index.html          # superadmin SPA entry
-  vite.config.ts            # MPA inputs, role history fallback, `@` alias, /api proxy
-  vitest.config.ts          # merges vite config; jsdom env; excludes e2e/**
-  tsconfig*.json            # root references → app / node / vitest projects
-  env.d.ts                  # Vite client types
-  eslint.config.ts          # flat config
-  nginx.conf                # used by the Docker image to serve dist/ (SPA history fallback)
-  Dockerfile                # node:22 build (corepack→pnpm) → nginx:alpine runtime
-  .env.dev.example          # build-time env shape (dev); .env.prod.example mirrors it
-  src/
-    apps/
-      client/main.ts        # client app bootstrap
-      client/routes.ts      # client route inventory
-      workshop/main.ts      # workshop app bootstrap
-      workshop/routes.ts    # workshop route inventory
-      admin/main.ts         # superadmin app bootstrap
-      admin/routes.ts       # superadmin route inventory
-    shared/                 # shared shell, views, stores, API client, primitives
-      api/client.ts         # fetch wrapper: api.get/post/put/patch/del/blob, ApiError, withQuery
-      app/                  # framework-agnostic helpers (authInit, clientUi, downloadBlob, scrollLock, …)
-      components/           # shared presentational components (+ __tests__/ colocated specs)
-      composables/          # shared composition functions (use*)
-      stores/               # Pinia stores — one file per domain (setup style)
-      views/                # route-level components (shared across roles for now)
-    assets/main.css         # `@import "tailwindcss"`; @theme tokens go here
-```
+The harness browser preview (`.claude/launch.json`) runs its own Vite on **:5199**
+(`--strictPort`) so it never collides with the docker `web` container that owns :5173 —
+if you screenshot :5173 while both run, you're looking at the docker container's build,
+not the preview. Both proxy `/api` to a backend that must be up separately on :8000.
 
 ## Conventions
 
 - **SFCs**: `<script setup lang="ts">` + Composition API only. No Options API, no class components.
-- **Imports**: use the `@/` alias for anything under `src/` (e.g. `@/stores/health`). Relative imports only within a feature folder.
+- **Imports**: use the `@/` alias for anything under `src/` (e.g. `@/shared/stores/orders`). Relative imports only within a feature folder.
 - **Routing**: register routes in the owning role file under `src/apps/<role>/routes.ts`.
   Route-level components currently live in `src/shared/views/`; move toward role-owned
   views as feature modules mature. Lazy-load (`() => import(...)`) everything except the
@@ -111,7 +57,17 @@ web/
   in `createRoleApp.ts` catches that and hard-loads the *target* route once per path per tab
   (`staleChunkRecovery`). Keep it wired when you touch the bootstrap.
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
-- **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
+- **Data fetching**: go through `src/shared/api/client.ts` — `api.get/post/put/patch/del/blob`,
+  plus `ApiError` and `withQuery`. Paths are relative to `/api/v1`. It throws
+  `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in
+  components. The API is same-origin `/api` in every environment (Vite proxy in dev, Caddy
+  edge in prod; the prod `web` container is a plain nginx static server). Dev-proxy details:
+  the target is `API_PROXY_TARGET ?? http://localhost:8000` (the Docker dev stack sets it to
+  the backend service), and `/docs`, `/api-docs`, `/api-redoc` are proxied too. Footgun: Node
+  resolves `localhost` to `::1` first — a backend bound IPv4-only (which includes a plain
+  `fastapi dev`, default host `127.0.0.1`, and `uvicorn --host 0.0.0.0`) can surface as an
+  empty-body 500 from `:5173/api` that looks like a backend crash. Fix: run the backend with
+  `--host '::'`, or point `API_PROXY_TARGET` at `http://127.0.0.1:8000`.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
 - **Copy**: every user-facing string lives in `src/shared/i18n/locales/<locale>/<namespace>.json`
   and reaches the screen through **`$t('ns.section.key')`** in templates (global injection is on —
@@ -121,29 +77,23 @@ web/
   `i18n/transliterate.ts` and is never hand-written — a word the rules get wrong goes in
   `i18n/overrides/uz-Cyrl.json`. Adding a namespace means adding its file to *both* locale
   `index.ts` files. A module-level `const LABELS = {...}` of copy is a bug: it freezes at
-  whatever locale was active when the module first evaluated — export a function instead. Copy
+  whatever locale was active when the module first evaluated — export a function instead.
+  Two holes in `pnpm i18n:check`, both by design: it only sees **literal** keys (a
+  `t(item.labelKey)` or built-up key is skipped — rename such a key and the raw path renders
+  through a green gate), and it validates against **`uz` only** (a key missing from `ru`
+  ships silently and falls back at runtime — keeping `ru` complete is on the author). Copy
   rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
-- **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`. API origin is not configurable — dev uses the Vite `/api` proxy and prod uses the Caddy same-origin `/api` edge.
-- **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`.
-- **Clean gate**: `eslint`, `prettier --check`, `vue-tsc`, and the test suite must all pass; `pnpm build` must succeed (it type-checks via `vue-tsc --build`). Fix issues rather than disabling rules; scope any `eslint-disable` to the line with a reason.
-
-## Backend contract
-
-The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. The API is same-origin in every environment (no CORS); prod subdomain routing is owned by [`docs/architecture.md`](../docs/architecture.md) (topology) and `deploy/Caddyfile`. The `web` container is a plain nginx static server (`web/nginx.conf`) doing the HTML5-history fallback.
-
-## Design system
-
-[`DESIGN.md`](./DESIGN.md) is the design system itself — tokens, surfaces, type, components,
-copy rules, and the glossary. It describes **what the system is**; the rules for building
-against it are below, so the two do not drift into one document that is half specification and
-half instruction. Read `DESIGN.md` before designing or reviewing UI. For frontend
-implementation polish use the **frontend-design** skill (when your harness provides it); for
-where a test belongs, **testing-practices**.
+- **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`.
+- **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/shared/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`. **E2E locators track UI copy** — changing labels/dialogs means grepping `e2e/tests/` (see root `AGENTS.md`).
 
 ## UX bar — every screen clears these
 
 Structure before skin: know the user's job, the screen's states, and the keyboard path before
 choosing components or colors. Never polish a screen whose structure is wrong.
+[`DESIGN.md`](./DESIGN.md) is the design system — tokens, surfaces, type, component
+contracts, copy rules, glossary; **read it before designing or reviewing UI**. Its rules plus
+this bar **outrank the design handoff** (DESIGN.md names the three palette values that
+deliberately sit off the handoff hex to clear the contrast floor); nothing else does.
 
 - **Every state is designed, not just the populated one**: empty (first-run), empty (no
   results), loading (skeletons sized like the real content — reserve space so nothing jumps),
@@ -151,12 +101,10 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   no infinite spinners.
 - **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
   `scissors`). Never an action glyph (`plus`, `edit`, `arrow`): the tile sits exactly where a
-  button would, so an arrow or a plus inside it reads as a control and gets clicked. The tile
-  itself is built not to be one — a `sunk` fill with an `ink-muted` glyph, deliberately *not*
-  the accent-on-accent-soft pairing a primary button and a station tile use.
+  button would, so an action glyph inside it reads as a control and gets clicked.
 - **The keyboard reaches and operates everything** a mouse can, in an order matching the
-  layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
-  nothing in its place. Modals trap focus and return it to the trigger on close.
+  layout, with the visible focus affordance DESIGN.md specifies. Modals trap focus and return
+  it to the trigger on close.
 - **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
   Errors sit next to their field, name the fix in plain language, and never clear the form.
   Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
@@ -164,25 +112,13 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   **readable**: a field that opens a popover anchors it clear of its own error text, because a
   message the operator can't see is the same as no message.
 - **Every action gives visible feedback within ~100ms**; submit buttons disable + show
-  progress during async work so they can't double-fire. Destructive actions name their
-  consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.
-- **Color is never the only signal** (pair with text/icon/position); text contrast ≥ 4.5:1
-  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area — the desktop
-  chrome draws its utilities at 38px and grows them under `@media (pointer: coarse)`, which is
-  where the 44px has to be met. This bar **outranks the design handoff**: three palette values
-  sit a shade off the specified hex precisely to clear the 4.5:1 floor, and `DESIGN.md` names
-  all three.
-- **One primary action per screen**, visually dominant — *plus* the shell's single global
-  create. `+ Yangi buyurtma` lives in the workshop sidebar because it belongs to the app rather
-  than to any one page, so a workshop screen carries its own primary action alongside it. A
-  screen that already has the shell's action does **not** add a second copy: the Buyurtmalar
-  list has no create button in its filter row.
-- Body text stays at the 14px base (dense back-office by design); **12.5px is the floor**, and
-  there is no serif or monospace face to reach for — two Wix Madefor families are the whole
-  system. No horizontal page scroll on any viewport (self-contained scrollable tables
-  excepted).
+  progress during async work so they can't double-fire. Prefer undo over a confirmation nag.
+- No horizontal page scroll on any viewport (self-contained scrollable tables excepted).
 - **Motion is cause-and-effect, not decoration**: ~150–300ms, `transform`/`opacity` only,
   gone under `prefers-reduced-motion` (the global CSS already honors it).
+
+Contrast floors, touch targets, type scale, colour pairing, one-primary-action — the rest of
+the bar is DESIGN.md's rules and its Do's & Don'ts checklist.
 
 ## Building against the system
 
@@ -212,6 +148,10 @@ panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--ap
 the compensation, and the ratio behind it (`--app-zoom`) is written down once. Raw `vh` / `vw`
 are still fine for a *cap* that only needs to stay under the viewport
 (`max-height: min(90vh, …)` on a modal).
+
+Media queries are zoomed too: the `lg` / `xl` / `2xl` breakpoints are **pre-divided** by the
+zoom ratio (922 / 1152 / 1382), so a hand-written `@media (min-width: 1024px)` fires 11%
+later than the `lg:` utility — use the utility, or the pre-divided numbers.
 
 ### The workshop frame scrolls in two places
 
@@ -260,35 +200,28 @@ cd .design-handoff && python3 -m http.server 8899
 # → http://localhost:8899/<name>.dc.html — self-contained, no build, no network
 ```
 
-**Reading the HTML instead of running it does not work, and has failed here twice.** The markup
-is a template language with `{{ }}` bindings whose values live hundreds of lines away in a
-`<script type="text/x-dc">`; a screen's real shape only exists once that script has run. Both
-times the result was work that passed every gate and did not look like the design.
-
-The rules, in order:
+Reading the HTML instead of running it does not work (it has failed here twice): the markup is
+a template language with `{{ }}` bindings whose values live in a `<script type="text/x-dc">`,
+so a screen's real shape only exists once that script has run. The rules, in order:
 
 1. **Screenshot the prototype screen first, then the app screen, then compare them side by
    side.** Not the source — the screens. Do this before writing any code for that screen, and
    again before saying it is done.
-2. **A spec's account of the gap is not evidence.** `SPEC_NEW_ORDER_PROTOTYPE_DELTA.md` opened
-   by asserting the flow was already built and only three deltas remained. It was wrong about
-   three of the four screens. Specs record intent and decisions; only the running prototype
-   says what a screen looks like.
+2. **A spec's account of the gap is not evidence** (a handoff spec here once misdescribed
+   three of four screens). Specs record intent and decisions; only the running prototype says
+   what a screen looks like.
 3. **Measure, don't eyeball.** For anything with a number in it — focus rings, border weights,
-   glyph geometry — read `getComputedStyle` on both sides. The handoff's focus affordance is
-   `border-color → accent` with no ring; ours had a 3px orange one, and no screenshot
-   comparison would have named the difference.
+   glyph geometry — read `getComputedStyle` on both sides (a 3px focus-ring difference is
+   invisible in scaled screenshots).
 4. **When the measurement disagrees with the screen, believe neither yet — get a third look.**
-   The browser pane renders at a large viewport and scales the capture down, so a 1px border is
-   simply not in the picture; and `getComputedStyle` through the pane has returned stale values
-   (an inline `!important` that did not move the number). Shrink the viewport to ~1280x700 so
-   the screenshot is near 1:1 and look again. "The CSS is right by construction" is where two
-   real defects hid: the ring came from a global `:focus-visible` nobody had checked, and a
-   `border-hairline` utility was overriding the focus colour in a later layer.
+   The browser pane renders large and scales the capture down (a 1px border vanishes), and
+   `getComputedStyle` through the pane has returned stale values. Shrink the viewport to
+   ~1280×700 so the screenshot is near 1:1 and look again. "The CSS is right by construction"
+   is where real defects hide — a global `:focus-visible` rule and a utility overriding the
+   focus colour in a later cascade layer have both bitten here.
 5. **Where the repo does more than the design depicts, keep the capability and match the
-   frame.** The design draws one tape per row; this editor numbers four. Keep the four, adopt
-   the design's rectangle. Say so in a comment at the deviation — every one of these is a
-   judgement someone will otherwise re-litigate.
+   frame.** Say so in a comment at the deviation — every one of these is a judgement someone
+   will otherwise re-litigate.
 6. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
    outranks the handoff; nothing else does. "It seemed better" is not a reason — take it to the
    owner instead.
@@ -297,12 +230,9 @@ The rules, in order:
 
 ### Verifying UI work
 
-The check gates are necessary, not sufficient. Run the app, seed realistic data
-(`bash deploy/seed-demo.sh`), and drive the affected flow in a browser before calling it done —
-a green test run never shows a wrong layout, a broken empty state, or mangled copy. Where CSS
-is the subject, a screenshot confirms intent but only the computed or rendered value confirms
-effect: read `getComputedStyle` / the measured rect, not the picture.
+Launch/seed/drive recipe (including browser login and its gotchas) → the **verify** skill.
+Where CSS is the subject, a screenshot confirms intent but only the computed or rendered
+value confirms effect: read `getComputedStyle` / the measured rect, not the picture.
 
 `vue-tsc` does **not** catch a component used in a template but never imported — it renders as
 nothing, silently, through a green typecheck. Only opening the screen finds it.
-

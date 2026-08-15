@@ -39,7 +39,7 @@
   /* Text. `ink-strong` is a legacy alias of `ink` — the new ramp has nothing
      darker than `ink`. `ink-muted` sits at #666d79 rather than the handoff's
      #6b7280 because #6b7280 gives only 4.32:1 on the #f1f2f4 canvas, and
-     AGENTS.md sets the floor at 4.5:1; the two are visually indistinguishable. */
+     DESIGN.md sets the floor at 4.5:1; the two are visually indistinguishable. */
   --color-ink: #0f1115;
   --color-ink-strong: #0f1115;
   --color-ink-nav: #4a5058;

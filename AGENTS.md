@@ -9,16 +9,16 @@ don't silently code around it.
 
 ## Repo map
 
-| Path       | What                                                                          | Stack                                                                                 | Details                                   |
-| ---------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `backend/` | REST API (JSON, `/api/v1`)                                                    | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/AGENTS.md`](backend/AGENTS.md)  |
-| `web/`     | Web client (target: 3 SPAs + static landing)                                  | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/AGENTS.md`](web/AGENTS.md)          |
-| `e2e/`     | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/AGENTS.md`](e2e/AGENTS.md)          |
-| `deploy/`  | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/AGENTS.md`](deploy/AGENTS.md)    |
-| `docs/`    | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill |
+| Path          | What                                                                          | Stack                                                                                 | Details                                   |
+| ------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `backend/`    | REST API (JSON, `/api/v1`)                                                    | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/AGENTS.md`](backend/AGENTS.md)  |
+| `web/`        | Web client — 3 SPAs (client / workshop / admin) + static landing              | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/AGENTS.md`](web/AGENTS.md)          |
+| `e2e/`        | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/AGENTS.md`](e2e/AGENTS.md)          |
+| `deploy/`     | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/AGENTS.md`](deploy/AGENTS.md)    |
+| `docs/`       | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill |
+| `impl_specs/` | Historical implementation handoffs (specs, prototypes) — **not canon**; on conflict `docs/` wins | Markdown · HTML                                                    | —                                         |
 
-Each subproject is self-contained with its own toolchain and `AGENTS.md` —
-**read the relevant one before working in that directory.** There is no
+**Read the relevant `AGENTS.md` before working in a directory.** There is no
 workspace-level package manager; `backend/` uses `uv`, `web/` and `e2e/` each
 have their own `pnpm` project.
 
@@ -35,13 +35,27 @@ cd deploy && cp .env.dev.example .env && docker compose up --build
 
 ```bash
 docker compose -f deploy/compose.yaml up -d postgres minio createbuckets
-cd backend && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py   # :8000
+cd backend && cp .env.dev.example .env && uv sync && uv run alembic upgrade head && uv run fastapi dev app/main.py   # :8000
 cd web && pnpm install && pnpm dev                                                        # :5173, proxies /api → :8000
 ```
 
-E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the dev stack itself — see `e2e/AGENTS.md`).
+Full recipe — seeding, API tokens, browser login, PDF checks — is the **verify** skill. Traps:
 
-## Check gates (run before pushing)
+- A host Postgres already listening on :5432 **shadows the docker one** for every
+  `localhost:5432` DSN (alembic, e2e seeding, host-run backend all hit the wrong server).
+  Free the port, or reach the container via the machine's LAN IP.
+- `bash deploy/seed-demo.sh` (demo data; credentials in the script header; `--reset` wipes
+  volumes and re-seeds) requires the **docker** backend container — it execs `app.cli`
+  inside it. It cannot seed a host-run backend.
+- E2E boots and owns its own stack — **stop the docker `backend` and `web` containers
+  before `pnpm test`** (see `e2e/AGENTS.md` for why reuse silently breaks the suite).
+
+## Check gates
+
+While iterating, run only the touched project's checks — single test file first
+(`uv run pytest tests/test_x.py` · `pnpm test src/path` · `cd e2e && pnpm test tests/x.spec.ts`).
+The full chains below are the **pre-push** bar; CI mirrors them exactly. (Locally,
+`pnpm build` re-runs `vue-tsc`, so build subsumes typecheck.)
 
 - `backend/`: `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`
 - `web/`: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm i18n:check && pnpm test && pnpm build`
@@ -52,12 +66,15 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
 > feature branch / PR and merge deliberately. CI/CD flow, prod topology, infra contract:
 > [`deploy/AGENTS.md`](deploy/AGENTS.md).
 
+The web gate does **not** run the Playwright suite. When changing UI flows, labels, or
+dialogs, grep `e2e/tests/` for affected locators and run the touched spec — locator drift
+ships silently otherwise.
+
 ## How to work
 
-- Use the harness's native planning and task tracking. Plan first for anything that spans
-  modules or adds surface (API / schema / entity / feature). For feature work, encode the
-  target state into `docs/` before or alongside the implementation — writing the spec is
-  itself a design check.
+- Plan first for anything that spans modules or adds surface (API / schema / entity /
+  feature). For feature work, encode the target state into `docs/` before or alongside the
+  implementation — writing the spec is itself a design check.
 - Design to the operating envelope in [`docs/architecture.md`](docs/architecture.md) — no
   higher, no lower. Default to the boring, smaller thing; before adding a service, queue,
   cache, or layer, name the present problem it solves, with a number behind it. **Boring
@@ -68,15 +85,12 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
   code can't show:
   - anything under `docs/` (create, edit, move, review, "where does this go?") → **docs-management**
   - test strategy (what to test, where a test belongs, unit vs. E2E) → **testing-practices**
+  - launching / driving the running app (seed, tokens, browser login, PDFs) → **verify**
 - **Verify like a user, not just a compiler.** The check gates are necessary, not
-  sufficient. For any change with a runtime surface, run the app locally (see "Run it
-  locally"), seed realistic data with `bash deploy/seed-demo.sh` when an empty stack won't
-  exercise the flow (fixed demo credentials in the script header; `--reset` re-seeds from
-  scratch), and drive the affected flow in a real browser — states, layout, copy. This
-  manual pass is a separate discipline from the automated `e2e/` suite: the suite locks in
-  invariants; your own browser check catches the wrong layout, the broken empty state, the
-  mangled copy that a green run never shows. UI work must also clear the design system and
-  UX bar in [`web/DESIGN.md`](web/DESIGN.md).
+  sufficient. For any change with a runtime surface, run the app locally, seed realistic
+  data with `bash deploy/seed-demo.sh` when an empty stack won't exercise the flow, and
+  drive the affected flow in a real browser — states, layout, copy. UI work must also clear
+  the design system and UX bar in [`web/DESIGN.md`](web/DESIGN.md).
 
 ## Conventions
 
@@ -89,12 +103,12 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
 
 Prefer sensible behavior baked in over knobs the user must set. **Every config has a default**, and the default's _direction_ is deliberate:
 
-- **Non-security config → default leans to dev.** Convenience for the common local case (e.g. `ENV=dev`, `DEBUG=true`, verbose logs, a dev OTP code present). Running with zero configuration should give a working dev setup.
-- **Security config → default leans to prod (fail safe).** The baked-in default is the _locked-down_ one (e.g. an empty `OTP_DEV_CODES`, auth required, no secret bypass). A misconfiguration must err toward refusing access, never toward opening it. Secrets have **no real default** — they're `{{change-me}}` placeholders that must be set.
+- **Non-security config → leans to dev.** `ENV=dev` out of the box; the dev conveniences
+  (`DEBUG=true`, the `000000` dev OTP code) live in the `.env.dev.example` templates — copy
+  the template and everything works, no edits.
+- **Security config → leans to prod (fail safe).** The baked-in _code_ default is the
+  locked-down one (empty `OTP_DEV_CODES`, `DEBUG=false`, auth required, no secret bypass).
+  A misconfiguration must err toward refusing access, never toward opening it. Secrets have
+  **no real default** — they're `{{change-me}}` placeholders that must be set.
 
-**Env files come in two committed templates per subproject** — kept in sync across `backend/`, `web/`, `deploy/`:
-
-- **`.env.dev.example`** — ready-to-use dev defaults; copy to `.env` and run, no edits needed.
-- **`.env.prod.example`** — same shape; every secret/security value is a `{{change-me}}` placeholder, non-security values carry prod-sane settings.
-
-Real `.env` files are gitignored; only the two `*.example` templates are committed. A new setting is added to `Settings` (`backend/app/core/config.py`) with a default that follows the direction rule above, then surfaced in both templates.
+**Env files come in two committed templates per subproject** — kept in sync across `backend/`, `web/`, `deploy/`: `.env.dev.example` (ready-to-use dev defaults) and `.env.prod.example` (same shape; secrets as `{{change-me}}`, non-security values prod-sane). Real `.env` files are gitignored. A new setting is added to `Settings` (`backend/app/core/config.py`) with a default that follows the direction rule, then surfaced in all four backend-relevant templates (`backend/` + `deploy/`, dev + prod).

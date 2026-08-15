@@ -5,140 +5,125 @@ Run `docker compose` commands **from this directory** (`deploy/`) — build
 contexts are `../backend` and `../web`, and env is read from `deploy/.env`
 (copy `.env.dev.example`).
 
-Two **standalone** compose files — not an overlay pair. Each is a complete
-stack on its own; pick whichever matches the environment.
+Two **standalone** compose files — not an overlay pair; each is a complete stack on its own.
+Don't try `-f compose.yaml -f compose.prod.yaml` (the old overlay shape we deliberately moved
+away from). Keep service names and env-var names consistent across both so the `backend`/`web`
+contract doesn't drift. The compose files, `ci.yml`, `deploy.sh`, and `seed-demo.sh` are all
+heavily commented at the point of use — they are the source of truth for their own details;
+this file carries only the map and the gotchas.
 
 | File                | Stack |
 | ------------------- | ----- |
-| `compose.yaml`      | **Dev**, self-contained. `postgres` (17-alpine, named volume), `minio` (S3-compatible, named volume) + `createbuckets` (one-shot `mc` that creates the bucket then exits), `backend` (source-mounted, `uvicorn --reload` autoreload, the repo's `docs/` bind-mounted at `/docs`, plus an optional `cutting-engine` checkout at `/opt/cutting-engine` — see `CUTTING_ENGINE_SRC` below), `web` (Vite dev server on `node:22-slim`, HMR). Ports published on the host: 5432, 9000/9001 (MinIO API + console), 8000, 5173. |
-| `compose.prod.yaml` | **Prod**, self-contained. No local data services — backend joins the external `infra-net` Docker network and reaches the shared `postgres` + `minio` services by name. `backend` runs the built image (alembic upgrade on start), `web` is the built SPA served by nginx, and a **Caddy edge** (built from `edge.Dockerfile`, Caddyfile baked in) is the only published service (80 / 443 / 443-UDP; auto-HTTPS per host). Edge subdomain routing (apex/`app.*`/`workshop.*`/`admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. Includes per-service log rotation and resource caps. Bucket creation is **not** done here — provision the `MINIO_BUCKET` on the shared MinIO once via its console / `mc`. |
-| `Caddyfile`         | Edge reverse-proxy config. **Baked into the edge image**, not mounted — a config change ships as a new image, so `up -d --build` recreates the edge deterministically (a bind-mounted file's contents are invisible to Compose and would strand Caddy on a stale in-memory config). Also carries the `{$TAQSIM_DOMAIN}` site for the **taqsim** project — see below. |
-| `edge.Dockerfile`   | Two lines: `FROM caddy:2.8-alpine` + `COPY Caddyfile`. Build context is this `deploy/` dir, scoped by `.dockerignore` to just the Caddyfile. Per-env values (`BASE_DOMAIN`, `ACME_EMAIL`) stay runtime env — Caddy substitutes them at load. |
-| `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF`, then **re-exec the freshly-checked-out script once** (so a fix to the deploy flow applies the same deploy, not the next) → verify `deploy/.env` and `infra-net` exist → `docker compose -f compose.prod.yaml up -d --build --remove-orphans` → wait for backend healthcheck → prune dangling images. Idempotent; runnable manually too. |
-| `.env.dev.example`  | Dev env contract — ready-to-use defaults. Copy to `.env` for `compose.yaml`. |
-| `.env.prod.example` | Prod env contract — same shape, secrets as `{{change-me}}`. Copy to `.env` for `compose.prod.yaml`. |
-| `seed-demo.sh`      | **Presentation demo seed** for the running **dev** stack. Builds one deterministic, fixed-credential demo world spanning all three SPAs — platform admin + extra operator, 4 manufacturers, 16 panels + 16 edges (each with a `seed-assets/` image), "Mebel Master" workshop with 2 branches + 5 staff (distinct per-branch grants), 2 skeleton workshops, both branches carrying all 32 materials with stock, 2 clients with 9 orders across every status, and a populated finance ledger. All credentials live in the file's header comment. Runs entirely through the public API (curl + jq) except the first admin (via `app.cli`). `bash deploy/seed-demo.sh` seeds a fresh stack (aborts if already seeded); `--reset` wipes volumes (`down -v`), restarts, then seeds. Honors `API` / `READYZ` env overrides. |
-| `seed-assets/`      | Committed catalog images used by `seed-demo.sh` — 32 material swatch JPEGs in `materials/` (`<decor>_panel.jpg` / `<decor>_edge.jpg`, ~480px, ~30 KiB each): wood decors tinted from CC0 textures, uni colours + edge-tape cards generated. One upload per material; a missing file just skips that material's image. |
+| `compose.yaml`      | **Dev**, self-contained: `postgres` (17-alpine), `minio` + `createbuckets` one-shot, `backend` (source-mounted, autoreload, repo `docs/` bind-mounted, optional `cutting-engine` checkout — see gotchas), `web` (Vite dev server, HMR). Host ports: 5432, 9000/9001, 8000, 5173. |
+| `compose.prod.yaml` | **Prod**, self-contained. No local data services — backend joins the external `infra-net` network and uses the shared `postgres` + `minio`. Built images; a **Caddy edge** is the only published service (80/443/443-udp, auto-HTTPS). Subdomain routing (apex / `app.*` / `workshop.*` / `admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. |
+| `Caddyfile`         | Edge config, **baked into the edge image** (not bind-mounted — a mounted file's changes are invisible to `compose up`, stranding Caddy on stale config; a change ships via `up -d --build`). Also fronts the **taqsim** project — see below. |
+| `edge.Dockerfile`   | `FROM caddy:2.8-alpine` + `COPY Caddyfile`. Per-env values (`BASE_DOMAIN`, `ACME_EMAIL`) stay runtime env. |
+| `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF` (a hard reset — server-side edits are destroyed), re-exec the fresh script once, verify `deploy/.env` + `infra-net`, `compose -f compose.prod.yaml up -d --build --remove-orphans`, wait for the backend healthcheck, prune. Idempotent; runnable manually. |
+| `seed-demo.sh`      | Deterministic fixed-credential demo world for the running **dev** stack. Credentials, catalog shape, and counts live in the script's own header; `--reset` wipes volumes (`down -v`) and re-seeds. Needs the **docker** backend container (execs `app.cli` inside it). |
+| `seed-assets/`      | Catalog images the seed uploads; a missing file just skips that material's image. |
+| `.env.dev.example` / `.env.prod.example` | The env contract — dev copy runs as-is; prod has every secret as `{{change-me}}`. |
 
-> The `web` *container* still has its own minimal nginx config (`../web/nginx.conf`, SPA history fallback) — it's purely a static file server behind the edge and never touches TLS. `deploy/Caddyfile` is the **edge** in front of everything; that's the one that terminates HTTPS and auto-renews the certificate.
+> The `web` *container* has its own minimal nginx config (`../web/nginx.conf`, SPA history
+> fallback) — a plain static server behind the edge, never touching TLS. `deploy/Caddyfile`
+> is the edge that terminates HTTPS.
 
-## The edge also fronts taqsim (2026-08-07)
+## The edge also fronts taqsim
 
-The VPS is shared. **taqsim** (a Telegram bot + its Mini App) runs its own
-compose stack from `/opt/taqsim` and publishes **no** host ports, because this
-edge already owns 80/443. So the edge is taqsim's only way in:
-
-- `edge` joins `infra-net` (it previously sat on `default` only) purely to
-  resolve taqsim's container. It stays **out** of `TRUSTED_PROXY_CIDRS` — the
-  backend still trusts only `172.29.0.0/24`, and the edge reaches `backend`
-  over `default`, so its source IP is unchanged.
-- `Caddyfile` has one site block: `{$TAQSIM_DOMAIN}` → `reverse_proxy
-  taqsim-web:80`. `taqsim-web` is an explicit **network alias** declared in
-  taqsim's `docker-compose.prod.yml`; its own Caddy serves the SPA and proxies
-  `/api/*` onward, so one line covers the whole site.
-- `TAQSIM_DOMAIN` is a **bare host, no scheme**, defaulted to `taqsim-ai.uz`
-  so the server's `deploy/.env` needs no edit. Never set it to an *empty*
-  string: that renders an anonymous server block, Caddy rejects the entire
-  config, and the edge fails to start — taking mebel-pro down for a
-  neighbour's variable. The `:-` form treats empty as unset, so the default
-  still wins; only a deliberate `TAQSIM_DOMAIN=""` inside the Caddyfile's
-  own environment could break it.
-
-Consequence to keep in mind: a taqsim domain change now needs a mebel-pro
-`.env` edit, and a Caddyfile edit here rebuilds the edge for both projects.
-That coupling is the price of one shared edge; the alternative (a third
-standalone proxy) can't work, since only one process can bind :443.
-
-## Why no overlay
-
-`compose.prod.yaml` doesn't extend `compose.yaml` — the two are fully separate stacks. Reasons: prod doesn't run a local `postgres`/`minio` at all (the VPS provides them on `infra-net`), so an overlay would mostly be deletions; and the dev/prod commands are unambiguous when you read either file in isolation. Keep service names and env-var names consistent across both so the contract for `backend` and `web` doesn't drift.
+The VPS is shared: **taqsim** (a separate project at `/opt/taqsim`) publishes no host ports,
+so this edge's `{$TAQSIM_DOMAIN}` site block (default `taqsim-ai.uz`) is its only way in —
+`reverse_proxy taqsim-web:80` over `infra-net`. Consequences: a Caddyfile edit here rebuilds
+the edge **for both projects**, a taqsim domain change needs a mebel-pro `.env` edit, and
+`TAQSIM_DOMAIN` must never be set to an *empty string* (an anonymous server block makes Caddy
+reject the entire config and takes mebel-pro down; the `:-` default handles unset/empty).
+Mechanics and the alias contract are commented in `compose.prod.yaml` and the `Caddyfile`.
 
 ## Commands
 
+Day-to-day dev commands (`up --build`, data-services-only, logs, down) are in the root
+`AGENTS.md` and `compose.yaml`'s own header. The ones documented nowhere else:
+
 ```bash
-cp .env.dev.example .env                               # first time
-
-# Dev — full stack with hot reload
-docker compose up --build
-docker compose up -d postgres minio createbuckets   # just the data services (e.g. to run backend/web on the host)
-docker compose logs -f backend
-docker compose down                                 # add -v to also drop volumes
-
-# Validate the merged config
-docker compose config
-docker compose -f compose.prod.yaml config
-
-# Prod — local smoke test of the prod stack (needs the `infra-net` network)
-docker network create infra-net   # once, if missing
-docker compose -f compose.prod.yaml up -d --build
-docker compose -f compose.prod.yaml logs -f edge   # Caddy logs (cert provisioning, access)
-docker compose -f compose.prod.yaml down
+docker compose config                                # validate the merged dev config
+docker compose -f compose.prod.yaml config           # validate prod
+docker compose -f compose.prod.yaml up -d --build    # local prod smoke test (needs `docker network create infra-net` once)
 
 # DB migrations inside the running backend container
 docker compose exec backend alembic upgrade head
 docker compose exec backend alembic revision --autogenerate -m "..."
 ```
 
-Ports in dev: web `http://localhost:5173`, API `http://localhost:8000` (and via Vite's proxy at `:5173/api`), live docs `http://localhost:8000/docs`, Postgres `localhost:5432`, MinIO API `localhost:9000` + console `http://localhost:9001` (login `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`). In prod: only the Caddy edge, on 80 and 443 (HTTP/3 on 443/udp).
-
 ## CI / CD
 
-`.github/workflows/ci.yml`:
+`.github/workflows/ci.yml` (its header comment is the canonical description): three parallel
+verify jobs run the per-directory gates owned by the root `AGENTS.md` (backend additionally
+runs the infra-gated Postgres/MinIO suites; e2e boots its own stack), a docker-build smoke
+job builds both images, and — **only on a green push to `main`** — the deploy job SSHes to
+the VPS and runs `DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh` (fetch +
+hard reset to the verified SHA; no registry). SSH secrets are listed in `ci.yml`'s header.
 
-1. **Verify** — runs on every PR and every push to `main`. Three parallel jobs (`verify-backend`, `verify-web`, `verify-e2e`) that run the per-directory check gates owned by the repo `AGENTS.md`. `verify-backend` additionally boots Postgres + MinIO via Compose and runs the two infra-gated suites (`POSTGRES_CONCURRENCY=1` stock-locking test against a throwaway `mebel_ci` database, `MINIO_CONTRACT=1` S3 round-trip). `verify-e2e` runs `pnpm typecheck` and the full Playwright suite; the Playwright config boots Postgres/MinIO via Compose, migrates the FastAPI backend, starts Vite, and tears the data services down afterward.
-2. **Docker-build smoke** — builds the backend + web images so we know they still compile. No registry push.
-3. **Deploy** — only on push to `main`, only after every other job is green. SSHes to the VPS and runs `DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh`. No registry, no rsync — the server does its own `git pull` + `docker compose up --build`.
-
-GitHub config (Settings → Secrets and variables → Actions):
-
-- `secrets.DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` — required (the key is a passphrase-less PEM private key for a user that's in the `docker` group; default `mebel`).
-- `secrets.DEPLOY_SSH_PORT` — optional (default `22`).
-
-The repository must be cloned at `/opt/mebel-pro` on the VPS — see the bootstrap below.
+CI runs the compose data services with `--env-file .env.dev.example` **directly** — no `.env`
+copy exists there — so the dev template must stay runnable as-is: a `{{placeholder}}` or a
+commented-out required var added to it breaks `verify-backend` and `verify-e2e`, not just
+local convenience.
 
 ## First-time setup on the VPS
 
-The VPS is already provisioned for other projects: Docker Engine + Compose v2 are installed, the shared `postgres` and `minio` are running on the external `infra-net` Docker network, and the host is reachable on 80 + 443. What's left for mebel-pro is one-time, manual:
-
-```bash
-# As a user in the `docker` group (used by CI too — the SSH key in
-# secrets.DEPLOY_SSH_KEY belongs to this user):
-sudo mkdir -p /opt/mebel-pro && sudo chown "$USER" /opt/mebel-pro
-git clone https://github.com/qadam-uz/mebel-pro.git /opt/mebel-pro
-
-cp /opt/mebel-pro/deploy/.env.prod.example /opt/mebel-pro/deploy/.env
-$EDITOR /opt/mebel-pro/deploy/.env
-chmod 600 /opt/mebel-pro/deploy/.env
-#   Set: POSTGRES_USER/PASSWORD/DB    — credentials of a DB on the shared Postgres
-#                                        (provision the DB + user once via psql
-#                                        on the infra-net postgres container)
-#        MINIO_ACCESS_KEY_ID / MINIO_SECRET_ACCESS_KEY / MINIO_BUCKET
-#                                      — an access key + bucket on the shared MinIO
-#                                        (create them once via the MinIO console
-#                                        or `mc`; the bucket isn't auto-created)
-#        DOCS_AUTH_USERNAME / DOCS_AUTH_PASSWORD  — gates admin.<domain>/docs
-#        BASE_DOMAIN=mebel-pro.uz · ACME_EMAIL=ops@…
-
-# First deploy:
-bash /opt/mebel-pro/deploy/scripts/deploy.sh
-```
-
-Pre-reqs that `deploy.sh` will refuse to run without: `deploy/.env` exists on the server, the `infra-net` Docker network exists. Also implicit: the host is reachable on 80 + 443 and DNS for the apex AND `app.*` / `workshop.*` / `admin.*` points at this box (so Caddy can obtain certificates).
-
-`deploy/.env` is **not** committed and is **not** pulled by the deploy script — it lives only on the server. The first prod `up` provisions four Let's Encrypt certificates (apex + three subdomains); they live in the `caddy-data` volume and renew automatically — don't delete that volume.
+One-time and already done: repo cloned at `/opt/mebel-pro`; `deploy/.env` created from
+`.env.prod.example` with **every** `{{change-me}}` filled (the backend refuses to boot in
+prod with `OTP_CODE_PEPPER` or `TELEGRAM_GATEWAY_ACCESS_TOKEN` left empty — a missed one
+crash-loops the first deploy, fail-safe); shared Postgres DB/user and MinIO key/bucket
+provisioned by hand on `infra-net` (prod never auto-creates the bucket); DNS for the apex +
+three subdomains pointed at the box, ports 80/443 open. The first `up` provisions five
+Let's Encrypt certificates (apex + three subdomains + the taqsim domain); they live in the
+`caddy-data` volume and renew automatically — don't delete that volume. `deploy.sh` refuses
+to run without `deploy/.env` and `infra-net`, and prints the fix for each.
 
 ## Conventions / gotchas
 
 - Always `cd deploy/` before `docker compose …` (relative build contexts + `.env` discovery).
-- The two compose files are **independent stacks**. Don't try `-f compose.yaml -f compose.prod.yaml` — that's the old overlay shape we deliberately moved away from.
-- `.env` is gitignored; `.env.dev.example` / `.env.prod.example` are the contract. Keep them in sync with each other, and mirror backend-relevant vars with `backend/.env.dev.example` + `backend/.env.prod.example`.
-- In prod, postgres/minio creds in `deploy/.env` are credentials **on the shared infra**, not credentials we provision. The DB and the MinIO access key must already exist on those shared services before deploy.
-- The `backend` image runs `alembic upgrade head` on start (see `../backend/Dockerfile` CMD); fresh DBs get the schema automatically. A failed migration crash-loops the new container; `deploy.sh`'s healthcheck wait will fail and the script exits non-zero.
-- The prod stack does **not** create the MinIO bucket — provision it once on the shared MinIO (console or `mc`) before the first deploy; the dev stack still has a `createbuckets` one-shot for local convenience.
-- Backend Python deps live in the image's **system interpreter** (`UV_PROJECT_ENVIRONMENT=/usr/local` in `../backend/Dockerfile`), not in a venv under `/app` — so the dev source bind-mount can't shadow them and no venv volume exists. The tradeoff: a `pyproject.toml`/`uv.lock` change reaches the container **only via an image rebuild** — `docker compose up --build` (a plain restart is not enough). Don't reintroduce the old shape (image venv at `/app/.venv` "rescued" by a `backend-venv` named volume): named volumes seed from the image only when **empty**, so every dep bump stranded existing dev machines with a stale venv — a `ModuleNotFoundError` crash-loop fixable only by manual volume surgery. Machines that ran the old stack can reclaim the orphaned volume once with `docker volume rm mebel-pro_backend-venv`.
-- **`cutting-engine` is the one dep the dev stack can override from a checkout.** `CUTTING_ENGINE_SRC` (default `../../cutting-engine`, i.e. a sibling clone next to the repo) is bind-mounted read-only at `/opt/cutting-engine`; its `src/` is first on `PYTHONPATH` and is a `--reload-dir`, so engine edits take effect on save — no PyPI release, no version bump, no image rebuild. The wheel pinned in `backend/uv.lock` stays installed underneath and takes over whenever nothing is mounted there, so `uv.lock` remains the single source of truth for what ships. **Dev only** — `compose.prod.yaml` has no such mount, and the version stamp persisted on a result (`cutting-engine/…`) will read the checkout's version, so don't compare local stamps against prod ones.
-- New deployable service? Add it to both compose files; in prod give it `expose` (not `ports`) and route it through the edge in the Caddyfile.
-- Don't revert the prod edge to `image: caddy + bind-mount Caddyfile`. `compose up -d` won't recreate a container for a bind-mounted file's content change, so Caddy would silently keep stale config after every Caddyfile edit. Keep it baked via `edge.Dockerfile`.
-- Auto-HTTPS needs the edge reachable on **80 and 443** from the internet — don't remap those ports if you want Caddy to manage certificates.
-- Pin image tags (`postgres:17-alpine`, `minio/minio:RELEASE.…`, `minio/mc:RELEASE.…`, `caddy:2.8-alpine`, `nginx:1.27-alpine`, `node:22-slim`) — don't use `latest`. MinIO uses date-stamped `RELEASE.<timestamp>Z` tags; bump them deliberately.
-- The prod `default` network subnet (`172.29.0.0/24` in `compose.prod.yaml`) and `TRUSTED_PROXY_CIDRS` move **together** — the backend trusts the edge's `X-Forwarded-For` only from that subnet, and the per-IP OTP send limits are inert without it. If the subnet collides on the VPS (`docker network inspect`), change both in the same commit. `infra-net` must never be listed as trusted (shared with other projects).
+- **The dev stack is one shared instance per machine.** `compose.yaml` pins
+  `name: mebel-pro`, so every checkout **and every git worktree** drives the same containers
+  and volumes: containers keep bind mounts pointing at whichever tree created them
+  (`--force-recreate` to re-point — see the verify skill), and `seed-demo.sh --reset` from
+  any checkout wipes the shared volumes under a parallel session. Isolation needs
+  `COMPOSE_PROJECT_NAME` + a ports override.
+- `.env` is gitignored; the two `*.example` files are the contract. Keep them in sync with
+  each other and with `backend/.env.{dev,prod}.example`.
+- In prod, postgres/minio creds in `deploy/.env` are credentials **on the shared infra**, not
+  something this stack provisions.
+- The `backend` image runs `alembic upgrade head` on start; fresh DBs get the schema
+  automatically. A failed migration crash-loops the container and `deploy.sh`'s healthcheck
+  wait exits non-zero. The `Caddyfile`'s `lb_try_duration 30s` retry blocks exist **because**
+  of that migrate-then-bind window — every deploy has seconds where the upstream refuses
+  connections, and removing the retry turns each merge to `main` into user-facing 502s. Not
+  tuning; don't strip it in a "simplify the Caddyfile" pass.
+- Backend Python deps live in the image's **system interpreter** (no venv), so the dev source
+  bind-mount can't shadow them — the tradeoff: a `pyproject.toml`/`uv.lock` change reaches
+  the container **only via `docker compose up --build`**, a restart is not enough. Don't
+  reintroduce the venv-in-a-named-volume shape: named volumes seed from the image only when
+  empty, so every dep bump strands existing machines on a stale venv.
+- The dev `web` container installs deps into a named volume at container start — a `pnpm add`
+  done on the host is **invisible inside it** (Vite import-resolution errors) until
+  `docker compose restart web` re-runs the install.
+- **`cutting-engine` is the one dep the dev stack can override from a checkout.**
+  `CUTTING_ENGINE_SRC` (default `../../cutting-engine`) is bind-mounted read-only with its
+  `src/` first on `PYTHONPATH` and on `--reload-dir`, so engine edits apply on save; the
+  wheel pinned in `backend/uv.lock` takes over when nothing is mounted and stays the single
+  source of truth for what ships. **Dev only** — prod has no such mount, and a locally
+  stamped `cutting-engine/…` version on a result reads the checkout, so don't compare local
+  stamps against prod.
+- New deployable service? Add it to both compose files; in prod give it `expose` (not
+  `ports`), route it through the edge in the Caddyfile — and give it a **project-unique
+  network alias** (the Caddyfile proxies to `mebel-web:80`, not `web:80`: on the shared
+  `infra-net` a bare `web` once resolved to a *neighbour project's* container and every
+  mebel-pro SPA served taqsim's frontend).
+- Don't revert the prod edge to `image: caddy` + a bind-mounted Caddyfile — `compose up -d`
+  won't recreate a container for a mounted file's content change, so Caddy silently keeps
+  stale config. Keep it baked via `edge.Dockerfile`.
+- Auto-HTTPS needs the edge reachable on **80 and 443** from the internet — don't remap them.
+- Pin image tags (`postgres:17-alpine`, `minio/minio:RELEASE.…`, `caddy:2.8-alpine`,
+  `nginx:1.27-alpine`, `node:22-slim`); never `latest`.
+- The prod `default` subnet (`172.29.0.0/24`) and `TRUSTED_PROXY_CIDRS` move **together** —
+  the backend trusts `X-Forwarded-For` only from that subnet, and the per-IP OTP limits are
+  inert without it. If the subnet collides on the VPS, change both in one commit. `infra-net`
+  must never be listed as trusted (shared with other projects).

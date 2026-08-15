@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-15
 order: 70
 ---
 
@@ -18,10 +18,10 @@ high-traffic, not regulated — but it moves money on one axis, so that axis get
 
 | Axis                | Where we are                                                                                                                                                                                            | Consequence                                                                                                                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scale**           | Tens of workshops · low hundreds of branches · low thousands of clients · low tens of thousands of orders/year. Flat-to-modest growth. Read-heavy. Hottest op: cutting (≤ 300 parts, synchronous, 5 s). | One Postgres, one FastAPI process (replicas if needed). No sharding, no cache layer until something is _measured_ slow.                                                                                                |
+| **Scale**           | Tens of workshops · low hundreds of branches · low thousands of clients · low tens of thousands of orders/year. Flat-to-modest growth. Read-heavy. Hottest op: cutting (≤ 300 parts, synchronous, 10 s). | One Postgres, one FastAPI process (replicas if needed). No sharding, no cache layer until something is _measured_ slow.                                                                                                |
 | **Criticality**     | Money (recorded income / expenses) and real stock movement back the orders. A wrong balance or a lost stock decrement is real harm.                                                                     | Integer-tiyin money (never float); atomic stock decrement / restore; append-only audit; idempotent seams; money tracked, not moved (recorded by hand in v1, no order-held payments).                                   |
 | **Security**        | Public on the internet. Holds personal data, staff credentials, and operational business records. Worth attacking.                                                                                      | Hard authn/authz on every request; opaque DB-backed sessions with instant revocation; password hashing + lockout; least-privilege admin scope; multi-tenant isolation at the service layer on every read and write.   |
-| **Latency**         | Back-office-ish — "a second or two" is fine. The one visible expensive op is cutting (5 s budget, synchronous; bigger jobs rejected, not queued in v1).                                                 | No async/queue on the hot path; cutting runs in-process within budget; background jobs on an in-process scheduler.                                                                                                     |
+| **Latency**         | Back-office-ish — "a second or two" is fine. The one visible expensive op is cutting (10 s budget, synchronous; bigger jobs rejected, not queued in v1).                                                 | No async/queue on the hot path; cutting runs in-process within budget; background jobs on an in-process scheduler.                                                                                                     |
 | **Lifespan × team** | Years; moderate change; ~2-person team.                                                                                                                                                                 | Modular monolith, boring tech (FastAPI · SQLAlchemy · Postgres · Vue · Tailwind), structure two people can operate at 3 a.m.                                                                                           |
 
 **Not built for:** high traffic (no multi-region / cache / CDN — capacity work happens _if_ it's
@@ -68,14 +68,18 @@ Caddy (config in `deploy/Caddyfile`) routes by **subdomain** under a single apex
 
 Each SPA stays same-origin with its API (no CORS).
 
+The prod edge additionally fronts one unrelated project on the same VPS (**taqsim**, its own
+domain) — a Caddyfile change here redeploys the edge for both projects; the coupling and its
+failure mode are documented in the repo's `deploy/AGENTS.md`.
+
 - **One FastAPI process** — Python 3.12, async end-to-end (asyncio + asyncpg + SQLAlchemy 2.0,
   Alembic, pydantic-settings). Also renders `docs/` as a live site.
 - **One PostgreSQL** — shared by all modules; each module owns its tables.
-- **One MinIO / S3** — decor photos, logos, and receipt attachments. The `files` module owns
+- **One MinIO / S3** — decor photos, logos, and receipt attachments. The `support` module owns
   stored files; others attach/detach by id. Cutting PDFs are generated on demand from immutable
   cutting-result rows, not stored as file records in v1.
 - **In-process scheduler** — platform maintenance jobs that stay inside the app process; in v1,
-  this prunes expired sessions.
+  this prunes expired sessions and expired OTP challenges.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
 - **One external integration** — Telegram Gateway, used only to deliver client sign-in OTP codes.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
@@ -89,25 +93,13 @@ import another module's private ORM model implementation or private service func
 may call another module only through that module's public API (`api.py`) or stable contracts
 (`contracts.py`).
 
-Implementation lives under `backend/app/modules/<module>/`. Each module has `api.py` for
-cross-module use cases, `contracts.py` for stable shared shapes and explicit persistence
-contracts, `models.py` for its SQLAlchemy ORM classes, `schemas.py` or named `*_schemas.py` files
-for its API request/response models, and private implementation files such as `service.py`,
-`users.py`, `setup.py`, `optimizer.py`, or `rendering.py`. Domain route implementations live with
-the owning module as `routes.py` or a named `*_routes.py`; the top-level
-`backend/app/api/router.py` only mounts those routers, and `backend/app/api/routes/` is reserved
-for meta routes such as health checks. `backend/app/models/base.py` and
-`backend/app/models/enums.py` are shared infrastructure/value definitions, and
-`backend/app/schemas/common.py` holds the shared API schema base/meta responses. Layer-first
-domain files under `backend/app/models/`, `backend/app/schemas/`, or `backend/app/services/` are
-retired and must not be reintroduced. `backend/app/models/__init__.py` exposes `Base` and an
-explicit `import_all_models()` bootstrap used by Alembic and tests so metadata registration does
-not create import cycles during normal module imports.
-
 Cross-module behavior goes through `api.py`. If a same-transaction SQL query needs another
 module's table class, it imports that class from the owning module's `contracts.py`, never from
-the owning module's private `models.py`. That makes the remaining persistence coupling explicit
-without adding repository layers that would only forward SQLAlchemy calls in this envelope.
+the owning module's private `models.py` — that keeps the remaining persistence coupling explicit
+without adding repository layers that would only forward SQLAlchemy calls in this envelope. The
+per-module file conventions (naming, route placement, the `import_all_models()` registry, the
+retired layer-first packages) are working instructions and live in the repo's
+`backend/AGENTS.md`.
 
 | Module | Owns |
 |---|---|
@@ -170,7 +162,8 @@ specifics, this section just states the requirement.
 ### Performance budgets
 
 - API reads: p95 < 500 ms under expected load.
-- Cutting optimisation: 5 s hard timeout, synchronous; > 100 parts rejected; ≤ 30 parts target
+- Cutting optimisation: 10 s hard timeout, synchronous; > 300 parts rejected (the caps' owning
+  table: [`ref/features/cutting.md`](ref/features/cutting.md) → Limits); ≤ 30 parts target
   < 1 s.
 - PDF generation: synchronous, in-process; seconds, not minutes.
 

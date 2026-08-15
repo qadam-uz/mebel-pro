@@ -6,7 +6,9 @@ tmp/
 .worktrees/
 
 # Claude machine-local files
-# ...
+.claude/settings.local.json
+.workflows/
+.design-handoff/
 impl_specs/
 backend/tests/fixtures/cutting_import/
 

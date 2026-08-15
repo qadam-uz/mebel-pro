@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-15
 order: 45
 ---
 
@@ -32,7 +32,10 @@ per bounded context.
 - **Branch material** — a dekor in one concrete format (thickness plus sheet size, or
   plus tape width) carried by one branch, at that branch's price. **This is "the
   material"**: stock, cutting sheets and order lines all point here. The platform cannot
-  know which formats a workshop's supplier sells, so the branch owns them.
+  know which formats a workshop's supplier sells, so the branch owns them. A
+  `customer_supplied` branch material is the exception that proves the shape: a walk-in's
+  own sheet, excluded from every catalog and portal listing — the branch cuts it but does
+  not sell it (fields: [`ref/entities/catalog.md`](ref/entities/catalog.md)).
 - **Stock item** — a branch's on-hand balance for one branch material. **Supplier** — where
   stock arrived from (lightweight, added on demand; distinct from manufacturer).
   **Supplier invoice** — one arrival document grouping the stock-ins that came in on it,

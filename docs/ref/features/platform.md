@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-15
 order: 70
 ---
 
@@ -75,7 +75,7 @@ jobs:
 
 | Job                        | When   | What                       |
 | -------------------------- | ------ | -------------------------- |
-| `cleanup-expired-sessions` | hourly | prune expired session rows |
+| `cleanup-expired-sessions` | hourly | prune expired session rows and expired OTP challenges |
 
 Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
 the 50-draft cap ([`cutting.md`](cutting.md)). There is no auto-cleanup of drafts anywhere.
