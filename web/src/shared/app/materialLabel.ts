@@ -220,3 +220,25 @@ export function materialOptionLabel(
     ? snapshotEdgeLabel(snapshot, base)
     : snapshotMaterialLabel(snapshot, base)
 }
+
+/**
+ * A panel's identity without its format, e.g. `Egger H1334 ST9 · Sanoma`.
+ *
+ * The canonical label repeats the size, which is right where it stands alone —
+ * a picker row, an order line — and wrong where the size is already on the next
+ * line. The cutting editor's group header is that case: it prints
+ * `2750×1830×18` right underneath.
+ */
+export function materialIdentityLabel(
+  option: ClientCatalogMaterialOption | null | undefined,
+  fallback?: string,
+): string {
+  if (!option) return fallback ?? translate('cutting.material.none')
+  const parts = [option.manufacturer_name, option.kod, option.nomi].filter((part): part is string =>
+    Boolean(part && part.trim()),
+  )
+  // Spaces, not the ` · ` the canonical label uses: with the format stripped out
+  // these three read as one name — `Egger H1145 Oq daraxt` — and dots between
+  // them would present three separate facts.
+  return parts.length > 0 ? parts.join(' ') : (fallback ?? option.id.slice(0, 8))
+}

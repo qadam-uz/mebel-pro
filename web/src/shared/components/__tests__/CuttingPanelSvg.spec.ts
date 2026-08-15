@@ -251,3 +251,97 @@ describe('CuttingPanelSvg edge banding', () => {
     expect(wrapper.get('.offcut text').attributes('transform')).toContain('rotate(-90')
   })
 })
+
+describe('CuttingPanelSvg grain marking', () => {
+  // The fixture sheet is 1000×700, so normScale = 800/1000 = 0.8 → the tile is
+  // 8/0.8 = 10 sheet-mm and the hairline is 1/0.8 = 1.25 mm wide. Both numbers
+  // are asserted rather than recomputed: they are the whole point of expressing
+  // the marking against the normalized 800-unit width.
+  it('draws one hairline pattern for a grain-locked part', () => {
+    const wrapper = mountWithBanding(makePart({ follow_grain: true }))
+
+    const patterns = wrapper.findAll('pattern')
+    expect(patterns).toHaveLength(1)
+    expect(patterns[0].attributes('width')).toBe('10')
+    expect(patterns[0].attributes('height')).toBe('10')
+
+    const hairline = patterns[0].get('line')
+    expect(hairline.attributes('stroke')).toBe('var(--color-ink)')
+    expect(hairline.attributes('stroke-opacity')).toBe('0.17')
+    expect(hairline.attributes('stroke-width')).toBe('1.25')
+    // Centred in the tile, not on its edge: pattern content is clipped to the
+    // tile, so a stroke sitting on 0 would render at half its width.
+    expect(hairline.attributes('y1')).toBe('5')
+    expect(hairline.attributes('y2')).toBe('5')
+  })
+
+  // Print parity: the SVG tiles from the sheet's TOP edge (svgY flips y) while
+  // the PDF phases from its bottom. The tile offset is what makes both put a
+  // hairline on the same sheet millimetres. 700mm sheet, 10mm tile → (700 - 5)
+  // mod 10 = 5, so the absolute lines land on every 10th mm from the bottom.
+  // The backend twin is test_grain_hatch_lines_nominal_geometry.
+  it('phases the pattern so the PDF draws the same hairlines', () => {
+    const wrapper = mountWithBanding(makePart({ follow_grain: true }))
+
+    expect(wrapper.get('pattern').attributes('y')).toBe('5')
+  })
+
+  it('fills a grain-locked placement with the pattern over its state fill', () => {
+    const wrapper = mountWithBanding(makePart({ follow_grain: true }))
+
+    const rects = wrapper.findAll('.placement rect')
+    expect(rects).toHaveLength(2)
+    // The base rect keeps the accent fill — it is what marks the selection.
+    expect(rects[0].attributes('fill')).toBe('var(--color-accent-soft)')
+    expect(rects[1].attributes('fill')).toMatch(/^url\(#mp-grain-\d+\)$/)
+  })
+
+  it('leaves a part the optimizer may turn flat', () => {
+    const wrapper = mountWithBanding(makePart({ follow_grain: false }))
+
+    expect(wrapper.findAll('.placement rect')).toHaveLength(1)
+  })
+
+  // A placement whose part is missing from the snapshot: we do not know its
+  // grain, so claiming it is locked would be a lie on the one mark a cutter
+  // acts on. It draws flat and nothing throws.
+  it('draws an orphan placement flat', () => {
+    const orphanResult = {
+      ...result,
+      parts_snapshot: [makePart({ part_ref: 'other' })],
+    } as unknown as CuttingResult
+    const wrapper = mount(CuttingPanelSvg, {
+      props: { result: orphanResult, panel, activePlacementId: null },
+    })
+
+    expect(wrapper.findAll('.placement rect')).toHaveLength(1)
+  })
+
+  // The texture runs along the sheet's long side; the viewBox maps that side to
+  // x. On a portrait sheet the same rule turns the hairlines vertical — the one
+  // case a hardcoded "horizontal" would silently draw across the board.
+  it('runs the hairline along the sheet’s long side on a portrait sheet', () => {
+    const portraitResult = {
+      ...result,
+      material_snapshots: {
+        'mat-1': { name: 'Panel', panel_length_mm: 900, panel_width_mm: 2000 },
+      },
+      parts_snapshot: [makePart({ follow_grain: true })],
+    } as unknown as CuttingResult
+    const wrapper = mount(CuttingPanelSvg, {
+      props: { result: portraitResult, panel, activePlacementId: null },
+    })
+
+    const hairline = wrapper.get('pattern line')
+    expect(hairline.attributes('x1')).toBe(hairline.attributes('x2'))
+    expect(hairline.attributes('y1')).not.toBe(hairline.attributes('y2'))
+  })
+
+  // The pattern's own line lives in <defs>, outside `.placement` — which is
+  // what keeps every band-tick count in the suite above counting tape only.
+  it('keeps the hairline out of the band-tick selector', () => {
+    const wrapper = mountWithBanding(makePart({ follow_grain: true }))
+
+    expect(wrapper.findAll('.placement line')).toHaveLength(0)
+  })
+})

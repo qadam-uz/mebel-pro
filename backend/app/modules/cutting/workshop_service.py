@@ -10,6 +10,7 @@ and how the branch is validated (workshop tenancy, not public browsability).
 """
 
 import uuid
+from decimal import Decimal
 
 from fastapi import status
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
     CuttingResultStatus,
+    MaterialStatus,
     Permission,
     UserStatus,
 )
@@ -27,10 +29,18 @@ from app.modules.access.api import (
     resolve_branch_scope,
 )
 from app.modules.access.contracts import Client
+from app.modules.catalog.contracts import (
+    CUSTOMER_DEKOR_ID,
+    BranchMaterial,
+    Dekor,
+    DekorType,
+    Manufacturer,
+)
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.cutting.imports.common import draft_name_from_filename
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
+    CustomerBoardCreateRequest,
     CuttingDraftPart,
     CuttingDraftResponse,
     CuttingMapImportCommitRequest,
@@ -46,6 +56,7 @@ from app.modules.cutting.service import (
     _catalog_materials,
     _commit_imported_map_for_draft,
     _draft_response,
+    _project_own_panels_onto_results,
     _result_response,
 )
 from app.modules.sales.contracts import Order
@@ -349,12 +360,19 @@ async def workshop_catalog_materials(
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
     limit: int | None = None,
+    draft_id: uuid.UUID | None = None,
 ) -> list[ClientCatalogMaterialOption]:
     # A staff draft is always branch-scoped — the branch must belong to the
     # workshop and the staffer must hold manage_orders on it.
     await resolve_branch_scope(
         db, principal, branch_id=branch_id, permission=Permission.MANAGE_ORDERS
     )
+    # `draft_id` widens the listing by exactly this drawing's customer boards.
+    # Authorized through `_workshop_draft`, not taken on trust: without the
+    # check any staffer could name another workshop's draft and read the boards
+    # its customer brought.
+    if draft_id is not None:
+        await _workshop_draft(db, principal=principal, draft_id=draft_id)
     # Staff see unpriced formats (flagged `price_unset`) so the gap is visible
     # where it is fixable; the client listing drops them entirely.
     return await _catalog_materials(
@@ -365,6 +383,7 @@ async def workshop_catalog_materials(
         manufacturer_id=manufacturer_id,
         include_unpriced=True,
         limit=limit,
+        include_draft_id=draft_id,
     )
 
 
@@ -385,3 +404,164 @@ async def _workshop_draft(
             status_code=status.HTTP_404_NOT_FOUND,
         )
     return draft
+
+
+async def create_customer_board(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    draft_id: uuid.UUID,
+    payload: CustomerBoardCreateRequest,
+) -> ClientCatalogMaterialOption:
+    """Record a sheet the walk-in carried in as a branch material of this draft.
+
+    A board the branch does not sell still has to be a branch material: the
+    parts, the optimizer, `own_panel_counts`, the result snapshots and every
+    order item key on a branch-material id, and a drawing-level object would
+    force a second material identity through all of them. What makes this row
+    different is that the branch does not *carry* it — no stock row, excluded
+    from every catalog listing, reachable only from this drawing.
+
+    The sheet count the operator typed is written straight into the draft's
+    own-material claim, because for a customer board the claim is not a guess:
+    the sheets are on the floor. `_project_own_panels_onto_results` then clamps
+    it onto any live result exactly as it does for a catalog claim.
+    """
+    draft = await _workshop_draft(db, principal=principal, draft_id=draft_id)
+    if draft.preferred_branch_id is None:
+        raise APIError(
+            "cutting_draft_branch_required",
+            "Pick a branch before adding a customer board",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=draft.preferred_branch_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+
+    # The optimizer's panel convention: the long side is the length. Normalizing
+    # here rather than rejecting means the operator can type the two numbers in
+    # either order, which is how a tape measure reads them.
+    uzunlik, eni = max(payload.uzunlik_mm, payload.eni_mm), min(payload.uzunlik_mm, payload.eni_mm)
+    substitute = await _branch_substitute(
+        db,
+        branch_id=scope.branch_id,
+        qalinlik_mm=payload.qalinlik_mm,
+        uzunlik_mm=uzunlik,
+        eni_mm=eni,
+    )
+
+    board = BranchMaterial(
+        branch_id=scope.branch_id,
+        dekor_id=CUSTOMER_DEKOR_ID,
+        qalinlik_mm=payload.qalinlik_mm,
+        uzunlik_mm=uzunlik,
+        eni_mm=eni,
+        kromka_eni_mm=None,
+        # The substitute's price, or 0 when the branch carries nothing of this
+        # size. This one number is what makes the SHORTAGE price itself: the
+        # quote's demand is already `needed - brought`, so a per-sheet price on
+        # this row bills only the sheets the customer did not bring, and bills
+        # nothing when they brought enough.
+        price_tiyin=substitute[1] if substitute else 0,
+        min_stock=0,
+        status=MaterialStatus.ACTIVE,
+        customer_supplied=True,
+        nomi=payload.nomi.strip() or None if payload.nomi else None,
+        tolali=payload.tolali,
+        source_draft_id=draft.id,
+        stock_material_id=substitute[0] if substitute else None,
+    )
+    db.add(board)
+    await db.flush()
+
+    # Deliberately no `ensure_stock_item_for_branch_material`: a stock row would
+    # surface the board on the Ombor screen, where `on_hand <= min_stock` reads
+    # 0/0 as "low stock" and pages the owner about a sheet the shop never owned.
+    claim = dict(draft.own_panel_counts or {})
+    claim[str(board.id)] = payload.sheets
+    draft.own_panel_counts = claim
+    await _project_own_panels_onto_results(db, draft=draft)
+    await db.flush()
+
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="cutting_draft.customer_board",
+        entity_type="cutting_draft",
+        entity_id=draft.id,
+        workshop_id=scope.workshop_id,
+        summary="Recorded a customer-supplied board",
+        details={
+            "branch_material_id": str(board.id),
+            "uzunlik_mm": uzunlik,
+            "eni_mm": eni,
+            "qalinlik_mm": str(payload.qalinlik_mm),
+            "sheets": payload.sheets,
+            "substitute_id": str(board.stock_material_id) if board.stock_material_id else None,
+        },
+    )
+
+    options = await _catalog_materials(
+        db,
+        tape=False,
+        branch_id=scope.branch_id,
+        search=None,
+        manufacturer_id=None,
+        include_unpriced=True,
+        limit=None,
+        include_draft_id=draft.id,
+    )
+    created = next((option for option in options if option.id == board.id), None)
+    if created is None:  # pragma: no cover - the row was just written
+        raise APIError(
+            "customer_board_not_found",
+            "Customer board was not created",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    return created
+
+
+async def _branch_substitute(
+    db: AsyncSession,
+    *,
+    branch_id: uuid.UUID,
+    qalinlik_mm: Decimal,
+    uzunlik_mm: int,
+    eni_mm: int,
+) -> tuple[uuid.UUID, int] | None:
+    """The branch's own sheet of this exact size, to sell the shortfall from.
+
+    Cheapest match wins and the id breaks ties, so the answer is deterministic
+    and the customer is billed the least the branch could have charged. Exact
+    size only: a "close enough" sheet is a different board to cut, and guessing
+    one would bill for something the layout never nested against.
+
+    `None` means the branch carries nothing of this size — then the shortfall
+    stays unpriced and the operator prices it by hand on the order, which is the
+    owner's rule for that case.
+    """
+    row = (
+        await db.execute(
+            select(BranchMaterial.id, BranchMaterial.price_tiyin)
+            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            .where(
+                BranchMaterial.branch_id == branch_id,
+                BranchMaterial.customer_supplied.is_(False),
+                BranchMaterial.status == MaterialStatus.ACTIVE,
+                Dekor.holat == MaterialStatus.ACTIVE,
+                Manufacturer.status == MaterialStatus.ACTIVE,
+                Dekor.tur != DekorType.KROMKA,
+                BranchMaterial.qalinlik_mm == qalinlik_mm,
+                BranchMaterial.uzunlik_mm == uzunlik_mm,
+                BranchMaterial.eni_mm == eni_mm,
+                BranchMaterial.price_tiyin > 0,
+            )
+            .order_by(BranchMaterial.price_tiyin, BranchMaterial.id)
+            .limit(1)
+        )
+    ).first()
+    return (row[0], row[1]) if row else None

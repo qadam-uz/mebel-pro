@@ -530,6 +530,8 @@ Russian and appear in the Russian column on purpose.
 | A signed statement of account          | `akt sverka`        | `акт сверки`         | —                                 |
 | A printed/served document              | `hujjat`            | `документ`           | `xujjat`                          |
 | A part fitted onto a sheet             | `joylashtirildi`    | `размещено`          | — _orders never use it_           |
+| The share of a sheet a drawing uses    | `ishlatildi`        | `использовано`       | `KIM`, `To'ldirish`               |
+| An offcut big enough to keep           | `foydali qoldiq`    | `полезный остаток`   | `ostatka`, `Ish ostatkasi`        |
 | An order the client just submitted     | `Yuborildi`         | `Отправлен`          | `Joylashtirildi`                  |
 | The currency unit                      | `so'm`              | `сум` (`сўм` in Cyrillic Uzbek) | —                      |
 
@@ -554,6 +556,14 @@ locale.
 word, so a client read `Joylashtirildi 12/14` on the result screen and then saw their order
 sitting in a stage called `Joylashtirildi` — one meaning a placed part, the other a submitted
 order. Submitting is `Yuborildi`.
+
+`joylashtirildi` counts **parts**, `ishlatildi` measures **sheet area** — the two now sit one
+row apart in the table and read alike, so keep them apart on screen: `Joylashtirildi 25/25`
+answers "did every detail fit", `73% ishlatildi` answers "how much of this board did we use".
+The screen said `KIM` until 2026-08 — the nesting engineer's abbreviation, which no operator
+reading the result uses — and `To'ldirish` was rejected in prototype review because an operator
+read it as the amount *still to be filled*. `ishlatildi` is a statement about a board already
+cut, which is what the sheet on that screen is.
 
 ## Brand
 

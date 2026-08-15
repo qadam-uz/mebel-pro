@@ -98,6 +98,12 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
         # NULLs are distinct in a Postgres unique index, so a plain
         # UniqueConstraint over the nullable format columns would let
         # (dekor, 18mm, NULL, NULL) in twice. COALESCE collapses them.
+        #
+        # Partial on `NOT customer_supplied`: uniqueness is a statement about
+        # what a branch CARRIES, and a customer board is not carried. Every
+        # customer board points at the one seeded `Mijoz` dekor, so two walk-ins
+        # bringing 2750x1830x16 to the same branch produce an identical tuple:
+        # a full index would reject the second customer.
         Index(
             "uq_branch_materials_branch_dekor_format",
             "branch_id",
@@ -107,7 +113,9 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
             func.coalesce(text("eni_mm"), text("0")),
             func.coalesce(text("kromka_eni_mm"), text("0")),
             unique=True,
+            postgresql_where=text("NOT customer_supplied"),
         ),
+        Index("ix_branch_materials_source_draft", "source_draft_id"),
         CheckConstraint("price_tiyin >= 0", name="ck_branch_materials_price_nonnegative"),
         CheckConstraint("min_stock >= 0", name="ck_branch_materials_min_stock_nonnegative"),
         CheckConstraint("qalinlik_mm > 0", name="ck_branch_materials_qalinlik_positive"),
@@ -143,6 +151,34 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
         default=MaterialStatus.ACTIVE,
         nullable=False,
     )
+
+    # ── Customer-supplied boards ────────────────────────────────────────────
+    # A walk-in brings sheets the branch does not sell. They still have to be a
+    # branch material, because `own_panel_counts`, `material_snapshots`, the
+    # optimizer's PanelSpec and every order item key on a branch-material id —
+    # a drawing-level object would force a second material identity through all
+    # of them. What makes this row different is only that the branch does not
+    # carry it: no stock row, excluded from every catalog listing, and reachable
+    # only from the drawing that created it.
+    customer_supplied: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("false"), default=False
+    )
+    # The operator-typed board name. `_identity()` in core/material_label.py
+    # prefers the dekor's `kod` (NULL on the seeded Mijoz dekor) and then its
+    # `nomi`, so this column is the label's identity slot. NULL inherits.
+    nomi: Mapped[str | None]
+    # `tolali` lives on the dekor, and one shared dekor cannot carry a per-board
+    # answer. NULL inherits the dekor's.
+    tolali: Mapped[bool | None]
+    # Provenance, never the discriminator: the draft is deleted when the order is
+    # placed, so scoping on this would un-scope the board mid-placement.
+    source_draft_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cutting_drafts.id", ondelete="SET NULL")
+    )
+    # The branch material the SHORTAGE is sold from when the layout needs more
+    # sheets than the customer brought. NULL means the branch carries nothing of
+    # this size — then the shortfall stays unpriced and the operator prices it.
+    stock_material_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branch_materials.id"))
 
 
 class BranchPricing(Base):

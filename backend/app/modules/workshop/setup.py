@@ -323,7 +323,14 @@ async def get_onboarding_status(
         await db.scalar(
             select(BranchMaterial.id)
             .join(Branch, Branch.id == BranchMaterial.branch_id)
-            .where(Branch.workshop_id == workshop_id, BranchMaterial.price_tiyin > 0)
+            .where(
+                Branch.workshop_id == workshop_id,
+                BranchMaterial.price_tiyin > 0,
+                # A walk-in's board is not the shop stocking its catalog, and it
+                # can carry a price (the substitute's) — so exclude it
+                # structurally rather than relying on the price gate.
+                BranchMaterial.customer_supplied.is_(False),
+            )
             .limit(1)
         )
         is not None

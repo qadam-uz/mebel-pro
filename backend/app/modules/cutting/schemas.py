@@ -14,6 +14,7 @@ from app.models.enums import (
     MaterialSource,
 )
 from app.modules.cutting.imports.base import ImportMapLayout
+from app.modules.cutting.optimizer import MAX_PANELS_PER_MATERIAL
 from app.schemas.common import APIModel
 
 
@@ -260,6 +261,24 @@ class WorkshopCuttingDraftSummary(APIModel):
     updated_at: datetime
 
 
+class CustomerBoardCreateRequest(BaseModel):
+    """A sheet the walk-in carried in, as the operator typed it.
+
+    `nomi` is optional because the customer rarely knows what their board is;
+    the size is what the layout needs. `qalinlik_mm` is required even though the
+    handoff form omits it — it is NOT NULL on the material, part of the format
+    key, and printed in every label, so inventing one server-side would make two
+    genuinely different boards render identically.
+    """
+
+    nomi: str | None = Field(default=None, max_length=80)
+    uzunlik_mm: int = Field(gt=0, le=6000)
+    eni_mm: int = Field(gt=0, le=6000)
+    qalinlik_mm: Decimal = Field(gt=0, le=100)
+    sheets: int = Field(gt=0, le=MAX_PANELS_PER_MATERIAL)
+    tolali: bool = False
+
+
 class ClientCatalogMaterialOption(APIModel):
     """One format a branch carries, as the cutting editors' pickers see it.
 
@@ -282,6 +301,15 @@ class ClientCatalogMaterialOption(APIModel):
     kromka_eni_mm: int | None
     price_tiyin: int
     # 0 means "the branch has not priced this format yet", not "free". Only the
-    # workshop-facing listing ever returns such a row; clients never see one.
+    # workshop-facing listing ever returns such a row; the client listing drops
+    # them. A customer-supplied board is the one row where 0 IS free, so it
+    # never sets this flag — see `customer_supplied`.
     price_unset: bool
     display_unit: str
+    # A sheet the walk-in carried in. It is a real branch material so the whole
+    # cutting/pricing path can keep keying on a material id, but the branch does
+    # not carry it: no stock, and every catalog listing excludes it. Its
+    # `price_tiyin` is the branch's price for the same size when there is one —
+    # that is what makes the SHORTAGE price itself, since the demand the quote
+    # sees is already `needed - brought`.
+    customer_supplied: bool = False

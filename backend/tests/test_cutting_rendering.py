@@ -288,3 +288,94 @@ def test_thickening_stamp_prints_only_for_a_thickened_part() -> None:
     rendering.draw_sheet_map(pdf, (0.0, 0.0, 560.0, 360.0), result, panel)  # type: ignore[arg-type]
 
     assert drawn.count(rendering._THICKENING_MARK) == 1
+
+
+# --- grain hatch ---------------------------------------------------------
+
+
+def test_follow_grain_flag_reads_the_part_snapshot_and_defaults_on() -> None:
+    """The default for a missing key is **on**, the mirror image of `thickened`.
+
+    `CuttingDraftPart.follow_grain` is `bool = True`, so every snapshot the app
+    writes carries the key; a raw dict without it is an old or hand-built one
+    whose parts followed that same default. Reading it as False would quietly
+    un-mark exactly the parts a cutter must not turn.
+    """
+    assert rendering._follows_grain({"follow_grain": True}) is True
+    assert rendering._follows_grain({"follow_grain": False}) is False
+    assert rendering._follows_grain({}) is True  # legacy snapshot, default on
+    assert rendering._follows_grain(None) is False  # placement with no known part
+
+
+def test_grain_hatch_lines_nominal_geometry() -> None:
+    """Twin of the `<pattern>` case in
+    web/src/shared/components/__tests__/CuttingPanelSvg.spec.ts — same pitch
+    formula, same phase rule. Nothing mechanical keeps the two in step, so
+    change them together."""
+    norm_scale = 800 / 2800  # pitch = 8 / norm_scale = 28.0 sheet mm
+    placement = _placement(x_mm=100, y_mm=200, length_mm=600, width_mm=400)
+
+    lines = rendering._grain_hatch_lines(placement, norm_scale, horizontal=True)
+
+    # Phased from the sheet origin, not the placement: the first line is the
+    # first multiple of 28 above y=200, and the last one stays below y=600.
+    assert lines[0] == pytest.approx((100.0, 224.0, 700.0, 224.0))
+    assert lines[1] == pytest.approx((100.0, 252.0, 700.0, 252.0))
+    assert lines[-1] == pytest.approx((100.0, 588.0, 700.0, 588.0))
+    assert len(lines) == 14
+    assert all(y1 == y2 for _, y1, _, y2 in lines)
+
+
+def test_grain_hatch_runs_along_the_sheets_long_side() -> None:
+    """A portrait sheet turns the ladder 90°. The one case a hardcoded
+    "horizontal" would print across the board instead of along it."""
+    norm_scale = 800 / 900
+    placement = _placement(x_mm=0, y_mm=0, length_mm=400, width_mm=900)
+
+    lines = rendering._grain_hatch_lines(placement, norm_scale, horizontal=False)
+
+    assert lines
+    assert all(x1 == x2 for x1, _, x2, _ in lines)
+    assert all(y1 == 0 and y2 == 900 for _, y1, _, y2 in lines)
+
+
+def test_grain_hatch_skips_a_placement_thinner_than_one_gap() -> None:
+    """A sliver narrower than the pitch draws nothing rather than a line on its
+    own edge — the edge is already a stroke."""
+    norm_scale = 800 / 2800
+    placement = _placement(x_mm=0, y_mm=0, length_mm=600, width_mm=20)
+
+    assert rendering._grain_hatch_lines(placement, norm_scale, horizontal=True) == []
+
+
+def test_grain_hatch_prints_only_for_a_grain_locked_part() -> None:
+    """The hatch is the only mark that says "do not turn this part". If it
+    stopped printing, a textured board would be cut across the grain and
+    nothing else on the sheet would say so."""
+    rendering._register_fonts()
+    free = _placement(part_ref="free", x_mm=0, y_mm=0, length_mm=600, width_mm=400)
+    locked = _placement(part_ref="locked", x_mm=800, y_mm=0, length_mm=600, width_mm=400)
+    result = SimpleNamespace(
+        parts_snapshot=[
+            {"part_ref": "free", "length_mm": 600, "width_mm": 400, "follow_grain": False},
+            {"part_ref": "locked", "length_mm": 600, "width_mm": 400, "follow_grain": True},
+        ],
+        material_snapshots={"m": {"panel_length_mm": 2750, "panel_width_mm": 1830}},
+    )
+    panel = SimpleNamespace(branch_material_id="m", placements=[free, locked], offcuts=[])
+
+    batches: list[int] = []
+    pdf = canvas.Canvas(BytesIO(), pagesize=(600, 400))
+    original = pdf.lines
+
+    def spy(lines: Any, *args: Any, **kwargs: Any) -> None:
+        batches.append(len(lines))
+        original(lines, *args, **kwargs)
+
+    pdf.lines = spy  # type: ignore[method-assign]
+    rendering.draw_sheet_map(pdf, (0.0, 0.0, 560.0, 360.0), result, panel)  # type: ignore[arg-type]
+
+    # One batch, for the locked placement only. `pdf.lines` is used nowhere else
+    # in draw_sheet_map, so the count is unambiguous.
+    assert len(batches) == 1
+    assert batches[0] > 0

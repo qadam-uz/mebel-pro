@@ -249,6 +249,52 @@ carry them across: an outside-click handler that tests only the wrapper will clo
 the panel's own `pointerdown` (test the panel too), and a `keydown` handler bound to the wrapper
 never sees Esc pressed with focus inside the panel (bind it on both).
 
+### Building from a design handoff — run the prototype, don't read it
+
+A handoff from Claude Design arrives as a bundle of `.dc.html` prototypes (the repo keeps the
+latest in the untracked `.design-handoff/`). **They are runnable.** Serve the folder and click
+through the real thing:
+
+```bash
+cd .design-handoff && python3 -m http.server 8899
+# → http://localhost:8899/<name>.dc.html — self-contained, no build, no network
+```
+
+**Reading the HTML instead of running it does not work, and has failed here twice.** The markup
+is a template language with `{{ }}` bindings whose values live hundreds of lines away in a
+`<script type="text/x-dc">`; a screen's real shape only exists once that script has run. Both
+times the result was work that passed every gate and did not look like the design.
+
+The rules, in order:
+
+1. **Screenshot the prototype screen first, then the app screen, then compare them side by
+   side.** Not the source — the screens. Do this before writing any code for that screen, and
+   again before saying it is done.
+2. **A spec's account of the gap is not evidence.** `SPEC_NEW_ORDER_PROTOTYPE_DELTA.md` opened
+   by asserting the flow was already built and only three deltas remained. It was wrong about
+   three of the four screens. Specs record intent and decisions; only the running prototype
+   says what a screen looks like.
+3. **Measure, don't eyeball.** For anything with a number in it — focus rings, border weights,
+   glyph geometry — read `getComputedStyle` on both sides. The handoff's focus affordance is
+   `border-color → accent` with no ring; ours had a 3px orange one, and no screenshot
+   comparison would have named the difference.
+4. **When the measurement disagrees with the screen, believe neither yet — get a third look.**
+   The browser pane renders at a large viewport and scales the capture down, so a 1px border is
+   simply not in the picture; and `getComputedStyle` through the pane has returned stale values
+   (an inline `!important` that did not move the number). Shrink the viewport to ~1280x700 so
+   the screenshot is near 1:1 and look again. "The CSS is right by construction" is where two
+   real defects hid: the ring came from a global `:focus-visible` nobody had checked, and a
+   `border-hairline` utility was overriding the focus colour in a later layer.
+5. **Where the repo does more than the design depicts, keep the capability and match the
+   frame.** The design draws one tape per row; this editor numbers four. Keep the four, adopt
+   the design's rectangle. Say so in a comment at the deviation — every one of these is a
+   judgement someone will otherwise re-litigate.
+6. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
+   outranks the handoff; nothing else does. "It seemed better" is not a reason — take it to the
+   owner instead.
+7. **Do not delete working behaviour because the prototype omits it.** A prototype is a sketch
+   of a screen, not an inventory of a product.
+
 ### Verifying UI work
 
 The check gates are necessary, not sufficient. Run the app, seed realistic data
@@ -256,4 +302,7 @@ The check gates are necessary, not sufficient. Run the app, seed realistic data
 a green test run never shows a wrong layout, a broken empty state, or mangled copy. Where CSS
 is the subject, a screenshot confirms intent but only the computed or rendered value confirms
 effect: read `getComputedStyle` / the measured rect, not the picture.
+
+`vue-tsc` does **not** catch a component used in a template but never imported — it renders as
+nothing, silently, through a green typecheck. Only opening the screen finds it.
 

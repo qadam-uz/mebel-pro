@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-13
 order: 25
 ---
 
@@ -106,12 +106,20 @@ formats; the branch's [`stock_item`](inventory.md#stock-item) is created alongsi
 | `price_tiyin` | bigint | per sell unit (per **sheet** for panel-shaped, per **metre** for `kromka`), integer tiyin, ≥ 0. Default `0` — see *Price 0 means unpriced* |
 | `min_stock` | int | low-stock alert threshold, in the material's stock unit (sheet count or tape millimetres); ≥ 0; default `0`. **The only home of the threshold** — [`stock_item`](inventory.md#stock-item) carries no copy |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
+| `customer_supplied` | bool | a sheet a walk-in carried in, not something the branch sells. Excluded from every catalog listing; see *Customer-supplied boards* |
+| `nomi` | text? | operator-typed board name; overrides the dekor's for the label. Null on a carried format |
+| `tolali` | bool? | per-board texture answer — one shared dekor cannot carry it. Null inherits the dekor's |
+| `source_draft_id` | uuid? | the drawing the board was recorded on, `ON DELETE SET NULL`. **Provenance, not the scope key** — the draft is deleted when the order is placed |
+| `stock_material_id` | uuid? | the branch material the board's *shortfall* is sold from, frozen at creation. Null = the branch carries nothing of that size |
 | `created_at` / `updated_at` | timestamp | |
 
 **Format uniqueness.** `(branch_id, dekor_id, qalinlik_mm, uzunlik_mm, eni_mm, kromka_eni_mm)`
 is unique per branch, with the three nullable columns collapsed through `COALESCE(…, 0)` —
 NULLs are distinct in a Postgres unique index, so a plain constraint would let the same
-tape-shaped format in twice. Panel sizes are **normalized on write** (`uzunlik ≥ eni`), so
+tape-shaped format in twice. The index is **partial on `NOT customer_supplied`**: uniqueness
+is a statement about what a branch *carries*, and every customer board points at one shared
+dekor, so two walk-ins bringing the same size to one branch produce an identical tuple that a
+full index would reject. Panel sizes are **normalized on write** (`uzunlik ≥ eni`), so
 2750×1830 and 1830×2750 are one format, not two rows that cut identically.
 
 **Which format columns apply follows the dekor's `tur`**, and `tur` lives on `dekorlar` where
@@ -125,7 +133,19 @@ before it knows prices, so `price_tiyin` defaults to `0` and attaching without a
 legal. Responses carry a derived `price_unset` flag, and **every** listing keeps and flags
 those rows — client-facing ones included, so a client sees the whole shelf rather than the
 priced fraction of it. What stops an unpriced format becoming a free order line sits at order
-confirmation, not here ([`orders.md`](../features/orders.md#pricing)).
+confirmation, not here ([`orders.md`](../features/orders.md#pricing)). **One exception:** a
+customer-supplied board priced at 0 is genuinely free — the branch never sold it — so it never
+raises `price_unset`. Its price, when it has one, is the branch's own price for the same size,
+which is what bills the shortfall.
+
+**Customer-supplied boards.** A sheet the walk-in brought that the branch does not sell is
+still a branch material, because `own_panel_counts`, `material_snapshots`, the optimizer's
+panel spec and every order item key on a branch-material id. It differs only in that the branch
+does not carry it: no [`stock_item`](inventory.md#stock-item) row is created, every catalog and
+portal listing excludes it, and only the drawing named by `source_draft_id` can see it. The
+rules that govern it — the seeded `Mijoz` dekor, the sheet-count claim, the substitute that
+prices the shortfall — live with the feature in
+[`cutting.md`](../features/cutting.md).
 `min_stock` is an **alert threshold, not a stock policy** — nothing stops the branch
 holding less, nothing reserves the quantity, and the low-stock notification fires when
 `on_hand ≤ min_stock`, so `0` warns only once the material is gone. The rules behind both

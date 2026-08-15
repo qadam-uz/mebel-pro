@@ -33,3 +33,11 @@ export function sanitizeSignedQuantityInput(value: string): string {
   const rest = normalized.slice(sign ? 1 : 0).replace(/[+-]/g, '')
   return sign + sanitizeQuantityInput(rest)
 }
+
+// Whole millimetres — a cut dimension or a piece count. No separator at all:
+// these are integers by definition, and the field they back is a plain text
+// input (the handoff's, and the right control: a spinner on a cut size is a
+// stray scroll wheel away from resizing a part).
+export function sanitizeWholeNumberInput(value: string): string {
+  return value.replace(/\D/g, '')
+}

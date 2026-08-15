@@ -161,7 +161,11 @@ describe('CuttingPartRow grain toggle', () => {
     const glyph = wrapper.get('[data-cell="edge"]')
     expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(1)
     expect(glyph.attributes('aria-label')).toBe('Kromka tomonlari')
-    expect(glyph.attributes('style')).toContain('border-left: 3px solid')
+    // The mark is the 20x15 rectangle inside the button; the button is the hit
+    // target. Weights are the handoff's: 2.5px banded, 1.5px bare.
+    expect(wrapper.get('[data-test="edge-glyph"]').attributes('style')).toContain(
+      'border-left: 2.5px solid',
+    )
 
     await glyph.trigger('click')
 
@@ -169,11 +173,14 @@ describe('CuttingPartRow grain toggle', () => {
     expect(wrapper.emitted('open-edge-picker')?.[0]).toHaveLength(1)
   })
 
-  it('shows the edge glyph with dashed borders when no edge is selected', () => {
+  it('draws every side hairline-thin when no edge is selected', () => {
     seedPanel(true)
     const wrapper = mountRow(part())
 
-    expect(wrapper.get('[data-cell="edge"]').attributes('style')).toContain('1px dashed')
+    const style = wrapper.get('[data-test="edge-glyph"]').attributes('style')
+    expect(style).toContain('border-left: 1.5px solid')
+    // No tape, no fill — the rectangle reads as an empty part, not a coloured one.
+    expect(style).toContain('background: transparent')
   })
 
   it('opens the material picker from the actions menu', async () => {

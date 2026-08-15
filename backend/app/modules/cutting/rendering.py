@@ -37,6 +37,17 @@ _LABEL_MIN_H = 30.0
 _BAND_STROKE = 3.0
 _BAND_INSET = 3.0
 _BAND_MARK = 30.0
+# Grain marking, mirroring CuttingPanelSvg.vue: a part the optimizer may not
+# turn is filled with hairlines running along the sheet's texture (its long
+# side). Same normalization as the labels and the band ticks.
+_GRAIN_STROKE = 1.0
+_GRAIN_GAP = 8.0
+# The band ticks floor at 0.8pt because a tape mark that thin stops reading as a
+# mark. A hairline is the opposite: it must stay a hairline, and at the sheet-
+# group frame the natural width is already ~0.5pt. Clamping it to the tick floor
+# would make it as heavy as the tape it must sit under. 0.25pt is the classic
+# hairline minimum — thinner than that, a 96dpi preview drops it entirely.
+_MIN_GRAIN_STROKE_PT = 0.25
 # Dimension texts sit against the side they measure, like the web visualiser
 # (CuttingPanelSvg.vue). The inset clears the band tick (_BAND_INSET + stroke)
 # with room to spare, so a number never lands on a tape mark.
@@ -73,6 +84,12 @@ _SUCCESS = HexColor("#067a4b")  # --color-success: usable offcut
 _DANGER = HexColor("#c9302a")  # --color-danger: waste offcut
 _INK_MUTED = HexColor("#666d79")  # --color-ink-muted: waste offcut label, footer
 _INK_SOFT = HexColor("#565c66")  # --color-ink-soft: placement labels
+# --color-ink (#0f1115) at 17% over the white placement fill, composited by
+# hand. The screen draws the hairline with stroke-opacity; the PDF pre-composites
+# instead, because the placement fill here is deliberately pure white (see the
+# note on setFillGray below) — so the result is pixel-identical, the document
+# stays free of a transparency group, and no shop RIP has to flatten one.
+_GRAIN = HexColor("#d6d7d7")
 
 # The vendored Unicode font pair is shared with the other in-process documents
 # (app/core/pdf.py); these aliases keep the module-local naming.
@@ -212,6 +229,35 @@ def draw_sheet_map(
         pdf.rect(x, y, w, h, stroke=1, fill=1)
 
         row = parts.get(placement.part_ref)
+        if _follows_grain(row[0] if row else None):
+            hatch = _grain_hatch_lines(
+                placement, norm_scale, horizontal=panel_length >= panel_width
+            )
+            if hatch:
+                pdf.saveState()
+                # Clip to the placement: the ladder is phased from the sheet
+                # origin (so neighbouring grained parts share one set of lines,
+                # as on screen), which means its segments are computed against
+                # the sheet, not this rectangle.
+                clip = pdf.beginPath()
+                clip.rect(x, y, w, h)
+                pdf.clipPath(clip, stroke=0, fill=0)
+                pdf.setStrokeColor(_GRAIN)
+                pdf.setLineWidth(max(_MIN_GRAIN_STROKE_PT, (_GRAIN_STROKE / norm_scale) * scale))
+                pdf.setLineCap(0)
+                pdf.lines(
+                    [
+                        (
+                            origin_x + x1 * scale,
+                            origin_y + y1 * scale,
+                            origin_x + x2 * scale,
+                            origin_y + y2 * scale,
+                        )
+                        for x1, y1, x2, y2 in hatch
+                    ]
+                )
+                pdf.restoreState()
+
         sides = _banded_sides(row[0] if row else None, rotated=placement.rotated)
         if sides is not None:
             ticks = _band_tick_lines(placement, sides, norm_scale)
@@ -262,6 +308,22 @@ def draw_sheet_map(
 
 def _is_thickened(part: dict[str, Any] | None) -> bool:
     return bool(part.get("thickened")) if part else False
+
+
+def _follows_grain(part: dict[str, Any] | None) -> bool:
+    """Whether the optimizer was forbidden to turn this part.
+
+    The default for a missing key is **True**, the opposite of `_is_thickened`:
+    `CuttingDraftPart.follow_grain` is `bool = True` (schemas.py), so a snapshot
+    written by the app always carries the key, and a raw dict that does not is
+    an old or hand-built one whose parts followed the same default. Reading a
+    missing key as False would quietly un-mark them.
+
+    A placement with no part at all (`None`) is a different case: we do not know
+    its grain, so it stays flat rather than claiming a lock — the same rule the
+    visualiser's `followsGrain` follows for an orphan `part_ref`.
+    """
+    return bool(part.get("follow_grain", True)) if part is not None else False
 
 
 def _draw_thickening_mark(
@@ -495,6 +557,40 @@ def _band_tick_lines(
         lines.append((x0 + inset, cy - half_v, x0 + inset, cy + half_v))
     if sides.right:
         lines.append((x0 + length - inset, cy - half_v, x0 + length - inset, cy + half_v))
+    return lines
+
+
+def _grain_hatch_lines(
+    placement: CuttingPlacementResponse, norm_scale: float, *, horizontal: bool
+) -> list[tuple[float, float, float, float]]:
+    """Hairlines across a grain-locked placement, in sheet mm (y up).
+
+    Twin of the `<pattern>` in CuttingPanelSvg.vue: the pitch is the same
+    `_GRAIN_GAP / norm_scale`, and the ladder is phased from the **sheet
+    origin** rather than the placement's own edge, so two grained parts side by
+    side share one set of lines and the sheet reads as a single grained board.
+    The caller clips to the placement; the segments themselves are already
+    trimmed to it, so the clip only guards the stroke's own width.
+    """
+    gap = _GRAIN_GAP / norm_scale
+    if gap <= 0:
+        return []
+    x0 = float(placement.x_mm)
+    y0 = float(placement.y_mm)
+    x1 = x0 + placement.length_mm
+    y1 = y0 + placement.width_mm
+    lines: list[tuple[float, float, float, float]] = []
+    if horizontal:
+        # First multiple of `gap` at or above the placement's bottom edge.
+        y = (int(y0 / gap) + 1) * gap
+        while y < y1:
+            lines.append((x0, y, x1, y))
+            y += gap
+    else:
+        x = (int(x0 / gap) + 1) * gap
+        while x < x1:
+            lines.append((x, y0, x, y1))
+            x += gap
     return lines
 
 

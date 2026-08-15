@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { snapshotEdgeLabel, snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import {
   deriveSnapshotEdgeRegistry,
   edgeRegistryEntryByMaterial,
   groupPanelPlacements,
+  numberSnapshot,
   panelDisplayIndex,
+  resultTotals,
+  squareMetres,
 } from '@/shared/app/cuttingResultsDisplay'
+import { snapshotValue } from '@/shared/app/materialLabel'
 import CuttingPartsList from '@/shared/components/CuttingPartsList.vue'
 import CuttingResultSheets from '@/shared/components/CuttingResultSheets.vue'
-import { metres, type CuttingPlacement, type CuttingResult } from '@/shared/stores/cutting'
+import {
+  metres,
+  useCuttingStore,
+  type CuttingPlacement,
+  type CuttingResult,
+} from '@/shared/stores/cutting'
 
 // The whole read-only face of a finished cutting result: the material and edge
 // tally, the sheet strip, the active sheet's drawing, and the per-sheet parts
@@ -28,6 +38,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:activePanelId': [string | null]
 }>()
+
+const { t } = useI18n()
+const cutting = useCuttingStore()
 
 const activePartRef = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
@@ -53,9 +66,39 @@ const panelMaterials = computed(() =>
       id,
       count,
       label: snapshotMaterialLabel(props.result.material_snapshots[id], id.slice(0, 8)),
+      // Any claim at all marks the row: a client who brought 2 of the 5 sheets
+      // this layout needs still brought material, and the split itself is the
+      // ownership dialog's and the quote's job to state — the chip only answers
+      // "whose board is this", which `> 0` answers exactly.
+      own: (props.result.own_panel_counts?.[id] ?? 0) > 0,
+      // How much of this material's sheets the layout actually consumed —
+      // averaged over its own panels, so a material is judged against itself
+      // rather than against a result-wide figure two materials would share.
+      fill: materialFillPercent(id),
     }))
     .sort((left, right) => left.label.localeCompare(right.label, 'uz')),
 )
+
+function materialFillPercent(materialId: string) {
+  const panels = props.result.panels.filter((panel) => panel.branch_material_id === materialId)
+  if (panels.length === 0) return null
+  const snapshot = props.result.material_snapshots[materialId]
+  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
+  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
+  if (length <= 0 || width <= 0) return null
+  const sheetArea = length * width * panels.length
+  const waste = panels.reduce((sum, panel) => sum + panel.waste_area_mm2, 0)
+  return Math.max(0, Math.min(100, 100 - (waste / sheetArea) * 100))
+}
+// Three literal keys, never an interpolated one: `pnpm i18n:check` only
+// resolves keys it can read as literals, so a computed key would leave the
+// chip's copy entirely outside the gate. The client branch exists because the
+// same screen renders for the client reading their own order, where
+// "Mijoz materiali" is the third person for the person looking at it.
+function sourceLabel(own: boolean) {
+  if (!own) return t('cutting.source.shop')
+  return cutting.scope === 'client' ? t('cutting.source.ownClient') : t('cutting.source.own')
+}
 const edgeByMaterial = computed(() => {
   const result = props.result
   const registry = snapshotEdgeRegistry.value
@@ -79,6 +122,67 @@ const edgeByMaterial = computed(() => {
 const activePanelGroups = computed(() =>
   activePanel.value ? groupPanelPlacements(props.result, activePanel.value) : [],
 )
+
+// D3.2: the order-level figures, which until now only existed on the order
+// detail screen — so reading a fresh result meant leaving it. Nothing here is a
+// new API field; `resultTotals` derives all five from the payload the optimizer
+// already returns.
+const summaryRows = computed(() => {
+  const totals = resultTotals(props.result)
+  const missing = Math.max(0, totals.requestedParts - totals.placedParts)
+  return [
+    {
+      key: 'parts',
+      label: t('cutting.result.summaryParts'),
+      // On a placed order in the client app this row is the only shortage
+      // signal on the screen — the stale/short banners are the workshop
+      // caller's slot. So the shortfall is spelled out in words as well as
+      // coloured: colour alone is never the signal (DESIGN.md).
+      value: missing
+        ? t('cutting.result.summaryPartsShort', {
+            placed: totals.placedParts,
+            requested: totals.requestedParts,
+            n: missing,
+          })
+        : t('cutting.result.summaryPartsValue', {
+            placed: totals.placedParts,
+            requested: totals.requestedParts,
+          }),
+      short: missing > 0,
+    },
+    {
+      key: 'sheets',
+      label: t('cutting.result.summarySheets'),
+      value: `${totals.sheets} ${t('cutting.unit.sheet', totals.sheets)}`,
+      short: false,
+    },
+    {
+      key: 'cut',
+      label: t('cutting.result.summaryCutLength'),
+      value: metres(totals.cutLengthMm),
+      short: false,
+    },
+    {
+      key: 'edge',
+      label: t('cutting.result.summaryEdge'),
+      // Em-dash rather than "0.00 m": a drawing with no banding at all has no
+      // tape figure, and printing a zero invites the reader to look for one.
+      value: totals.edgeConsumedMm > 0 ? metres(totals.edgeConsumedMm) : '—',
+      short: false,
+    },
+    {
+      key: 'offcuts',
+      label: t('cutting.result.summaryOffcuts'),
+      value: totals.usableOffcutCount
+        ? t('cutting.result.summaryOffcutsValue', {
+            n: totals.usableOffcutCount,
+            area: squareMetres(totals.usableOffcutAreaMm2),
+          })
+        : '—',
+      short: false,
+    },
+  ]
+})
 
 watch(
   () => activePanel.value?.id,
@@ -192,10 +296,43 @@ function revealDrawing() {
             class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
           >
             <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
-            <span class="min-w-0 font-bold leading-tight text-ink-soft">{{ material.label }}</span>
-            <span class="shrink-0 text-ink"
-              >{{ material.count }} {{ $t('cutting.unit.sheet', material.count) }}</span
-            >
+            <!-- The chip nests inside the label column rather than taking a
+                 fourth grid track: the tape list below shares this template,
+                 and a track it never fills would pull its counts out of line. -->
+            <span class="min-w-0">
+              <span class="block font-bold leading-tight text-ink-soft">{{ material.label }}</span>
+              <span
+                class="mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-bold"
+                :class="
+                  material.own
+                    ? 'bg-accent-soft text-accent-strong'
+                    : 'bg-neutral-soft text-ink-nav'
+                "
+                >{{ sourceLabel(material.own) }}</span
+              >
+            </span>
+            <span class="shrink-0 text-right">
+              <span class="block text-ink"
+                >{{ material.count }} {{ $t('cutting.unit.sheet', material.count) }}</span
+              >
+              <!-- The bar is a second reading of the number beside it, never
+                   the only one: the percentage is written out, so a bar that
+                   fails to paint costs nothing. -->
+              <template v-if="material.fill !== null">
+                <span class="num block text-[11.5px] text-ink-soft">
+                  {{ $t('cutting.result.fillUsed', { fill: `${material.fill.toFixed(0)}%` }) }}
+                </span>
+                <span
+                  class="mt-1 block h-[5px] w-full min-w-[72px] overflow-hidden rounded-full bg-track"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="block h-full rounded-full bg-accent"
+                    :style="{ width: `${material.fill}%` }"
+                  ></span>
+                </span>
+              </template>
+            </span>
           </li>
         </ul>
 
@@ -223,6 +360,28 @@ function revealDrawing() {
           </li>
         </ul>
         <p v-else class="mt-2 text-sm text-ink-soft">{{ $t('cutting.result.noEdgeUsed') }}</p>
+
+        <div class="my-4 border-t border-hairline"></div>
+
+        <!-- No heading: the two lists above earn theirs by naming what their
+             rows are, and every row here already names itself. A third heading
+             would also give the page two more `Kromka`/`Materiallar` accessible
+             names to collide with. -->
+        <dl class="text-[13px]">
+          <div
+            v-for="row in summaryRows"
+            :key="row.key"
+            class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5"
+          >
+            <dt class="text-ink-soft">{{ row.label }}</dt>
+            <dd
+              class="shrink-0 text-right text-[13.5px] font-semibold"
+              :class="row.short ? 'text-danger' : 'text-ink'"
+            >
+              {{ row.value }}
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <!-- Superseded below `md` by CuttingPartsList, which covers every sheet

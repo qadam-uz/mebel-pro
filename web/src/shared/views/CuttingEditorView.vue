@@ -13,7 +13,12 @@ import {
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
 import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
-import { formatMm, isTape, snapshotMaterialLabel } from '@/shared/app/materialLabel'
+import {
+  formatMm,
+  isTape,
+  materialIdentityLabel,
+  snapshotMaterialLabel,
+} from '@/shared/app/materialLabel'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import {
   deriveEdgeRegistry,
@@ -27,6 +32,7 @@ import {
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
+import OrderWizardHead from '@/shared/components/OrderWizardHead.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -37,6 +43,7 @@ import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
   materialLabel,
@@ -197,6 +204,12 @@ const isReadOnly = computed(() => boundOrderId.value !== null)
 // order — the strip and the results CTA switch to the revision flow. The order
 // context loads lazily and non-fatally; the editor works without it.
 const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null)
+// This screen is step 2 of the staff order flow only when it is actually on
+// that journey: the client SPA reaches it on its own, a revision edits a placed
+// order rather than creating one, and a bound draft is a read-only record.
+const inOrderWizard = computed(
+  () => isWorkshopScope.value && !isReadOnly.value && revisionOrderId.value === null,
+)
 // The locked-branch strip names the branch the editor actually operates on. For a
 // resumed walk-in draft that's the draft's frozen branch (which may differ from
 // the topbar the adapter froze at mount); fall back to the topbar name.
@@ -337,7 +350,14 @@ const optimizeDisabledHint = computed(() => {
 })
 const primaryCtaLabel = computed(() => {
   if (cutting.optimizing || creatingDraft.value) return t('cutting.editor.ctaCalculating')
-  return t('cutting.editor.ctaContinue')
+  // «Optimallashtirish» is the wizard's word for this step, and it is only true
+  // when the click will actually run one: with a chosen result already matching
+  // these parts the button just opens that result, and on a read-only drawing it
+  // does nothing at all. Both of those keep the neutral «Davom etish», as does
+  // the client SPA, whose editor is a screen of its own rather than step 2 of
+  // anything.
+  if (!inOrderWizard.value || hasCurrentChosenResult.value) return t('cutting.editor.ctaContinue')
+  return t('cutting.editor.ctaOptimize')
 })
 const primaryCtaDisabled = computed(
   () =>
@@ -400,7 +420,11 @@ function edgeById(id: string | null | undefined) {
 const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
 const edgeAssignmentEntries = computed(() => [...edgeAssignments.value.entries()])
 const groupedParts = computed(() =>
-  groupCuttingParts(parts.value, (materialId) => materialLabel(materialById(materialId))),
+  groupCuttingParts(parts.value, (materialId) =>
+    inOrderWizard.value
+      ? materialIdentityLabel(materialById(materialId))
+      : materialLabel(materialById(materialId)),
+  ),
 )
 const errorCount = computed(
   () => parts.value.filter((part, index) => rowHasError(part, index)).length,
@@ -415,6 +439,39 @@ const visibleGroups = computed(() =>
     }))
     .filter((group) => group.parts.length > 0),
 )
+// D3.3: whose sheets a material group is cut from — display only. The claim is
+// entered after the optimizer (CuttingOwnMaterialDialog), so on a first pass
+// through the editor every group is correctly `Ombordan`; the chip earns its
+// place on a resumed or revised draft, where the claim already exists and is
+// otherwise invisible until the result screen. `draft` is null for the whole
+// unsaved first pass, hence the optional chain.
+// `2750×1830×18` — the sheet the group's parts are cut from, on the sub-line
+// where the design puts it. Blank when the branch material is gone or unpicked;
+// the counts after it still read.
+function groupSize(materialId: string | null) {
+  if (!materialId) return ''
+  const material = materialById(materialId)
+  if (!material) return ''
+  const parts = [material.uzunlik_mm, material.eni_mm, material.qalinlik_mm].filter(Boolean)
+  return parts.length >= 2 ? parts.join('×') : ''
+}
+
+function materialIsOwn(materialId: string | null) {
+  if (!materialId) return false
+  // A customer board IS the customer's material by construction — it says so on
+  // the row. The claim is the other half: on a catalog format the only thing
+  // that makes it theirs is the count entered after the optimiser.
+  if (materialById(materialId)?.customer_supplied) return true
+  return (draft.value?.own_panel_counts?.[materialId] ?? 0) > 0
+}
+
+// Three literal keys so `pnpm i18n:check` can see them; the client branch is
+// the same second-person rule the result screen follows.
+function materialSourceLabel(materialId: string | null) {
+  if (!materialIsOwn(materialId)) return t('cutting.source.shop')
+  return isWorkshopScope.value ? t('cutting.source.own') : t('cutting.source.ownClient')
+}
+
 const displayPartIndex = computed(() => {
   const positions = new Map<string, number>()
   let position = 0
@@ -716,6 +773,117 @@ function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
   focusCell(index + 1, 'name')
 }
 
+// Leaving is free here: the draft autosaves, so Bekor qilish abandons the
+// *order*, not the work. It lands on the drafts list — where the thing just
+// left behind actually is — rather than on the orders list the prototype
+// picked, which would show no trace of it. No confirmation: nothing is
+// destroyed, and DESIGN.md rules a nag out where there is nothing to lose.
+// ── Customer-supplied board ─────────────────────────────────────────────────
+// The picker's second tab. Workshop only, and only once a draft exists on the
+// server: the board is recorded against that draft, so it is what scopes the
+// row to this customer instead of offering it to the whole branch.
+type MaterialPickerMode = 'shop' | 'own'
+
+const materialPickerMode = ref<MaterialPickerMode>('shop')
+const customerBoardSaving = ref(false)
+const customerBoardError = ref<string | null>(null)
+const customerBoard = ref({
+  nomi: '',
+  uzunlik: '',
+  eni: '',
+  qalinlik: '16',
+  sheets: '',
+  tolali: false,
+})
+
+// The draft whose customer boards the picker may see. Null on the unsaved first
+// pass — nothing is recorded yet — and null outside the workshop, where the
+// listing must never widen.
+const boardScopeDraftId = computed(() =>
+  isWorkshopScope.value ? (draft.value?.id ?? pendingDraftId.value) : null,
+)
+const canAddCustomerBoard = computed(
+  () => isWorkshopScope.value && !isReadOnly.value && Boolean(activeBranchId.value),
+)
+const materialPickerModes = computed(() => [
+  { value: 'shop', label: t('cutting.source.shop') },
+  { value: 'own', label: t('cutting.source.own') },
+])
+
+function resetCustomerBoard() {
+  materialPickerMode.value = 'shop'
+  customerBoardError.value = null
+  customerBoardSaving.value = false
+  customerBoard.value = {
+    nomi: '',
+    uzunlik: '',
+    eni: '',
+    qalinlik: '16',
+    sheets: '',
+    tolali: false,
+  }
+}
+
+async function submitCustomerBoard() {
+  customerBoardError.value = null
+  const uzunlik = Number(customerBoard.value.uzunlik)
+  const eni = Number(customerBoard.value.eni)
+  const qalinlik = Number(customerBoard.value.qalinlik.replace(',', '.'))
+  const sheets = Number(customerBoard.value.sheets)
+  if (!Number.isFinite(uzunlik) || !Number.isFinite(eni) || uzunlik <= 0 || eni <= 0) {
+    customerBoardError.value = t('cutting.customerBoard.sizeError')
+    return
+  }
+  if (!Number.isFinite(qalinlik) || qalinlik <= 0) {
+    customerBoardError.value = t('cutting.customerBoard.thicknessError')
+    return
+  }
+  if (!Number.isFinite(sheets) || sheets <= 0) {
+    customerBoardError.value = t('cutting.customerBoard.sheetsError')
+    return
+  }
+  customerBoardSaving.value = true
+  try {
+    // A board needs a draft to belong to. On the unsaved first pass there is
+    // none yet, so mint it here rather than making the operator save first.
+    // A board needs a draft row to belong to. On the unsaved first pass there
+    // is none, so mint one here — the same `pendingDraftId` the autosave uses,
+    // so the two never create two drafts for one drawing.
+    if (isNewDraft.value && !pendingDraftId.value) {
+      pendingDraftId.value = (
+        await cutting.createDraft(
+          fixedBranch.value ? { branchId: fixedBranch.value.id } : undefined,
+        )
+      ).id
+    }
+    const boardDraftId = isNewDraft.value ? pendingDraftId.value : draftId.value
+    if (!boardDraftId) {
+      customerBoardError.value = t('cutting.customerBoard.saveFailed')
+      return
+    }
+    const option = await cutting.createCustomerBoard({
+      draftId: boardDraftId,
+      nomi: customerBoard.value.nomi.trim() || null,
+      uzunlik_mm: uzunlik,
+      eni_mm: eni,
+      qalinlik_mm: qalinlik,
+      sheets,
+      tolali: customerBoard.value.tolali,
+    })
+    closeMaterialPicker()
+    addRow(option.id, null)
+  } catch (caught) {
+    customerBoardError.value =
+      clientErrorLabel(apiErrorCode(caught)) || t('cutting.customerBoard.saveFailed')
+  } finally {
+    customerBoardSaving.value = false
+  }
+}
+
+function requestCancelWizard() {
+  void router.push(rolePath(adapter.paths.drafts))
+}
+
 function requestDeleteDraft() {
   deleteDraftError.value = null
   deleteDraftTraceId.value = null
@@ -873,6 +1041,7 @@ const materialPickerSearch = ref('')
 let materialSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(materialPickerTarget, (target) => {
+  resetCustomerBoard()
   // Each open starts from the whole list; a query left over from the previous
   // open would silently hide materials.
   if (!target) return
@@ -896,7 +1065,13 @@ async function reloadPanelOptions(search: string) {
   const branchId = activeBranchId.value
   if (!branchId) return
   // `force`: the store caches per branch, and a query change must defeat that.
-  await cutting.loadMaterials({ tape: false, branchId, search: search.trim(), force: true })
+  await cutting.loadMaterials({
+    tape: false,
+    branchId,
+    search: search.trim(),
+    force: true,
+    draftId: boardScopeDraftId.value,
+  })
 }
 
 // The picker reads like the catalog table: one photo + identity line per dekor,
@@ -1423,7 +1598,7 @@ async function loadMaterials() {
     return
   }
   await Promise.all([
-    cutting.loadMaterials({ tape: false, branchId }),
+    cutting.loadMaterials({ tape: false, branchId, draftId: boardScopeDraftId.value }),
     cutting.loadMaterials({ tape: true, branchId }),
   ])
 }
@@ -1591,11 +1766,34 @@ onBeforeRouteLeave(async () => {
          screen carries this link. `adapter.paths.drafts` so the workshop shell
          lands on its own list, and the route guard still flushes the autosave
          on the way out. -->
-    <RouterLink :to="rolePath(adapter.paths.drafts)" class="client-back">
+    <RouterLink v-if="!inOrderWizard" :to="rolePath(adapter.paths.drafts)" class="client-back">
       <span aria-hidden="true">←</span> {{ $t('cutting.editor.backToDrafts') }}
     </RouterLink>
 
-    <div class="client-page-head">
+    <!-- In the staff order flow this screen is step 2 of four, so it wears the
+         wizard's head instead of naming itself. Everywhere else — the client
+         SPA, a revision, a placed order's read-only drawing — it is a screen in
+         its own right and keeps its own title and its back link. -->
+    <OrderWizardHead v-if="inOrderWizard" :step="2" cancellable @cancel="requestCancelWizard">
+      <template #tools>
+        <span
+          v-if="!isNewDraft"
+          class="mp-chip"
+          :class="{
+            'bg-success-soft text-success': saveState === 'saved',
+            'bg-info-soft text-info': saveState === 'saving' || saveState === 'editing',
+            'bg-danger-soft text-danger': saveState === 'error',
+          }"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="mp-dot" aria-hidden="true"></span>
+          {{ saveLabel() }}
+        </span>
+      </template>
+    </OrderWizardHead>
+
+    <div v-else class="client-page-head">
       <div>
         <h1>{{ $t('cutting.editor.title') }}</h1>
       </div>
@@ -1687,10 +1885,12 @@ onBeforeRouteLeave(async () => {
           </RouterLink>
         </section>
 
-        <!-- Walk-in identity strip (workshop scope only): staff always sees who
-             the order is being created for. -->
+        <!-- Walk-in identity strip: staff always sees who the order is being
+             created for. Not in the wizard — step 1 identified the client one
+             screen ago and step 4 states them again before the commit, so a
+             third copy here is a band of chrome above the work. -->
         <section
-          v-if="isWorkshopScope && cutting.walkInClient && !revisionOrderId"
+          v-if="isWorkshopScope && cutting.walkInClient && !revisionOrderId && !inOrderWizard"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
         >
           <span
@@ -1709,8 +1909,10 @@ onBeforeRouteLeave(async () => {
              app context and can't change mid-draft). Keyed on
              `appSuppliesBranch` so a cold load — where the frozen branch is
              still null — names the branch instead of showing nothing. -->
+        <!-- Not in the wizard: the branch is named in the wizard head's subtitle
+             on the step that chose it, and again in the sidebar's workshop card. -->
         <section
-          v-if="appSuppliesBranch"
+          v-if="appSuppliesBranch && !inOrderWizard"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
@@ -1730,7 +1932,11 @@ onBeforeRouteLeave(async () => {
         </section>
 
         <template v-else>
-          <section class="mb-3 flex items-center gap-2">
+          <!-- The wizard's head names the journey; a drawing name above the card
+               is a second title for a thing the operator has not saved as a
+               drawing yet. It comes back on the standalone editor, where the
+               name is how a saved drawing is found again. -->
+          <section v-if="!inOrderWizard" class="mb-3 flex items-center gap-2">
             <input
               v-if="draftNameEditing"
               v-model="draftNameValue"
@@ -1789,11 +1995,36 @@ onBeforeRouteLeave(async () => {
           </section>
         </template>
 
-        <section class="client-card">
-          <div class="client-card-h">
+        <!-- A panel, not a bordered block: `.client-card` also sets
+             `overflow: hidden`, which would trap the 547px row grid's own
+             horizontal scroller on a narrow viewport. -->
+        <section
+          :class="
+            inOrderWizard
+              ? 'mp-scroll min-w-0 overflow-x-auto rounded-2xl bg-elevated px-6 pb-6 pt-5 shadow-panel'
+              : 'client-card'
+          "
+        >
+          <div
+            :class="
+              inOrderWizard
+                ? 'mb-1 flex flex-wrap items-center gap-3.5 border-b border-divider pb-4'
+                : 'client-card-h'
+            "
+          >
             <div>
-              <h2>{{ $t('cutting.parts.heading') }}</h2>
-              <p class="mt-1 text-sm text-ink-muted">
+              <!-- The wizard's head already names the screen; a second heading
+                   here would say "Detallar" one line under the chip that says
+                   the same thing. What is left is the count, which is the one
+                   fact this row carries. -->
+              <h2 v-if="!inOrderWizard">{{ $t('cutting.parts.heading') }}</h2>
+              <p
+                :class="
+                  inOrderWizard
+                    ? 'text-[14.5px] font-semibold text-ink'
+                    : 'mt-1 text-sm text-ink-muted'
+                "
+              >
                 {{ totalQuantity }} {{ $t('cutting.unit.part', totalQuantity) }} ·
                 {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }} · ~{{
                   totalAreaM2.toFixed(1)
@@ -1811,7 +2042,13 @@ onBeforeRouteLeave(async () => {
               >
                 {{ $t('cutting.editor.unfilledCount', { n: errorCount }, errorCount) }}
               </button>
-              <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
+              <!-- Outside the wizard the two entry modes are a segmented pair.
+                   Inside it the import lives with the other "add something"
+                   actions at the foot of the list, where the design puts it. -->
+              <div
+                v-if="!inOrderWizard"
+                class="inline-flex rounded-lg border border-hairline bg-sunk p-1"
+              >
                 <button
                   type="button"
                   class="rounded-md px-3 py-2 text-sm font-bold transition"
@@ -1894,13 +2131,22 @@ onBeforeRouteLeave(async () => {
             <div class="client-empty">
               <h3>{{ $t('cutting.editor.emptyTitle') }}</h3>
               <p>{{ $t('cutting.editor.emptyBody') }}</p>
-              <button
-                type="button"
-                class="mp-button mp-button-primary mt-4"
-                @click="openNewMaterial"
-              >
-                + {{ $t('cutting.editor.emptyAction') }}
-              </button>
+              <div class="mt-4 flex flex-wrap justify-center gap-2.5">
+                <button type="button" class="mp-button mp-button-primary" @click="openNewMaterial">
+                  + {{ $t('cutting.editor.emptyAction') }}
+                </button>
+                <!-- The import is a first-run path, not an advanced one: a shop
+                     that already keeps its cut lists in a file should not have
+                     to find the mode switch to use one. -->
+                <button
+                  v-if="inOrderWizard"
+                  type="button"
+                  class="mp-button mp-button-outline"
+                  @click="openImportWizard"
+                >
+                  {{ $t('cutting.import.title') }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1913,7 +2159,13 @@ onBeforeRouteLeave(async () => {
                  because this view is embedded both full-width (client) and next
                  to a persistent workshop sidebar — the same viewport width maps
                  to different available row widths in each shell. -->
-            <div class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[680px]:block">
+            <!-- One header above every group outside the wizard; inside it the
+                 design repeats the header per group, right under the material it
+                 belongs to, which is what a list of two materials needs. -->
+            <div
+              v-if="!inOrderWizard"
+              class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[920px]:block"
+            >
               <div
                 class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
               >
@@ -1946,13 +2198,24 @@ onBeforeRouteLeave(async () => {
                   class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
                   @click="toggleGroup(group.key)"
                 >
-                  <span class="flex min-w-0 items-center gap-3">
+                  <span class="flex min-w-0 flex-1 items-center gap-3">
                     <Icon
                       :name="collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'"
                       class="size-4 shrink-0 text-ink-muted"
                       aria-hidden="true"
                     />
                     <span
+                      v-if="inOrderWizard"
+                      class="size-[30px] shrink-0 rounded-lg border border-hairline"
+                      :style="{
+                        background: group.materialId
+                          ? colorForMaterial(group.label)
+                          : 'var(--color-sunk)',
+                      }"
+                      aria-hidden="true"
+                    ></span>
+                    <span
+                      v-else
                       class="size-3 shrink-0 rounded-full"
                       :style="{
                         background: group.materialId
@@ -1961,20 +2224,62 @@ onBeforeRouteLeave(async () => {
                       }"
                       aria-hidden="true"
                     ></span>
-                    <button
-                      v-if="!isReadOnly && group.materialId"
-                      type="button"
-                      class="min-w-0 truncate border-b border-dashed border-ink-muted text-left text-sm font-extrabold text-ink hover:border-accent"
-                      @click.stop="openGroupMaterial(group)"
-                    >
-                      {{ group.label }}
-                    </button>
-                    <span v-else class="min-w-0 truncate text-sm font-extrabold text-ink">{{
-                      group.label
-                    }}</span>
+                    <!-- In the wizard the name owns the first line and the counts
+                         drop under it, so a long dekor name has the row's whole
+                         width instead of competing with the figures for it. -->
+                    <span class="min-w-0 flex-1">
+                      <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                        <button
+                          v-if="!isReadOnly && group.materialId"
+                          type="button"
+                          class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
+                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                          @click.stop="openGroupMaterial(group)"
+                        >
+                          {{ group.label }}
+                        </button>
+                        <span
+                          v-else
+                          class="min-w-0 truncate font-extrabold text-ink"
+                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                          >{{ group.label }}</span
+                        >
+                        <!-- Beside the name, where the design puts it: it names
+                             whose sheets this group is cut from. The swap glyph
+                             is honest — it opens the picker, which is where a
+                             shop format is exchanged for a customer board. -->
+                        <button
+                          v-if="inOrderWizard && group.materialId && !isReadOnly"
+                          type="button"
+                          class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-[0.97]"
+                          :class="
+                            materialIsOwn(group.materialId)
+                              ? 'bg-accent-soft text-accent-strong'
+                              : 'bg-neutral-soft text-ink-nav'
+                          "
+                          :title="$t('cutting.customerBoard.modeLabel')"
+                          @click.stop="openGroupMaterial(group)"
+                        >
+                          {{ materialSourceLabel(group.materialId) }}
+                          <Icon name="swap" class="size-3" aria-hidden="true" />
+                        </button>
+                      </span>
+                      <span
+                        v-if="inOrderWizard"
+                        class="num mt-0.5 block text-[12.5px] text-ink-muted"
+                      >
+                        <template v-if="groupSize(group.materialId)"
+                          >{{ groupSize(group.materialId) }} · </template
+                        >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                        {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
+                      </span>
+                    </span>
                   </span>
-                  <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
-                    <span
+                  <span
+                    class="flex items-center gap-2 text-xs font-bold text-ink-muted"
+                    :class="inOrderWizard ? 'shrink-0' : ''"
+                  >
+                    <span v-if="!inOrderWizard"
                       >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
                       {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}</span
                     >
@@ -1992,6 +2297,20 @@ onBeforeRouteLeave(async () => {
                     </span>
                   </span>
                 </button>
+                <!-- Sibling of the collapse button, never a child of it: inside,
+                     the chip would join that button's accessible name and read
+                     as a control. It is a statement about the material, and the
+                     counts behind it belong to the post-optimizer dialog. -->
+                <span
+                  v-if="group.materialId && !inOrderWizard"
+                  class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
+                  :class="
+                    materialIsOwn(group.materialId)
+                      ? 'bg-accent-soft text-accent-strong'
+                      : 'bg-neutral-soft text-ink-nav'
+                  "
+                  >{{ materialSourceLabel(group.materialId) }}</span
+                >
                 <button
                   v-if="!isReadOnly"
                   type="button"
@@ -2001,6 +2320,32 @@ onBeforeRouteLeave(async () => {
                   <Icon name="plus" class="size-3.5" />
                   {{ $t('cutting.editor.addPart') }}
                 </button>
+              </div>
+              <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[920px]:block">
+                <div
+                  class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
+                >
+                  <span aria-hidden="true" class="text-center">№</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.name')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.length')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.width')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.quantity')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.rotation')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.edge')
+                  }}</span>
+                  <span aria-hidden="true"></span>
+                </div>
               </div>
               <div
                 v-if="groupEdgeRegistryEntries(group).length > 0"
@@ -2025,6 +2370,7 @@ onBeforeRouteLeave(async () => {
                   :material-missing="rowMaterialMissing(part)"
                   :optimize-error="rowOptimizeError(part, index)"
                   :edge-registry="edgeRegistry"
+                  :bare-index="inOrderWizard"
                   @toggle-select="toggleSelect(part.part_ref)"
                   @update:name="setPartName(part, $event)"
                   @update:length="part.length_mm = $event"
@@ -2045,14 +2391,25 @@ onBeforeRouteLeave(async () => {
             <!-- Add the next row where it appears: a dashed tile under the last
                  row, echoing the empty-state CTA. Replaces the header button so
                  the add affordance follows the content. -->
-            <button
-              type="button"
-              class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
-              @click="openNewMaterial"
-            >
-              <Icon name="plus" class="size-4" />
-              {{ $t('cutting.editor.addMaterial') }}
-            </button>
+            <div :class="inOrderWizard ? 'flex flex-wrap gap-2.5' : 'grid'">
+              <button
+                type="button"
+                class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                :class="inOrderWizard ? 'h-10 min-h-10 px-4' : ''"
+                @click="openNewMaterial"
+              >
+                <Icon name="plus" class="size-4" />
+                {{ $t('cutting.editor.addMaterial') }}
+              </button>
+              <button
+                v-if="inOrderWizard"
+                type="button"
+                class="flex h-10 min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong px-4 text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                @click="openImportWizard"
+              >
+                {{ $t('cutting.import.title') }}
+              </button>
+            </div>
           </div>
 
           <div v-if="optimizeError" class="client-banner danger mx-5 mt-4" role="alert">
@@ -2074,11 +2431,18 @@ onBeforeRouteLeave(async () => {
              scrolling to the bottom of a long parts list. It opens a current
              chosen result or starts optimisation; disabled reasons remain visible
              inline (including on touch) instead of only in a title tooltip. -->
+        <!-- In the wizard the action row is a plain right-aligned row under the
+             card, as the design draws it: the list is one card on one screen, so
+             a sticky bar would be chrome floating over content it never covers. -->
         <div
           v-if="parts.length > 0"
-          class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur"
+          :class="
+            inOrderWizard
+              ? 'mt-[18px] flex flex-wrap items-center justify-end gap-3'
+              : 'sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur'
+          "
         >
-          <div class="text-sm">
+          <div v-if="!inOrderWizard" class="text-sm">
             <span class="font-bold text-ink"
               >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} · {{ totalQuantity }}
               {{ $t('cutting.unit.piece', totalQuantity) }}</span
@@ -2086,16 +2450,19 @@ onBeforeRouteLeave(async () => {
             <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3">
+            <!-- The blocker states itself as a chip rather than a whispered
+                 note: it is the reason the button beside it will not move, and
+                 on a touch screen a `title` tooltip never appears at all. -->
             <span
               v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
-              class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted"
+              class="inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
             >
-              <span class="font-black text-warning" aria-hidden="true">!</span>
               {{ primaryCtaHint }}
             </span>
             <button
               type="button"
               class="mp-button mp-button-primary"
+              :class="inOrderWizard ? 'h-11 rounded-xl px-6 text-[14.5px]' : ''"
               :disabled="primaryCtaDisabled"
               :title="primaryCtaHint"
               @click="runPrimaryCta"
@@ -2288,18 +2655,119 @@ onBeforeRouteLeave(async () => {
           </button>
         </div>
         <div class="border-b border-hairline px-5 py-3">
-          <label class="sr-only" for="material-picker-search">
-            {{ $t('cutting.material.searchLabel') }}
-          </label>
-          <input
-            id="material-picker-search"
-            v-model="materialPickerSearch"
-            type="search"
-            class="mp-input w-full"
-            :placeholder="$t('cutting.material.searchPlaceholder')"
+          <!-- Workshop only: the client SPA has no counter to hand a board
+               across, and no draft of its own to scope one to. -->
+          <SegmentedControl
+            v-if="canAddCustomerBoard"
+            v-model="materialPickerMode"
+            class="mb-3"
+            hide-label
+            :label="$t('cutting.customerBoard.modeLabel')"
+            :options="materialPickerModes"
           />
+          <template v-if="materialPickerMode === 'shop'">
+            <label class="sr-only" for="material-picker-search">
+              {{ $t('cutting.material.searchLabel') }}
+            </label>
+            <input
+              id="material-picker-search"
+              v-model="materialPickerSearch"
+              type="search"
+              class="mp-input w-full"
+              :placeholder="$t('cutting.material.searchPlaceholder')"
+            />
+          </template>
         </div>
-        <div class="grid max-h-[52vh] gap-3 overflow-auto p-3">
+
+        <!-- `v-if`, never `v-show`: the stock list's own assertions count the
+             dialog's sections, and a hidden panel is still in the tree. -->
+        <div v-if="materialPickerMode === 'own'" class="grid gap-3 p-5">
+          <p class="text-sm leading-[1.45] text-ink-soft">
+            {{ $t('cutting.customerBoard.intro') }}
+          </p>
+          <label class="field !mb-0">
+            <span
+              >{{ $t('cutting.customerBoard.nameLabel') }}
+              <small class="text-ink-muted">{{ $t('cutting.customerBoard.optional') }}</small></span
+            >
+            <input
+              v-model="customerBoard.nomi"
+              class="mp-input"
+              maxlength="80"
+              :placeholder="$t('cutting.customerBoard.namePlaceholder')"
+            />
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="field !mb-0">
+              <span>{{ $t('cutting.customerBoard.length') }}</span>
+              <input
+                v-model="customerBoard.uzunlik"
+                class="mp-input"
+                inputmode="numeric"
+                placeholder="2750"
+              />
+            </label>
+            <label class="field !mb-0">
+              <span>{{ $t('cutting.customerBoard.width') }}</span>
+              <input
+                v-model="customerBoard.eni"
+                class="mp-input"
+                inputmode="numeric"
+                placeholder="1830"
+              />
+            </label>
+            <label class="field !mb-0">
+              <span>{{ $t('cutting.customerBoard.thickness') }}</span>
+              <input
+                v-model="customerBoard.qalinlik"
+                class="mp-input"
+                inputmode="decimal"
+                placeholder="16"
+              />
+            </label>
+            <label class="field !mb-0">
+              <span>{{ $t('cutting.customerBoard.sheets') }}</span>
+              <input
+                v-model="customerBoard.sheets"
+                class="mp-input"
+                inputmode="numeric"
+                placeholder="2"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-[38px] w-fit items-center gap-2 rounded-lg border border-hairline px-3.5 text-[13.5px] font-semibold transition"
+            :class="
+              customerBoard.tolali
+                ? 'bg-accent-soft text-accent-strong'
+                : 'bg-elevated text-ink hover:bg-sunk'
+            "
+            :aria-pressed="customerBoard.tolali"
+            @click="customerBoard.tolali = !customerBoard.tolali"
+          >
+            {{ $t('cutting.customerBoard.textured') }}
+          </button>
+          <p v-if="customerBoardError" class="mp-field-error !mt-0">{{ customerBoardError }}</p>
+          <div class="mt-1 flex justify-end gap-2.5">
+            <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
+              {{ $t('cutting.action.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="mp-button mp-button-primary"
+              :disabled="customerBoardSaving"
+              @click="submitCustomerBoard"
+            >
+              {{
+                customerBoardSaving
+                  ? $t('cutting.editor.saveSaving')
+                  : $t('cutting.customerBoard.submit')
+              }}
+            </button>
+          </div>
+        </div>
+        <div v-if="materialPickerMode === 'shop'" class="grid max-h-[52vh] gap-3 overflow-auto p-3">
           <p
             v-if="materialPickerGroups.length === 0"
             class="px-2 py-6 text-center text-sm text-ink-muted"
@@ -2373,7 +2841,13 @@ onBeforeRouteLeave(async () => {
             {{ $t('cutting.material.emptyInBranch') }}
           </p>
         </div>
-        <div class="flex justify-end border-t border-hairline px-5 py-3">
+        <!-- The own tab carries its own Bekor qilish beside its primary, where
+             a form's actions belong; a second one under it would be two ways to
+             do the same thing on one short dialog. -->
+        <div
+          v-if="materialPickerMode === 'shop'"
+          class="flex justify-end border-t border-hairline px-5 py-3"
+        >
           <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
             {{ $t('cutting.action.cancel') }}
           </button>

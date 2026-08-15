@@ -1,5 +1,7 @@
 """Stable catalog contracts."""
 
+import uuid
+
 from app.models.enums import DekorType
 from app.modules.catalog.models import BranchMaterial, BranchPricing, Dekor, Manufacturer
 
@@ -28,3 +30,12 @@ __all__ = [
     "is_panel",
     "is_tape",
 ]
+
+# ── The seeded identity every customer-supplied board points at ──────────────
+# Written by migration d4b18e6c07a9 at these exact ids. A board cannot mint its
+# own dekor: dekor writes are platform-operator-only, and one dekor per board
+# would collide on the name index and grow the admin catalog without bound.
+# The migration carries its own copies of these literals on purpose — a frozen
+# revision must not import code that can move under it.
+CUSTOMER_MANUFACTURER_ID = uuid.UUID("00000000-0000-0000-0000-00000000c001")
+CUSTOMER_DEKOR_ID = uuid.UUID("00000000-0000-0000-0000-00000000c002")

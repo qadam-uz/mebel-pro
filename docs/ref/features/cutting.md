@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-13
 order: 80
 ---
 
@@ -52,10 +52,12 @@ A draft owns:
   dimensions (length × width × quantity), and a per-side **edge** material (top, bottom,
   left, right — each `null` for no banding, or a `kromka` format the branch carries). Every material is
   **workshop-supplied**: the editor offers no "I'll bring it myself" choice (the snapshot's
-  `material_source` / side `source` fields are always `shop`; see _Parts and materials_).
+  `material_source` / side `source` fields are always `shop`; see _Parts and materials_), but a
+  material group whose sheets the client already claimed says so on its header.
   Grain direction is a property of the chosen panel material, and each part stores
   `follow_grain` (default `true`) to say whether that part must respect it. The instruction
-  matters only on grained panels. Edge thickness and colour are properties of the chosen edge
+  matters only on grained panels, and the drawing marks the parts it locks (see
+  _Panel layout visualiser_). Edge thickness and colour are properties of the chosen edge
   material — the user picks the tape, not a thickness. A part may also carry an optional
   display `name`; blank names stay `null` and render as `D{row}` in the editor, SVG, and PDF.
 - **Layout result.** Re-running the optimiser produces one best result against the current input.
@@ -113,7 +115,10 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **Material is workshop-supplied unless the branch takes the client's own.** The per-part
   `material_source` and per-side edge `source` (`shop` / `own`) are always written `shop` by
   the editor, and a legacy draft saved otherwise is normalized back on load — the parts list
-  is not where ownership is expressed. Ownership is claimed **per material, after the run**,
+  is not where ownership is **expressed**, though it does now **show** it: each material group
+  header carries the same read-only source chip the result screen does, so a resumed or revised
+  draft says where its sheets come from instead of hiding the claim until the result screen.
+  Ownership is claimed **per material, after the run**,
   because the two numbers it needs (how many sheets this layout uses, what they cost) do not
   exist until the optimiser has answered: the draft carries `own_panel_counts` per panel
   material and `own_edge_material_ids` per tape. The stored number is the client's **claim,
@@ -130,6 +135,33 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   come off the material demand and never touch stock, while cutting and banding labour are
   charged on every sheet and every banded millimetre regardless of who supplied them
   ([`orders.md`](orders.md#pricing)).
+- **A customer may bring a sheet the branch does not sell.** The editor's material picker has a
+  second tab, `Mijoz materiali`, where staff type the board's size, its thickness, how many the
+  customer brought, and whether it is textured. The board becomes a **branch material scoped to
+  that drawing**: `customer_supplied` marks it, `source_draft_id` says whose it is, and every
+  catalog listing — the branch's own material screen, the client portal, onboarding's
+  "materials added" probe, dekor-photo access — excludes it. Only this drawing's picker sees
+  it. It has to be a branch material rather than a drawing-level object because
+  `own_panel_counts`, `material_snapshots`, the optimizer's panel spec and every order item key
+  on a branch-material id; a second identity would have to be threaded through all of them.
+  - Every board points at one platform-seeded `Mijoz` dekor. A dekor per board would need
+    platform-operator rights the counter does not have, and would grow the admin catalog
+    without bound. That is also why the format uniqueness index is **partial** on
+    `NOT customer_supplied`: two customers bringing the same size to one branch produce the
+    same (dekor, format) tuple, and a full index would reject the second of them.
+  - The sheet count typed on the form is written straight into `own_panel_counts` — for a
+    customer board the claim is not a guess, the sheets are on the floor.
+  - **The shortfall is sold from branch stock.** At creation the board resolves a *substitute*:
+    the branch's own cheapest active sheet of exactly that size. Its price becomes the board's
+    price, so the quote — whose demand is already `needed − brought` — bills only the sheets
+    the customer did not bring, and bills nothing when they brought enough. The substitute is
+    frozen onto the result, so consuming stock at **Kesish tugadi** moves exactly what was
+    billed even if the branch has since re-priced it. When the branch carries nothing of that
+    size the board stays at price 0, the shortfall lands in the order's unpriced-material gate,
+    and staff price it by hand — no stock moves, because the shop never owned the sheet.
+  - Kromka keeps today's rule: `own_edge_material_ids` claims **catalog tapes only**.
+  - The `Teksturali material` checkbox names the board and its snapshot; it does **not** lock
+    the layout. Rotation is decided per part by `Burilish`, as on any other material.
 - **Edge tape is a branch material too** — a `kromka` dekor in one thickness × tape width.
   Each side of a part is either `null` (no banding) or one of those formats. The picker UX
   pins decor-matching edges at the top of one material list, then prefers tape widths that
@@ -534,16 +566,33 @@ authoritative reading of the result. 768px is the app's own desktop boundary (th
 at `zoom: 90%` from 769px), so the switch lands where the layout already changes character
 rather than inventing a third regime.
 
+**The staff order flow adds a third surface, and it is not a third reading of the same thing.**
+On step 3 of the wizard a **Kesish xaritasi** card below the result shows *every* sheet at once
+as a small map in an auto-filling grid. It answers a different question from the drawing above
+it — "how many boards does this cost and how full is each" — for an operator deciding whether to
+place the order, where the drawing answers "where does this part go" for the person cutting it.
+So the two do show together here, and the rule above is unchanged: within one reading there is
+still one authoritative surface. Each small map is told its real render width
+(`renderWidthPx`), because the fitting thresholds are expressed against an 800px drawing and at
+a ~356px cell an 11px label would compute to about 5px — the thresholds tighten with the width
+instead, so fewer labels print and the ones that do are legible.
+
 1. **Panel layout visualiser.**
    - The result header shows the imported-layout and placement state. Only the chosen result is
      shown; legacy or previous candidates are not offered as variants.
    - A sheet thumbnail strip grouped by panel material. Each group header shows the material
      type, fuller material label, and that material's sheet count; compact thumbnails below
      it show drawing-wide `List N` numbering and a bottom-right fill badge.
-   - The active panel renders as an interactive SVG; each placed part carries one centred
-     label — display name + dimensions + a `↻` marker when the placement is rotated (e.g.
-     `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
-     hide on placements too small to carry them. Offcut rectangles overlay as dashed
+   - Above the drawing, one caption line names the sheet: `List {n} · {material} ·
+     {fill} ishlatildi` — the share of the board this layout consumes, phrased as a statement
+     about a sheet already cut. It read `KIM {fill}` until 2026-08; that is the nesting
+     engineer's abbreviation, and the operators reading this screen do not use it.
+   - The active panel renders as an interactive SVG; each placed part carries its display
+     name centred, a `↻` marker when the optimizer rotated the placement, and its two
+     dimensions set against the sides they measure — the placed length just inside the top
+     edge, the placed width rotated 90° just inside the left edge. Each number renders
+     independently, so a thin strip still shows the dimension that fits, and the name hides on
+     placements too small to carry it. Offcut rectangles overlay as dashed
      outlines: green with a `Qoldiq …×…` label when usable, red `chiqit` when waste.
      Offcut labels use the same fitting ladder in SVG and PDF: horizontal label, rotated
      label for tall narrow remnants, dimensions-only fallback, then no label if nothing
@@ -556,6 +605,15 @@ rather than inventing a third regime.
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
      a rotated placement maps them 90° clockwise. Tick inset, length and weight are
      normalised, so banding reads the same on a large and a small panel.
+   - **Grain-locked parts** — those whose `follow_grain` is true, which the optimizer may not
+     turn — are filled with hairlines running parallel to the sheet's texture, that is along
+     its long side. Free parts keep the flat fill. The pattern is normalised like the ticks
+     (1px wide, 8px apart against the 800-unit reference width) and drawn in `ink` at 17%, so
+     it sits under the dimension numbers and under the band ticks without taking contrast from
+     either. It tiles from the sheet, not from each placement, so two grain-locked parts side
+     by side share one ladder of lines and the sheet reads as a single grained board. The `↻`
+     marker says the optimizer *did* turn a part; the hairlines say it *may not* — a cutter
+     reading the map could not tell the two states apart before.
    - From 768px up, the left rail is grouped by part for the active sheet
      (`Detallar — List N`), showing name, dimensions, quantity, and rotated count. Result data
      is frozen from that result's `parts_snapshot`, so it remains self-contained after later
@@ -564,6 +622,23 @@ rather than inventing a third regime.
      then its Kromka block shows a dot in the same colour as the drawing, fuller material label
      such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed metres. These two cards have
      border-only surfaces.
+   - Each panel-material row carries a **source chip** — `Mijoz materiali` where that material
+     holds an ownership claim, `Ombordan` otherwise (the client reads `Mening materialim` for
+     the first). It is display only: the counts behind a claim are entered in the
+     post-optimizer ownership dialog, and a second control for the same fact on a read-only
+     screen would be two places to change one number. The row also carries that material's own
+     fill — `{x}% ishlatildi` and a bar — averaged over its own sheets, so a material is judged
+     against itself rather than against a result-wide figure two materials would share. The
+     percentage is always written out; the bar is a second reading of it, never the only one.
+   - Under the tape list, a five-row block carries the order-level figures that otherwise only
+     existed on the order detail screen: `Detallar` (placed against requested — the shortfall
+     spelled out and coloured when the layout could not take everything), `Listlar`,
+     `Arra yo'li` (the propil length), `Kromka lentasi` (shop plus own consumed tape, `—` when
+     the drawing has no banding) and `Foydali qoldiq` (count and m² of the offcuts the drawing
+     marks green). Every value is derived from the result payload — no field was added to the
+     API for it. On a placed order in the client app this block's first row is the only
+     shortage signal on the screen, which is why the shortfall is stated in words and not by
+     colour alone.
    - Below 768px the per-sheet rail is replaced by a **`Detallar` parts list directly beneath
      the drawing**, covering the whole result rather than only the active sheet: one `List N`
      group per sheet — the material label printed once per run of sheets that share it — and
@@ -593,19 +668,25 @@ rather than inventing a third regime.
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
      identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
      include every physical sheet.
-   - The PDF carries two area-derived KIM figures. `KIM` is parts area divided by sheet
-     area; `KIM (qoldiq bilan)` adds usable offcut area before dividing.
+   - The PDF carries two area-derived utilisation figures. `Ishlatildi` is parts area divided
+     by sheet area; `Qoldiq bilan` adds usable offcut area before dividing. Both read `KIM`
+     until 2026-08, the same rename the screen took.
    - Work cards are planned for print before drawing: two layout units always stack on one A4
      portrait page — never a page of its own for a dense sheet or an unlabelable map, and never
      landscape. An odd unit stays alone in the top slot. A card carries four header lines
-     (sheet range · material · `Kromkalar` · `Detallar maydoni · KIM · Foydali qoldiq ·
-     Chiqindi`), then a proportional map beside a compact `Uzunlik · Kenglik · Soni` register whose
+     (sheet range · material · `Kromkalar` · `Detallar maydoni · {fill} ishlatildi ·
+     Foydali qoldiq · Chiqindi`), then a proportional map beside a compact
+     `Uzunlik · Kenglik · Soni` register whose
      band marks sit under each dimension. A register too long for its half-page slot spills its
      overflow rows onto a full-width portrait `Detallar (davomi)` continuation page, never by
      clipping a row or splitting the map. Every page is numbered.
    - The PDF parity contract is intentionally narrow: the **map panel inside the PDF**
-     mirrors the web sheet visualiser's geometry, label fitting, offcut overlays, and
-     banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.
+     mirrors the web sheet visualiser's geometry, label fitting, offcut overlays, banding
+     ticks, and the grain hairlines — same pitch, phased onto the same sheet millimetres, so
+     print and screen mark the same parts the same way. Print composites the 17% ink by hand
+     against the placement's white fill instead of using transparency, which keeps the
+     document free of a transparency group no shop RIP then has to flatten. The surrounding
+     summary, title blocks, stats and tables are PDF-own.
      Text is rendered with an embedded Unicode font, so Cyrillic material and part names
      print correctly.
    - **Edit parts** returns to the editor. Name, edge-band, and material-source changes retain

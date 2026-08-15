@@ -202,6 +202,22 @@
     box-shadow: 0 0 0 5px var(--color-elevated);
   }
 
+  /* Text fields are the one exception, and the handoff is explicit about it:
+     a focused field moves its border from `hairline` to graphite and wears
+     nothing else — no outline, no halo. A 3px ring plus a 5px halo around a
+     38px row cell swallows the cell.
+
+     This is not `outline: none` with nothing in its place. The border goes from
+     near-invisible to near-black (~14:1 on the canvas, against a 3:1 floor) and
+     a caret appears in it. Every other focusable thing — buttons, links, the
+     segmented control — keeps the ring above. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
   button,
   input,
   textarea {
@@ -322,11 +338,14 @@
     font-weight: 400;
   }
 
-  /* The app's most-used focus affordance: the accent border alone moves from
-     #e4e6ea to graphite, which the soft ring makes unmissable. */
+  /* The app's most-used focus affordance, and the design language's: the border
+     alone moves from `hairline` to graphite. That is a 1px line going from
+     near-invisible to near-black — ~14:1 against the canvas, far above the 3:1
+     the bar asks of a UI mark — so it needs no ring beside it. The orange ring
+     that used to sit here was ours, not the handoff's; the handoff rings exactly
+     one field, the edge-picker search, and rings it in graphite at 12%. */
   .mp-input:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   /* A unit that stays put. Where the unit changes the meaning of the number by
@@ -1446,7 +1465,7 @@
 
   .ep-search:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .picker-select {
@@ -2278,7 +2297,7 @@
   /* A solid ring, not a tinted glow — the halo language is gone. */
   .workshop-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .workshop-search svg {
@@ -2547,6 +2566,17 @@
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 22px;
+  }
+
+  /* The order wizard's head. `.page-head` aligns to the baseline because a page
+     title sits beside tools of its own height; here the title sits beside a row
+     of pills half its height, and flex-end would hang them off the descender.
+     `justify-content` steps aside so the strip can follow the title and the way
+     out can hold the far edge on its own. */
+  .wizard-head {
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 20px;
   }
 
   .page-head h1 {
@@ -5395,7 +5425,7 @@
   /* A solid ring, not a tinted glow. */
   .admin-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .admin-search input {
@@ -6110,7 +6140,7 @@
   .admin-field input:focus,
   .admin-field textarea:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .admin-form-grid {
@@ -6907,7 +6937,6 @@
 
   .mp-phone:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .mp-phone.is-disabled {

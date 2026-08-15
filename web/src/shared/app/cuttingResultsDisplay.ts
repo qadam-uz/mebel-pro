@@ -55,6 +55,69 @@ export function resultPanelCount(result: Pick<CuttingResult, 'panels_used_by_mat
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
 }
 
+/** The order-level figures the result already carries, in raw units — mm and
+ *  counts, never formatted. Formatting is the caller's, so the same numbers
+ *  feed a screen, a comparison and a test without a round-trip through a
+ *  localized string. */
+export interface CuttingResultTotals {
+  placedParts: number
+  requestedParts: number
+  sheets: number
+  cutLengthMm: number
+  edgeConsumedMm: number
+  usableOffcutCount: number
+  usableOffcutAreaMm2: number
+}
+
+function sumValues(record: Record<string, number>) {
+  return Object.values(record).reduce((sum, value) => sum + value, 0)
+}
+
+/**
+ * Every number the result aside shows, derived from the payload the optimizer
+ * already returns — there is no API field behind any of them.
+ *
+ * Two choices worth stating. `edgeConsumedMm` reads the **consumed** dicts, not
+ * `edge_length_*`: consumed is what the shop actually pulls off the roll (the
+ * visible edge plus the per-side glue-and-trim overhang), which is the number a
+ * cutter and an invoice both mean by "kromka lentasi". And offcuts are counted
+ * from the panels rather than from `waste_percentage`, because only the panel
+ * rows carry the `usable` flag that separates a keepable remnant from scrap —
+ * the same flag the drawing colours green.
+ */
+export function resultTotals(result: CuttingResult): CuttingResultTotals {
+  let placedParts = 0
+  let usableOffcutCount = 0
+  let usableOffcutAreaMm2 = 0
+  for (const panel of result.panels) {
+    placedParts += panel.placements.length
+    for (const offcut of panel.offcuts) {
+      if (!offcut.usable) continue
+      usableOffcutCount += 1
+      usableOffcutAreaMm2 += offcut.length_mm * offcut.width_mm
+    }
+  }
+  return {
+    placedParts,
+    // Pre-snapshot results exist in the DB; `?? []` is what keeps them at 0
+    // instead of throwing on the read.
+    requestedParts: (result.parts_snapshot ?? []).reduce((sum, part) => sum + part.quantity, 0),
+    sheets: resultPanelCount(result),
+    cutLengthMm: result.total_cut_length_mm,
+    edgeConsumedMm:
+      sumValues(result.edge_consumed_shop_by_material) +
+      sumValues(result.edge_consumed_own_by_material),
+    usableOffcutCount,
+    usableOffcutAreaMm2,
+  }
+}
+
+/** m², two decimals — the unit the editor's group headers and the PDF's
+ *  material table both print offcut and part areas in. */
+export function squareMetres(areaMm2: number) {
+  return (areaMm2 / 1_000_000).toFixed(2)
+}
+
 function textFits(text: string, lengthMm: number, widthMm: number, normScale: number) {
   return (
     lengthMm * normScale > Math.max(LABEL_MIN_W, text.length * 6) &&

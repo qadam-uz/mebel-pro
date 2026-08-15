@@ -57,6 +57,20 @@ class WorkshopClientResolveResponse(APIModel):
     created: bool
 
 
+class WorkshopClientLookupResponse(APIModel):
+    """Read-only answer to "is this phone already a client?".
+
+    `found=False` carries the normalized phone and nothing else — a miss must
+    not be distinguishable from a hit by anything except this flag, and it must
+    never leak a partial name.
+    """
+
+    found: bool
+    phone: str
+    id: uuid.UUID | None = None
+    name: str | None = None
+
+
 class WorkshopClientResponse(APIModel):
     id: uuid.UUID
     name: str
