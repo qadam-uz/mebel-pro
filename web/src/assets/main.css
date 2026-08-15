@@ -202,6 +202,22 @@
     box-shadow: 0 0 0 5px var(--color-elevated);
   }
 
+  /* Text fields are the one exception, and the handoff is explicit about it:
+     a focused field moves its border from `hairline` to graphite and wears
+     nothing else — no outline, no halo. A 3px ring plus a 5px halo around a
+     38px row cell swallows the cell.
+
+     This is not `outline: none` with nothing in its place. The border goes from
+     near-invisible to near-black (~14:1 on the canvas, against a 3:1 floor) and
+     a caret appears in it. Every other focusable thing — buttons, links, the
+     segmented control — keeps the ring above. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
   button,
   input,
   textarea {

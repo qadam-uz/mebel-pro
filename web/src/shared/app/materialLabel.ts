@@ -237,5 +237,8 @@ export function materialIdentityLabel(
   const parts = [option.manufacturer_name, option.kod, option.nomi].filter((part): part is string =>
     Boolean(part && part.trim()),
   )
-  return parts.length > 0 ? parts.join(' · ') : (fallback ?? option.id.slice(0, 8))
+  // Spaces, not the ` · ` the canonical label uses: with the format stripped out
+  // these three read as one name — `Egger H1145 Oq daraxt` — and dots between
+  // them would present three separate facts.
+  return parts.length > 0 ? parts.join(' ') : (fallback ?? option.id.slice(0, 8))
 }

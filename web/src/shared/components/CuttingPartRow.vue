@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
+import { sanitizeWholeNumberInput } from '@/shared/app/inputSanitizers'
 import { type EdgeField } from '@/shared/app/cuttingDisplay'
 import {
   partDisplayName,
@@ -57,6 +58,15 @@ const actionsOpen = ref(false)
 // so 0 renders as an empty field. `v-model.number` hands back '' when the field
 // is cleared, hence the widened cell type.
 type NumericCell = number | string | null
+
+// The field is plain text now, so the alphabet has to be constrained here
+// rather than by the input type. Rejecting at `beforeinput` keeps the caret
+// where it was — rewriting `value` afterwards would jump it to the end.
+function onWholeNumberBeforeInput(event: Event) {
+  const input = event as InputEvent
+  if (typeof input.data !== 'string' || input.data === '') return
+  if (sanitizeWholeNumberInput(input.data) !== input.data) event.preventDefault()
+}
 
 function toStoredNumber(value: NumericCell): number {
   const numeric = Number(value)
@@ -357,13 +367,13 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model.number="lengthModel"
             :data-part-index="index"
             data-cell="length"
-            type="number"
-            :min="MIN_PART_MM"
+            type="text"
             inputmode="numeric"
             enterkeyhint="next"
             class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
+            @beforeinput="onWholeNumberBeforeInput"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'length')"
@@ -378,13 +388,13 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model.number="widthModel"
             :data-part-index="index"
             data-cell="width"
-            type="number"
-            :min="MIN_PART_MM"
+            type="text"
             inputmode="numeric"
             enterkeyhint="next"
             class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
+            @beforeinput="onWholeNumberBeforeInput"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'width')"
@@ -399,13 +409,13 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model.number="quantityModel"
             :data-part-index="index"
             data-cell="quantity"
-            type="number"
-            min="1"
+            type="text"
             inputmode="numeric"
             enterkeyhint="done"
             class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
+            @beforeinput="onWholeNumberBeforeInput"
             @mousedown="focusNumericFromPointer"
             @focus="placeNumericCaretAtEnd"
             @keydown="onRapidEntryKeydown($event, 'quantity')"

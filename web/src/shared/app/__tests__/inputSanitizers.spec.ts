@@ -4,6 +4,7 @@ import {
   sanitizeMoneyInput,
   sanitizeQuantityInput,
   sanitizeSignedQuantityInput,
+  sanitizeWholeNumberInput,
 } from '@/shared/app/inputSanitizers'
 
 describe('inputSanitizers', () => {
@@ -34,5 +35,13 @@ describe('inputSanitizers', () => {
     expect(sanitizeSignedQuantityInput('2-')).toBe('2') // sign must lead
     expect(sanitizeSignedQuantityInput('a-2b')).toBe('2')
     expect(sanitizeSignedQuantityInput('+')).toBe('+') // mid-typing state stays editable
+  })
+  it('keeps a whole-number cell to digits', () => {
+    // The cell backs a cut dimension: a letter that slipped through would be
+    // coerced to 0 and silently resize the part.
+    expect(sanitizeWholeNumberInput('2750')).toBe('2750')
+    expect(sanitizeWholeNumberInput('27a50')).toBe('2750')
+    expect(sanitizeWholeNumberInput('-27.5')).toBe('275')
+    expect(sanitizeWholeNumberInput('e')).toBe('')
   })
 })

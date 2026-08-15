@@ -2164,7 +2164,7 @@ onBeforeRouteLeave(async () => {
                  belongs to, which is what a list of two materials needs. -->
             <div
               v-if="!inOrderWizard"
-              class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[680px]:block"
+              class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[920px]:block"
             >
               <div
                 class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
@@ -2321,7 +2321,7 @@ onBeforeRouteLeave(async () => {
                   {{ $t('cutting.editor.addPart') }}
                 </button>
               </div>
-              <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[680px]:block">
+              <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[920px]:block">
                 <div
                   class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
                 >
