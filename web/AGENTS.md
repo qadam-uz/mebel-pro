@@ -278,14 +278,21 @@ The rules, in order:
    glyph geometry — read `getComputedStyle` on both sides. The handoff's focus affordance is
    `border-color → accent` with no ring; ours had a 3px orange one, and no screenshot
    comparison would have named the difference.
-4. **Where the repo does more than the design depicts, keep the capability and match the
+4. **When the measurement disagrees with the screen, believe neither yet — get a third look.**
+   The browser pane renders at a large viewport and scales the capture down, so a 1px border is
+   simply not in the picture; and `getComputedStyle` through the pane has returned stale values
+   (an inline `!important` that did not move the number). Shrink the viewport to ~1280x700 so
+   the screenshot is near 1:1 and look again. "The CSS is right by construction" is where two
+   real defects hid: the ring came from a global `:focus-visible` nobody had checked, and a
+   `border-hairline` utility was overriding the focus colour in a later layer.
+5. **Where the repo does more than the design depicts, keep the capability and match the
    frame.** The design draws one tape per row; this editor numbers four. Keep the four, adopt
    the design's rectangle. Say so in a comment at the deviation — every one of these is a
    judgement someone will otherwise re-litigate.
-5. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
+6. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
    outranks the handoff; nothing else does. "It seemed better" is not a reason — take it to the
    owner instead.
-6. **Do not delete working behaviour because the prototype omits it.** A prototype is a sketch
+7. **Do not delete working behaviour because the prototype omits it.** A prototype is a sketch
    of a screen, not an inventory of a product.
 
 ### Verifying UI work
