@@ -322,11 +322,14 @@
     font-weight: 400;
   }
 
-  /* The app's most-used focus affordance: the accent border alone moves from
-     #e4e6ea to graphite, which the soft ring makes unmissable. */
+  /* The app's most-used focus affordance, and the design language's: the border
+     alone moves from `hairline` to graphite. That is a 1px line going from
+     near-invisible to near-black — ~14:1 against the canvas, far above the 3:1
+     the bar asks of a UI mark — so it needs no ring beside it. The orange ring
+     that used to sit here was ours, not the handoff's; the handoff rings exactly
+     one field, the edge-picker search, and rings it in graphite at 12%. */
   .mp-input:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   /* A unit that stays put. Where the unit changes the meaning of the number by
@@ -1446,7 +1449,7 @@
 
   .ep-search:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .picker-select {
@@ -2278,7 +2281,7 @@
   /* A solid ring, not a tinted glow — the halo language is gone. */
   .workshop-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .workshop-search svg {
@@ -5406,7 +5409,7 @@
   /* A solid ring, not a tinted glow. */
   .admin-search:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .admin-search input {
@@ -6121,7 +6124,7 @@
   .admin-field input:focus,
   .admin-field textarea:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 
   .admin-form-grid {
@@ -6918,7 +6921,6 @@
 
   .mp-phone:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
   .mp-phone.is-disabled {

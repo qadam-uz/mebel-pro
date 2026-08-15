@@ -101,6 +101,16 @@ function edgeRegistryEntry(side: EdgeField) {
   return registryEntryForBand(props.edgeRegistry, band?.material_id, band?.source)
 }
 
+// The tape mark: a 20x15 rectangle whose banded sides are drawn thick and whose
+// fill is the tape's own colour. Geometry, weights and the bare-side colour are
+// the handoff's, to the pixel.
+//
+// One deviation, and it adds rather than removes: a banded side keeps its tape's
+// registry colour instead of a flat ink. The handoff assumes one tape per row,
+// but this editor lets four sides carry four different tapes and numbers them —
+// flattening them here would delete the only place the row shows which is which.
+// With a single tape the two are identical anyway, because the fill carries that
+// same colour.
 function edgeGlyphStyle() {
   const sideStyles = {
     edge_top: 'borderTop',
@@ -108,15 +118,24 @@ function edgeGlyphStyle() {
     edge_left: 'borderLeft',
     edge_right: 'borderRight',
   } as const
-  return Object.fromEntries(
-    Object.entries(sideStyles).map(([side, property]) => {
-      const entry = edgeRegistryEntry(side as EdgeField)
-      return [
-        property,
-        entry ? `3px solid ${entry.colorStyle.bg}` : '1px dashed var(--color-hairline-strong)',
-      ]
-    }),
-  )
+  const entries = Object.entries(sideStyles).map(([side, property]) => {
+    const entry = edgeRegistryEntry(side as EdgeField)
+    return [
+      property,
+      entry ? `2.5px solid ${entry.colorStyle.bg}` : '1.5px solid var(--color-hairline)',
+    ] as const
+  })
+  const banded = entries
+    .map(([, value]) => value)
+    .filter((value) => !value.includes('var(--color-hairline)'))
+  return {
+    ...Object.fromEntries(entries),
+    // Only when the row is on one tape: two tapes have no single fill to be.
+    background:
+      banded.length > 0 && new Set(banded).size === 1
+        ? banded[0].replace('2.5px solid ', '')
+        : 'transparent',
+  }
 }
 
 function toggleFollowGrain() {
@@ -191,7 +210,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input border-hairline bg-elevated/40 @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :placeholder="partDisplayName(part, index)"
             :aria-label="$t('cutting.column.name')"
             @keydown="onRapidEntryKeydown($event, 'name')"
@@ -230,8 +249,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="button"
             :data-part-index="index"
             data-cell="edge"
-            class="grid size-8 place-items-center rounded-md bg-sunk/30 text-[9px] font-black leading-none text-ink transition hover:bg-sunk"
-            :style="edgeGlyphStyle()"
+            class="grid h-[38px] w-full place-items-center rounded-md transition hover:bg-sunk"
             :title="part.thickened ? $t('cutting.thickening.label') : $t('cutting.column.edge')"
             :aria-label="
               part.thickened
@@ -241,12 +259,19 @@ function focusNumericFromPointer(event: MouseEvent) {
             aria-haspopup="dialog"
             @click="emit('open-edge-picker', $event)"
           >
-            <!-- The glyph already draws the four sides as borders; the stamp
-                 sits inside it because thickening is a property of the part,
-                 not of a side. -->
-            <span v-if="part.thickened" aria-hidden="true">{{
-              $t('cutting.thickening.mark')
-            }}</span>
+            <!-- The 20x15 rectangle is the mark; the button around it is the
+                 hit target, which has to stay big enough to press. The stamp
+                 sits inside the rectangle because thickening is a property of
+                 the part, not of a side. -->
+            <span
+              data-test="edge-glyph"
+              class="grid h-[15px] w-5 place-items-center rounded-[3px] text-[8px] font-black leading-none text-ink"
+              :style="edgeGlyphStyle()"
+            >
+              <span v-if="part.thickened" aria-hidden="true">{{
+                $t('cutting.thickening.mark')
+              }}</span>
+            </span>
           </button>
         </div>
         <div
@@ -336,7 +361,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
             @mousedown="focusNumericFromPointer"
@@ -357,7 +382,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
             @mousedown="focusNumericFromPointer"
@@ -378,7 +403,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input border-hairline bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
             @mousedown="focusNumericFromPointer"
