@@ -275,6 +275,9 @@
     "valueError": "Qiymatni to'g'ri kiriting — masalan: 50 000."
   },
   "checkout": {
+    "branch": "Filial",
+    "contents": "Buyurtma tarkibi",
+    "cuttingWithLength": "Kesish · {length}",
     "title": "Buyurtmani rasmiylashtirish",
     "branchFallback": "Filial",
     "client": "Mijoz ma'lumotlari",
@@ -316,6 +319,14 @@
     "total": "Jami",
     "save": "O'zgarishlarni saqlash"
   },
+  "wizard": {
+    "title": "Yangi buyurtma",
+    "stepClient": "Mijoz",
+    "stepParts": "Detallar",
+    "stepResult": "Natija",
+    "stepCheckout": "Rasmiylashtirish",
+    "cancel": "Bekor qilish"
+  },
   "walkIn": {
     "title": "Yangi buyurtma",
     "branch": "{branch} · mijoz uchun",
@@ -324,13 +335,10 @@
     "phone": "Telefon raqami",
     "name": "Ism",
     "nameHint": "(yangi mijoz uchun)",
+    "foundHint": "Bazadan topildi — boshqa odam bo'lsa, raqamni tekshiring.",
     "namePlaceholder": "Masalan: Dilshod",
     "checking": "Tekshirilmoqda…",
-    "continue": "Davom etish",
-    "found": "Topilgan mijoz",
-    "confirm": "Bu mijoz uchun buyurtma yaratilsinmi? Agar bu boshqa odam bo'lsa, orqaga qaytib raqamni tekshiring.",
-    "back": "Orqaga",
-    "confirmContinue": "Ha, davom etish"
+    "continue": "Davom etish"
   },
   "error": {
     "cuttingWorkerMissing": "Kesishni bajargan xodim topilmadi.",

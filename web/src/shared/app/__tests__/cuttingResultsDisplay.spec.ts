@@ -7,7 +7,9 @@ import {
   panelDisplayIndex,
   panelFillPercent,
   resultSheetPartGroups,
+  resultTotals,
   snapshotShortLabel,
+  squareMetres,
 } from '@/shared/app/cuttingResultsDisplay'
 import type { CuttingPanel, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
 
@@ -261,5 +263,112 @@ describe('cutting results display helpers', () => {
     const cuttingResult = result({ panels: [first, secondMaterialFirstPanel] })
 
     expect(panelDisplayIndex(cuttingResult, secondMaterialFirstPanel)).toBe(2)
+  })
+})
+
+describe('resultTotals', () => {
+  // The aside's five figures. Every one of them is a fold over the payload, so
+  // the risk is not arithmetic — it is folding the wrong field. Each case here
+  // pins the field, not the sum.
+  const placement = (partRef: string, id: string) => ({
+    id,
+    part_ref: partRef,
+    part_quantity_index: 1,
+    x_mm: 0,
+    y_mm: 0,
+    length_mm: 300,
+    width_mm: 200,
+    rotated: false,
+  })
+  const panel = (id: string, overrides: Partial<CuttingPanel> = {}): CuttingPanel => ({
+    id,
+    branch_material_id: 'panel-a',
+    panel_index: 1,
+    waste_area_mm2: 0,
+    offcuts: [],
+    placements: [],
+    ...overrides,
+  })
+
+  it('counts placed parts across every sheet against the quantities requested', () => {
+    const totals = resultTotals(
+      result({
+        parts_snapshot: [part({ quantity: 3 }), part({ part_ref: 'part-b', quantity: 2 })],
+        panels: [
+          panel('one', { placements: [placement('part-a', 'p1'), placement('part-a', 'p2')] }),
+          panel('two', { placements: [placement('part-b', 'p3')] }),
+        ],
+      }),
+    )
+
+    expect(totals.placedParts).toBe(3)
+    expect(totals.requestedParts).toBe(5)
+  })
+
+  // Pre-snapshot results are still in the database. Dropping the `?? []` guard
+  // throws on the read rather than degrading, and takes the whole aside with it.
+  it('reads a result whose parts snapshot is absent as zero requested', () => {
+    const legacy = result()
+    // @ts-expect-error — the frozen legacy payload genuinely lacks the field
+    delete legacy.parts_snapshot
+
+    expect(resultTotals(legacy).requestedParts).toBe(0)
+  })
+
+  it('counts sheets per material, not per panel row', () => {
+    const totals = resultTotals(
+      result({ panels_used_by_material: { 'panel-a': 3, 'panel-b': 2 }, panels: [panel('one')] }),
+    )
+
+    expect(totals.sheets).toBe(5)
+  })
+
+  // `edge_length_*` is the geometric edge; `edge_consumed_*` adds the per-side
+  // glue-and-trim overhang, which is what actually comes off the roll. Summing
+  // the wrong pair understates every invoice.
+  it('sums the consumed tape dicts and ignores the geometric ones', () => {
+    const totals = resultTotals(
+      result({
+        edge_length_shop_by_material: { 'edge-a': 99_000 },
+        edge_length_own_by_material: { 'edge-a': 99_000 },
+        edge_consumed_shop_by_material: { 'edge-a': 1_000, 'edge-b': 500 },
+        edge_consumed_own_by_material: { 'edge-a': 250 },
+      }),
+    )
+
+    expect(totals.edgeConsumedMm).toBe(1_750)
+  })
+
+  it('reports no tape at all for a drawing with no banding', () => {
+    expect(resultTotals(result()).edgeConsumedMm).toBe(0)
+  })
+
+  // `usable` is the same flag the drawing colours green and the label calls
+  // "Qoldiq … — sizda qoladi". Scrap must not join the figure the client reads
+  // as what they take home.
+  it('counts and measures only the offcuts the layout marked usable', () => {
+    const totals = resultTotals(
+      result({
+        panels: [
+          panel('one', {
+            offcuts: [
+              { x_mm: 0, y_mm: 0, length_mm: 1000, width_mm: 500, usable: true },
+              { x_mm: 0, y_mm: 0, length_mm: 100, width_mm: 40, usable: false },
+            ],
+          }),
+          panel('two', {
+            offcuts: [{ x_mm: 0, y_mm: 0, length_mm: 2000, width_mm: 1000, usable: true }],
+          }),
+        ],
+      }),
+    )
+
+    expect(totals.usableOffcutCount).toBe(2)
+    expect(totals.usableOffcutAreaMm2).toBe(2_500_000)
+    expect(squareMetres(totals.usableOffcutAreaMm2)).toBe('2.50')
+  })
+
+  it('carries the propil length through untouched', () => {
+    expect(resultTotals(result({ total_cut_length_mm: 53_800 })).cutLengthMm).toBe(53_800)
   })
 })

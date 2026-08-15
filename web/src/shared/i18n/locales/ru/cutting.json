@@ -70,6 +70,23 @@
     "searchEmpty": "По этому запросу материалов не найдено.",
     "pickerEmpty": "В этом филиале нет материалов."
   },
+  "customerBoard": {
+    "modeLabel": "Источник материала",
+    "intro": "Если клиент принёс свой лист, укажите размер и сколько листов принесено. За принесённые листы стоимость материала не берётся — считаются только распил и кромка.",
+    "nameLabel": "Название",
+    "optional": "(необязательно)",
+    "namePlaceholder": "ЛДСП клиента белый 16 мм",
+    "length": "Длина, мм",
+    "width": "Ширина, мм",
+    "thickness": "Толщина, мм",
+    "sheets": "Сколько листов",
+    "textured": "Материал с текстурой",
+    "submit": "Добавить",
+    "sizeError": "Укажите размер листа.",
+    "thicknessError": "Укажите толщину листа.",
+    "sheetsError": "Укажите, сколько листов принесено.",
+    "saveFailed": "Не удалось добавить лист. Повторите попытку."
+  },
   "editor": {
     "backToDrafts": "Раскрои",
     "title": "Раскрой",
@@ -104,6 +121,7 @@
     "addMaterial": "Другой материал",
     "ctaCalculating": "Идёт расчёт",
     "ctaContinue": "Продолжить",
+    "ctaOptimize": "Оптимизировать",
     "hintReadOnly": "Раскрой привязан к заказу",
     "hintNoBranch": "Сначала выберите мастерскую",
     "hintNoParts": "Сначала добавьте деталь",
@@ -308,7 +326,18 @@
     "noEdgeUsed": "Кромка не использована.",
     "partsOnSheet": "Детали — лист {n}",
     "sheetLabel": "Лист {n}",
-    "sheetCaption": "Лист {n} · {material} · КИМ {fill}",
+    "mapTitle": "Карта раскроя",
+    "offcutHint": "Остатки больше 80×400 мм возвращаются на склад и используются в следующих заказах.",
+    "fillUsed": "использовано {fill}",
+    "sheetCaption": "Лист {n} · {material} · использовано {fill}",
+    "summaryParts": "Детали",
+    "summaryPartsValue": "{placed} / {requested}",
+    "summaryPartsShort": "{placed} / {requested} · не влезло {n}",
+    "summarySheets": "Листы",
+    "summaryCutLength": "Длина реза",
+    "summaryEdge": "Кромочная лента",
+    "summaryOffcuts": "Полезный остаток",
+    "summaryOffcutsValue": "{n} шт · {area} м²",
     "cutSettings": "Ширина реза {kerf} мм · Краевой обрез {trim} мм",
     "panelAria": "Раскладка листа {n}",
     "offcutUsable": "Остаток {dims}",
@@ -377,5 +406,10 @@
     "sheetsSplit": "{own} ваши · {shop} от цеха",
     "tapeFree": "ваша кромка — не считается",
     "saved": "Со своим материалом сэкономлено {amount}"
+  },
+  "source": {
+    "shop": "Со склада",
+    "own": "Материал клиента",
+    "ownClient": "Мой материал"
   }
 }

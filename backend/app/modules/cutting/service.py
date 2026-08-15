@@ -11,7 +11,7 @@ from typing import Any
 
 import anyio.to_thread
 from fastapi import status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -708,6 +708,7 @@ async def _catalog_materials(
     manufacturer_id: uuid.UUID | None,
     include_unpriced: bool,
     limit: int | None,
+    include_draft_id: uuid.UUID | None = None,
 ) -> list[ClientCatalogMaterialOption]:
     """Catalog listing shared by the client and workshop editors — the caller
     authorizes the branch (public browsability vs workshop tenancy) first.
@@ -716,6 +717,12 @@ async def _catalog_materials(
     kromka, every other picker wants panel-shaped dekorlar. `include_unpriced`
     is the client/workshop split — staff must see the rows they still have to
     price, clients must not.
+
+    Customer-supplied boards are excluded unless `include_draft_id` names the
+    drawing that created them. They are one customer's property recorded as a
+    branch material; offering the next walk-in the board somebody else carried
+    in would be a data leak, and both editors pass `include_unpriced=True`, so
+    the price filter does not hide them.
     """
     shape = Dekor.tur == DekorType.KROMKA if tape else Dekor.tur != DekorType.KROMKA
     query = (
@@ -728,6 +735,12 @@ async def _catalog_materials(
             Dekor.holat == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
             shape,
+            BranchMaterial.customer_supplied.is_(False)
+            if include_draft_id is None
+            else or_(
+                BranchMaterial.customer_supplied.is_(False),
+                BranchMaterial.source_draft_id == include_draft_id,
+            ),
         )
         # There is no stored material name to sort by any more; maker, then
         # decor, then thickness is the order the formats read in on the shelf.
@@ -755,15 +768,16 @@ async def _catalog_materials(
             manufacturer_id=dekor.manufacturer_id,
             manufacturer_name=manufacturer.name,
             kod=dekor.kod,
-            nomi=dekor.nomi,
-            tolali=dekor.tolali,
+            nomi=branch_material.nomi or dekor.nomi,
+            tolali=(branch_material.tolali if branch_material.tolali is not None else dekor.tolali),
+            customer_supplied=branch_material.customer_supplied,
             image_file_id=dekor.image_file_id,
             qalinlik_mm=normalize_mm(branch_material.qalinlik_mm),
             uzunlik_mm=branch_material.uzunlik_mm,
             eni_mm=branch_material.eni_mm,
             kromka_eni_mm=branch_material.kromka_eni_mm,
             price_tiyin=branch_material.price_tiyin,
-            price_unset=branch_material.price_tiyin == 0,
+            price_unset=branch_material.price_tiyin == 0 and not branch_material.customer_supplied,
             display_unit=display_unit(dekor.tur),
         )
         for branch_material, dekor, manufacturer in rows
@@ -1445,6 +1459,12 @@ def _material_snapshot(
 
     `qalinlik_mm` is written as a string (Decimal is not JSON-serialisable and
     the formatter expects text); the three size fields stay ints.
+
+    A customer-supplied board overrides `nomi` and `tolali` from the row: every
+    board points at the one seeded `Mijoz` dekor, so the dekor cannot carry
+    either. `customer_supplied` and `stock_material_id` are frozen here too —
+    the stock seam reads them at "Kesish tugadi", long after the branch may have
+    re-priced or de-listed the substitute, and it must consume what was billed.
     """
     return {
         "id": str(branch_material.id),
@@ -1453,13 +1473,17 @@ def _material_snapshot(
         "manufacturer_name": manufacturer.name,
         "tur": dekor.tur.value,
         "kod": dekor.kod,
-        "nomi": dekor.nomi,
+        "nomi": branch_material.nomi or dekor.nomi,
         "qalinlik_mm": str(branch_material.qalinlik_mm),
         "uzunlik_mm": branch_material.uzunlik_mm,
         "eni_mm": branch_material.eni_mm,
         "kromka_eni_mm": branch_material.kromka_eni_mm,
-        "tolali": dekor.tolali,
+        "tolali": branch_material.tolali if branch_material.tolali is not None else dekor.tolali,
         "image_file_id": str(dekor.image_file_id) if dekor.image_file_id else None,
+        "customer_supplied": branch_material.customer_supplied,
+        "stock_material_id": (
+            str(branch_material.stock_material_id) if branch_material.stock_material_id else None
+        ),
     }
 
 

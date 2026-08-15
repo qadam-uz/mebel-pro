@@ -16,7 +16,7 @@ from types import MappingProxyType
 from typing import Any, cast
 
 from fastapi import status
-from sqlalchemy import Select, and_, delete, func, or_, select
+from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -568,9 +568,25 @@ async def begin_order_edit(
         created_via_workshop_id=order.workshop_id,
         revision_of_order_id=order.id,
         parts_snapshot=copy.deepcopy(result.parts_snapshot),
+        # The claim travels with the parts. Without it a revision re-prices from
+        # an empty claim and bills the client for sheets they carried in — a bug
+        # for any own-material order, and money-shaped for a customer board,
+        # whose whole price is the shortfall.
+        own_panel_counts=dict(result.own_panel_counts or {}),
     )
     db.add(draft)
     await db.flush()
+    # Customer boards belong to the drawing being revised, not to the one they
+    # were typed into: `source_draft_id` is what the editor's picker re-resolves
+    # them by, so without this the revision cannot see them.
+    await db.execute(
+        update(BranchMaterial)
+        .where(
+            BranchMaterial.customer_supplied.is_(True),
+            BranchMaterial.id.in_([uuid.UUID(key) for key in (result.own_panel_counts or {})]),
+        )
+        .values(source_draft_id=draft.id)
+    )
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -1760,7 +1776,9 @@ async def complete_cutting(
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
     shortfall = False
-    for branch_material_id, quantity in _stock_movements(panel_demands):
+    for branch_material_id, quantity in _stock_movements(
+        _stock_keyed_demands(result, panel_demands)
+    ):
         transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
@@ -2301,7 +2319,7 @@ async def _cancel_order(
 async def _restore_cutting_step(db: AsyncSession, order: Order) -> dict[uuid.UUID, int]:
     result = await _order_result(db, order)
     demands = _panel_stock_demands(result)
-    for branch_material_id, quantity in _stock_movements(demands):
+    for branch_material_id, quantity in _stock_movements(_stock_keyed_demands(result, demands)):
         await restore_order_stock(
             db,
             branch_id=order.branch_id,
@@ -3004,6 +3022,13 @@ def _stock_warnings_from_demands(
 ) -> list[OrderStockWarning]:
     warnings: list[OrderStockWarning] = []
     for branch_material_id, required in demands.items():
+        # A zero demand is a real entry — `_panel_stock_demands` keeps the key so
+        # pricing still checks the branch carries the material, which is what
+        # happens when the client brings every sheet. There is nothing to warn
+        # about, and the material join misses for a stock-less row, so the
+        # warning would render a raw uuid.
+        if required <= 0:
+            continue
         item = stock_by_branch_material.get(branch_material_id)
         material = materials.get(branch_material_id)
         on_hand = item.on_hand if item is not None else 0
@@ -3492,6 +3517,41 @@ def _panel_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
         if material_id in demands:
             demands[material_id] = max(0, demands[material_id] - own)
     return demands
+
+
+def _stock_keyed_demands(
+    result: CuttingResult, demands: dict[uuid.UUID, int]
+) -> dict[uuid.UUID, int]:
+    """Re-key a panel demand map from customer boards onto what stock holds.
+
+    A customer-supplied board is a branch material so that pricing, snapshots and
+    order items can all key on one id — but the branch never owned it, so it has
+    no stock row. Its shortfall, though, IS sold from the branch: the substitute
+    frozen on the result at optimize time (`stock_material_id`) is the row that
+    must move.
+
+    Frozen, never re-resolved: the branch may have re-priced or de-listed the
+    substitute between placement and "Kesish tugadi", and consume must move what
+    was billed. A board with no substitute drops out entirely — there is nothing
+    the shop owns to consume, and inventing a row would drive a balance negative
+    and page every owner about a sheet the shop never had.
+
+    Both stock sites go through this one helper on purpose: consume and restore
+    disagreeing is how a reverted order leaks or double-counts stock.
+    """
+    snapshots = result.material_snapshots or {}
+    mapped: dict[uuid.UUID, int] = {}
+    for material_id, quantity in demands.items():
+        snapshot = snapshots.get(str(material_id)) or {}
+        if not snapshot.get("customer_supplied"):
+            mapped[material_id] = mapped.get(material_id, 0) + quantity
+            continue
+        substitute = snapshot.get("stock_material_id")
+        if not substitute:
+            continue
+        key = uuid.UUID(str(substitute))
+        mapped[key] = mapped.get(key, 0) + quantity
+    return mapped
 
 
 def _stock_movements(demands: dict[uuid.UUID, int]) -> list[tuple[uuid.UUID, int]]:

@@ -433,6 +433,9 @@ async def _can_read_dekor_file(
                 .where(
                     BranchMaterial.dekor_id == dekor_id,
                     BranchMaterial.status == MaterialStatus.ACTIVE,
+                    # Otherwise one walk-in board would make every branch a
+                    # "carrier" of the shared Mijoz dekor and grant its photo.
+                    BranchMaterial.customer_supplied.is_(False),
                     Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]),
                     Workshop.status == WorkshopStatus.ACTIVE,
                 )
@@ -451,6 +454,7 @@ async def _can_read_dekor_file(
             .where(
                 BranchMaterial.dekor_id == dekor_id,
                 Branch.workshop_id == principal.workshop_id,
+                BranchMaterial.customer_supplied.is_(False),
             )
         )
     ).scalars()

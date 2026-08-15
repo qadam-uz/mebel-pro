@@ -198,6 +198,12 @@ export interface ClientCatalogMaterialOption {
   // workshop-facing listing ever returns such a row; clients never see one.
   price_unset: boolean
   display_unit: string
+  /** A sheet the walk-in carried in: a real branch material so the whole cutting
+   *  path keeps keying on a material id, but one the branch does not carry — no
+   *  stock, and every catalog listing except this drawing's hides it. Its price
+   *  is the branch's for the same size, which is what makes the shortfall price
+   *  itself; `price_unset` therefore never fires for one. */
+  customer_supplied?: boolean
 }
 
 export interface ClientBranchOption {
@@ -301,6 +307,43 @@ export const useCuttingStore = defineStore('cutting', () => {
     )
     walkInClient.value = { id: resolved.id, name: resolved.name, phone: resolved.phone }
     return resolved
+  }
+
+  /**
+   * Read-only "is this phone already a client?" — the half `resolveWalkInClient`
+   * cannot do, because resolving *writes*: asking it on every typed phone would
+   * mint a client for every mistyped digit. Call it once per complete phone, not
+   * per keystroke; the server audits and budgets each call, since a hit
+   * discloses a stored name.
+   */
+  /** Record a sheet the customer brought. Workshop scope only — the client SPA
+   *  has no counter to hand a board across. Returns the new material as a picker
+   *  option and pushes it into the loaded list so the caller can add a part on it
+   *  without a refetch. */
+  async function createCustomerBoard(input: {
+    draftId: string
+    nomi: string | null
+    uzunlik_mm: number
+    eni_mm: number
+    qalinlik_mm: number
+    sheets: number
+    tolali: boolean
+  }) {
+    const { draftId, ...body } = input
+    const option = await api.post<ClientCatalogMaterialOption>(
+      `/workshop/cutting-drafts/${draftId}/customer-materials`,
+      body,
+      authInit(),
+    )
+    panelOptions.value = [...panelOptions.value, option]
+    return option
+  }
+
+  async function lookupWalkInClient(phone: string) {
+    return api.get<{ found: boolean; phone: string; id: string | null; name: string | null }>(
+      withQuery('/workshop/clients/lookup', { phone }),
+      authInit(),
+    )
   }
 
   // Workshop-only: rehydrate the walk-in client after a mid-flow reload (the
@@ -556,8 +599,12 @@ export const useCuttingStore = defineStore('cutting', () => {
     manufacturerId?: string | null
     limit?: number
     force?: boolean
+    /** Workshop only: widen the listing by this drawing's customer-supplied
+     *  boards. Part of the cache key — a board belongs to one drawing, so two
+     *  drafts must never share a cached list. */
+    draftId?: string | null
   }) {
-    const cacheKey = `${params.tape}:${params.branchId}:${params.search ?? ''}:${params.manufacturerId ?? ''}:${params.limit ?? ''}`
+    const cacheKey = `${params.tape}:${params.branchId}:${params.search ?? ''}:${params.manufacturerId ?? ''}:${params.limit ?? ''}:${params.draftId ?? ''}`
     const cached = materialsCache.get(cacheKey)
     if (!params.force && cached && Date.now() - cached.at < 30_000) {
       if (params.tape) edgeOptions.value = cached.items
@@ -570,6 +617,7 @@ export const useCuttingStore = defineStore('cutting', () => {
         withQuery(scopedPath('/catalog/materials'), {
           tape: params.tape,
           branch_id: params.branchId,
+          draft_id: params.draftId ?? undefined,
           search: params.search,
           manufacturer_id: params.manufacturerId,
           limit: params.limit,
@@ -643,6 +691,8 @@ export const useCuttingStore = defineStore('cutting', () => {
     configureScope,
     setWalkInClient,
     resolveWalkInClient,
+    lookupWalkInClient,
+    createCustomerBoard,
     loadWalkInClient,
     drafts,
     workshopDrafts,

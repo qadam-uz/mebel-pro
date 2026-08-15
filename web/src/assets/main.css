@@ -2549,6 +2549,17 @@
     margin-bottom: 22px;
   }
 
+  /* The order wizard's head. `.page-head` aligns to the baseline because a page
+     title sits beside tools of its own height; here the title sits beside a row
+     of pills half its height, and flex-end would hang them off the descender.
+     `justify-content` steps aside so the strip can follow the title and the way
+     out can hold the far edge on its own. */
+  .wizard-head {
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 20px;
+  }
+
   .page-head h1 {
     margin: 0;
     color: var(--color-ink);

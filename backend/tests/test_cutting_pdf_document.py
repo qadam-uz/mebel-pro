@@ -586,6 +586,9 @@ def test_work_card_metrics_line_reads_foydali_qoldiq_and_chiqindi_not_bold(
     assert "Jami qoldiq" not in text
     assert "Foydasiz qoldiq" not in text
     assert bold is False
+    # D3.1: the utilisation figure lost the `KIM:` prefix in the same line.
+    assert "ishlatildi" in text
+    assert "KIM" not in text
 
 
 def test_portrait_slot_capacity_is_the_exact_max_the_drawn_card_fits(
@@ -947,3 +950,28 @@ def test_a_new_vocabulary_snapshot_prints_the_same_summary_row() -> None:
 
     assert summary_row(modern) == summary_row(legacy)
     assert summary_row(modern)[1] == "1000×1000"
+
+
+def test_summary_section_headers_survive_their_own_column_widths() -> None:
+    """`_clip` truncates by character count, silently and without an error.
+
+    D3.1 renamed the `KIM` column to `Ishlatildi` — three times longer, in a
+    column sized for three glyphs. Nothing in the render path raises when a
+    header is clipped, and no rendered-PDF assertion reads it, so the only
+    guard against `Ishlati…` is this one: every header must fit the width its
+    own section hands `_draw_table_row`.
+    """
+    panel = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
+    result = _result(parts=[_part()], panels=[panel])
+    sections = pdf_document._summary_sections(result, [])
+
+    clipped = [
+        (section.title, header)
+        for section in sections
+        for header, width in zip(section.headers, section.widths, strict=True)
+        if pdf_document._clip(header, width) != header
+    ]
+
+    assert clipped == []
+    materials = next(section for section in sections if section.title == "Materiallar")
+    assert materials.headers[-1] == "Ishlatildi"

@@ -13,6 +13,7 @@ from app.models.enums import (
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.access.workshop_clients import (
+    CLIENT_LOOKUP_ACTION,
     CLIENT_RESOLVE_ACTION,
     CLIENT_RESOLVES_PER_STAFF_PER_HOUR,
 )
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.factories import seed_platform_user, seed_workshop_with_owner
 
 RESOLVE_URL = "/api/v1/workshop/clients/resolve"
+LOOKUP_URL = "/api/v1/workshop/clients/lookup"
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -383,3 +385,92 @@ async def test_get_workshop_client_requires_a_draft_or_order_with_this_workshop(
     assert foreign_missing.status_code == 404
     assert unknown_missing.status_code == 404
     assert other_workshop_id != workshop_id
+
+
+async def test_lookup_finds_without_creating_and_audits_both_outcomes(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The counter types a phone before it knows whose it is.
+
+    The whole point of this endpoint is that asking does not write: a mistyped
+    digit must leave no client behind. It still discloses a name, so a miss and
+    a hit both leave an audit row.
+    """
+    access, _, _, owner_id = await _workshop_owner_access(db_session)
+    await client.post(
+        RESOLVE_URL,
+        headers=_auth(access),
+        json={"phone": "+998901111444", "name": "Walk In"},
+    )
+
+    hit = await client.get(LOOKUP_URL, headers=_auth(access), params={"phone": " +998901111444 "})
+    miss = await client.get(LOOKUP_URL, headers=_auth(access), params={"phone": "+998909999000"})
+
+    assert hit.status_code == 200
+    assert hit.json()["found"] is True
+    assert hit.json()["name"] == "Walk In"
+    assert hit.json()["phone"] == "+998901111444"
+    assert miss.status_code == 200
+    assert miss.json() == {"found": False, "phone": "+998909999000", "id": None, "name": None}
+    # The miss must not have minted the client the operator was only asking about.
+    assert await db_session.scalar(select(Client).where(Client.phone == "+998909999000")) is None
+    lookups = (
+        (
+            await db_session.execute(
+                select(ActionLog).where(
+                    ActionLog.action == CLIENT_LOOKUP_ACTION,
+                    ActionLog.actor_user_id == owner_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(lookups) == 2
+    assert {row.details["found"] for row in lookups} == {True, False}
+
+
+async def test_lookup_reads_a_blocked_client_as_a_miss(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A blocked account is not an order this counter may write, and the lookup
+    must not become an oracle for account status — the resolve path is where
+    `account_blocked` surfaces, on a real attempt to act."""
+    access, _, _, _ = await _workshop_owner_access(db_session)
+    blocked = Client(phone="+998901111555", name="Blocked", status=UserStatus.BLOCKED)
+    db_session.add(blocked)
+    await db_session.flush()
+
+    response = await client.get(
+        LOOKUP_URL, headers=_auth(access), params={"phone": "+998901111555"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["found"] is False
+    assert response.json()["name"] is None
+
+
+async def test_lookup_rejects_wrong_principals(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
+    production_access, _ = await _staff_user_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.PROCESS_PRODUCTION,
+    )
+    client_access, _ = await _client_access(db_session)
+    platform_access = await _platform_access(db_session)
+    params = {"phone": "+998901111666"}
+
+    production = await client.get(LOOKUP_URL, headers=_auth(production_access), params=params)
+    client_call = await client.get(LOOKUP_URL, headers=_auth(client_access), params=params)
+    platform = await client.get(LOOKUP_URL, headers=_auth(platform_access), params=params)
+
+    assert production.status_code == 403
+    assert client_call.status_code == 403
+    assert platform.status_code == 403

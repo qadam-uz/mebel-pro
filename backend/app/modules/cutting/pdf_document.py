@@ -260,10 +260,10 @@ def _draw_materials_summary(pdf: canvas.Canvas, result: CuttingResultResponse, y
         "Detal m²",
         "Qoldiq m²",
         "Chiqit m²",
-        "KIM",
-        "KIM+q",
+        "Ishlatildi",
+        "Qoldiq bilan",
     ]
-    widths = [124, 62, 34, 38, 45, 45, 42, 34, 34]
+    widths = [124, 62, 34, 38, 45, 45, 42, 58, 58]
     y = _draw_table_row(pdf, y, headers, widths, bold=True)
     stats = _material_stats(result)
     total = MaterialStats("", 0, 0, 0, 0, 0, 0)
@@ -418,7 +418,7 @@ def _draw_sheet_stats(
 ) -> float:
     areas = _panel_areas(result, panel)
     text = (
-        f"To'ldirish {_percent(areas.parts_area, areas.sheet_area)} · "
+        f"{_percent(areas.parts_area, areas.sheet_area)} ishlatildi · "
         f"Detallar {_m2(areas.parts_area)} m² · "
         f"Qoldiq {_m2(areas.usable_area)} m² · "
         f"Chiqit {_m2(areas.waste_area)} m²"
@@ -932,7 +932,11 @@ def _plan_summary_pages(
 def _summary_sections(
     result: CuttingResultResponse, registry: list[EdgeRegistryEntry]
 ) -> list[SummarySection]:
-    material_widths = _fill_width([0, 50, 55, 52, 52, 55, 38])
+    # Last column widened 38 → 58 with the KIM → Ishlatildi rename: _clip allows
+    # max(3, width / 4.4) characters, so a 10-glyph header needs ~44pt or it
+    # silently prints as "Ishlati…". _fill_width gives the slack back from the
+    # name column, which is the widest and has it to spare.
+    material_widths = _fill_width([0, 50, 55, 52, 52, 55, 58])
     material_rows: list[list[str]] = []
     total = MaterialStats("", 0, 0, 0, 0, 0, 0)
     for row in _material_stats(result):
@@ -1005,7 +1009,7 @@ def _summary_sections(
                 "Detal m²",
                 "Qoldiq m²",
                 "Chiqindi m²",
-                "KIM",
+                "Ishlatildi",
             ],
             material_widths,
             material_rows or [["", "0", "0", "0.00", "0.00", "0.00", "—"]],
@@ -1162,7 +1166,7 @@ def _draw_work_card(
     snapshot = _material_snapshot(result, panel.branch_material_id)
     parts_by_ref = _parts_by_ref(result)
     # Card header: exactly 4 lines — list range, material, kromka materials
-    # used on this sheet, then the area/KIM/qoldiq metrics.
+    # used on this sheet, then the area/ishlatildi/qoldiq metrics.
     _draw_text(pdf, x + 6, y + height - 14, _sheet_list_label(unit.group), 9, bold=True)
     _draw_text(
         pdf,
@@ -1177,7 +1181,7 @@ def _draw_work_card(
     areas = _panel_areas(result, panel)
     metrics_line = (
         f"Detallar maydoni: {_m2(areas.parts_area)} m² · "
-        f"KIM: {_percent(areas.parts_area, areas.sheet_area)} · "
+        f"{_percent(areas.parts_area, areas.sheet_area)} ishlatildi · "
         f"Foydali qoldiq: {_m2(areas.usable_area)} m² · "
         f"Chiqindi: {_m2(areas.waste_area)} m²"
     )

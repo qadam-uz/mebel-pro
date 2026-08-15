@@ -7,6 +7,7 @@ import {
   orphanPartIndexByRef,
 } from '@/shared/app/cuttingResultsDisplay'
 import { partDisplayName, registryEntryForBand } from '@/shared/app/cuttingEditorDerived'
+import { nextStableId } from '@/shared/app/listboxNav'
 import { snapshotValue } from '@/shared/app/materialLabel'
 import type { EdgeField } from '@/shared/app/cuttingDisplay'
 import type {
@@ -40,6 +41,15 @@ const DIM_MIN_ACROSS = 24
 const BAND_STROKE = 3
 const BAND_INSET = 3
 const BAND_MARK = 30
+// Grain marking: a part the optimizer may NOT turn is filled with hairlines
+// running along the sheet's texture. `↻` on a label says the optimizer *did*
+// turn this part; nothing on the drawing said it *may not be* turned, which is
+// the one thing a cutter must not get wrong on a textured board. Same
+// normalization as the labels, so the hatch reads identically on a 2800 mm and
+// a 900 mm sheet.
+const GRAIN_STROKE = 1
+const GRAIN_GAP = 8
+const GRAIN_OPACITY = 0.17
 
 const props = defineProps<{
   result: CuttingResult
@@ -49,6 +59,13 @@ const props = defineProps<{
   // 'width' (default) fills the container; 'viewport' caps the height so the
   // whole panel stays on a shop-floor screen without scrolling.
   fit?: 'width' | 'viewport'
+  // Roughly how many CSS pixels wide this drawing will paint. Everything sized
+  // "on screen" below is normalized against 800 of them, which is right for the
+  // one-big-sheet layouts this started as. In a grid of small maps it is a lie:
+  // at 370px an 11px label computes to about 5px and the sheet fills with marks
+  // nobody can read. Tell it the real width and every threshold tightens with
+  // it — fewer labels, but the ones that print are legible.
+  renderWidthPx?: number
 }>()
 
 const emit = defineEmits<{
@@ -69,9 +86,31 @@ const panelWidth = computed(() =>
   numberSnapshot(snapshotValue(material.value, 'eni_mm', 'panel_width_mm'), 700),
 )
 const viewBox = computed(() => `0 0 ${panelLength.value} ${panelWidth.value}`)
-const normScale = computed(() => NORM_WIDTH / panelLength.value)
+const normScale = computed(() => (props.renderWidthPx ?? NORM_WIDTH) / panelLength.value)
 const labelFontSize = computed(() => LABEL_FONT / normScale.value)
 const bandStrokeWidth = computed(() => BAND_STROKE / normScale.value)
+const grainStrokeWidth = computed(() => GRAIN_STROKE / normScale.value)
+const grainGap = computed(() => GRAIN_GAP / normScale.value)
+// The sheet's texture runs along its long side, and the viewBox maps that side
+// to x — so the hairlines are horizontal on an ordinary landscape sheet. Read
+// from the snapshot rather than assumed: `panelLength`/`panelWidth` fall back
+// to 1000×700 and accept a legacy key vocabulary, so a portrait snapshot is
+// representable and would otherwise get its grain drawn across the board.
+const grainHorizontal = computed(() => panelLength.value >= panelWidth.value)
+// One pattern per mounted panel. Only one mounts per page today, but a
+// hardcoded id would fail silently — as a wrong-scaled fill, not an error —
+// the day a second drawing appears beside the first.
+const grainId = nextStableId('mp-grain')
+// The pattern tiles from SVG (0,0) — the sheet's TOP edge, because svgY flips
+// the axis — while the PDF phases its ladder from the sheet's bottom, y up.
+// Left alone the two would sit `panelWidth mod gap` apart: invisible, but it
+// would make "print parity" untestable. Shifting the tile by that remainder
+// puts a hairline on exactly the same sheet millimetres in both renderers.
+const grainOffset = computed(() =>
+  grainHorizontal.value
+    ? (((panelWidth.value - grainGap.value / 2) % grainGap.value) + grainGap.value) % grainGap.value
+    : 0,
+)
 
 // A placement carries no edge data itself — its part (by part_ref) holds which
 // sides are banded, so map them back here.
@@ -119,6 +158,13 @@ function placementLabel(placement: CuttingPlacement) {
 
 function isThickened(placement: CuttingPlacement) {
   return partRowsByRef.value.get(placement.part_ref)?.part.thickened === true
+}
+
+// Strict `=== true`: an orphan `part_ref` (a placement whose part is missing
+// from the snapshot) yields undefined and draws flat, which is the honest
+// answer — we do not know its grain, so we must not claim it is locked.
+function followsGrain(placement: CuttingPlacement) {
+  return partRowsByRef.value.get(placement.part_ref)?.part.follow_grain === true
 }
 
 // The stamp is an instruction, not a label: it prints even on a part too small
@@ -250,6 +296,31 @@ function offcutTransform(offcut: CuttingOffcut) {
     role="img"
     :aria-label="$t('cutting.result.panelAria', { n: panel.panel_index })"
   >
+    <defs>
+      <!-- `userSpaceOnUse` anchors the tiling to the sheet origin rather than to
+           each placement, so neighbouring grain-locked parts share one ladder of
+           lines and the sheet reads as a single grained board. The line sits at
+           half the tile, not at 0: pattern content is clipped to its tile, and a
+           stroke centred on the edge would lose half its width. -->
+      <pattern
+        :id="grainId"
+        patternUnits="userSpaceOnUse"
+        :width="grainGap"
+        :height="grainGap"
+        :x="0"
+        :y="grainOffset"
+      >
+        <line
+          :x1="grainHorizontal ? 0 : grainGap / 2"
+          :y1="grainHorizontal ? grainGap / 2 : 0"
+          :x2="grainHorizontal ? grainGap : grainGap / 2"
+          :y2="grainHorizontal ? grainGap / 2 : grainGap"
+          stroke="var(--color-ink)"
+          :stroke-opacity="GRAIN_OPACITY"
+          :stroke-width="grainStrokeWidth"
+        />
+      </pattern>
+    </defs>
     <rect
       x="0"
       y="0"
@@ -309,6 +380,19 @@ function offcutTransform(offcut: CuttingOffcut) {
         "
         stroke="var(--color-accent)"
         :stroke-width="placementIsActive(placement) ? 3 : 1.5"
+      />
+      <!-- Over the state fill, under the ticks and every label — the base rect
+           keeps its own fill so the active/inactive tint is still the selection
+           signal, and neither the numbers nor the tape marks lose contrast. -->
+      <rect
+        v-if="followsGrain(placement)"
+        :x="placement.x_mm"
+        :y="svgY(placement)"
+        :width="placement.length_mm"
+        :height="placement.width_mm"
+        :fill="`url(#${grainId})`"
+        stroke="none"
+        aria-hidden="true"
       />
       <line
         v-for="(line, index) in bandLines(placement)"

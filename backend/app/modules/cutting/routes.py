@@ -15,6 +15,7 @@ from app.modules.cutting.api import (
     client_catalog_materials,
     commit_imported_map,
     commit_workshop_imported_map,
+    create_customer_board,
     create_draft,
     create_workshop_draft,
     cutting_result_pdf_context,
@@ -42,6 +43,7 @@ from app.modules.cutting.imports.base import (
 )
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
+    CustomerBoardCreateRequest,
     CuttingChooseResultRequest,
     CuttingDraftPatchRequest,
     CuttingDraftResponse,
@@ -361,6 +363,7 @@ async def workshop_catalog_materials_index(
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
     limit: int | None = Query(default=None, ge=1, le=200),
+    draft_id: uuid.UUID | None = None,
 ) -> list[ClientCatalogMaterialOption]:
     return await workshop_catalog_materials(
         db,
@@ -370,4 +373,24 @@ async def workshop_catalog_materials_index(
         search=search,
         manufacturer_id=manufacturer_id,
         limit=limit,
+        draft_id=draft_id,
+    )
+
+
+@router.post(
+    "/workshop/cutting-drafts/{draft_id}/customer-materials",
+    response_model=ClientCatalogMaterialOption,
+    status_code=status.HTTP_201_CREATED,
+)
+async def workshop_customer_board_create(
+    draft_id: uuid.UUID,
+    payload: CustomerBoardCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> ClientCatalogMaterialOption:
+    return await create_customer_board(
+        db,
+        principal=principal,
+        draft_id=draft_id,
+        payload=payload,
     )

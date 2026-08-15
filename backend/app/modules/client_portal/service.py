@@ -233,6 +233,10 @@ async def _branch_material_previews(
             .where(
                 BranchMaterial.branch_id.in_(branch_ids),
                 BranchMaterial.status == MaterialStatus.ACTIVE,
+                # A customer's board is their property, not the branch shelf.
+                # Both this preview and `client_branch_materials` carry the
+                # predicate, so the "+N more" count still agrees with its list.
+                BranchMaterial.customer_supplied.is_(False),
                 # No price gate — kept identical to `client_branch_materials` so
                 # this preview's "+N more" count can never disagree with the
                 # list it links to.
@@ -298,6 +302,8 @@ async def client_branch_materials(
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
+            # A customer's board is their property, not the branch shelf.
+            BranchMaterial.customer_supplied.is_(False),
             # No price gate: a branch registers its format list long before it
             # prices it, and a client browsing the shelf should see what the
             # branch actually works with. The row carries `price_unset` so the

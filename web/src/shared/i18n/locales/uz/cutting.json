@@ -70,6 +70,23 @@
     "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
     "pickerEmpty": "Bu filialda material yo‘q."
   },
+  "customerBoard": {
+    "modeLabel": "Material manbasi",
+    "intro": "Mijoz o'z listini olib kelgan bo'lsa, o'lchamini va nechta list olib kelganini yozing. Olib kelingan listlar uchun material narxi olinmaydi — faqat kesish va kromka hisoblanadi.",
+    "nameLabel": "Nomi",
+    "optional": "(ixtiyoriy)",
+    "namePlaceholder": "Mijoz LDSP oq 16 mm",
+    "length": "Uzunlik, mm",
+    "width": "Eni, mm",
+    "thickness": "Qalinlik, mm",
+    "sheets": "Nechta list",
+    "textured": "Teksturali material",
+    "submit": "Qo'shish",
+    "sizeError": "List o'lchamini kiriting.",
+    "thicknessError": "List qalinligini kiriting.",
+    "sheetsError": "Nechta list olib kelinganini kiriting.",
+    "saveFailed": "Listni qo'shib bo'lmadi. Qayta urinib ko'ring."
+  },
   "editor": {
     "backToDrafts": "Chizmalar",
     "title": "Chizma",
@@ -104,6 +121,7 @@
     "addMaterial": "Boshqa material",
     "ctaCalculating": "Hisoblanmoqda",
     "ctaContinue": "Davom etish",
+    "ctaOptimize": "Optimallashtirish",
     "hintReadOnly": "Bu chizma buyurtmaga biriktirilgan",
     "hintNoBranch": "Avval ustaxona tanlang",
     "hintNoParts": "Avval detal qo'shing",
@@ -308,7 +326,18 @@
     "noEdgeUsed": "Kromka ishlatilmagan.",
     "partsOnSheet": "Detallar — List {n}",
     "sheetLabel": "List {n}",
-    "sheetCaption": "List {n} · {material} · KIM {fill}",
+    "mapTitle": "Kesish xaritasi",
+    "offcutHint": "Qoldiqlar 80×400 mm dan katta bo'lgani uchun omborga qaytadi va keyingi buyurtmalarda ishlatiladi.",
+    "fillUsed": "{fill} ishlatildi",
+    "sheetCaption": "List {n} · {material} · {fill} ishlatildi",
+    "summaryParts": "Detallar",
+    "summaryPartsValue": "{placed} / {requested}",
+    "summaryPartsShort": "{placed} / {requested} · {n} joylashmadi",
+    "summarySheets": "Listlar",
+    "summaryCutLength": "Arra yo'li",
+    "summaryEdge": "Kromka lentasi",
+    "summaryOffcuts": "Foydali qoldiq",
+    "summaryOffcutsValue": "{n} dona · {area} m²",
     "cutSettings": "Arra kesigi {kerf} mm · Chetki qirqim {trim} mm",
     "panelAria": "List {n} joylashuvi",
     "offcutUsable": "Qoldiq {dims}",
@@ -377,5 +406,10 @@
     "sheetsSplit": "{own} sizniki · {shop} ustaxonadan",
     "tapeFree": "o'z lentangiz — hisoblanmaydi",
     "saved": "O'z materialingiz bilan {amount} tejaldi"
+  },
+  "source": {
+    "shop": "Ombordan",
+    "own": "Mijoz materiali",
+    "ownClient": "Mening materialim"
   }
 }

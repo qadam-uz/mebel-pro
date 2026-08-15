@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-08-09
+updated: 2026-08-13
 order: 20
 ---
 
@@ -135,22 +135,32 @@ real client row. Workshop staff holding `manage_orders` resolve the walk-in **by
 from the workshop app's order-creation flow
 ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)):
 
-- **Phone-first.** The staffer submits the phone (`+998XXXXXXXXX`). A match returns the
-  client's registered name, and the staffer must explicitly confirm "this is the right
-  person" before continuing — the confirm step is what stops a phone typo attaching an
-  order to a stranger. The name is asked **only when no row exists**; then a client row is
-  created (`status = active`) exactly as OTP registration would create it.
-- **A blocked client is rejected** (`account_blocked`) — mirrors OTP verification.
+- **Phone-first, answered as it is typed.** The moment the phone is complete
+  (`+998XXXXXXXXX`) the base is asked who owns it. A match fills the client's registered
+  name into a read-only field with a "found in the base — check the number if this is
+  someone else" caption, and the staffer reads that name before pressing continue; a miss
+  leaves the field empty and required. **The disclosure still happens before the commit** —
+  that is what stops a phone typo attaching an order to a stranger — but on one screen
+  rather than behind a second confirm card.
+- **Asking does not write.** The read is its own endpoint, separate from find-or-create:
+  resolving on every typed phone would mint a client per typo. The write happens once, on
+  continue, and creates the row (`status = active`) exactly as OTP registration would.
+- **A blocked client is rejected** (`account_blocked`) on the write path — mirrors OTP
+  verification. On the read path a blocked account reads as a **miss**: the answer to "may
+  I write an order for this number" is no either way, and raising there would make the
+  lookup an oracle for account status.
 - **Never a login.** The staff path finds or creates the row; it creates **no client
   session**. OTP remains the only way a client signs in — the first time the walk-in
   verifies that number they claim the row and see their order history.
-- **Guardrails.** Resolve deliberately discloses an existing client's stored name to
+- **Guardrails.** Both paths deliberately disclose an existing client's stored name to
   `manage_orders` staff — the trade for the anti-typo confirmation, and the name is already
-  what the counter conversation runs on. In exchange the operation is **rate-limited per
-  staff user** (the same convention as the OTP send limits) and **every call writes an
-  audit row** (the phone, whether a row was created, the acting staffer) — a staffer
-  scanning phone numbers is throttled and visible. Revisit if name disclosure draws a real
-  privacy complaint — then mask the returned name, at the cost of a weaker confirmation.
+  what the counter conversation runs on. In exchange each is **rate-limited per staff user**
+  (the same convention as the OTP send limits) and **every call writes an audit row** (the
+  phone, the outcome, the acting staffer) — a staffer scanning phone numbers is throttled
+  and visible. The read carries the larger hourly budget of the two: looking a number up
+  and not writing an order is the normal case at a counter, not a suspicious one. Revisit
+  if name disclosure draws a real privacy complaint — then mask the returned name, at the
+  cost of a weaker confirmation.
 
 **Why find-or-create, not a guest entity.** `phone` is unique on the client and the account
 is passwordless — OTP verification is itself already a find-or-create on the phone. Reusing

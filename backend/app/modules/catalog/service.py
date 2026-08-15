@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -132,10 +132,27 @@ def branch_material_snapshot(
     One writer for the key vocabulary that `app/core/material_label.py` reads and
     that cutting/sales freeze into history. Thickness goes out as a *string* so
     the label formatter renders it (it ignores non-str thickness), sizes as ints.
+
+    A customer-supplied board overrides the dekor's `nomi`/`tolali`: every board
+    points at the one seeded `Mijoz` dekor, which cannot carry a per-board name
+    or texture. Keep this in step with `cutting/service.py::_material_snapshot`
+    — nothing mechanical catches a divergence, the picker and the order history
+    just start printing different names for the same board.
     """
 
     return {
         **dekor_snapshot(dekor, manufacturer),
+        **(
+            {
+                "nomi": branch_material.nomi or dekor.nomi,
+                "tolali": (
+                    branch_material.tolali if branch_material.tolali is not None else dekor.tolali
+                ),
+                "customer_supplied": True,
+            }
+            if branch_material.customer_supplied
+            else {}
+        ),
         "qalinlik_mm": _fmt_mm(branch_material.qalinlik_mm),
         "uzunlik_mm": branch_material.uzunlik_mm,
         "eni_mm": branch_material.eni_mm,
@@ -326,7 +343,16 @@ async def list_dekorlar(
     query = (
         select(Dekor, Manufacturer, func.count(func.distinct(BranchMaterial.branch_id)))
         .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
-        .outerjoin(BranchMaterial, BranchMaterial.dekor_id == Dekor.id)
+        .outerjoin(
+            BranchMaterial,
+            and_(
+                BranchMaterial.dekor_id == Dekor.id,
+                # On the ON-clause, never the WHERE: in the WHERE this
+                # LEFT JOIN degrades to an inner one and every dekor no
+                # branch carries drops out of the platform list.
+                BranchMaterial.customer_supplied.is_(False),
+            ),
+        )
     )
     query = _dekor_filters(
         query,
@@ -550,6 +576,7 @@ async def list_branch_catalog_options(
         .where(
             BranchMaterial.branch_id == scope.branch_id,
             BranchMaterial.dekor_id == Dekor.id,
+            BranchMaterial.customer_supplied.is_(False),
         )
         .scalar_subquery()
     )
@@ -647,7 +674,11 @@ async def list_branch_materials(
         select(BranchMaterial, Dekor, Manufacturer)
         .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
         .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
-        .where(BranchMaterial.branch_id == scope.branch_id)
+        .where(
+            BranchMaterial.branch_id == scope.branch_id,
+            # A customer's board is not part of the branch catalog.
+            BranchMaterial.customer_supplied.is_(False),
+        )
         .order_by(
             Manufacturer.name,
             Dekor.nomi,
@@ -1042,6 +1073,9 @@ async def _carried_formats(
             ).where(
                 BranchMaterial.branch_id == branch_id,
                 BranchMaterial.dekor_id == dekor_id,
+                # Attach dedupes against what the branch carries; a customer's
+                # board is not an offer and must not block one.
+                BranchMaterial.customer_supplied.is_(False),
             )
         )
     ).all()
