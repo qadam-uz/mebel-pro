@@ -13,7 +13,12 @@ import {
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
 import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
-import { formatMm, isTape, snapshotMaterialLabel } from '@/shared/app/materialLabel'
+import {
+  formatMm,
+  isTape,
+  materialIdentityLabel,
+  snapshotMaterialLabel,
+} from '@/shared/app/materialLabel'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import {
   deriveEdgeRegistry,
@@ -415,7 +420,11 @@ function edgeById(id: string | null | undefined) {
 const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
 const edgeAssignmentEntries = computed(() => [...edgeAssignments.value.entries()])
 const groupedParts = computed(() =>
-  groupCuttingParts(parts.value, (materialId) => materialLabel(materialById(materialId))),
+  groupCuttingParts(parts.value, (materialId) =>
+    inOrderWizard.value
+      ? materialIdentityLabel(materialById(materialId))
+      : materialLabel(materialById(materialId)),
+  ),
 )
 const errorCount = computed(
   () => parts.value.filter((part, index) => rowHasError(part, index)).length,
@@ -1923,7 +1932,11 @@ onBeforeRouteLeave(async () => {
         </section>
 
         <template v-else>
-          <section class="mb-3 flex items-center gap-2">
+          <!-- The wizard's head names the journey; a drawing name above the card
+               is a second title for a thing the operator has not saved as a
+               drawing yet. It comes back on the standalone editor, where the
+               name is how a saved drawing is found again. -->
+          <section v-if="!inOrderWizard" class="mb-3 flex items-center gap-2">
             <input
               v-if="draftNameEditing"
               v-model="draftNameValue"
@@ -2146,7 +2159,13 @@ onBeforeRouteLeave(async () => {
                  because this view is embedded both full-width (client) and next
                  to a persistent workshop sidebar — the same viewport width maps
                  to different available row widths in each shell. -->
-            <div class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[680px]:block">
+            <!-- One header above every group outside the wizard; inside it the
+                 design repeats the header per group, right under the material it
+                 belongs to, which is what a list of two materials needs. -->
+            <div
+              v-if="!inOrderWizard"
+              class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[680px]:block"
+            >
               <div
                 class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
               >
@@ -2209,21 +2228,42 @@ onBeforeRouteLeave(async () => {
                          drop under it, so a long dekor name has the row's whole
                          width instead of competing with the figures for it. -->
                     <span class="min-w-0 flex-1">
-                      <button
-                        v-if="!isReadOnly && group.materialId"
-                        type="button"
-                        class="block min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
-                        :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                        @click.stop="openGroupMaterial(group)"
-                      >
-                        {{ group.label }}
-                      </button>
-                      <span
-                        v-else
-                        class="block min-w-0 truncate font-extrabold text-ink"
-                        :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                        >{{ group.label }}</span
-                      >
+                      <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                        <button
+                          v-if="!isReadOnly && group.materialId"
+                          type="button"
+                          class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
+                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                          @click.stop="openGroupMaterial(group)"
+                        >
+                          {{ group.label }}
+                        </button>
+                        <span
+                          v-else
+                          class="min-w-0 truncate font-extrabold text-ink"
+                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                          >{{ group.label }}</span
+                        >
+                        <!-- Beside the name, where the design puts it: it names
+                             whose sheets this group is cut from. The swap glyph
+                             is honest — it opens the picker, which is where a
+                             shop format is exchanged for a customer board. -->
+                        <button
+                          v-if="inOrderWizard && group.materialId && !isReadOnly"
+                          type="button"
+                          class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-[0.97]"
+                          :class="
+                            materialIsOwn(group.materialId)
+                              ? 'bg-accent-soft text-accent-strong'
+                              : 'bg-neutral-soft text-ink-nav'
+                          "
+                          :title="$t('cutting.customerBoard.modeLabel')"
+                          @click.stop="openGroupMaterial(group)"
+                        >
+                          {{ materialSourceLabel(group.materialId) }}
+                          <Icon name="swap" class="size-3" aria-hidden="true" />
+                        </button>
+                      </span>
                       <span
                         v-if="inOrderWizard"
                         class="num mt-0.5 block text-[12.5px] text-ink-muted"
@@ -2262,7 +2302,7 @@ onBeforeRouteLeave(async () => {
                      as a control. It is a statement about the material, and the
                      counts behind it belong to the post-optimizer dialog. -->
                 <span
-                  v-if="group.materialId"
+                  v-if="group.materialId && !inOrderWizard"
                   class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
                   :class="
                     materialIsOwn(group.materialId)
@@ -2280,6 +2320,32 @@ onBeforeRouteLeave(async () => {
                   <Icon name="plus" class="size-3.5" />
                   {{ $t('cutting.editor.addPart') }}
                 </button>
+              </div>
+              <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[680px]:block">
+                <div
+                  class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
+                >
+                  <span aria-hidden="true" class="text-center">№</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.name')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.length')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.width')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.quantity')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.rotation')
+                  }}</span>
+                  <span aria-hidden="true" class="text-center">{{
+                    $t('cutting.column.edge')
+                  }}</span>
+                  <span aria-hidden="true"></span>
+                </div>
               </div>
               <div
                 v-if="groupEdgeRegistryEntries(group).length > 0"
@@ -2304,6 +2370,7 @@ onBeforeRouteLeave(async () => {
                   :material-missing="rowMaterialMissing(part)"
                   :optimize-error="rowOptimizeError(part, index)"
                   :edge-registry="edgeRegistry"
+                  :bare-index="inOrderWizard"
                   @toggle-select="toggleSelect(part.part_ref)"
                   @update:name="setPartName(part, $event)"
                   @update:length="part.length_mm = $event"

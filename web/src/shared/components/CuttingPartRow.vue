@@ -27,6 +27,9 @@ const props = defineProps<{
   materialMissing: boolean
   optimizeError: string | null
   edgeRegistry: EdgeRegistryEntry[]
+  /** The order wizard's row: a bare `1` rather than `#1`, and delete promoted
+   *  out of the ⋯ menu into the row — the shape the design draws. */
+  bareIndex?: boolean
 }>()
 const emit = defineEmits<{
   'update:name': [string | null]
@@ -164,7 +167,7 @@ function focusNumericFromPointer(event: MouseEvent) {
 <template>
   <article
     :id="`part-row-${part.part_ref}`"
-    class="border-b border-hairline px-2 py-1.5 transition last:border-b-0 focus-within:bg-sunk"
+    class="group/row border-b border-hairline px-2 py-1.5 transition last:border-b-0 focus-within:bg-sunk"
     :class="hasError ? 'border-danger-soft bg-danger-soft/60' : 'border-hairline bg-elevated'"
   >
     <div
@@ -173,7 +176,8 @@ function focusNumericFromPointer(event: MouseEvent) {
       <div
         class="text-xs font-extrabold text-ink-muted @min-[680px]:col-start-1 @min-[680px]:row-start-1"
       >
-        #{{ (displayIndex ?? index) + 1 }}
+        <span v-if="bareIndex">{{ (displayIndex ?? index) + 1 }}</span>
+        <span v-else>#{{ (displayIndex ?? index) + 1 }}</span>
       </div>
 
       <div
@@ -256,9 +260,28 @@ function focusNumericFromPointer(event: MouseEvent) {
             :aria-label="$t('cutting.parts.closeActions')"
             @click="actionsOpen = false"
           ></button>
+          <!-- Delete is the row's own action and reads as one click, the way
+               the design draws it. Duplicate and "move to another material" are
+               real and stay reachable — behind the ⋯, which surfaces on hover or
+               keyboard focus so the resting row stays as drawn. -->
+          <button
+            v-if="bareIndex"
+            type="button"
+            class="mp-action-icon-button size-8 min-h-0 text-ink-muted hover:bg-danger-soft hover:text-danger"
+            :aria-label="$t('cutting.action.delete')"
+            :title="$t('cutting.action.delete')"
+            @click="emit('delete')"
+          >
+            <Icon name="trash" class="size-4" />
+          </button>
           <button
             type="button"
             class="mp-action-icon-button size-8 min-h-0"
+            :class="
+              bareIndex && !actionsOpen
+                ? 'opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100'
+                : ''
+            "
             :aria-label="$t('cutting.parts.rowActionsAria', { n: index + 1 })"
             :title="$t('cutting.column.actions')"
             @click="actionsOpen = !actionsOpen"
