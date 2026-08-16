@@ -5,13 +5,20 @@ import {
   groupPanelPlacements,
   offcutLabelMode,
   panelDisplayIndex,
+  panelEdgeConsumedByMaterial,
   panelFillPercent,
   resultSheetPartGroups,
   resultTotals,
+  sheetEdgeLine,
   snapshotShortLabel,
   squareMetres,
 } from '@/shared/app/cuttingResultsDisplay'
-import type { CuttingPanel, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
+import type {
+  CuttingPanel,
+  CuttingPart,
+  CuttingPlacement,
+  CuttingResult,
+} from '@/shared/stores/cutting'
 
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
@@ -370,5 +377,193 @@ describe('resultTotals', () => {
 
   it('carries the propil length through untouched', () => {
     expect(resultTotals(result({ total_cut_length_mm: 53_800 })).cutLengthMm).toBe(53_800)
+  })
+})
+
+// The sheet card's own tape figure. The result-wide dicts cannot answer it, and
+// the overhang behind it is recovered from those dicts rather than fetched — so
+// both the attribution and the recovery are pinned here.
+describe('panelEdgeConsumedByMaterial', () => {
+  const placement = (partRef: string, id: string): CuttingPlacement => ({
+    id,
+    part_ref: partRef,
+    part_quantity_index: 0,
+    x_mm: 0,
+    y_mm: 0,
+    length_mm: 300,
+    width_mm: 200,
+    rotated: false,
+  })
+  const panel = (overrides: Partial<CuttingPanel> = {}): CuttingPanel => ({
+    id: 'panel-1',
+    branch_material_id: 'panel-a',
+    panel_index: 1,
+    waste_area_mm2: 0,
+    offcuts: [],
+    placements: [],
+    ...overrides,
+  })
+  const band = (materialId: string) => ({ material_id: materialId, source: 'shop' as const })
+
+  // One 300×200 part, banded top and left: 300 + 200 of visible edge, plus the
+  // 10 mm overhang each banded side eats — recovered from the dicts, not read
+  // from the branch, which may have re-set it since this result was cut.
+  function bandedResult(overrides: Partial<CuttingResult> = {}) {
+    return result({
+      parts_snapshot: [part({ edge_top: band('edge-a'), edge_left: band('edge-a') })],
+      edge_length_by_material: { 'edge-a': 500 },
+      edge_consumed_shop_by_material: { 'edge-a': 520 },
+      edge_banded_sides_by_material: { 'edge-a': { shop: 2, own: 0 } },
+      ...overrides,
+    })
+  }
+
+  it('charges each banded side its own edge plus the overhang', () => {
+    const consumed = panelEdgeConsumedByMaterial(
+      bandedResult(),
+      panel({ placements: [placement('part-a', 'p1')] }),
+    )
+
+    expect(consumed.get('edge-a:shop')).toBe(520)
+  })
+
+  // Two copies of the same part on one sheet cost twice the tape; the
+  // result-wide dict would have said the same thing for one.
+  it('counts every placement on the sheet, not the part once', () => {
+    const consumed = panelEdgeConsumedByMaterial(
+      bandedResult(),
+      panel({ placements: [placement('part-a', 'p1'), placement('part-a', 'p2')] }),
+    )
+
+    expect(consumed.get('edge-a:shop')).toBe(1_040)
+  })
+
+  it('leaves a sheet with no banding empty rather than at zero metres', () => {
+    const consumed = panelEdgeConsumedByMaterial(
+      result({ parts_snapshot: [part()] }),
+      panel({ placements: [placement('part-a', 'p1')] }),
+    )
+
+    expect(consumed.size).toBe(0)
+  })
+
+  it('keeps two tapes apart on the same sheet', () => {
+    const consumed = panelEdgeConsumedByMaterial(
+      result({
+        parts_snapshot: [part({ edge_top: band('edge-a'), edge_left: band('edge-b') })],
+        edge_length_by_material: { 'edge-a': 300, 'edge-b': 200 },
+        edge_consumed_shop_by_material: { 'edge-a': 300, 'edge-b': 200 },
+        edge_banded_sides_by_material: {
+          'edge-a': { shop: 1, own: 0 },
+          'edge-b': { shop: 1, own: 0 },
+        },
+      }),
+      panel({ placements: [placement('part-a', 'p1')] }),
+    )
+
+    // Top follows the part's length, left its width — no overhang in this result.
+    expect(consumed.get('edge-a:shop')).toBe(300)
+    expect(consumed.get('edge-b:shop')).toBe(200)
+  })
+
+  // A placement whose part is missing from the snapshot (pre-snapshot results)
+  // must not throw the caption — it simply carries no tape.
+  it('skips a placement with no part in the snapshot', () => {
+    const consumed = panelEdgeConsumedByMaterial(
+      bandedResult({ parts_snapshot: [] }),
+      panel({ placements: [placement('part-a', 'p1')] }),
+    )
+
+    expect(consumed.size).toBe(0)
+  })
+})
+
+// The caption under a sheet card. Its branches are where the prototype and this
+// app part ways, so each is pinned: one tape gives metres alone, several give
+// each its own figure, and no banding gives nothing at all.
+describe('sheetEdgeLine', () => {
+  const placement = (partRef: string, id: string): CuttingPlacement => ({
+    id,
+    part_ref: partRef,
+    part_quantity_index: 0,
+    x_mm: 0,
+    y_mm: 0,
+    length_mm: 300,
+    width_mm: 200,
+    rotated: false,
+  })
+  const sheet = (): CuttingPanel => ({
+    id: 'panel-1',
+    branch_material_id: 'panel-a',
+    panel_index: 1,
+    waste_area_mm2: 0,
+    offcuts: [],
+    placements: [placement('part-a', 'p1')],
+  })
+  const band = (materialId: string) => ({ material_id: materialId, source: 'shop' as const })
+
+  // The card is the only place this screen names a tape at all — its summary row
+  // says "Kromka lentasi" and a result-wide figure, never which roll.
+  it('names the tape by its code even when the result runs on one', () => {
+    const parts = [part({ edge_top: band('edge-a') })]
+    const line = sheetEdgeLine(
+      result({
+        parts_snapshot: parts,
+        material_snapshots: { 'edge-a': { manufacturer_name: 'Egger', kod: 'H1137' } },
+      }),
+      sheet(),
+      deriveSnapshotEdgeRegistry(parts),
+    )
+
+    expect(line).toBe('H1137 · 0.30 m')
+  })
+
+  // The composed label is three `·`-separated fields; dropped into a caption
+  // that already uses `·`, it wraps the card three lines deep.
+  it('keeps the composed label out of the caption', () => {
+    const parts = [part({ edge_top: band('edge-a') })]
+    const line = sheetEdgeLine(
+      result({
+        parts_snapshot: parts,
+        material_snapshots: {
+          'edge-a': {
+            manufacturer_name: 'Egger',
+            kod: 'H1137',
+            nomi: 'Kulrang eman',
+            qalinlik_mm: '2',
+            kromka_eni_mm: 19,
+          },
+        },
+      }),
+      sheet(),
+      deriveSnapshotEdgeRegistry(parts),
+    )
+
+    expect(line).toBe('H1137 · 0.30 m')
+  })
+
+  // 17.52 m off two different rolls is the one figure the operator cannot act on.
+  it('splits the figure per tape, in registry order', () => {
+    const parts = [part({ edge_top: band('edge-b'), edge_left: band('edge-a') })]
+    const line = sheetEdgeLine(
+      result({
+        parts_snapshot: parts,
+        material_snapshots: {
+          'edge-a': { manufacturer_name: 'Egger', kod: 'H1137' },
+          'edge-b': { manufacturer_name: 'Egger', kod: 'H1145' },
+        },
+      }),
+      sheet(),
+      deriveSnapshotEdgeRegistry(parts),
+    )
+
+    // edge_top is walked first, so H1145 takes registry number 1 and leads.
+    expect(line).toBe('H1145 · 0.30 m, H1137 · 0.20 m')
+  })
+
+  it('says nothing at all for a sheet with no banding', () => {
+    const parts = [part()]
+
+    expect(sheetEdgeLine(result({ parts_snapshot: parts }), sheet(), [])).toBeNull()
   })
 })

@@ -4,6 +4,8 @@ import {
   snapshotEdgeLabel,
   snapshotMaterialLabel,
   snapshotShortLabel,
+  snapshotText,
+  type MaterialSnapshot,
 } from '@/shared/app/materialLabel'
 import { translate } from '@/shared/i18n'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
@@ -50,14 +52,48 @@ export const sideLabels: Record<EdgeField, string> = {
 // Callers pass `nomi` where they used to pass `color`.
 export function colorForMaterial(value: string | null | undefined): string {
   const text = (value ?? '').toLowerCase()
+  // `yong'oq` (walnut) ends in `oq`, so the compound colours have to be tested
+  // before the plain ones or every walnut dekor paints near-white.
+  if (text.includes('walnut') || text.includes('yong')) return '#805434'
   if (text.includes('white') || text.includes('oq')) return '#f7f4ec'
   if (text.includes('black') || text.includes('qora')) return '#2a2d33'
   if (text.includes('gray') || text.includes('grey') || text.includes('kul')) return '#a7adb5'
-  if (text.includes('walnut') || text.includes('yong')) return '#805434'
   if (text.includes('oak') || text.includes('dub')) return '#c9aa73'
   let hash = 0
   for (const char of text || 'material') hash = (hash * 31 + char.charCodeAt(0)) % 360
   return `hsl(${hash} 34% 72%)`
+}
+
+/**
+ * The swatch a result screen paints beside a material name — how an operator
+ * recognises a row before reading it. A reserved slot painted nothing is worse
+ * than no slot: it holds the width and reads as broken.
+ *
+ * **It takes the frozen snapshot, not a label, and that is the whole point.**
+ * `colorForMaterial` hashes whatever string it is handed, so the colour is only
+ * stable if every screen hands it the same one. The picker passes the dekor's
+ * `nomi`; passing the composed label here instead would paint the same board a
+ * different colour one wizard step later, and give one dekor two colours in two
+ * thicknesses — the exact recognition this swatch exists to create.
+ *
+ * A customer's own board is hatched rather than coloured. It is not a catalog
+ * dekor, so hashing the typed name would invent an identity for something nobody
+ * picked; the hatch is the handoff's, and it also reads at a glance as "not ours"
+ * beside the `Mijoz materiali` chip.
+ *
+ * One deviation from the prototype: it paints each dekor a two-stop gradient,
+ * but those gradients are literals hand-authored for its five demo materials.
+ * Nothing derives one for an arbitrary catalog row, so the app keeps the flat
+ * colour it already shares with the picker.
+ */
+export function materialSwatchStyle(snapshot: MaterialSnapshot): Record<string, string> {
+  if (snapshot?.customer_supplied === true) {
+    return {
+      backgroundImage:
+        'repeating-linear-gradient(135deg, var(--color-hairline-soft) 0 5px, var(--color-sunk) 5px 10px)',
+    }
+  }
+  return { background: colorForMaterial(snapshotText(snapshot, 'nomi', 'color')) }
 }
 
 export function edgeShortLabel(

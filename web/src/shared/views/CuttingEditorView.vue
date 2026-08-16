@@ -12,7 +12,12 @@ import {
   cuttingEditorAdapterKey,
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
-import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
+import {
+  colorForMaterial,
+  edgeFields,
+  materialSwatchStyle,
+  type EdgeField,
+} from '@/shared/app/cuttingDisplay'
 import {
   formatMm,
   isTape,
@@ -1203,6 +1208,14 @@ function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
   return material.tolali ? t('cutting.material.grained') : t('cutting.material.grainless')
 }
 
+function groupSwatchStyle(materialId: string) {
+  const material = materialById(materialId)
+  return materialSwatchStyle({
+    nomi: material?.nomi ?? null,
+    customer_supplied: material?.customer_supplied === true,
+  })
+}
+
 function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
   return {
     background: colorForMaterial(material.nomi || material.id),
@@ -2204,24 +2217,29 @@ onBeforeRouteLeave(async () => {
                       class="size-4 shrink-0 text-ink-muted"
                       aria-hidden="true"
                     />
+                    <!-- One dekor, one colour, all the way through: this swatch,
+                         the picker one step back and the result one step on all
+                         hash the dekor's `nomi`. Hashing the composed label here
+                         instead would repaint the same board between two screens
+                         of the same wizard. -->
                     <span
                       v-if="inOrderWizard"
                       class="size-[30px] shrink-0 rounded-lg border border-hairline"
-                      :style="{
-                        background: group.materialId
-                          ? colorForMaterial(group.label)
-                          : 'var(--color-sunk)',
-                      }"
+                      :style="
+                        group.materialId
+                          ? groupSwatchStyle(group.materialId)
+                          : { background: 'var(--color-sunk)' }
+                      "
                       aria-hidden="true"
                     ></span>
                     <span
                       v-else
                       class="size-3 shrink-0 rounded-full"
-                      :style="{
-                        background: group.materialId
-                          ? colorForMaterial(group.label)
-                          : 'var(--color-ink-muted)',
-                      }"
+                      :style="
+                        group.materialId
+                          ? groupSwatchStyle(group.materialId)
+                          : { background: 'var(--color-ink-muted)' }
+                      "
                       aria-hidden="true"
                     ></span>
                     <!-- In the wizard the name owns the first line and the counts

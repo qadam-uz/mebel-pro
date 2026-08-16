@@ -3,12 +3,15 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
+  deriveSnapshotEdgeRegistry,
   numberSnapshot,
   panelDisplayIndex,
   panelFillPercent,
   resultTotals,
+  sheetEdgeLine,
   squareMetres,
 } from '@/shared/app/cuttingResultsDisplay'
+import { materialSwatchStyle } from '@/shared/app/cuttingDisplay'
 import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { metres, useCuttingStore, type CuttingResult } from '@/shared/stores/cutting'
@@ -28,6 +31,10 @@ const { t } = useI18n()
 const cutting = useCuttingStore()
 
 const totals = computed(() => resultTotals(props.result))
+
+function swatchFor(materialId: string) {
+  return materialSwatchStyle(props.result.material_snapshots[materialId])
+}
 
 function materialSize(materialId: string) {
   const snapshot = props.result.material_snapshots[materialId]
@@ -58,6 +65,7 @@ const planRows = computed(() =>
       id,
       sheets,
       label: snapshotMaterialLabel(props.result.material_snapshots[id], id.slice(0, 8)),
+      swatch: swatchFor(id),
       size: materialSize(id),
       own: (props.result.own_panel_counts?.[id] ?? 0) > 0,
       fill: materialFill(id),
@@ -117,6 +125,8 @@ const summaryRows = computed(() => {
   ]
 })
 
+const edgeRegistry = computed(() => deriveSnapshotEdgeRegistry(props.result.parts_snapshot ?? []))
+
 const sheets = computed(() =>
   props.result.panels.map((panel) => ({
     panel,
@@ -125,7 +135,9 @@ const sheets = computed(() =>
       props.result.material_snapshots[panel.branch_material_id],
       panel.branch_material_id.slice(0, 8),
     ),
+    swatch: swatchFor(panel.branch_material_id),
     size: materialSize(panel.branch_material_id),
+    edgeLine: sheetEdgeLine(props.result, panel, edgeRegistry.value),
     fill: panelFillPercent(props.result, panel),
     own: (props.result.own_panel_counts?.[panel.branch_material_id] ?? 0) > 0,
   })),
@@ -171,7 +183,8 @@ function sourceLabel(own: boolean) {
               class="flex items-center gap-3 border-t border-divider py-3"
             >
               <span
-                class="size-[30px] shrink-0 rounded-lg border border-hairline bg-sunk"
+                class="size-[30px] shrink-0 rounded-lg border border-hairline"
+                :style="row.swatch"
                 aria-hidden="true"
               ></span>
               <span class="min-w-0 flex-1">
@@ -249,15 +262,16 @@ function sourceLabel(own: boolean) {
           <div v-for="sheet in sheets" :key="sheet.panel.id" class="min-w-0">
             <div class="mb-2 flex items-center gap-2.5">
               <span
-                class="size-[26px] shrink-0 rounded-[7px] border border-hairline bg-sunk"
+                class="size-[26px] shrink-0 rounded-[7px] border border-hairline"
+                :style="sheet.swatch"
                 aria-hidden="true"
               ></span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-[13.5px] font-semibold text-ink">
                   {{ $t('cutting.result.sheetLabel', { n: sheet.index }) }} · {{ sheet.label }}
                 </span>
-                <span v-if="sheet.size" class="num block text-xs text-ink-muted">
-                  {{ sheet.size }}
+                <span v-if="sheet.size || sheet.edgeLine" class="num block text-xs text-ink-muted">
+                  {{ [sheet.size, sheet.edgeLine].filter(Boolean).join(' · ') }}
                 </span>
               </span>
               <span

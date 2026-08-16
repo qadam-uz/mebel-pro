@@ -167,7 +167,42 @@ function deleteFromMenu() {
   emit('delete')
 }
 
+// ↑/↓ step the three numeric cells — how a mistyped `2749` becomes `2750` and how
+// `soni` goes 4 → 6 without retyping. Shift steps by 10, as the handoff prototype
+// does. `name` keeps the arrows for caret movement, and the cells sanitize their
+// own input, so native `type="number"` spinners are not the fallback here.
+//
+// Floors only, no ceiling. The floor stops a step from manufacturing an invalid
+// row (0 is "not entered"; a row needs at least one piece). The prototype also
+// caps at 999/9999, and we deliberately don't: the editor already validates size
+// and the 300-part budget with named, visible errors, and a silent cap would
+// swallow the very message the UX bar requires the operator to see.
+const NUMERIC_STEP_CELLS = ['length', 'width', 'quantity'] as const
+type NumericStepCell = (typeof NUMERIC_STEP_CELLS)[number]
+
+function isNumericStepCell(cell: string): cell is NumericStepCell {
+  return (NUMERIC_STEP_CELLS as readonly string[]).includes(cell)
+}
+
+function stepNumericCell(cell: NumericStepCell, delta: number) {
+  if (cell === 'quantity') {
+    emit('update:quantity', Math.max(1, props.part.quantity + delta))
+    return
+  }
+  if (cell === 'length') {
+    emit('update:length', Math.max(0, props.part.length_mm + delta))
+    return
+  }
+  emit('update:width', Math.max(0, props.part.width_mm + delta))
+}
+
 function onRapidEntryKeydown(event: KeyboardEvent, cell: 'name' | 'length' | 'width' | 'quantity') {
+  if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && isNumericStepCell(cell)) {
+    event.preventDefault()
+    const magnitude = event.shiftKey ? 10 : 1
+    stepNumericCell(cell, event.key === 'ArrowUp' ? magnitude : -magnitude)
+    return
+  }
   if (event.key !== 'Enter' && (event.key !== 'Tab' || event.shiftKey)) return
   event.preventDefault()
   emit('cell-enter', cell)

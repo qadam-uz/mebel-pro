@@ -197,3 +197,81 @@ describe('CuttingPartRow grain toggle', () => {
     expect(wrapper.emitted('open-material-picker')).toHaveLength(1)
   })
 })
+
+// ↑/↓ stepping: the handoff prototype steps the focused number by 1 (Shift by 10)
+// so a mistyped dimension is fixed without retyping. Floors are asserted in both
+// directions because a step must never leave a row in the "not entered" state.
+describe('CuttingPartRow arrow stepping', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedPanel(true)
+  })
+
+  it('steps a dimension up by one', async () => {
+    const wrapper = mountRow(part({ length_mm: 2749 }))
+
+    await wrapper.get('[data-cell="length"]').trigger('keydown', { key: 'ArrowUp' })
+
+    expect(wrapper.emitted('update:length')).toEqual([[2750]])
+  })
+
+  it('steps a dimension down by one', async () => {
+    const wrapper = mountRow(part({ width_mm: 200 }))
+
+    await wrapper.get('[data-cell="width"]').trigger('keydown', { key: 'ArrowDown' })
+
+    expect(wrapper.emitted('update:width')).toEqual([[199]])
+  })
+
+  it('steps by ten while shift is held', async () => {
+    const wrapper = mountRow(part({ length_mm: 300 }))
+
+    await wrapper.get('[data-cell="length"]').trigger('keydown', { key: 'ArrowUp', shiftKey: true })
+
+    expect(wrapper.emitted('update:length')).toEqual([[310]])
+  })
+
+  it('lands on 1 when stepping a blank dimension up', async () => {
+    const wrapper = mountRow(part({ length_mm: 0 }))
+
+    await wrapper.get('[data-cell="length"]').trigger('keydown', { key: 'ArrowUp' })
+
+    expect(wrapper.emitted('update:length')).toEqual([[1]])
+  })
+
+  it('holds a blank dimension at 0 when stepping down', async () => {
+    const wrapper = mountRow(part({ length_mm: 0 }))
+
+    await wrapper.get('[data-cell="length"]').trigger('keydown', { key: 'ArrowDown' })
+
+    expect(wrapper.emitted('update:length')).toEqual([[0]])
+  })
+
+  // A row with 0 pieces reads as "not entered", so a step must not produce one.
+  it('holds quantity at 1 when stepping down', async () => {
+    const wrapper = mountRow(part({ quantity: 1 }))
+
+    await wrapper.get('[data-cell="quantity"]').trigger('keydown', { key: 'ArrowDown' })
+
+    expect(wrapper.emitted('update:quantity')).toEqual([[1]])
+  })
+
+  it('does not advance the caret to the next cell while stepping', async () => {
+    const wrapper = mountRow(part({ quantity: 4 }))
+
+    await wrapper.get('[data-cell="quantity"]').trigger('keydown', { key: 'ArrowUp' })
+    await wrapper.get('[data-cell="quantity"]').trigger('keydown', { key: 'ArrowDown' })
+
+    expect(wrapper.emitted('cell-enter')).toBeUndefined()
+  })
+
+  // The name cell is text: the arrows belong to the caret there.
+  it('leaves the name cell alone', async () => {
+    const wrapper = mountRow(part({ name: 'Eshik' }))
+
+    await wrapper.get('[data-cell="name"]').trigger('keydown', { key: 'ArrowUp' })
+
+    expect(wrapper.emitted('update:name')).toBeUndefined()
+    expect(wrapper.emitted('cell-enter')).toBeUndefined()
+  })
+})

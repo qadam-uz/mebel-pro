@@ -295,6 +295,13 @@ function revealDrawing() {
             :key="material.id"
             class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
           >
+            <!-- Deliberately NOT the dekor's colour, though the gap spec asks
+                 for it here too. `colorForMaterial` is a pastel ramp built for
+                 the 26-30px swatches; at 6px on white it lands near 1.5:1, under
+                 DESIGN.md's 3:1 floor for a UI mark, and the ink dot it would
+                 replace reads at 5.2:1. The bar outranks the handoff, and the
+                 recognition the spec is after is carried by the two real
+                 swatches on the order result. -->
             <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
             <!-- The chip nests inside the label column rather than taking a
                  fourth grid track: the tape list below shares this template,

@@ -3,6 +3,7 @@ import {
   snapshotShortLabel,
   snapshotValue,
 } from '@/shared/app/materialLabel'
+import { edgeFields } from '@/shared/app/cuttingDisplay'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
@@ -11,6 +12,7 @@ import {
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import { translate } from '@/shared/i18n'
+import { metres } from '@/shared/stores/cutting'
 import type {
   CuttingOffcut,
   CuttingPanel,
@@ -110,6 +112,109 @@ export function resultTotals(result: CuttingResult): CuttingResultTotals {
     usableOffcutCount,
     usableOffcutAreaMm2,
   }
+}
+
+/**
+ * The branch's per-side glue-and-trim overhang, recovered from the result rather
+ * than fetched: the optimizer stores both the geometric edge length and the
+ * consumed one, and consumed is `geometric + overhang × banded sides`. So the
+ * allowance falls straight out of the two dicts, per edge material, with no new
+ * API field and no branch read on a screen that is already frozen history — the
+ * branch may have re-set its overhang since, and this result must keep billing
+ * what it was cut with.
+ */
+function edgeOverhangMm(result: CuttingResult, edgeMaterialId: string): number {
+  const geometric = result.edge_length_by_material[edgeMaterialId] ?? 0
+  const consumed =
+    (result.edge_consumed_shop_by_material[edgeMaterialId] ?? 0) +
+    (result.edge_consumed_own_by_material[edgeMaterialId] ?? 0)
+  const sides = result.edge_banded_sides_by_material[edgeMaterialId]
+  const sideCount = (sides?.shop ?? 0) + (sides?.own ?? 0)
+  if (sideCount <= 0) return 0
+  return Math.max(0, Math.round((consumed - geometric) / sideCount))
+}
+
+/**
+ * Tape consumed on ONE sheet, per edge material — the figure the person holding
+ * that sheet card is about to band with, which the result-wide totals cannot
+ * answer.
+ *
+ * The arithmetic is the optimizer's, narrowed from "every part × its quantity"
+ * to "every placement on this panel": a banded side eats its own edge plus the
+ * overhang, and top/bottom follow the part's length while left/right follow its
+ * width. Rotation does not enter it — a turned part bands the same two edges, it
+ * just draws them on the sheet's other axis.
+ */
+export function panelEdgeConsumedByMaterial(
+  result: CuttingResult,
+  panel: CuttingPanel,
+): Map<string, number> {
+  const partsByRef = new Map((result.parts_snapshot ?? []).map((part) => [part.part_ref, part]))
+  const consumed = new Map<string, number>()
+  for (const placement of panel.placements) {
+    const part = partsByRef.get(placement.part_ref)
+    if (!part) continue
+    for (const field of edgeFields) {
+      const band = part[field]
+      if (!band) continue
+      const sideLength =
+        field === 'edge_top' || field === 'edge_bottom' ? part.length_mm : part.width_mm
+      const key = edgeRegistryKey(band.material_id, band.source)
+      const millimetres = sideLength + edgeOverhangMm(result, band.material_id)
+      consumed.set(key, (consumed.get(key) ?? 0) + millimetres)
+    }
+  }
+  return consumed
+}
+
+/**
+ * What this one sheet costs in tape. The aside's per-tape totals and the summary
+ * row are both result-wide, and neither answers the question the person holding
+ * this card has: they are about to band *this* sheet and need the roll for it.
+ *
+ * A sheet with no banding shows its size alone — never `0.00 m`, which invites
+ * the reader to hunt for a figure that does not exist.
+ *
+ * Two deviations from the prototype, each forced by something it never had to
+ * render:
+ *
+ * 1. It prints one combined figure per sheet; with several tapes we give each
+ *    its own. You cannot pull 17.52 m off two different rolls, so a combined
+ *    number is the one thing the operator holding this card cannot act on. They
+ *    list in registry-number order, the numbering the editor gave them.
+ * 2. The tape is named by its **short** label (the dekor code), not the composed
+ *    one the aside prints. This app builds a tape label from manufacturer, dekor
+ *    and size — three `·`-separated fields — and dropping two of those into a
+ *    caption that already separates its own fields with `·` leaves a chain whose
+ *    only grouping cue is a comma, wrapping three lines deep in a 370px card.
+ *    The code is the identity the operator reads off the roll.
+ *
+ * Metres are the app's `metres()` (two decimals), not the prototype's one: this
+ * screen already prints the result-wide tape total with two, and a quantity
+ * rounded two ways on one screen reads as two different numbers.
+ */
+export function sheetEdgeLine(
+  result: CuttingResult,
+  panel: CuttingPanel,
+  edgeRegistry: EdgeRegistryEntry[],
+): string | null {
+  const consumed = panelEdgeConsumedByMaterial(result, panel)
+  if (consumed.size === 0) return null
+  const total = [...consumed.values()].reduce((sum, millimetres) => sum + millimetres, 0)
+  if (total <= 0) return null
+  return [...consumed.entries()]
+    .map(([key, millimetres]) => ({
+      entry: edgeRegistry.find((registryEntry) => registryEntry.key === key),
+      millimetres,
+    }))
+    .sort((left, right) => (left.entry?.number ?? 0) - (right.entry?.number ?? 0))
+    .map(({ entry, millimetres }) => {
+      const label = entry ? snapshotShortLabel(result.material_snapshots[entry.materialId]) : ''
+      // `·` between fields, per DESIGN.md: without it the metres run onto the
+      // tape's own size and read as one more measurement of the roll.
+      return label ? `${label} · ${metres(millimetres)}` : metres(millimetres)
+    })
+    .join(', ')
 }
 
 /** m², two decimals — the unit the editor's group headers and the PDF's
