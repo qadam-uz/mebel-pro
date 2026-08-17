@@ -68,6 +68,13 @@
      words it steps down — `accent-deep` on a neutral surface, `accent-strong`
      on either tint (accent-deep on accent-soft is only 4.44:1). */
   --color-signal: #ff5a1f;
+  /* Three steps of the same tint, weakest first. `wash` backs a whole table row
+     — `accent-soft` across that much area reads as a status, not a selection —
+     `line` outlines it, and `edge` borders a small pressed control that already
+     sits on `accent-soft`. None of them ever carries text. */
+  --color-accent-wash: #fdf3ee;
+  --color-accent-line: #f3c4ae;
+  --color-accent-edge: #f0a880;
   --color-accent-soft: #ffe9e0;
   --color-accent-tint: #ffd8c9;
   --color-accent-deep: #c53d0c;

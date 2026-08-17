@@ -43,6 +43,7 @@ import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
+import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
@@ -720,6 +721,10 @@ function deleteRow(index: number) {
       nextSel.delete(removed.part_ref)
       selectedRefs.value = nextSel
     }
+    // The panel's subject just stopped existing. Clearing here rather than
+    // letting `activePart` resolve to null keeps `activeSide` from surviving
+    // into whatever row is selected next.
+    if (activePartRef.value === removed.part_ref) clearActivePart()
     const label = partDisplayName(removed, index)
     toast.action(
       t('cutting.editor.partDeleted', { name: label }),
@@ -976,6 +981,72 @@ const selectedParts = computed(() =>
   parts.value.filter((part) => selectedRefs.value.has(part.part_ref)),
 )
 const bulkEdgeMode = ref(false)
+
+// The wizard's docked kromka panel edits ONE row, and this is that row. Kept
+// apart from `selectedRefs` on purpose: that set is the bulk-apply selection,
+// a different question ("which rows does this action fan out to") with a
+// different affordance. Folding them together would make tabbing through the
+// board silently arm a bulk edit.
+const activePartRef = ref<string | null>(null)
+const activePart = computed(
+  () => parts.value.find((part) => part.part_ref === activePartRef.value) ?? null,
+)
+/** The side the operator pointed at, so the panel can flash that toggle. */
+const activeSide = ref<EdgeField | null>(null)
+
+function selectPart(part: CuttingPart, side?: EdgeField) {
+  activePartRef.value = part.part_ref
+  activeSide.value = side ?? null
+}
+
+function clearActivePart() {
+  activePartRef.value = null
+  activeSide.value = null
+}
+
+/** How many detals the apply-to-group action would reach. */
+const activeGroupSize = computed(() => {
+  const part = activePart.value
+  if (!part) return 0
+  return parts.value.filter((row) => row.material_id === part.material_id).length
+})
+
+// Writes to the PANEL's subject, not the modal's. `onEdgePickerChange` targets
+// `edgePickerPart`, which the wizard never sets because it never opens the
+// modal — routing through it made every toggle a silent no-op. Thickening is a
+// property of the detal rather than of its banding, so it is carried through
+// untouched rather than asked of the panel.
+function onPanelEdgesChange(payload: {
+  edges: Record<EdgeField, CuttingEdgeBand | null>
+  rememberedMaterialId: string | null
+}) {
+  const part = activePart.value
+  if (!part) return
+  part.edge_top = payload.edges.edge_top
+  part.edge_bottom = payload.edges.edge_bottom
+  part.edge_left = payload.edges.edge_left
+  part.edge_right = payload.edges.edge_right
+  rememberEdgeMaterial(part, payload.rememberedMaterialId)
+}
+
+function applyActiveEdgesToGroup() {
+  const part = activePart.value
+  if (!part) return
+  const refs = new Set(
+    parts.value.filter((row) => row.material_id === part.material_id).map((row) => row.part_ref),
+  )
+  applyEdgesToRefs(refs, {
+    edges: {
+      edge_top: part.edge_top ? { ...part.edge_top } : null,
+      edge_bottom: part.edge_bottom ? { ...part.edge_bottom } : null,
+      edge_left: part.edge_left ? { ...part.edge_left } : null,
+      edge_right: part.edge_right ? { ...part.edge_right } : null,
+    },
+    rememberedMaterialId: preferredEdgeByPart.value[part.part_ref] ?? null,
+    thickened: part.thickened,
+  })
+}
+
 type MaterialPickerTarget =
   | { type: 'part'; partRef: string }
   | { type: 'group'; key: string }
@@ -2008,163 +2079,202 @@ onBeforeRouteLeave(async () => {
           </section>
         </template>
 
-        <!-- A panel, not a bordered block: `.client-card` also sets
-             `overflow: hidden`, which would trap the 547px row grid's own
-             horizontal scroller on a narrow viewport. -->
-        <section
-          :class="
-            inOrderWizard
-              ? 'mp-scroll min-w-0 overflow-x-auto rounded-2xl bg-elevated px-6 pb-6 pt-5 shadow-panel'
-              : 'client-card'
-          "
+        <!-- Two columns in the wizard: the board on the left, the kromka panel
+             docked on the right. The split is a CONTAINER query, not a viewport
+             one, and that is deliberate — the board's own layout is a container
+             query too, and taking 348px+18px out of its column can push it under
+             the 560px its fixed grid needs. Measuring the column the board
+             actually gets, rather than the window, keeps the two decisions on
+             the same ruler, and it needs no `zoom: 90%` arithmetic. 1006px is
+             that floor: 560 (board) + 80 (card + board padding) + 348 + 18. -->
+        <!-- Esc clears the selection from anywhere in step 2, including from
+             inside a number cell. `.stop` so it does not travel on to the
+             wizard's own cancel — the operator is dismissing the panel, not
+             the order. -->
+        <div
+          :class="inOrderWizard ? '@container/step' : ''"
+          @keydown.esc.stop="inOrderWizard && clearActivePart()"
         >
           <div
             :class="
               inOrderWizard
-                ? 'mb-1 flex flex-wrap items-center gap-3.5 border-b border-divider pb-4'
-                : 'client-card-h'
+                ? 'grid items-start gap-[18px] @min-[1006px]/step:grid-cols-[minmax(0,1fr)_348px]'
+                : ''
             "
           >
-            <div>
-              <!-- The wizard's head already names the screen; a second heading
+            <div :class="inOrderWizard ? 'min-w-0' : 'contents'">
+              <!-- A panel, not a bordered block: `.client-card` also sets
+             `overflow: hidden`, which would trap the 547px row grid's own
+             horizontal scroller on a narrow viewport. -->
+              <section
+                :class="
+                  inOrderWizard
+                    ? 'mp-scroll min-w-0 overflow-x-auto rounded-2xl bg-elevated px-6 pb-6 pt-5 shadow-panel'
+                    : 'client-card'
+                "
+              >
+                <div
+                  :class="
+                    inOrderWizard
+                      ? 'mb-1 flex flex-wrap items-center gap-3.5 border-b border-divider pb-4'
+                      : 'client-card-h'
+                  "
+                >
+                  <div>
+                    <!-- The wizard's head already names the screen; a second heading
                    here would say "Detallar" one line under the chip that says
                    the same thing. What is left is the count, which is the one
                    fact this row carries. -->
-              <h2 v-if="!inOrderWizard">{{ $t('cutting.parts.heading') }}</h2>
-              <p
-                :class="
-                  inOrderWizard
-                    ? 'text-[14.5px] font-semibold text-ink'
-                    : 'mt-1 text-sm text-ink-muted'
-                "
-              >
-                {{ totalQuantity }} {{ $t('cutting.unit.part', totalQuantity) }} ·
-                {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }} · ~{{
-                  totalAreaM2.toFixed(1)
-                }}
-                {{ $t('cutting.unit.areaM2') }}
-              </p>
-            </div>
-            <div v-if="!isReadOnly && activeBranchId" class="flex flex-wrap items-center gap-2">
-              <button
-                v-if="errorCount > 0"
-                type="button"
-                class="mp-chip bg-danger-soft text-danger"
-                :aria-pressed="errorFilterEnabled"
-                @click="errorFilterEnabled = !errorFilterEnabled"
-              >
-                {{ $t('cutting.editor.unfilledCount', { n: errorCount }, errorCount) }}
-              </button>
-              <!-- Outside the wizard the two entry modes are a segmented pair.
+                    <h2 v-if="!inOrderWizard">{{ $t('cutting.parts.heading') }}</h2>
+                    <p
+                      :class="
+                        inOrderWizard
+                          ? 'text-[14.5px] font-semibold text-ink'
+                          : 'mt-1 text-sm text-ink-muted'
+                      "
+                    >
+                      {{ totalQuantity }} {{ $t('cutting.unit.part', totalQuantity) }} ·
+                      {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }} · ~{{
+                        totalAreaM2.toFixed(1)
+                      }}
+                      {{ $t('cutting.unit.areaM2') }}
+                    </p>
+                  </div>
+                  <div
+                    v-if="!isReadOnly && activeBranchId"
+                    class="flex flex-wrap items-center gap-2"
+                  >
+                    <button
+                      v-if="errorCount > 0"
+                      type="button"
+                      class="mp-chip bg-danger-soft text-danger"
+                      :aria-pressed="errorFilterEnabled"
+                      @click="errorFilterEnabled = !errorFilterEnabled"
+                    >
+                      {{ $t('cutting.editor.unfilledCount', { n: errorCount }, errorCount) }}
+                    </button>
+                    <!-- Outside the wizard the two entry modes are a segmented pair.
                    Inside it the import lives with the other "add something"
                    actions at the foot of the list, where the design puts it. -->
-              <div
-                v-if="!inOrderWizard"
-                class="inline-flex rounded-lg border border-hairline bg-sunk p-1"
-              >
-                <button
-                  type="button"
-                  class="rounded-md px-3 py-2 text-sm font-bold transition"
-                  :class="
-                    importWizardOpen
-                      ? 'text-ink-muted hover:bg-elevated hover:text-ink'
-                      : 'bg-elevated text-ink shadow-sm'
-                  "
-                  :aria-pressed="!importWizardOpen"
-                  @click="importWizardOpen = false"
-                >
-                  {{ $t('cutting.editor.manualEntry') }}
-                </button>
-                <button
-                  type="button"
-                  class="rounded-md px-3 py-2 text-sm font-bold transition"
-                  :class="
-                    importWizardOpen
-                      ? 'bg-elevated text-ink shadow-sm'
-                      : 'text-ink-muted hover:bg-elevated hover:text-ink'
-                  "
-                  :aria-pressed="importWizardOpen"
-                  @click="openImportWizard"
-                >
-                  {{ $t('cutting.import.title') }}
-                </button>
-              </div>
-            </div>
-          </div>
+                    <div
+                      v-if="!inOrderWizard"
+                      class="inline-flex rounded-lg border border-hairline bg-sunk p-1"
+                    >
+                      <button
+                        type="button"
+                        class="rounded-md px-3 py-2 text-sm font-bold transition"
+                        :class="
+                          importWizardOpen
+                            ? 'text-ink-muted hover:bg-elevated hover:text-ink'
+                            : 'bg-elevated text-ink shadow-sm'
+                        "
+                        :aria-pressed="!importWizardOpen"
+                        @click="importWizardOpen = false"
+                      >
+                        {{ $t('cutting.editor.manualEntry') }}
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-md px-3 py-2 text-sm font-bold transition"
+                        :class="
+                          importWizardOpen
+                            ? 'bg-elevated text-ink shadow-sm'
+                            : 'text-ink-muted hover:bg-elevated hover:text-ink'
+                        "
+                        :aria-pressed="importWizardOpen"
+                        @click="openImportWizard"
+                      >
+                        {{ $t('cutting.import.title') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-          <!-- Bulk bar: actions only — the row checkboxes already show what's
+                <!-- Bulk bar: actions only — the row checkboxes already show what's
                selected, so a "N selected" counter would repeat them; the count
                still reads out via the group label and the bulk-dialog titles. -->
-          <div
-            v-if="selectedParts.length > 0"
-            role="group"
-            :aria-label="
-              $t('cutting.editor.bulkGroupLabel', { n: selectedParts.length }, selectedParts.length)
-            "
-            class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
-          >
-            <button type="button" class="text-accent-strong hover:underline" @click="openBulkEdge">
-              {{ $t('cutting.editor.bulkApplyEdge') }}
-            </button>
-            <button
-              type="button"
-              class="text-accent-strong hover:underline"
-              @click="openBulkMaterial"
-            >
-              {{ $t('cutting.editor.bulkChangeMaterial') }}
-            </button>
-            <button type="button" class="text-danger hover:underline" @click="bulkDelete">
-              {{ $t('cutting.action.delete') }}
-            </button>
-            <button
-              type="button"
-              class="ml-auto text-ink-muted hover:text-ink"
-              @click="clearSelection"
-            >
-              {{ $t('cutting.action.cancel') }}
-            </button>
-          </div>
+                <div
+                  v-if="selectedParts.length > 0"
+                  role="group"
+                  :aria-label="
+                    $t(
+                      'cutting.editor.bulkGroupLabel',
+                      { n: selectedParts.length },
+                      selectedParts.length,
+                    )
+                  "
+                  class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
+                >
+                  <button
+                    type="button"
+                    class="text-accent-strong hover:underline"
+                    @click="openBulkEdge"
+                  >
+                    {{ $t('cutting.editor.bulkApplyEdge') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="text-accent-strong hover:underline"
+                    @click="openBulkMaterial"
+                  >
+                    {{ $t('cutting.editor.bulkChangeMaterial') }}
+                  </button>
+                  <button type="button" class="text-danger hover:underline" @click="bulkDelete">
+                    {{ $t('cutting.action.delete') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="ml-auto text-ink-muted hover:text-ink"
+                    @click="clearSelection"
+                  >
+                    {{ $t('cutting.action.cancel') }}
+                  </button>
+                </div>
 
-          <div v-if="!activeBranchId" class="client-card-b">
-            <div class="client-empty">
-              <div class="client-empty-icon"><Icon name="store" /></div>
-              <h3>{{ $t('cutting.editor.pickBranchTitle') }}</h3>
-              <p>{{ $t('cutting.editor.pickBranchBody') }}</p>
-              <button
-                type="button"
-                class="mp-button mp-button-primary mt-4"
-                @click="branchPickerOpen = true"
-              >
-                {{ $t('cutting.branch.pick') }}
-              </button>
-            </div>
-          </div>
+                <div v-if="!activeBranchId" class="client-card-b">
+                  <div class="client-empty">
+                    <div class="client-empty-icon"><Icon name="store" /></div>
+                    <h3>{{ $t('cutting.editor.pickBranchTitle') }}</h3>
+                    <p>{{ $t('cutting.editor.pickBranchBody') }}</p>
+                    <button
+                      type="button"
+                      class="mp-button mp-button-primary mt-4"
+                      @click="branchPickerOpen = true"
+                    >
+                      {{ $t('cutting.branch.pick') }}
+                    </button>
+                  </div>
+                </div>
 
-          <div v-else-if="parts.length === 0" class="client-card-b">
-            <div class="client-empty">
-              <h3>{{ $t('cutting.editor.emptyTitle') }}</h3>
-              <p>{{ $t('cutting.editor.emptyBody') }}</p>
-              <div class="mt-4 flex flex-wrap justify-center gap-2.5">
-                <button type="button" class="mp-button mp-button-primary" @click="openNewMaterial">
-                  + {{ $t('cutting.editor.emptyAction') }}
-                </button>
-                <!-- The import is a first-run path, not an advanced one: a shop
+                <div v-else-if="parts.length === 0" class="client-card-b">
+                  <div class="client-empty">
+                    <h3>{{ $t('cutting.editor.emptyTitle') }}</h3>
+                    <p>{{ $t('cutting.editor.emptyBody') }}</p>
+                    <div class="mt-4 flex flex-wrap justify-center gap-2.5">
+                      <button
+                        type="button"
+                        class="mp-button mp-button-primary"
+                        @click="openNewMaterial"
+                      >
+                        + {{ $t('cutting.editor.emptyAction') }}
+                      </button>
+                      <!-- The import is a first-run path, not an advanced one: a shop
                      that already keeps its cut lists in a file should not have
                      to find the mode switch to use one. -->
-                <button
-                  v-if="inOrderWizard"
-                  type="button"
-                  class="mp-button mp-button-outline"
-                  @click="openImportWizard"
-                >
-                  {{ $t('cutting.import.title') }}
-                </button>
-              </div>
-            </div>
-          </div>
+                      <button
+                        v-if="inOrderWizard"
+                        type="button"
+                        class="mp-button mp-button-outline"
+                        @click="openImportWizard"
+                      >
+                        {{ $t('cutting.import.title') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-          <div v-else class="@container grid gap-3 p-4">
-            <!-- Desktop column header: same border + p-3 + grid template as a
+                <div v-else class="@container grid gap-3 p-4">
+                  <!-- Desktop column header: same border + p-3 + grid template as a
                  CuttingPartRow card, so the columns line up; hidden below the
                  single-row fit width, where each row keeps its own field labels.
                  The leading cell is a real select-all checkbox; the rest are
@@ -2172,321 +2282,362 @@ onBeforeRouteLeave(async () => {
                  because this view is embedded both full-width (client) and next
                  to a persistent workshop sidebar — the same viewport width maps
                  to different available row widths in each shell. -->
-            <!-- One header above every group outside the wizard; inside it the
+                  <!-- One header above every group outside the wizard; inside it the
                  design repeats the header per group, right under the material it
                  belongs to, which is what a list of two materials needs. -->
-            <div
-              v-if="!inOrderWizard"
-              class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[920px]:block"
-            >
-              <div
-                class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
-              >
-                <span aria-hidden="true" class="text-center">#</span>
-                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.name') }}</span>
-                <span aria-hidden="true" class="text-center">{{
-                  $t('cutting.column.length')
-                }}</span>
-                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.width') }}</span>
-                <span aria-hidden="true" class="text-center">{{
-                  $t('cutting.column.quantity')
-                }}</span>
-                <span aria-hidden="true" class="text-center">{{
-                  $t('cutting.column.rotation')
-                }}</span>
-                <span aria-hidden="true" class="text-center">{{ $t('cutting.column.edge') }}</span>
-                <span aria-hidden="true"></span>
-              </div>
-            </div>
-            <section
-              v-for="group in visibleGroups"
-              :key="group.key"
-              class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
-            >
-              <div
-                class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2"
-              >
-                <button
-                  type="button"
-                  class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
-                  @click="toggleGroup(group.key)"
-                >
-                  <span class="flex min-w-0 flex-1 items-center gap-3">
-                    <Icon
-                      :name="collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'"
-                      class="size-4 shrink-0 text-ink-muted"
-                      aria-hidden="true"
-                    />
-                    <!-- One dekor, one colour, all the way through: this swatch,
+                  <div
+                    v-if="!inOrderWizard"
+                    class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[560px]:block"
+                  >
+                    <div
+                      class="grid grid-cols-[26px_minmax(96px,1fr)_80px_80px_56px_62px_54px_44px] items-center gap-[7px] text-[11px] font-extrabold text-ink-muted"
+                    >
+                      <span aria-hidden="true" class="text-center">#</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.name')
+                      }}</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.length')
+                      }}</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.width')
+                      }}</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.quantity')
+                      }}</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.rotation')
+                      }}</span>
+                      <span aria-hidden="true" class="text-center">{{
+                        $t('cutting.column.edge')
+                      }}</span>
+                      <span aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <section
+                    v-for="group in visibleGroups"
+                    :key="group.key"
+                    class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
+                  >
+                    <div
+                      class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2"
+                    >
+                      <button
+                        type="button"
+                        class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
+                        @click="toggleGroup(group.key)"
+                      >
+                        <span class="flex min-w-0 flex-1 items-center gap-3">
+                          <Icon
+                            :name="
+                              collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'
+                            "
+                            class="size-4 shrink-0 text-ink-muted"
+                            aria-hidden="true"
+                          />
+                          <!-- One dekor, one colour, all the way through: this swatch,
                          the picker one step back and the result one step on all
                          hash the dekor's `nomi`. Hashing the composed label here
                          instead would repaint the same board between two screens
                          of the same wizard. -->
-                    <span
-                      v-if="inOrderWizard"
-                      class="size-[30px] shrink-0 rounded-lg border border-hairline"
-                      :style="
-                        group.materialId
-                          ? groupSwatchStyle(group.materialId)
-                          : { background: 'var(--color-sunk)' }
-                      "
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      v-else
-                      class="size-3 shrink-0 rounded-full"
-                      :style="
-                        group.materialId
-                          ? groupSwatchStyle(group.materialId)
-                          : { background: 'var(--color-ink-muted)' }
-                      "
-                      aria-hidden="true"
-                    ></span>
-                    <!-- In the wizard the name owns the first line and the counts
+                          <span
+                            v-if="inOrderWizard"
+                            class="size-[30px] shrink-0 rounded-lg border border-hairline"
+                            :style="
+                              group.materialId
+                                ? groupSwatchStyle(group.materialId)
+                                : { background: 'var(--color-sunk)' }
+                            "
+                            aria-hidden="true"
+                          ></span>
+                          <span
+                            v-else
+                            class="size-3 shrink-0 rounded-full"
+                            :style="
+                              group.materialId
+                                ? groupSwatchStyle(group.materialId)
+                                : { background: 'var(--color-ink-muted)' }
+                            "
+                            aria-hidden="true"
+                          ></span>
+                          <!-- In the wizard the name owns the first line and the counts
                          drop under it, so a long dekor name has the row's whole
                          width instead of competing with the figures for it. -->
-                    <span class="min-w-0 flex-1">
-                      <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                        <button
-                          v-if="!isReadOnly && group.materialId"
-                          type="button"
-                          class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
-                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                          @click.stop="openGroupMaterial(group)"
-                        >
-                          {{ group.label }}
-                        </button>
-                        <span
-                          v-else
-                          class="min-w-0 truncate font-extrabold text-ink"
-                          :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                          >{{ group.label }}</span
-                        >
-                        <!-- Beside the name, where the design puts it: it names
+                          <span class="min-w-0 flex-1">
+                            <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                              <button
+                                v-if="!isReadOnly && group.materialId"
+                                type="button"
+                                class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
+                                :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                                @click.stop="openGroupMaterial(group)"
+                              >
+                                {{ group.label }}
+                              </button>
+                              <span
+                                v-else
+                                class="min-w-0 truncate font-extrabold text-ink"
+                                :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
+                                >{{ group.label }}</span
+                              >
+                              <!-- Beside the name, where the design puts it: it names
                              whose sheets this group is cut from. The swap glyph
                              is honest — it opens the picker, which is where a
                              shop format is exchanged for a customer board. -->
-                        <button
-                          v-if="inOrderWizard && group.materialId && !isReadOnly"
-                          type="button"
-                          class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-[0.97]"
-                          :class="
-                            materialIsOwn(group.materialId)
-                              ? 'bg-accent-soft text-accent-strong'
-                              : 'bg-neutral-soft text-ink-nav'
-                          "
-                          :title="$t('cutting.customerBoard.modeLabel')"
-                          @click.stop="openGroupMaterial(group)"
+                              <button
+                                v-if="inOrderWizard && group.materialId && !isReadOnly"
+                                type="button"
+                                class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-[0.97]"
+                                :class="
+                                  materialIsOwn(group.materialId)
+                                    ? 'bg-accent-soft text-accent-strong'
+                                    : 'bg-neutral-soft text-ink-nav'
+                                "
+                                :title="$t('cutting.customerBoard.modeLabel')"
+                                @click.stop="openGroupMaterial(group)"
+                              >
+                                {{ materialSourceLabel(group.materialId) }}
+                                <Icon name="swap" class="size-3" aria-hidden="true" />
+                              </button>
+                            </span>
+                            <span
+                              v-if="inOrderWizard"
+                              class="num mt-0.5 block text-[12.5px] text-ink-muted"
+                            >
+                              <template v-if="groupSize(group.materialId)"
+                                >{{ groupSize(group.materialId) }} · </template
+                              >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                              {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
+                            </span>
+                          </span>
+                        </span>
+                        <span
+                          class="flex items-center gap-2 text-xs font-bold text-ink-muted"
+                          :class="inOrderWizard ? 'shrink-0' : ''"
                         >
-                          {{ materialSourceLabel(group.materialId) }}
-                          <Icon name="swap" class="size-3" aria-hidden="true" />
-                        </button>
-                      </span>
-                      <span
-                        v-if="inOrderWizard"
-                        class="num mt-0.5 block text-[12.5px] text-ink-muted"
-                      >
-                        <template v-if="groupSize(group.materialId)"
-                          >{{ groupSize(group.materialId) }} · </template
-                        >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
-                        {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
-                      </span>
-                    </span>
-                  </span>
-                  <span
-                    class="flex items-center gap-2 text-xs font-bold text-ink-muted"
-                    :class="inOrderWizard ? 'shrink-0' : ''"
-                  >
-                    <span v-if="!inOrderWizard"
-                      >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
-                      {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}</span
-                    >
-                    <span
-                      v-if="groupErrorCount(group.key) > 0"
-                      class="rounded-md bg-danger-soft px-2 py-1 text-danger"
-                    >
-                      {{
-                        $t(
-                          'cutting.editor.unfilledCount',
-                          { n: groupErrorCount(group.key) },
-                          groupErrorCount(group.key),
-                        )
-                      }}
-                    </span>
-                  </span>
-                </button>
-                <!-- Sibling of the collapse button, never a child of it: inside,
+                          <span v-if="!inOrderWizard"
+                            >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                            {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}</span
+                          >
+                          <span
+                            v-if="groupErrorCount(group.key) > 0"
+                            class="rounded-md bg-danger-soft px-2 py-1 text-danger"
+                          >
+                            {{
+                              $t(
+                                'cutting.editor.unfilledCount',
+                                { n: groupErrorCount(group.key) },
+                                groupErrorCount(group.key),
+                              )
+                            }}
+                          </span>
+                        </span>
+                      </button>
+                      <!-- Sibling of the collapse button, never a child of it: inside,
                      the chip would join that button's accessible name and read
                      as a control. It is a statement about the material, and the
                      counts behind it belong to the post-optimizer dialog. -->
-                <span
-                  v-if="group.materialId && !inOrderWizard"
-                  class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
-                  :class="
-                    materialIsOwn(group.materialId)
-                      ? 'bg-accent-soft text-accent-strong'
-                      : 'bg-neutral-soft text-ink-nav'
-                  "
-                  >{{ materialSourceLabel(group.materialId) }}</span
-                >
-                <button
-                  v-if="!isReadOnly"
-                  type="button"
-                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint"
-                  @click="addGroupRow(group)"
-                >
-                  <Icon name="plus" class="size-3.5" />
-                  {{ $t('cutting.editor.addPart') }}
-                </button>
-              </div>
-              <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[920px]:block">
-                <div
-                  class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
-                >
-                  <span aria-hidden="true" class="text-center">№</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.name')
-                  }}</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.length')
-                  }}</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.width')
-                  }}</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.quantity')
-                  }}</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.rotation')
-                  }}</span>
-                  <span aria-hidden="true" class="text-center">{{
-                    $t('cutting.column.edge')
-                  }}</span>
-                  <span aria-hidden="true"></span>
-                </div>
-              </div>
-              <div
-                v-if="groupEdgeRegistryEntries(group).length > 0"
-                class="border-t border-hairline px-3 pb-2 pt-1.5"
-              >
-                <CuttingEdgeTapeRegistry
-                  :entries="groupEdgeRegistryEntries(group)"
-                  :label-for-material="edgeRegistryLabel"
-                  :narrow-warning-for-entry="edgeRegistryNarrowWarning"
-                  @replace="openRegistryReplace"
-                />
-              </div>
-              <div v-if="!collapsedGroupKeys.has(group.key)" class="overflow-visible bg-elevated">
-                <CuttingPartRow
-                  v-for="{ part, index } in group.parts"
-                  :key="part.part_ref"
-                  :part="part"
-                  :index="index"
-                  :display-index="displayPartIndex.get(part.part_ref)"
-                  :has-error="rowHasError(part, index)"
-                  :size-error="partSizeError(part)"
-                  :material-missing="rowMaterialMissing(part)"
-                  :optimize-error="rowOptimizeError(part, index)"
-                  :edge-registry="edgeRegistry"
-                  :bare-index="inOrderWizard"
-                  @toggle-select="toggleSelect(part.part_ref)"
-                  @update:name="setPartName(part, $event)"
-                  @update:length="part.length_mm = $event"
-                  @update:width="part.width_mm = $event"
-                  @update:quantity="part.quantity = $event"
-                  @update:follow-grain="setFollowGrain(part, $event)"
-                  @duplicate="duplicateRow(index)"
-                  @cell-enter="(cell, side) => onCellEnter(index, cell, side)"
-                  @delete="deleteRow(index)"
-                  @open-edge-picker="(event, side) => openEdgePicker(part, event, side)"
-                  @apply-edge-number="
-                    (side, number) => applyEdgeNumberToPartSide(part, side, number)
-                  "
-                  @open-material-picker="openPartMaterial(part)"
-                />
-              </div>
-            </section>
-            <!-- Add the next row where it appears: a dashed tile under the last
+                      <span
+                        v-if="group.materialId && !inOrderWizard"
+                        class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
+                        :class="
+                          materialIsOwn(group.materialId)
+                            ? 'bg-accent-soft text-accent-strong'
+                            : 'bg-neutral-soft text-ink-nav'
+                        "
+                        >{{ materialSourceLabel(group.materialId) }}</span
+                      >
+                      <button
+                        v-if="!isReadOnly"
+                        type="button"
+                        class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint"
+                        @click="addGroupRow(group)"
+                      >
+                        <Icon name="plus" class="size-3.5" />
+                        {{ $t('cutting.editor.addPart') }}
+                      </button>
+                    </div>
+                    <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[560px]:block">
+                      <div
+                        class="grid grid-cols-[26px_minmax(96px,1fr)_80px_80px_56px_62px_54px_44px] items-center gap-[7px] text-[11px] font-extrabold text-ink-muted"
+                      >
+                        <span aria-hidden="true" class="text-center">№</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.name')
+                        }}</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.length')
+                        }}</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.width')
+                        }}</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.quantity')
+                        }}</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.rotation')
+                        }}</span>
+                        <span aria-hidden="true" class="text-center">{{
+                          $t('cutting.column.edge')
+                        }}</span>
+                        <span aria-hidden="true"></span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="groupEdgeRegistryEntries(group).length > 0"
+                      class="border-t border-hairline px-3 pb-2 pt-1.5"
+                    >
+                      <CuttingEdgeTapeRegistry
+                        :entries="groupEdgeRegistryEntries(group)"
+                        :label-for-material="edgeRegistryLabel"
+                        :narrow-warning-for-entry="edgeRegistryNarrowWarning"
+                        @replace="openRegistryReplace"
+                      />
+                    </div>
+                    <div
+                      v-if="!collapsedGroupKeys.has(group.key)"
+                      class="overflow-visible bg-elevated"
+                    >
+                      <CuttingPartRow
+                        v-for="{ part, index } in group.parts"
+                        :key="part.part_ref"
+                        :part="part"
+                        :index="index"
+                        :display-index="displayPartIndex.get(part.part_ref)"
+                        :has-error="rowHasError(part, index)"
+                        :size-error="partSizeError(part)"
+                        :material-missing="rowMaterialMissing(part)"
+                        :optimize-error="rowOptimizeError(part, index)"
+                        :edge-registry="edgeRegistry"
+                        :bare-index="inOrderWizard"
+                        :selected="inOrderWizard && activePartRef === part.part_ref"
+                        @select="inOrderWizard && selectPart(part)"
+                        @toggle-select="toggleSelect(part.part_ref)"
+                        @update:name="setPartName(part, $event)"
+                        @update:length="part.length_mm = $event"
+                        @update:width="part.width_mm = $event"
+                        @update:quantity="part.quantity = $event"
+                        @update:follow-grain="setFollowGrain(part, $event)"
+                        @duplicate="duplicateRow(index)"
+                        @cell-enter="(cell, side) => onCellEnter(index, cell, side)"
+                        @delete="deleteRow(index)"
+                        @open-edge-picker="
+                          (event, side) =>
+                            inOrderWizard
+                              ? selectPart(part, side)
+                              : openEdgePicker(part, event, side)
+                        "
+                        @apply-edge-number="
+                          (side, number) => applyEdgeNumberToPartSide(part, side, number)
+                        "
+                        @open-material-picker="openPartMaterial(part)"
+                      />
+                    </div>
+                  </section>
+                  <!-- Add the next row where it appears: a dashed tile under the last
                  row, echoing the empty-state CTA. Replaces the header button so
                  the add affordance follows the content. -->
-            <div :class="inOrderWizard ? 'flex flex-wrap gap-2.5' : 'grid'">
-              <button
-                type="button"
-                class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
-                :class="inOrderWizard ? 'h-10 min-h-10 px-4' : ''"
-                @click="openNewMaterial"
-              >
-                <Icon name="plus" class="size-4" />
-                {{ $t('cutting.editor.addMaterial') }}
-              </button>
-              <button
-                v-if="inOrderWizard"
-                type="button"
-                class="flex h-10 min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong px-4 text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
-                @click="openImportWizard"
-              >
-                {{ $t('cutting.import.title') }}
-              </button>
-            </div>
-          </div>
+                  <div :class="inOrderWizard ? 'flex flex-wrap gap-2.5' : 'grid'">
+                    <button
+                      type="button"
+                      class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                      :class="inOrderWizard ? 'h-10 min-h-10 px-4' : ''"
+                      @click="openNewMaterial"
+                    >
+                      <Icon name="plus" class="size-4" />
+                      {{ $t('cutting.editor.addMaterial') }}
+                    </button>
+                    <button
+                      v-if="inOrderWizard"
+                      type="button"
+                      class="flex h-10 min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong px-4 text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                      @click="openImportWizard"
+                    >
+                      {{ $t('cutting.import.title') }}
+                    </button>
+                  </div>
+                </div>
 
-          <div v-if="optimizeError" class="client-banner danger mx-5 mt-4" role="alert">
-            <span class="font-black">!</span>
-            <span>
-              {{ optimizeError }}
-              <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
-                trace {{ cutting.traceId }}
-              </span>
-            </span>
-          </div>
+                <div v-if="optimizeError" class="client-banner danger mx-5 mt-4" role="alert">
+                  <span class="font-black">!</span>
+                  <span>
+                    {{ optimizeError }}
+                    <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
+                      trace {{ cutting.traceId }}
+                    </span>
+                  </span>
+                </div>
 
-          <div v-if="saveError" class="border-t border-hairline p-5">
-            <p class="text-sm font-bold text-danger">{{ saveError }}</p>
-          </div>
-        </section>
+                <div v-if="saveError" class="border-t border-hairline p-5">
+                  <p class="text-sm font-bold text-danger">{{ saveError }}</p>
+                </div>
+              </section>
 
-        <!-- Sticky action bar: its single primary CTA stays reachable without
+              <!-- Sticky action bar: its single primary CTA stays reachable without
              scrolling to the bottom of a long parts list. It opens a current
              chosen result or starts optimisation; disabled reasons remain visible
              inline (including on touch) instead of only in a title tooltip. -->
-        <!-- In the wizard the action row is a plain right-aligned row under the
+              <!-- In the wizard the action row is a plain right-aligned row under the
              card, as the design draws it: the list is one card on one screen, so
              a sticky bar would be chrome floating over content it never covers. -->
-        <div
-          v-if="parts.length > 0"
-          :class="
-            inOrderWizard
-              ? 'mt-[18px] flex flex-wrap items-center justify-end gap-3'
-              : 'sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur'
-          "
-        >
-          <div v-if="!inOrderWizard" class="text-sm">
-            <span class="font-bold text-ink"
-              >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} · {{ totalQuantity }}
-              {{ $t('cutting.unit.piece', totalQuantity) }}</span
-            >
-            <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
-          </div>
-          <div class="flex flex-wrap items-center justify-end gap-3">
-            <!-- The blocker states itself as a chip rather than a whispered
+              <div
+                v-if="parts.length > 0"
+                :class="
+                  inOrderWizard
+                    ? 'mt-[18px] flex flex-wrap items-center justify-end gap-3'
+                    : 'sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur'
+                "
+              >
+                <div v-if="!inOrderWizard" class="text-sm">
+                  <span class="font-bold text-ink"
+                    >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} ·
+                    {{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
+                  >
+                  <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
+                </div>
+                <div class="flex flex-wrap items-center justify-end gap-3">
+                  <!-- The blocker states itself as a chip rather than a whispered
                  note: it is the reason the button beside it will not move, and
                  on a touch screen a `title` tooltip never appears at all. -->
-            <span
-              v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
-              class="inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
-            >
-              {{ primaryCtaHint }}
-            </span>
-            <button
-              type="button"
-              class="mp-button mp-button-primary"
-              :class="inOrderWizard ? 'h-11 rounded-xl px-6 text-[14.5px]' : ''"
-              :disabled="primaryCtaDisabled"
-              :title="primaryCtaHint"
-              @click="runPrimaryCta"
-            >
-              {{ primaryCtaLabel }}
-            </button>
+                  <span
+                    v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
+                    class="inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
+                  >
+                    {{ primaryCtaHint }}
+                  </span>
+                  <button
+                    type="button"
+                    class="mp-button mp-button-primary"
+                    :class="inOrderWizard ? 'h-11 rounded-xl px-6 text-[14.5px]' : ''"
+                    :disabled="primaryCtaDisabled"
+                    :title="primaryCtaHint"
+                    @click="runPrimaryCta"
+                  >
+                    {{ primaryCtaLabel }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- `items-start` on the grid plus `sticky` on the DIRECT grid item
+                 is what gives the panel travel: a stretched item's box is the
+                 full row height, and a sticky element with no room to move
+                 never moves. Below the split it simply stacks under the board,
+                 which is what the design does — the modal stays the client
+                 editor's, where there is no rail to dock into. -->
+            <CuttingKromkaPanel
+              v-if="inOrderWizard && parts.length > 0"
+              class="min-w-0 @min-[1006px]/step:sticky @min-[1006px]/step:top-1"
+              :part="activePart"
+              :part-number="activePart ? (displayPartIndex.get(activePart.part_ref) ?? 0) + 1 : 0"
+              :panel-material="activePart ? materialById(activePart.material_id) : null"
+              :edge-options="cutting.edgeOptions"
+              :edge-registry="edgeRegistry"
+              :group-size="activeGroupSize"
+              :flash-side="activeSide"
+              @edges-change="onPanelEdgesChange"
+              @apply-group="applyActiveEdgesToGroup"
+              @close="clearActivePart"
+            />
           </div>
         </div>
       </fieldset>

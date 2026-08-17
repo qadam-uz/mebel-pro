@@ -231,6 +231,9 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   store: '<path d="M4 10h16l-1-5H5l-1 5Z"/><path d="M6 10v10h12V10"/><path d="M9 20v-6h6v6"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  // `clientIconPath` falls back to `box` for an unknown name, so a missing glyph
+  // renders as a crate rather than as nothing — silent, and it reads as content.
+  x: '<path d="m6 6 12 12M18 6 6 18"/>',
   globe:
     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.3 3.4 5.3 3.4 8.5s-1.2 6.2-3.4 8.5c-2.2-2.3-3.4-5.3-3.4-8.5S9.8 5.8 12 3.5Z"/>',
   board:
