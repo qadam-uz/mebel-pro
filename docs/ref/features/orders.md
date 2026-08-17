@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-18
 order: 30
 ---
 
@@ -515,7 +515,15 @@ Permission names below are the per-branch grants from
   - `/workshop/orders/new/cutting?client=` — the shared editor, new-draft mode.
   - `/workshop/orders/cutting/:id` — the shared editor on a saved walk-in draft.
   - `/workshop/orders/new/:draft_id/checkout` — the single-branch checkout (quote at the
-    locked branch, contact prefilled from the resolved client, **Place order**).
+    locked branch, contact prefilled from the resolved client, **Place order**). Two columns:
+    on the left the client as a heading — name, then `phone · branch`, with one **O'zgartirish**
+    link back to step 1 — over the order's contents and the optional note; on the right the
+    price. The client was decided on step 1, so this screen only has to let the operator
+    recognise it, not re-enter it. Each price line names what it was counted from (`2 list`,
+    `26.4 m propil`, `34.3 m lenta`) under its label, so "why this much?" is answerable without
+    leaving the screen. The card ends with the total, the commit, the way back and the
+    condition it commits to, in that order — the button that gets clicked lives with the number
+    it charges.
 
   Success routes to the order detail, already `confirmed`.
 - **Revision — edit a placed order** (`manage_orders`, status `new` / `confirmed`) — **Edit**

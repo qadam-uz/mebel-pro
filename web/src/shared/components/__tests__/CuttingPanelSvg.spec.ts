@@ -129,7 +129,7 @@ function mountWithBanding(part: CuttingPart, placement: Partial<CuttingPlacement
 }
 
 function lineOrientations(wrapper: ReturnType<typeof mountWithBanding>) {
-  return wrapper.findAll('.placement line').map((line) => ({
+  return wrapper.findAll('.placement line[data-band="tape"]').map((line) => ({
     horizontal: line.attributes('y1') === line.attributes('y2'),
     x: Number(line.attributes('x1')),
     y: Number(line.attributes('y1')),
@@ -139,7 +139,7 @@ function lineOrientations(wrapper: ReturnType<typeof mountWithBanding>) {
 describe('CuttingPanelSvg edge banding', () => {
   it('draws no band lines for a part with no banding', () => {
     const wrapper = mountWithBanding(makePart())
-    expect(wrapper.findAll('.placement line')).toHaveLength(0)
+    expect(wrapper.findAll('.placement line[data-band="tape"]')).toHaveLength(0)
   })
 
   it('draws one horizontal band line per banded long side (top/bottom), none on sides', () => {
@@ -148,7 +148,7 @@ describe('CuttingPanelSvg edge banding', () => {
     expect(lines).toHaveLength(2)
     expect(lines.every((line) => line.horizontal)).toBe(true)
     // the tape's own registry colour — EDGE_REGISTRY_COLOR_STYLES[0].bg
-    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#49740e')
+    expect(wrapper.find('.placement line[data-band="tape"]').attributes('stroke')).toBe('#49740e')
   })
 
   it('draws one vertical band line per banded short side (left/right)', () => {
@@ -173,7 +173,7 @@ describe('CuttingPanelSvg edge banding', () => {
     const wrapper = mount(CuttingPanelSvg, {
       props: { result, panel, activePlacementId: null },
     })
-    expect(wrapper.findAll('.placement line')).toHaveLength(0)
+    expect(wrapper.findAll('.placement line[data-band="tape"]')).toHaveLength(0)
   })
 
   it('labels placements with part names and renders usable offcuts', () => {
@@ -342,6 +342,6 @@ describe('CuttingPanelSvg grain marking', () => {
   it('keeps the hairline out of the band-tick selector', () => {
     const wrapper = mountWithBanding(makePart({ follow_grain: true }))
 
-    expect(wrapper.findAll('.placement line')).toHaveLength(0)
+    expect(wrapper.findAll('.placement line[data-band="tape"]')).toHaveLength(0)
   })
 })

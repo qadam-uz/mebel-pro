@@ -253,13 +253,13 @@ function focusNumericFromPointer(event: MouseEvent) {
     @pointerdown="emit('select')"
   >
     <div
-      class="grid gap-2 @min-[560px]:grid-cols-[26px_minmax(96px,1fr)_80px_80px_56px_62px_54px_44px] @min-[560px]:items-center @min-[560px]:gap-[7px]"
+      class="grid gap-2 @min-[660px]:grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] @min-[660px]:w-max @min-[660px]:items-center @min-[660px]:gap-[7px]"
     >
       <!-- `accent-strong`, not the handoff's `accent-deep` (#c53d0c): this is a
            number, so it owes 4.5:1, and accent-deep on an accent tint gives
            4.44 (see the ramp note in main.css). -->
       <div
-        class="text-xs font-extrabold @min-[560px]:col-start-1 @min-[560px]:row-start-1"
+        class="text-xs font-extrabold @min-[660px]:col-start-1 @min-[660px]:row-start-1"
         :class="selected ? 'text-accent-strong' : 'text-ink-muted'"
       >
         <span v-if="bareIndex">{{ (displayIndex ?? index) + 1 }}</span>
@@ -267,26 +267,26 @@ function focusNumericFromPointer(event: MouseEvent) {
       </div>
 
       <div
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 @min-[560px]:contents"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 @min-[660px]:contents"
       >
         <label
-          class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[560px]:col-start-2 @min-[560px]:row-start-1"
+          class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[660px]:col-start-2 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.name') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.name') }}</span>
           <input
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input bg-elevated/40 @min-[560px]:min-h-9 @min-[560px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
             :placeholder="partDisplayName(part, index)"
             :aria-label="$t('cutting.column.name')"
             @keydown="onRapidEntryKeydown($event, 'name')"
           />
         </label>
         <div
-          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[560px]:col-start-6 @min-[560px]:row-start-1"
+          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[660px]:col-start-6 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.rotation') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.rotation') }}</span>
           <!-- A bare checkbox under a one-word header never said which way it
                meant; the glyph shows the state itself. `switch` (not a checkbox)
                because the two states are both meaningful, not on/absent. -->
@@ -309,9 +309,9 @@ function focusNumericFromPointer(event: MouseEvent) {
           </button>
         </div>
         <div
-          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[560px]:col-start-7 @min-[560px]:row-start-1"
+          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[660px]:col-start-7 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.edge') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.edge') }}</span>
           <button
             type="button"
             :data-part-index="index"
@@ -342,9 +342,9 @@ function focusNumericFromPointer(event: MouseEvent) {
           </button>
         </div>
         <div
-          class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[560px]:col-start-8 @min-[560px]:row-start-1 @min-[560px]:flex @min-[560px]:justify-end"
+          class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[660px]:col-start-8 @min-[660px]:row-start-1 @min-[660px]:flex @min-[660px]:justify-end"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.actions') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.actions') }}</span>
           <button
             v-if="actionsOpen"
             type="button"
@@ -413,13 +413,13 @@ function focusNumericFromPointer(event: MouseEvent) {
       </div>
 
       <!-- Below the single-row fit width: the three dimensions share one row;
-           @min-[560px]:contents dissolves this wrapper so each input is a
+           @min-[660px]:contents dissolves this wrapper so each input is a
            column of the parent grid again (single-row layout unchanged) — CB-60. -->
-      <div class="grid grid-cols-3 gap-2 @min-[560px]:contents">
+      <div class="grid grid-cols-3 gap-2 @min-[660px]:contents">
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[560px]:col-start-3 @min-[560px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[660px]:col-start-3 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.length') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.length') }}</span>
           <input
             v-model.number="lengthModel"
             :data-part-index="index"
@@ -427,7 +427,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[560px]:min-h-9 @min-[560px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -438,9 +438,9 @@ function focusNumericFromPointer(event: MouseEvent) {
         </label>
 
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[560px]:col-start-4 @min-[560px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[660px]:col-start-4 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.width') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.width') }}</span>
           <input
             v-model.number="widthModel"
             :data-part-index="index"
@@ -448,7 +448,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[560px]:min-h-9 @min-[560px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -459,9 +459,9 @@ function focusNumericFromPointer(event: MouseEvent) {
         </label>
 
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[560px]:col-start-5 @min-[560px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[660px]:col-start-5 @min-[660px]:row-start-1"
         >
-          <span class="@min-[560px]:hidden">{{ $t('cutting.column.quantity') }}</span>
+          <span class="@min-[660px]:hidden">{{ $t('cutting.column.quantity') }}</span>
           <input
             v-model.number="quantityModel"
             :data-part-index="index"
@@ -469,7 +469,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input bg-elevated/40 text-right @min-[560px]:min-h-9 @min-[560px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
             @beforeinput="onWholeNumberBeforeInput"
