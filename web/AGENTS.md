@@ -207,26 +207,45 @@ so a screen's real shape only exists once that script has run. The rules, in ord
 1. **Screenshot the prototype screen first, then the app screen, then compare them side by
    side.** Not the source — the screens. Do this before writing any code for that screen, and
    again before saying it is done.
-2. **A spec's account of the gap is not evidence** (a handoff spec here once misdescribed
-   three of four screens). Specs record intent and decisions; only the running prototype says
-   what a screen looks like.
-3. **Measure, don't eyeball.** For anything with a number in it — focus rings, border weights,
-   glyph geometry — read `getComputedStyle` on both sides (a 3px focus-ring difference is
-   invisible in scaled screenshots).
-4. **When the measurement disagrees with the screen, believe neither yet — get a third look.**
+2. **A diff of the handoff is not a work list.** When a second bundle arrives it is tempting
+   to diff it against the last one and build the hunks. That answers "what did the designer
+   change", and the question is "where does the app differ from the design". Everything the
+   app never got right *and* the designer did not touch this round is invisible to a diff —
+   structurally, not by accident. It has cost a full round here: the cutting map's parts were
+   filled accent-peach against the prototype's white, the offcut had no fill, the waste had a
+   danger-red outline instead of a hatch and the sheet frame was orange — five element-level
+   mismatches, none of them in the diff, all of them on a screen that had already been called
+   done. Diff to learn intent; scope from the screen.
+3. **Scope is the screen, not the change.** If a screen is in play, every element on it is in
+   play — including the parts nobody edited this round. Before calling one done, walk it as an
+   inventory rather than an impression: background, border, every label, every mark, offcut,
+   waste, frame — tick each against the prototype. An impression checks that the blocks are
+   present; only the inventory catches the element that was always wrong.
+4. **Measure, don't eyeball.** For anything carrying a number *or a colour* — focus rings,
+   border weights, glyph geometry, fills — read `getComputedStyle` (or the SVG attribute) on
+   both sides. A 3px focus-ring difference is invisible in scaled screenshots, and so is a
+   fill you have stopped looking at because you are checking layout.
+5. **A noticed anomaly is a finding, not a note to self.** "That looks off, I will come back to
+   it" is how the map's fill survived a round: it was seen, written down mid-work and dropped.
+   Either resolve it or put it in the report. There is no third option.
+6. **When the measurement disagrees with the screen, believe neither yet — get a third look.**
    The browser pane renders large and scales the capture down (a 1px border vanishes), and
    `getComputedStyle` through the pane has returned stale values. Shrink the viewport to
    ~1280×700 so the screenshot is near 1:1 and look again. "The CSS is right by construction"
    is where real defects hide — a global `:focus-visible` rule and a utility overriding the
    focus colour in a later cascade layer have both bitten here.
-5. **Where the repo does more than the design depicts, keep the capability and match the
+7. **Where the repo does more than the design depicts, keep the capability and match the
    frame.** Say so in a comment at the deviation — every one of these is a judgement someone
    will otherwise re-litigate.
-6. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
+8. **Deviate only for the UX bar above, and write down which line of it forced you.** The bar
    outranks the handoff; nothing else does. "It seemed better" is not a reason — take it to the
    owner instead.
-7. **Do not delete working behaviour because the prototype omits it.** A prototype is a sketch
+9. **Do not delete working behaviour because the prototype omits it.** A prototype is a sketch
    of a screen, not an inventory of a product.
+
+A handoff is finished when every screen it names has been walked as an inventory and every
+element ticks — not when the tasks the spec listed are closed. The spec and the diff are both
+descriptions of the design; the prototype is the design.
 
 ### Verifying UI work
 
