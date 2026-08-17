@@ -21,6 +21,7 @@
       "Bash(git branch:*)",
       "Bash(git blame:*)",
       "Bash(git ls-files:*)",
+      "Bash(gh pr merge:*)",
       "Bash(docker compose ps:*)",
       "Bash(docker compose logs:*)",
       "Bash(docker compose config:*)",
