@@ -291,8 +291,8 @@ describe('CuttingPanelSvg grain marking', () => {
 
     const rects = wrapper.findAll('.placement rect')
     expect(rects).toHaveLength(2)
-    // The base rect keeps the accent fill — it is what marks the selection.
-    expect(rects[0].attributes('fill')).toBe('var(--color-accent-soft)')
+    // The base rect keeps its state fill — it is what marks the selection.
+    expect(rects[0].attributes('fill')).toBe('var(--color-elevated)')
     expect(rects[1].attributes('fill')).toMatch(/^url\(#mp-grain-\d+\)$/)
   })
 

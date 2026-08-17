@@ -333,7 +333,7 @@ function offcutTransform(offcut: CuttingOffcut) {
       :width="panelLength"
       :height="panelWidth"
       fill="var(--color-elevated)"
-      stroke="var(--color-accent)"
+      stroke="var(--color-hairline-strong)"
       stroke-width="2"
       @click="emit('clear-selection')"
     />
@@ -348,8 +348,8 @@ function offcutTransform(offcut: CuttingOffcut) {
         :y="offcutY(offcut)"
         :width="offcut.length_mm"
         :height="offcut.width_mm"
-        fill="transparent"
-        :stroke="offcut.usable ? 'var(--color-success)' : 'var(--color-danger)'"
+        :fill="offcut.usable ? 'var(--color-success-soft)' : 'transparent'"
+        :stroke="offcut.usable ? 'var(--color-success-border)' : 'var(--color-hairline-strong)'"
         :stroke-width="1.5"
         stroke-dasharray="12 8"
       />
@@ -381,10 +381,10 @@ function offcutTransform(offcut: CuttingOffcut) {
         :y="svgY(placement)"
         :width="placement.length_mm"
         :height="placement.width_mm"
-        :fill="
-          placementIsActive(placement) ? 'var(--color-accent-tint)' : 'var(--color-accent-soft)'
+        :fill="placementIsActive(placement) ? 'var(--color-select-wash)' : 'var(--color-elevated)'"
+        :stroke="
+          placementIsActive(placement) ? 'var(--color-accent)' : 'var(--color-hairline-strong)'
         "
-        stroke="var(--color-accent)"
         :stroke-width="placementIsActive(placement) ? 3 : 1.5"
       />
       <!-- Over the state fill, under the ticks and every label — the base rect
