@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-18
 order: 80
 ---
 
@@ -356,8 +356,16 @@ permission rather than the material property, so it is on when the part **may** 
 inverse of the stored `follow_grain`. It renders as a two-state glyph switch (grain lines when
 the part is pinned to the texture, a rotation arrow when it is free) rather than a checkbox,
 because both states carry meaning and a bare box under a one-word header did not say which. `Enter` moves through
-cells and appends a new inherited row from the last cell of the last row. Deleting a row shows an
-undo toast; clearing all rows still requires confirmation.
+cells — `Nomi → Uzunlik → Kenglik → Soni` — and appends a new inherited row from the last cell of
+the last row. `↑` / `↓` step the focused numeric cell by 1 and `Shift` by 10, floored at 0 and at 1
+for `Soni`, so a mistyped `2749` becomes `2750` without retyping; `Nomi` keeps the arrows for the
+caret. There is no ceiling: an oversized part and the 300-part budget already fail with named,
+visible errors, and a silent cap would swallow the message the operator needs to read. Deleting a
+row shows an undo toast; clearing all rows still requires confirmation.
+
+The six numeric columns are fixed-width, not elastic. Left to stretch they put `Soni` a screen's
+width away from `№` on a wide monitor, so the board now ends where its content ends and the
+leftover width stays empty — or, in the staff wizard, carries the kromka panel.
 
 Each material group shows its own edge-tape registry under the material name. Distinct
 `(edge material_id, source)` pairs get one number and colour in their first-use order; row edge
@@ -485,8 +493,20 @@ The grain toggle (small arrow + `Tekstura`) appears on the row.
 Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
 `follow_grain=false` and the optimiser may rotate it.
 
-**Edge picker** (opens from the row glyph on every viewport):
+**Edge picker** — two surfaces, one behaviour:
 
+- **The staff order wizard docks it.** In step 2 of the staff new-order flow, once the parts
+  column is wide enough for a 348px rail beside it, banding is a permanently docked panel to
+  the right of the board rather than a modal. Its subject is the selected row: clicking
+  anywhere in a row, or moving focus into any of its cells, selects that row; `Esc` clears the
+  selection and deleting the row clears it too. The selected row carries a tint, a one-pixel
+  outline (an outline rather than a border, so the columns cannot shift under it) and an
+  accent `№`. Nothing opens and nothing closes — the operator keeps the detal he is banding in
+  view, and each next detal costs one click instead of open → toggle → close. The panel has no
+  backdrop, no focus trap and no scroll lock; the board stays scrollable and keyboard-reachable
+  beside it. Below that width the panel simply stacks under the board.
+- **Everywhere else it stays a modal** — the client editor's board is full-width, so there is
+  no rail to dock into. The description below is that modal.
 - **One modal, two in-dialog panels.** The compact glyph is display-only: its four borders
   show banding state, while the whole glyph opens this modal on desktop and mobile alike.
   Panel 1 is the marking view. Its tape list contains only tapes already used in this drawing:
@@ -717,8 +737,9 @@ in-progress draft), and a persistent **identity strip** in the editor header nam
 walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
 just during the continuous create flow), so a re-opened draft still names who it's for. A
 draft that somehow carries no branch falls back to the current branch context rather than
-demanding a fresh pick. Everything else — parts editor, edge picker, optimise, results — is
-this page, unchanged.
+demanding a fresh pick. Everything else — parts editor, optimise, results — is this page,
+unchanged; the edge picker is the one exception, docked as a panel here rather than opened as a
+modal.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
 unfinished walk-in cuttings, reached from a **Chizmalar** entry at the right end of the Orders

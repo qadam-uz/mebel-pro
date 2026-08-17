@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import { materialSwatchStyle } from '@/shared/app/cuttingDisplay'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { formatTiyin } from '@/shared/formatters'
@@ -42,14 +43,22 @@ const canPlace = computed(
     !placing.value,
 )
 
+// One place decides which result this screen is describing. Four blocks below
+// read it — contents, the totals line, the cutting label, the swatches — and
+// each used to re-`find()` it, so the chosen-result rule lived in four copies.
+const chosenResult = computed(() =>
+  cutting.currentDraft?.results.find(
+    (result) => result.id === cutting.currentDraft?.chosen_result_id,
+  ),
+)
+
 // The order's contents, read off the quote and the chosen result — both already
 // loaded for the price, so this block costs no extra request.
 const materialLines = computed(() => {
   const current = quote.value
   if (!current) return []
-  const parts = cutting.currentDraft?.results.find(
-    (result) => result.id === cutting.currentDraft?.chosen_result_id,
-  )?.parts_snapshot
+  const parts = chosenResult.value?.parts_snapshot
+  const snapshots = chosenResult.value?.material_snapshots
   return current.material_lines.map((line) => {
     const count = (parts ?? [])
       .filter((part) => part.material_id === line.material_id)
@@ -58,6 +67,11 @@ const materialLines = computed(() => {
       id: line.material_id,
       name: line.material_name,
       own: line.own_panels > 0,
+      // The frozen snapshot, never the composed label and never `own`: the
+      // swatch has to be the same colour this board wore one step earlier, and
+      // a customer's own board is hatched off `customer_supplied`, which is not
+      // the same thing as a catalog board the client brought sheets for.
+      swatch: materialSwatchStyle(snapshots?.[line.material_id]),
       sub: `${line.panels_used} ${t('cutting.unit.sheet', line.panels_used)} · ${count} ${t('cutting.unit.part', count)}`,
     }
   })
@@ -68,20 +82,17 @@ const contentsTotalLine = computed(() => {
     (sum, line) => sum + line.panels_used,
     0,
   )
-  const parts = (
-    cutting.currentDraft?.results.find(
-      (result) => result.id === cutting.currentDraft?.chosen_result_id,
-    )?.parts_snapshot ?? []
-  ).reduce((sum, part) => sum + part.quantity, 0)
+  const parts = (chosenResult.value?.parts_snapshot ?? []).reduce(
+    (sum, part) => sum + part.quantity,
+    0,
+  )
   return `${parts} ${t('cutting.unit.part', parts)} · ${sheets} ${t('cutting.unit.sheet', sheets)}`
 })
 
 // The propil is what the cutting fee is charged against, so it belongs on the
 // label rather than as a figure the reader has to go find on the previous step.
 const cuttingLabel = computed(() => {
-  const chosen = cutting.currentDraft?.results.find(
-    (result) => result.id === cutting.currentDraft?.chosen_result_id,
-  )
+  const chosen = chosenResult.value
   if (!chosen?.total_cut_length_mm) return t('orders.checkout.cutting')
   return t('orders.checkout.cuttingWithLength', { length: metres(chosen.total_cut_length_mm) })
 })
@@ -222,7 +233,8 @@ async function place() {
               class="flex items-center gap-2.5 py-[7px]"
             >
               <span
-                class="size-6 shrink-0 rounded-[7px] border border-hairline bg-sunk"
+                class="size-6 shrink-0 rounded-[7px] border border-hairline"
+                :style="line.swatch"
                 aria-hidden="true"
               ></span>
               <span class="min-w-0 flex-1">
@@ -243,13 +255,18 @@ async function place() {
           </div>
 
           <label class="field !mb-0 mt-1 border-t border-divider pt-4">
+            <!-- `(ixtiyoriy)` is a qualifier on the label, not fine print: same
+                 size as the label, lighter weight. `<small>` shrank it to ~10.8px
+                 and kept the label's 600, which read as a badge. -->
             <span
               >{{ $t('orders.checkout.note') }}
-              <small class="text-ink-muted">{{ $t('orders.checkout.optional') }}</small></span
+              <span class="font-normal text-ink-muted">{{
+                $t('orders.checkout.optional')
+              }}</span></span
             >
             <textarea
               v-model="note"
-              class="mp-input min-h-[84px] resize-y py-[11px]"
+              class="mp-input min-h-[84px] resize-y px-[13px] py-[11px]"
               :placeholder="$t('orders.checkout.notePlaceholder')"
             ></textarea>
           </label>
@@ -305,7 +322,10 @@ async function place() {
               :to="rolePath(`/workshop/orders/cutting/${draftId}`)"
               class="mp-button mp-button-outline h-[42px]"
             >
-              {{ $t('orders.action.backToDrawing') }}
+              <!-- Its own key, not the shared `orders.action.backToDrawing`:
+                   that label also titles the revision-review screen, where the
+                   destination is not the step the reader just came from. -->
+              {{ $t('orders.checkout.back') }}
             </RouterLink>
             <button
               type="button"

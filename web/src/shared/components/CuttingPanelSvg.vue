@@ -241,7 +241,13 @@ function bandLines(placement: CuttingPlacement) {
   for (const side of sides) {
     const band = part[side.field]
     const entry = registryEntryForBand(edgeRegistry.value, band?.material_id, band?.source)
-    const stroke = entry?.colorStyle.bg ?? 'var(--color-accent)'
+    // A banded side normally draws in its tape's registry colour. The fallback
+    // is only reached when the band names a tape the registry never numbered —
+    // a data gap, not a problem with the part. It used to fall back to accent,
+    // which on this drawing is the same warm orange the unplaced-parts and
+    // short-stock alerts use, so a missing registry entry read as "this part is
+    // wrong". Neutral ink says "no tape identity here" and nothing more.
+    const stroke = entry?.colorStyle.bg ?? 'var(--color-ink-muted)'
     if (side.physical === 'top')
       lines.push({ x1: cx - halfH, y1: y0 + inset, x2: cx + halfH, y2: y0 + inset, stroke })
     if (side.physical === 'bottom')
