@@ -99,6 +99,11 @@ const docsMenuOpen = ref(false)
 let previousMobileFocus: HTMLElement | null = null
 let workshopSearchTimer: number | undefined
 const isAuthRoute = computed(() => route.meta.layout === 'auth')
+// The order-drawing flow builds one document start to finish; a topbar field
+// offering to jump to a different order is the one thing those screens are not
+// for. Declared per route so a new screen in the flow opts in where it is
+// defined, not in a path list here.
+const showWorkshopSearch = computed(() => route.meta.hideSearch !== true)
 const canLoadWorkshopContext = computed(
   () =>
     config.role === 'workshop' &&
@@ -444,7 +449,7 @@ function closeWorkshopSearch() {
 }
 
 function focusWorkshopSearch() {
-  if (config.role !== 'workshop' || isAuthRoute.value) return
+  if (config.role !== 'workshop' || isAuthRoute.value || !showWorkshopSearch.value) return
   // The search field lives in the topbar, which the drawer covers. Honouring ⌘K
   // there would move focus outside an `aria-modal` dialog — and the drawer's own
   // focus guard would immediately pull it back, leaving the keypress looking
@@ -1057,7 +1062,7 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
         </button>
 
-        <div ref="workshopSearchRootRef" class="workshop-search-wrap">
+        <div v-if="showWorkshopSearch" ref="workshopSearchRootRef" class="workshop-search-wrap">
           <label class="workshop-search" for="workshop-global-search">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <circle cx="8.5" cy="8.5" r="5.5"></circle>

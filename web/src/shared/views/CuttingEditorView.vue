@@ -2384,25 +2384,6 @@ onBeforeRouteLeave(async () => {
                                 :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
                                 >{{ group.label }}</span
                               >
-                              <!-- Beside the name, where the design puts it: it names
-                             whose sheets this group is cut from. The swap glyph
-                             is honest — it opens the picker, which is where a
-                             shop format is exchanged for a customer board. -->
-                              <button
-                                v-if="inOrderWizard && group.materialId && !isReadOnly"
-                                type="button"
-                                class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold transition hover:brightness-[0.97]"
-                                :class="
-                                  materialIsOwn(group.materialId)
-                                    ? 'bg-accent-soft text-accent-strong'
-                                    : 'bg-neutral-soft text-ink-nav'
-                                "
-                                :title="$t('cutting.customerBoard.modeLabel')"
-                                @click.stop="openGroupMaterial(group)"
-                              >
-                                {{ materialSourceLabel(group.materialId) }}
-                                <Icon name="swap" class="size-3" aria-hidden="true" />
-                              </button>
                             </span>
                             <span
                               v-if="inOrderWizard"

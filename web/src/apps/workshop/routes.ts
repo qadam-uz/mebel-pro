@@ -76,6 +76,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-new-walkin',
     component: () => import('@/shared/views/WorkshopWalkInClientView.vue'),
     meta: {
+      hideSearch: true,
       titleKey: 'routes.newOrder',
       workshopAccess: { any: orderAccess },
       branchScope: 'branch',
@@ -87,6 +88,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     component: () => import('@/shared/views/CuttingEditorView.vue'),
     beforeEnter: ensureWalkInClient,
     meta: {
+      hideSearch: true,
       titleKey: 'routes.draft',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
@@ -100,6 +102,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-cutting-editor',
     component: () => import('@/shared/views/CuttingEditorView.vue'),
     meta: {
+      hideSearch: true,
       titleKey: 'routes.draft',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
@@ -111,6 +114,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-cutting-result',
     component: () => import('@/shared/views/CuttingResultView.vue'),
     meta: {
+      hideSearch: true,
       titleKey: 'routes.cuttingResult',
       workshopAccess: { any: orderAccess },
       cuttingEditorAdapter: workshopCuttingEditorAdapter,
@@ -122,6 +126,7 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-order-checkout',
     component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),
     meta: {
+      hideSearch: true,
       titleKey: 'routes.checkout',
       workshopAccess: { any: orderAccess },
       branchScope: 'entity',

@@ -25,6 +25,11 @@ export type BranchScope =
 declare module 'vue-router' {
   interface RouteMeta {
     branchScope?: BranchScope
+    /** Drop the topbar's global search on this route. Set on the order-drawing
+     *  flow, where the operator is building one document from start to finish:
+     *  a field offering to jump to some other order, client or material is the
+     *  one thing that screen is not for. */
+    hideSearch?: boolean
   }
 }
 

@@ -350,8 +350,10 @@ list is built from the chosen workshop's catalog.
 
 Rows are grouped visually by panel material in first-seen order, with a leading
 `Material tanlanmagan` group for new rows before a material is picked. Each row has a `Nomi`
-input, dimensions, quantity, a grained-material-only `Burilish` toggle, four compact edge cells,
-duplicate, and an overflow menu for material replacement and deletion. The toggle names the
+input, dimensions, quantity, a grained-material-only `Burilish` toggle, one compact edge cell,
+and delete. Delete is the row's own button — the ⋯ menu that used to hold duplicate and "move to
+another material" behind it is gone: a menu that exists for two rarely-used actions is a second
+thing to learn on the row the operator types into all day. The toggle names the
 permission rather than the material property, so it is on when the part **may** rotate — the
 inverse of the stored `follow_grain`. It renders as a two-state glyph switch (grain lines when
 the part is pinned to the texture, a rotation arrow when it is free) rather than a checkbox,
@@ -362,6 +364,15 @@ for `Soni`, so a mistyped `2749` becomes `2750` without retyping; `Nomi` keeps t
 caret. There is no ceiling: an oversized part and the 300-part budget already fail with named,
 visible errors, and a silent cap would swallow the message the operator needs to read. Deleting a
 row shows an undo toast; clearing all rows still requires confirmation.
+
+The topbar's global search is dropped for the whole order-drawing flow (`hideSearch` on those
+routes, ⌘K included). Those screens build one document start to finish; a field offering to jump
+to some other order, client or material is the one thing they are not for.
+
+The row's edge glyph draws its banded sides in **ink**, never in the tape's own colour: the fill
+beneath is that colour, so a coloured border on it made the whole glyph one flat block and a dark
+tape lost its sides entirely. Ink keeps "which sides" readable whatever the tape is; the fill
+still answers "which tape".
 
 Every column except the row number is fixed-width, `Nomi` included. Left to stretch they put
 `Soni` a screen's width away from `№` on a wide monitor, so the board now ends where its content
