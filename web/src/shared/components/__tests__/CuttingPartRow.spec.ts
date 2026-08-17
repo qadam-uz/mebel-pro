@@ -48,7 +48,11 @@ function seedPanel(tolali: boolean) {
   ]
 }
 
-function mountRow(rowPart: CuttingPart, edgeRegistry: EdgeRegistryEntry[] = []) {
+function mountRow(
+  rowPart: CuttingPart,
+  edgeRegistry: EdgeRegistryEntry[] = [],
+  extraProps: Record<string, unknown> = {},
+) {
   return mount(CuttingPartRow, {
     props: {
       part: rowPart,
@@ -58,6 +62,7 @@ function mountRow(rowPart: CuttingPart, edgeRegistry: EdgeRegistryEntry[] = []) 
       materialMissing: false,
       optimizeError: null,
       edgeRegistry,
+      ...extraProps,
     },
     global: {
       stubs: {
@@ -183,18 +188,16 @@ describe('CuttingPartRow grain toggle', () => {
     expect(style).toContain('background: transparent')
   })
 
-  it('opens the material picker from the actions menu', async () => {
+  // The row's delete is its own button now; the ⋯ menu that used to hold
+  // duplicate and "move to another material" is gone, so the only row action
+  // this component still emits is delete.
+  it('deletes from the row button, with no overflow menu behind it', async () => {
     seedPanel(true)
-    const wrapper = mountRow(part())
+    const wrapper = mountRow(part(), [], { bareIndex: true })
 
-    await wrapper.get('[title="Amallar"]').trigger('click')
-    const moveButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes("ko'chirish"))
-    expect(moveButton).toBeDefined()
-    await moveButton!.trigger('click')
-
-    expect(wrapper.emitted('open-material-picker')).toHaveLength(1)
+    expect(wrapper.find('[title="Amallar"]').exists()).toBe(false)
+    await wrapper.get('[aria-label="O\'chirish"]').trigger('click')
+    expect(wrapper.emitted('delete')).toHaveLength(1)
   })
 })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
@@ -56,7 +56,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const actionsOpen = ref(false)
 // Writable computeds keep the original `v-model.number` semantics while emitting
 // (a number input bound straight to the prop would mutate it).
 // A fresh row carries 0 for the three numeric cells — the stored "not entered
@@ -135,43 +134,30 @@ function edgeGlyphStyle() {
     edge_left: 'borderLeft',
     edge_right: 'borderRight',
   } as const
+  // The banded edge is drawn in ink, never in the tape's own colour: the fill
+  // beneath it IS that colour, so a coloured border on it made the whole glyph
+  // one flat block — a dark tape lost its sides entirely. Ink on the fill keeps
+  // "which sides" readable whatever the tape is, and the fill still answers
+  // "which tape".
   const entries = Object.entries(sideStyles).map(([side, property]) => {
     const entry = edgeRegistryEntry(side as EdgeField)
     return [
       property,
-      entry ? `2.5px solid ${entry.colorStyle.bg}` : '1.5px solid var(--color-hairline)',
+      entry ? '2.5px solid var(--color-accent)' : '1.5px solid var(--color-hairline)',
     ] as const
   })
-  const banded = entries
-    .map(([, value]) => value)
-    .filter((value) => !value.includes('var(--color-hairline)'))
+  const fills = (Object.keys(sideStyles) as EdgeField[])
+    .map((side) => edgeRegistryEntry(side)?.colorStyle.bg)
+    .filter((fill): fill is string => Boolean(fill))
   return {
     ...Object.fromEntries(entries),
     // Only when the row is on one tape: two tapes have no single fill to be.
-    background:
-      banded.length > 0 && new Set(banded).size === 1
-        ? banded[0].replace('2.5px solid ', '')
-        : 'transparent',
+    background: fills.length > 0 && new Set(fills).size === 1 ? fills[0] : 'transparent',
   }
 }
 
 function toggleFollowGrain() {
   emit('update:follow-grain', rotationAllowed.value)
-}
-
-function duplicateFromMenu() {
-  actionsOpen.value = false
-  emit('duplicate')
-}
-
-function moveFromMenu() {
-  actionsOpen.value = false
-  emit('open-material-picker')
-}
-
-function deleteFromMenu() {
-  actionsOpen.value = false
-  emit('delete')
 }
 
 // ↑/↓ step the three numeric cells — how a mistyped `2749` becomes `2750` and how
@@ -277,7 +263,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input bg-elevated/40 @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
             :placeholder="partDisplayName(part, index)"
             :aria-label="$t('cutting.column.name')"
             @keydown="onRapidEntryKeydown($event, 'name')"
@@ -345,19 +331,12 @@ function focusNumericFromPointer(event: MouseEvent) {
           class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[660px]:col-start-8 @min-[660px]:row-start-1 @min-[660px]:flex @min-[660px]:justify-end"
         >
           <span class="@min-[660px]:hidden">{{ $t('cutting.column.actions') }}</span>
+          <!-- Delete is the row's own action and reads as one click, the way the
+               design draws it. There is no ⋯ behind it: its only unique entries
+               were duplicate and "move to another material", and a menu that
+               exists for two rarely-used actions is a second thing to learn on
+               the row the operator types into all day. -->
           <button
-            v-if="actionsOpen"
-            type="button"
-            class="fixed inset-0 z-20 cursor-default"
-            :aria-label="$t('cutting.parts.closeActions')"
-            @click="actionsOpen = false"
-          ></button>
-          <!-- Delete is the row's own action and reads as one click, the way
-               the design draws it. Duplicate and "move to another material" are
-               real and stay reachable — behind the ⋯, which surfaces on hover or
-               keyboard focus so the resting row stays as drawn. -->
-          <button
-            v-if="bareIndex"
             type="button"
             class="mp-action-icon-button size-8 min-h-0 text-ink-muted hover:bg-danger-soft hover:text-danger"
             :aria-label="$t('cutting.action.delete')"
@@ -366,49 +345,6 @@ function focusNumericFromPointer(event: MouseEvent) {
           >
             <Icon name="trash" class="size-4" />
           </button>
-          <button
-            type="button"
-            class="mp-action-icon-button size-8 min-h-0"
-            :class="
-              bareIndex && !actionsOpen
-                ? 'opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100'
-                : ''
-            "
-            :aria-label="$t('cutting.parts.rowActionsAria', { n: index + 1 })"
-            :title="$t('cutting.column.actions')"
-            @click="actionsOpen = !actionsOpen"
-          >
-            ⋯
-          </button>
-          <div
-            v-if="actionsOpen"
-            class="absolute bottom-9 right-0 z-30 grid min-w-48 overflow-hidden rounded-md border border-hairline-strong bg-elevated py-1 shadow-lg"
-          >
-            <button
-              type="button"
-              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
-              @click="duplicateFromMenu"
-            >
-              <Icon name="layers" class="size-4 text-ink-muted" />
-              {{ $t('cutting.parts.duplicate') }}
-            </button>
-            <button
-              type="button"
-              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
-              @click="moveFromMenu"
-            >
-              <Icon name="swap" class="size-4 text-ink-muted" />
-              {{ $t('cutting.parts.moveToMaterial') }}
-            </button>
-            <button
-              type="button"
-              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft"
-              @click="deleteFromMenu"
-            >
-              <Icon name="trash" class="size-4" />
-              {{ $t('cutting.action.delete') }}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -427,7 +363,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -448,7 +384,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -469,7 +405,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong focus:border-accent"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
             @beforeinput="onWholeNumberBeforeInput"
