@@ -224,15 +224,15 @@ function focusNumericFromPointer(event: MouseEvent) {
 <template>
   <article
     :id="`part-row-${part.part_ref}`"
-    class="group/row border-b border-hairline px-2 py-1.5 transition last:border-b-0"
+    class="group/row rounded-[10px] py-[3px] pl-0 pr-1.5 transition"
     :class="[
-      hasError ? 'border-danger-soft bg-danger-soft/60' : 'border-hairline bg-elevated',
+      hasError ? 'bg-danger-soft/60' : 'bg-elevated',
       // Outline, never border: a border would add a pixel to the row box and
       // shift every column against the header above it. An error still wins the
       // background — a row that cannot be cut outranks a row being edited.
       selected
-        ? 'outline outline-1 -outline-offset-1 outline-accent-line ' +
-          (hasError ? '' : '!bg-accent-wash')
+        ? 'outline outline-1 -outline-offset-1 outline-select-line ' +
+          (hasError ? '' : '!bg-select-wash')
         : 'focus-within:bg-sunk',
     ]"
     @focusin="emit('select')"
@@ -241,12 +241,9 @@ function focusNumericFromPointer(event: MouseEvent) {
     <div
       class="grid gap-2 @min-[660px]:grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] @min-[660px]:w-max @min-[660px]:items-center @min-[660px]:gap-[7px]"
     >
-      <!-- `accent-strong`, not the handoff's `accent-deep` (#c53d0c): this is a
-           number, so it owes 4.5:1, and accent-deep on an accent tint gives
-           4.44 (see the ramp note in main.css). -->
       <div
         class="text-xs font-extrabold @min-[660px]:col-start-1 @min-[660px]:row-start-1"
-        :class="selected ? 'text-accent-strong' : 'text-ink-muted'"
+        :class="selected ? 'text-ink' : 'text-ink-muted'"
       >
         <span v-if="bareIndex">{{ (displayIndex ?? index) + 1 }}</span>
         <span v-else>#{{ (displayIndex ?? index) + 1 }}</span>
@@ -263,7 +260,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input bg-elevated/40 @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
+            class="mp-input bg-elevated/40 @min-[660px]:min-h-[38px] @min-[660px]:rounded-[9px] @min-[660px]:px-[10px] hover:border-hairline-strong"
             :placeholder="partDisplayName(part, index)"
             :aria-label="$t('cutting.column.name')"
             @keydown="onRapidEntryKeydown($event, 'name')"
@@ -275,18 +272,18 @@ function focusNumericFromPointer(event: MouseEvent) {
           <span class="@min-[660px]:hidden">{{ $t('cutting.column.rotation') }}</span>
           <!-- A bare checkbox under a one-word header never said which way it
                meant; the glyph shows the state itself. `switch` (not a checkbox)
-               because the two states are both meaningful, not on/absent. -->
+               because the two states are both meaningful, not on/absent.
+               Icon-only: this is a state the operator scans down a column of 25
+               rows, and a bordered chip on every locked row builds a second
+               column of boxes beside the inputs. The glyph alone carries it;
+               background appears on hover, where it means "clickable". -->
           <button
             data-test="follow-grain"
             type="button"
             role="switch"
             :aria-checked="rotationAllowed"
-            class="grid size-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-            :class="
-              rotationAllowed
-                ? 'border-hairline bg-sunk/30 text-ink-muted hover:border-hairline-strong hover:bg-sunk'
-                : 'border-accent-tint bg-accent-soft text-accent-strong hover:border-accent'
-            "
+            class="grid h-[38px] w-full place-items-center rounded-[9px] transition hover:bg-sunk focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            :class="rotationAllowed ? 'text-ink-muted' : 'text-ink'"
             :title="grainTitle"
             :aria-label="grainTitle"
             @click="toggleFollowGrain"
@@ -363,7 +360,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-[38px] @min-[660px]:rounded-[9px] @min-[660px]:px-[10px] hover:border-hairline-strong"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.lengthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -384,7 +381,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-[38px] @min-[660px]:rounded-[9px] @min-[660px]:px-[10px] hover:border-hairline-strong"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             :aria-label="$t('cutting.parts.widthAria')"
             @beforeinput="onWholeNumberBeforeInput"
@@ -405,7 +402,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             type="text"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-9 @min-[660px]:px-1 hover:border-hairline-strong"
+            class="mp-input bg-elevated/40 text-right @min-[660px]:min-h-[38px] @min-[660px]:rounded-[9px] @min-[660px]:px-[10px] hover:border-hairline-strong"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             :aria-label="$t('cutting.column.quantity')"
             @beforeinput="onWholeNumberBeforeInput"

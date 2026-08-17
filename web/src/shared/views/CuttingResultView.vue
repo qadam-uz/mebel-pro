@@ -136,14 +136,14 @@ onMounted(async () => {
     >
       <RouterLink
         :to="rolePath(adapter.paths.editor(draftId))"
-        class="mp-button mp-button-outline h-[42px]"
+        class="mp-button mp-button-outline h-[42px] rounded-[11px]"
       >
         {{ $t('cutting.result.editParts') }}
       </RouterLink>
       <RouterLink
         v-if="draft.chosen_result_id"
         :to="rolePath(checkoutPath)"
-        class="mp-button mp-button-primary h-[42px]"
+        class="mp-button mp-button-primary h-[42px] rounded-[11px]"
       >
         {{ $t('cutting.result.checkout') }}
       </RouterLink>

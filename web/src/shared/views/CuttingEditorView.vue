@@ -1011,15 +1011,20 @@ function clearActivePart() {
 // panel 10% short. `overlayRect` divides the zoom out once, at the measurement,
 // and everything after it stays in one unit.
 const stepShell = ref<HTMLElement | null>(null)
+const kromkaPanel = ref<{ $el: HTMLElement } | null>(null)
 const panelOffset = ref(0)
 /** Board + gap + panel. Under this the panel has wrapped and there is no row to
  *  level with. */
 const PANEL_SIDE_BY_SIDE_MIN = 318
 
+// Centres, not aligns: a 44px row against a ~330px panel put the row at the
+// panel's shoulder, and the pair read as two unrelated things that happened to
+// start at the same height.
 function syncPanelOffset() {
   const shell = stepShell.value
   const part = activePart.value
-  if (!shell || !part) {
+  const panel = kromkaPanel.value?.$el as HTMLElement | undefined
+  if (!shell || !part || !panel) {
     panelOffset.value = 0
     return
   }
@@ -1031,13 +1036,33 @@ function syncPanelOffset() {
     panelOffset.value = 0
     return
   }
-  // 3px so the panel's own top edge lines up with the row's box, not its text.
-  panelOffset.value = Math.max(0, Math.round(overlayRect(row).top - shellBox.top - 3))
+  const rowBox = overlayRect(row)
+  const rowMid = rowBox.top + rowBox.height / 2 - shellBox.top
+  panelOffset.value = Math.max(0, Math.round(rowMid - overlayRect(panel).height / 2))
 }
 
 watch([activePartRef, () => parts.value.length], () => void nextTick(syncPanelOffset))
+
+// The panel's own height changes without the row moving — opening the tape list
+// is the common case — and a centre that is not re-measured then drifts by half
+// the list's height.
+let panelResize: ResizeObserver | null = null
+watch(
+  () => kromkaPanel.value?.$el as HTMLElement | undefined,
+  (panel) => {
+    panelResize?.disconnect()
+    if (!panel || typeof ResizeObserver === 'undefined') return
+    panelResize = new ResizeObserver(() => syncPanelOffset())
+    panelResize.observe(panel)
+  },
+  { immediate: true },
+)
+
 onMounted(() => window.addEventListener('resize', syncPanelOffset))
-onBeforeUnmount(() => window.removeEventListener('resize', syncPanelOffset))
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncPanelOffset)
+  panelResize?.disconnect()
+})
 
 // Writes to the PANEL's subject, not the modal's. `onEdgePickerChange` targets
 // `edgePickerPart`, which the wizard never sets because it never opens the
@@ -2521,11 +2546,21 @@ onBeforeRouteLeave(async () => {
                   <!-- Add the next row where it appears: a dashed tile under the last
                  row, echoing the empty-state CTA. Replaces the header button so
                  the add affordance follows the content. -->
-                  <div :class="inOrderWizard ? 'flex flex-wrap gap-2.5' : 'grid'">
+                  <!-- One control row, not two: the dashed add tiles and the CTA
+                       that acts on what they added belong to the same decision.
+                       `ml-auto` rides on whichever of chip / CTA comes first, so
+                       the right group stays right in both states. -->
+                  <div
+                    :class="
+                      inOrderWizard ? 'mt-[18px] flex flex-wrap items-center gap-2.5' : 'grid'
+                    "
+                  >
                     <button
                       type="button"
                       class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
-                      :class="inOrderWizard ? 'h-10 min-h-10 px-4' : ''"
+                      :class="
+                        inOrderWizard ? 'h-10 min-h-10 rounded-[11px] px-4 text-[13.5px]' : ''
+                      "
                       @click="openNewMaterial"
                     >
                       <Icon name="plus" class="size-4" />
@@ -2534,11 +2569,31 @@ onBeforeRouteLeave(async () => {
                     <button
                       v-if="inOrderWizard"
                       type="button"
-                      class="flex h-10 min-h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong px-4 text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                      class="flex h-10 min-h-10 items-center justify-center gap-2 rounded-[11px] border border-dashed border-hairline-strong px-4 text-[13.5px] font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
                       @click="openImportWizard"
                     >
                       {{ $t('cutting.import.title') }}
                     </button>
+                    <template v-if="inOrderWizard && parts.length > 0">
+                      <span
+                        v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
+                        class="ml-auto inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
+                      >
+                        {{ primaryCtaHint }}
+                      </span>
+                      <button
+                        type="button"
+                        class="mp-button mp-button-primary h-10 min-h-10 rounded-[11px] px-[22px] text-sm"
+                        :class="
+                          !cutting.optimizing && !creatingDraft && primaryCtaHint ? '' : 'ml-auto'
+                        "
+                        :disabled="primaryCtaDisabled"
+                        :title="primaryCtaHint"
+                        @click="runPrimaryCta"
+                      >
+                        {{ primaryCtaLabel }}
+                      </button>
+                    </template>
                   </div>
                 </div>
 
@@ -2565,14 +2620,10 @@ onBeforeRouteLeave(async () => {
              card, as the design draws it: the list is one card on one screen, so
              a sticky bar would be chrome floating over content it never covers. -->
               <div
-                v-if="parts.length > 0"
-                :class="
-                  inOrderWizard
-                    ? 'mt-[18px] flex flex-wrap items-center justify-end gap-3'
-                    : 'sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur'
-                "
+                v-if="!inOrderWizard && parts.length > 0"
+                class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur"
               >
-                <div v-if="!inOrderWizard" class="text-sm">
+                <div class="text-sm">
                   <span class="font-bold text-ink"
                     >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} ·
                     {{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
@@ -2592,7 +2643,6 @@ onBeforeRouteLeave(async () => {
                   <button
                     type="button"
                     class="mp-button mp-button-primary"
-                    :class="inOrderWizard ? 'h-11 rounded-xl px-6 text-[14.5px]' : ''"
                     :disabled="primaryCtaDisabled"
                     :title="primaryCtaHint"
                     @click="runPrimaryCta"
@@ -2610,6 +2660,7 @@ onBeforeRouteLeave(async () => {
                  there is no row to level with, so the offset is dropped. -->
             <CuttingKromkaPanel
               v-if="inOrderWizard && activePart"
+              ref="kromkaPanel"
               class="transition-[margin] duration-150 ease-out"
               :style="{ marginTop: `${panelOffset}px` }"
               :part="activePart"

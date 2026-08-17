@@ -231,7 +231,7 @@ async function place() {
 
     <div
       v-else-if="quote"
-      class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.32fr)_minmax(300px,0.68fr)]"
+      class="grid items-start gap-5 min-[990px]:grid-cols-[minmax(0,1.32fr)_minmax(300px,0.68fr)]"
     >
       <div class="grid gap-5">
         <!-- The client is a heading now, not a three-row table. It was decided on
@@ -286,9 +286,7 @@ async function place() {
               </span>
               <span
                 class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11px] font-bold"
-                :class="
-                  line.own ? 'bg-accent-soft text-accent-strong' : 'bg-neutral-soft text-ink-nav'
-                "
+                :class="line.own ? 'bg-track text-ink' : 'bg-neutral-soft text-ink-nav'"
               >
                 {{ line.own ? $t('cutting.source.own') : $t('cutting.source.shop') }}
               </span>

@@ -263,9 +263,9 @@ const subline = computed(() => {
             class="flex h-11 items-center gap-[9px] rounded-[10px] border px-2.5 text-left transition"
             :class="[
               side.on
-                ? 'border-accent-edge bg-accent-soft text-accent-strong'
+                ? 'border-select-chip-line bg-select-chip text-ink'
                 : 'border-hairline-soft bg-sunk text-ink-nav hover:border-hairline-strong',
-              side.flash ? 'ring-2 ring-accent-line' : '',
+              side.flash ? 'ring-2 ring-select-chip-line' : '',
             ]"
             @click="toggleSide(side.field)"
           >
@@ -287,9 +287,7 @@ const subline = computed(() => {
             :aria-pressed="allOn"
             class="grid h-11 place-items-center rounded-[10px] transition"
             :class="
-              allOn
-                ? 'bg-accent-soft text-accent-strong'
-                : 'bg-neutral-soft text-ink-nav hover:bg-hairline'
+              allOn ? 'bg-select-chip text-ink' : 'bg-sunk text-ink-nav hover:bg-neutral-soft'
             "
             :title="$t('cutting.edge.patternAll')"
             :aria-label="$t('cutting.edge.patternAll')"
@@ -305,9 +303,7 @@ const subline = computed(() => {
             :aria-pressed="noneOn"
             class="grid h-11 place-items-center rounded-[10px] transition"
             :class="
-              noneOn
-                ? 'bg-accent-soft text-accent-strong'
-                : 'bg-neutral-soft text-ink-nav hover:bg-hairline'
+              noneOn ? 'bg-select-chip text-ink' : 'bg-sunk text-ink-nav hover:bg-neutral-soft'
             "
             :title="$t('cutting.edge.patternNone')"
             :aria-label="$t('cutting.edge.patternNone')"

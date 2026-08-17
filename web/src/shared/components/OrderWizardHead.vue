@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Icon from '@/shared/components/AppIcon.vue'
+
 // The one head every screen of the staff order-creation flow wears: the title,
 // the four numbered steps, and the way out. The flow is four routes
 // (walk-in → editor → result → checkout), so before this the operator had no
@@ -33,6 +35,10 @@ const STEP_LABELS = [
   'orders.wizard.stepCheckout',
 ] as const
 
+// A numbered rail: circle → label → connector. Four filled pills read as four
+// tags; a rail reads as one journey with a position on it, which is what a head
+// for a four-route flow is for. The number moved into the circle, so the label
+// is the bare word.
 const steps = computed(() =>
   STEP_LABELS.map((key, index) => {
     const number = index + 1
@@ -40,17 +46,25 @@ const steps = computed(() =>
     return {
       key,
       number,
-      label: `${number}. ${t(key)}`,
+      label: t(key),
       state,
-      // `accent-deep` is the handoff's colour for a done chip, but on
-      // `accent-soft` it measures 4.44:1 — under the 4.5 floor DESIGN.md sets.
-      // `accent-strong` is the same orange one step down and clears it.
-      klass:
+      done: state === 'done',
+      circle:
         state === 'current'
-          ? 'bg-accent font-semibold text-on-accent'
+          ? 'bg-accent text-on-accent [box-shadow:0_0_0_3px_var(--color-track)]'
           : state === 'done'
-            ? 'bg-accent-soft font-medium text-accent-strong'
-            : 'bg-track font-medium text-ink-nav',
+            ? 'bg-ink-nav text-on-accent'
+            : 'bg-elevated text-ink-muted [box-shadow:inset_0_0_0_1.5px_var(--color-hairline)]',
+      label_klass:
+        state === 'current'
+          ? 'font-bold text-ink'
+          : state === 'done'
+            ? 'font-medium text-ink-nav'
+            : 'font-medium text-ink-muted',
+      // The connector belongs to the step behind it: it is dark once that step
+      // is finished, which is what makes the rail read as progress.
+      connector: state === 'done' ? 'bg-ink-nav' : 'bg-hairline',
+      last: number === STEP_LABELS.length,
     }
   }),
 )
@@ -65,15 +79,29 @@ const steps = computed(() =>
     <!-- A status readout, not a control: a step is reached by finishing the one
          before it, so a chip is never clickable and never focusable.
          `aria-current` is what tells a screen reader which one is live. -->
-    <ol class="mr-auto flex list-none flex-wrap gap-1.5 p-0">
+    <ol class="mr-auto flex flex-none list-none items-center p-0">
       <li
         v-for="item in steps"
         :key="item.key"
-        class="inline-flex items-center rounded-full px-[13px] py-[5px] text-[13px]"
-        :class="item.klass"
+        class="flex items-center gap-[9px]"
         :aria-current="item.state === 'current' ? 'step' : undefined"
       >
-        {{ item.label }}
+        <span
+          class="num grid size-[26px] flex-none place-items-center rounded-full text-[12.5px] font-bold"
+          :class="item.circle"
+        >
+          <Icon v-if="item.done" name="check" class="size-3.5 [stroke-width:2.6]" />
+          <template v-else>{{ item.number }}</template>
+        </span>
+        <span class="whitespace-nowrap text-[13.5px]" :class="item.label_klass">
+          {{ item.label }}
+        </span>
+        <span
+          v-if="!item.last"
+          aria-hidden="true"
+          class="mx-3 h-0.5 w-[34px] flex-none rounded-[2px]"
+          :class="item.connector"
+        ></span>
       </li>
     </ol>
     <div class="tools">

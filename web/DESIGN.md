@@ -29,6 +29,10 @@ colors:
   accent-tint: "#ffd8c9"
   accent-deep: "#c53d0c"
   accent-strong: "#a83408"
+  select-wash: "#f3f4f6"
+  select-line: "#d7dae0"
+  select-chip: "#e9ecf0"
+  select-chip-line: "#c3c9d1"
   success: "#067a4b"
   success-soft: "#e7f5ee"
   success-border: "#cbe8da"
@@ -165,8 +169,13 @@ semantic `--color-*` tokens.
   rule, a spotlight ring. It gives only **3.1:1 under white text**, so it is never a button
   background and never sits under text. When orange has to carry words it steps down — to
   `accent-deep` on a neutral surface (a text link, a text button), and to `accent-strong` on
-  either orange tint. Its tints are the app's *selected* fills: `accent-soft` for an active nav
-  item or a chip, `accent-tint` one step stronger.
+  either orange tint. Its tints back the **order-stage chips** (below) and an active nav item —
+  they are not the app's "selected" fills. Selection is neutral: see `select-*`.
+- **Selection** — `select-wash` fills a whole selected row, `select-line` outlines it,
+  `select-chip` / `select-chip-line` are a pressed small control inside a panel. Graphite and
+  grey on purpose: a screen can have four of these live at once, and when selection was orange
+  it competed with every status and stage chip until orange meant nothing. None of them ever
+  carries text.
 - **Status** — `success` / `warning` / `danger` / `info`, each with a `-soft` fill for pills and
   banners and a `-border` tint for their outlines. Status colour is never the only signal: pair
   it with the state's word or an icon.

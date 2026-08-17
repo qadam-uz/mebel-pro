@@ -221,7 +221,7 @@ function sourceLabel(own: boolean) {
           </span>
           <span
             class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11px] font-bold"
-            :class="row.own ? 'bg-accent-soft text-accent-strong' : 'bg-neutral-soft text-ink-nav'"
+            :class="row.own ? 'bg-track text-ink' : 'bg-neutral-soft text-ink-nav'"
           >
             {{ sourceLabel(row.own) }}
           </span>
@@ -275,9 +275,7 @@ function sourceLabel(own: boolean) {
               </span>
               <span
                 class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold"
-                :class="
-                  sheet.own ? 'bg-accent-soft text-accent-strong' : 'bg-neutral-soft text-ink-nav'
-                "
+                :class="sheet.own ? 'bg-track text-ink' : 'bg-neutral-soft text-ink-nav'"
               >
                 {{ sourceLabel(sheet.own) }}
               </span>
