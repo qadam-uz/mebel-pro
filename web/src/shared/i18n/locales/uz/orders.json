@@ -277,7 +277,11 @@
   "checkout": {
     "branch": "Filial",
     "contents": "Buyurtma tarkibi",
-    "cuttingWithLength": "Kesish · {length}",
+    "cuttingBasis": "{length} propil",
+    "edgeBasis": "{length} lenta",
+    "ownSheets": "mijoz {count} list olib kelgan",
+    "allOwnMaterial": "Hammasi mijoz materiali",
+    "changeClient": "O'zgartirish",
     "title": "Buyurtmani rasmiylashtirish",
     "branchFallback": "Filial",
     "client": "Mijoz ma'lumotlari",

@@ -277,7 +277,11 @@
   "checkout": {
     "branch": "Филиал",
     "contents": "Состав заказа",
-    "cuttingWithLength": "Распил · {length}",
+    "cuttingBasis": "{length} реза",
+    "edgeBasis": "{length} ленты",
+    "ownSheets": "клиент принёс {count} лист.",
+    "allOwnMaterial": "Весь материал клиента",
+    "changeClient": "Изменить",
     "title": "Оформление заказа",
     "branchFallback": "Филиал",
     "client": "Данные клиента",

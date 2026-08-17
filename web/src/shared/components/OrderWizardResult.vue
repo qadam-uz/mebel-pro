@@ -14,7 +14,7 @@ import {
 import { materialSwatchStyle } from '@/shared/app/cuttingDisplay'
 import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
-import { metres, useCuttingStore, type CuttingResult } from '@/shared/stores/cutting'
+import { useCuttingStore, type CuttingResult } from '@/shared/stores/cutting'
 
 // Step 3 of the staff order flow, drawn to the handoff prototype: one card that
 // answers "what will this cost me in boards", then one card that shows every
@@ -76,51 +76,57 @@ const planRows = computed(() =>
     .sort((left, right) => left.label.localeCompare(right.label, 'uz')),
 )
 
-const summaryRows = computed(() => {
+/** `metres()` carries its own unit, which the KPI cell prints separately — it
+ *  would read "26.38 m m". */
+function bareMetres(mm: number) {
+  return (mm / 1000).toFixed(2)
+}
+
+/** The six figures the operator reads out loud, value first. They replaced a
+ *  label/value list in an aside: the same numbers, but a list beside the plan
+ *  rows made them look like a footnote to the materials rather than the result
+ *  of the whole optimisation. */
+const kpiRows = computed(() => {
   const value = totals.value
-  const missing = Math.max(0, value.requestedParts - value.placedParts)
+  const fills = planRows.value
+    .map((row) => row.fill)
+    .filter((fill): fill is number => fill !== null)
+  const usedPercent = fills.length
+    ? Math.round(fills.reduce((sum, fill) => sum + fill, 0) / fills.length)
+    : 0
   return [
     {
-      key: 'parts',
-      label: t('cutting.result.summaryParts'),
-      // The shortfall is spelled out, not only coloured: on a placed order in
-      // the client app this row is the only shortage signal on the screen.
-      value: missing
-        ? t('cutting.result.summaryPartsShort', {
-            placed: value.placedParts,
-            requested: value.requestedParts,
-            n: missing,
-          })
-        : `${value.placedParts} ${t('cutting.unit.piece', value.placedParts)}`,
-      short: missing > 0,
-    },
-    {
       key: 'sheets',
-      label: t('cutting.result.summarySheets'),
-      value: `${value.sheets} ${t('cutting.unit.sheet', value.sheets)}`,
-      short: false,
+      value: String(value.sheets),
+      unit: t('cutting.unit.sheet', value.sheets),
+      label: t('cutting.result.kpiSheets'),
     },
     {
-      key: 'cut',
-      label: t('cutting.result.summaryCutLength'),
-      value: metres(value.cutLengthMm),
-      short: false,
+      key: 'parts',
+      value: String(value.placedParts),
+      unit: t('cutting.unit.part', value.placedParts),
+      label: t('cutting.result.kpiPlaced'),
     },
+    { key: 'fill', value: String(usedPercent), unit: '%', label: t('cutting.result.kpiFill') },
+    // An em dash rather than 0: a drawing with no banding has no tape figure,
+    // and a zero invites the reader to look for one.
     {
       key: 'edge',
-      label: t('cutting.result.summaryEdge'),
-      // Em-dash, not "0.00 m": a drawing with no banding has no tape figure,
-      // and a zero invites the reader to look for one.
-      value: value.edgeConsumedMm > 0 ? metres(value.edgeConsumedMm) : '—',
-      short: false,
+      value: value.edgeConsumedMm > 0 ? bareMetres(value.edgeConsumedMm) : '\u2014',
+      unit: value.edgeConsumedMm > 0 ? t('cutting.unit.metre') : '',
+      label: t('cutting.result.kpiEdge'),
     },
     {
       key: 'offcuts',
-      label: t('cutting.result.summaryOffcuts'),
-      value: value.usableOffcutCount
-        ? `${squareMetres(value.usableOffcutAreaMm2)} ${t('cutting.unit.areaM2')}`
-        : '—',
-      short: false,
+      value: value.usableOffcutCount ? squareMetres(value.usableOffcutAreaMm2) : '\u2014',
+      unit: value.usableOffcutCount ? t('cutting.unit.areaM2') : '',
+      label: t('cutting.result.kpiOffcuts'),
+    },
+    {
+      key: 'cut',
+      value: bareMetres(value.cutLengthMm),
+      unit: t('cutting.unit.metre'),
+      label: t('cutting.result.kpiCut'),
     },
   ]
 })
@@ -175,80 +181,73 @@ function sourceLabel(own: boolean) {
           </span>
         </div>
 
-        <div class="grid items-start gap-[26px] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.85fr)]">
-          <div>
-            <div
-              v-for="row in planRows"
-              :key="row.id"
-              class="flex items-center gap-3 border-t border-divider py-3"
-            >
+        <!-- Six figures across the top, hairline-separated. The gap IS the rule:
+             a 1px grid gap over a divider-coloured backdrop draws the lines, so
+             the cells reflow at any count without a border that ends up doubled
+             or orphaned at a wrap. -->
+        <dl
+          class="mb-5 grid gap-px overflow-hidden rounded-xl bg-divider [grid-template-columns:repeat(auto-fit,minmax(132px,1fr))]"
+        >
+          <div v-for="row in kpiRows" :key="row.key" class="bg-sunk px-3.5 pb-[13px] pt-3">
+            <dd class="flex items-baseline gap-1">
               <span
-                class="size-[30px] shrink-0 rounded-lg border border-hairline"
-                :style="row.swatch"
-                aria-hidden="true"
-              ></span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-semibold leading-tight text-ink">
-                  {{ row.label }}
-                </span>
-                <span
-                  class="mt-[3px] inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold"
-                  :class="
-                    row.own ? 'bg-accent-soft text-accent-strong' : 'bg-neutral-soft text-ink-nav'
-                  "
-                >
-                  {{ sourceLabel(row.own) }}
-                </span>
-                <span class="num block text-[12.5px] text-ink-muted">
-                  {{ row.size }} · {{ row.parts }} {{ $t('cutting.unit.part', row.parts) }}
-                </span>
-              </span>
-              <span class="w-[120px] min-w-[92px] shrink-0">
-                <span class="mb-[5px] flex items-baseline justify-between gap-2">
-                  <span class="num text-[13px] font-bold text-ink">
-                    {{ row.sheets }} {{ $t('cutting.unit.sheet', row.sheets) }}
-                  </span>
-                  <!-- The bar restates the number beside it; a bar that fails
-                       to paint costs the reader nothing. -->
-                  <span
-                    v-if="row.fill !== null"
-                    class="num whitespace-nowrap text-[11.5px] text-ink-soft"
-                  >
-                    {{ $t('cutting.result.fillUsed', { fill: `${row.fill.toFixed(0)}%` }) }}
-                  </span>
-                </span>
-                <span
-                  v-if="row.fill !== null"
-                  class="block h-[5px] overflow-hidden rounded-full bg-track"
-                  aria-hidden="true"
-                >
-                  <span
-                    class="block h-full rounded-full bg-accent"
-                    :style="{ width: `${row.fill}%` }"
-                  ></span>
-                </span>
-              </span>
-            </div>
-          </div>
-
-          <dl class="lg:border-l lg:border-divider lg:pl-[26px]">
-            <div
-              v-for="row in summaryRows"
-              :key="row.key"
-              class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-[7px]"
-            >
-              <dt class="text-[13px] text-ink-soft">{{ row.label }}</dt>
-              <dd
-                class="num shrink-0 text-right text-[13.5px] font-semibold"
-                :class="row.short ? 'text-danger' : 'text-ink'"
+                class="num font-display text-[23px] font-bold leading-none tracking-[-0.03em] text-ink"
               >
                 {{ row.value }}
-              </dd>
-            </div>
-            <p class="mt-2.5 text-[12.5px] leading-[1.45] text-ink-muted">
-              {{ $t('cutting.result.offcutHint') }}
-            </p>
-          </dl>
+              </span>
+              <span v-if="row.unit" class="text-xs font-semibold text-ink-soft">{{
+                row.unit
+              }}</span>
+            </dd>
+            <dt class="mt-[5px] text-[11.5px] text-ink-muted">{{ row.label }}</dt>
+          </div>
+        </dl>
+
+        <div
+          v-for="row in planRows"
+          :key="row.id"
+          class="grid items-center gap-3.5 border-t border-divider py-[13px] [grid-template-columns:30px_minmax(0,1fr)_auto_168px]"
+        >
+          <span
+            class="size-[30px] rounded-lg border border-hairline"
+            :style="row.swatch"
+            aria-hidden="true"
+          ></span>
+          <span class="min-w-0">
+            <span class="block truncate text-sm font-semibold text-ink">{{ row.label }}</span>
+            <span class="num block text-[12.5px] text-ink-muted">
+              {{ row.size }} · {{ row.parts }} {{ $t('cutting.unit.part', row.parts) }}
+            </span>
+          </span>
+          <span
+            class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11px] font-bold"
+            :class="row.own ? 'bg-accent-soft text-accent-strong' : 'bg-neutral-soft text-ink-nav'"
+          >
+            {{ sourceLabel(row.own) }}
+          </span>
+          <span class="flex items-center gap-2.5">
+            <span
+              v-if="row.fill !== null"
+              class="block h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-track"
+              aria-hidden="true"
+            >
+              <span
+                class="block h-full rounded-full bg-accent"
+                :style="{ width: `${row.fill}%` }"
+              ></span>
+            </span>
+            <span
+              v-if="row.fill !== null"
+              class="num flex-none whitespace-nowrap text-xs text-ink-soft"
+            >
+              {{ row.fill.toFixed(0) }}%
+            </span>
+            <span
+              class="num w-[52px] flex-none whitespace-nowrap text-right text-[13px] font-bold text-ink"
+            >
+              {{ row.sheets }} {{ $t('cutting.unit.sheet', row.sheets) }}
+            </span>
+          </span>
         </div>
       </div>
     </section>

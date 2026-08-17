@@ -60,6 +60,7 @@ import {
   type CuttingPart,
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
+import { overlayRect } from '@/shared/app/overlayGeometry'
 import type { OrderDetail } from '@/shared/stores/orders'
 
 const route = useRoute()
@@ -1004,12 +1005,39 @@ function clearActivePart() {
   activeSide.value = null
 }
 
-/** How many detals the apply-to-group action would reach. */
-const activeGroupSize = computed(() => {
+// Keeping the panel level with the row it edits. The measurement has to cross
+// the `zoom: 90%` boundary: `getBoundingClientRect` reports painted pixels while
+// a written `margin-top` is local layout pixels, so a raw delta would land the
+// panel 10% short. `overlayRect` divides the zoom out once, at the measurement,
+// and everything after it stays in one unit.
+const stepShell = ref<HTMLElement | null>(null)
+const panelOffset = ref(0)
+/** Board + gap + panel. Under this the panel has wrapped and there is no row to
+ *  level with. */
+const PANEL_SIDE_BY_SIDE_MIN = 318
+
+function syncPanelOffset() {
+  const shell = stepShell.value
   const part = activePart.value
-  if (!part) return 0
-  return parts.value.filter((row) => row.material_id === part.material_id).length
-})
+  if (!shell || !part) {
+    panelOffset.value = 0
+    return
+  }
+  const board = shell.firstElementChild?.firstElementChild
+  const row = shell.querySelector(`#part-row-${CSS.escape(part.part_ref)}`)
+  if (!board || !row) return
+  const shellBox = overlayRect(shell)
+  if (shellBox.width < overlayRect(board).width + PANEL_SIDE_BY_SIDE_MIN) {
+    panelOffset.value = 0
+    return
+  }
+  // 3px so the panel's own top edge lines up with the row's box, not its text.
+  panelOffset.value = Math.max(0, Math.round(overlayRect(row).top - shellBox.top - 3))
+}
+
+watch([activePartRef, () => parts.value.length], () => void nextTick(syncPanelOffset))
+onMounted(() => window.addEventListener('resize', syncPanelOffset))
+onBeforeUnmount(() => window.removeEventListener('resize', syncPanelOffset))
 
 // Writes to the PANEL's subject, not the modal's. `onEdgePickerChange` targets
 // `edgePickerPart`, which the wizard never sets because it never opens the
@@ -1027,24 +1055,6 @@ function onPanelEdgesChange(payload: {
   part.edge_left = payload.edges.edge_left
   part.edge_right = payload.edges.edge_right
   rememberEdgeMaterial(part, payload.rememberedMaterialId)
-}
-
-function applyActiveEdgesToGroup() {
-  const part = activePart.value
-  if (!part) return
-  const refs = new Set(
-    parts.value.filter((row) => row.material_id === part.material_id).map((row) => row.part_ref),
-  )
-  applyEdgesToRefs(refs, {
-    edges: {
-      edge_top: part.edge_top ? { ...part.edge_top } : null,
-      edge_bottom: part.edge_bottom ? { ...part.edge_bottom } : null,
-      edge_left: part.edge_left ? { ...part.edge_left } : null,
-      edge_right: part.edge_right ? { ...part.edge_right } : null,
-    },
-    rememberedMaterialId: preferredEdgeByPart.value[part.part_ref] ?? null,
-    thickened: part.thickened,
-  })
 }
 
 type MaterialPickerTarget =
@@ -2079,37 +2089,27 @@ onBeforeRouteLeave(async () => {
           </section>
         </template>
 
-        <!-- Two columns in the wizard: the board on the left, the kromka panel
-             docked on the right. The split is a CONTAINER query, not a viewport
-             one, and that is deliberate — the board's own layout is a container
-             query too, and taking 348px+18px out of its column can push it under
-             the 560px its fixed grid needs. Measuring the column the board
-             actually gets, rather than the window, keeps the two decisions on
-             the same ruler, and it needs no `zoom: 90%` arithmetic. 1006px is
-             that floor: 560 (board) + 80 (card + board padding) + 348 + 18. -->
+        <!-- The board sizes to its own content and the kromka panel sits next to
+             it — a wrap, not a breakpoint. The board's columns are fixed, so its
+             width is knowable, and `flex-wrap` puts the panel underneath exactly
+             when there is no room beside it. No media query, no container query,
+             and nothing to re-tune when a column width changes. -->
         <!-- Esc clears the selection from anywhere in step 2, including from
              inside a number cell. `.stop` so it does not travel on to the
              wizard's own cancel — the operator is dismissing the panel, not
              the order. -->
-        <div
-          :class="inOrderWizard ? '@container/step' : ''"
-          @keydown.esc.stop="inOrderWizard && clearActivePart()"
-        >
-          <div
-            :class="
-              inOrderWizard
-                ? 'grid items-start gap-[18px] @min-[1006px]/step:grid-cols-[minmax(0,1fr)_348px]'
-                : ''
-            "
-          >
-            <div :class="inOrderWizard ? 'min-w-0' : 'contents'">
+        <div ref="stepShell" @keydown.esc.stop="inOrderWizard && clearActivePart()">
+          <div :class="inOrderWizard ? 'flex flex-wrap items-start gap-[18px]' : ''">
+            <div :class="inOrderWizard ? 'shrink' : 'contents'">
               <!-- A panel, not a bordered block: `.client-card` also sets
-             `overflow: hidden`, which would trap the 547px row grid's own
-             horizontal scroller on a narrow viewport. -->
+             `overflow: hidden`, which would trap the row grid's own horizontal
+             scroller on a narrow viewport. `w-max` is what makes the wrap work:
+             the card asks for exactly its columns' width, so the panel either
+             fits beside it or drops below. -->
               <section
                 :class="
                   inOrderWizard
-                    ? 'mp-scroll min-w-0 overflow-x-auto rounded-2xl bg-elevated px-6 pb-6 pt-5 shadow-panel'
+                    ? 'mp-scroll w-max max-w-full overflow-x-auto rounded-2xl bg-elevated px-6 pb-6 pt-5 shadow-panel lg:min-w-[745px]'
                     : 'client-card'
                 "
               >
@@ -2133,11 +2133,15 @@ onBeforeRouteLeave(async () => {
                           : 'mt-1 text-sm text-ink-muted'
                       "
                     >
+                      <!-- Counts only. The m² was an estimate of the parts, not
+                           of what gets bought, and it sat one line above a board
+                           where the operator is entering the numbers it is
+                           derived from; step 3 gives the figure that matters. -->
                       {{ totalQuantity }} {{ $t('cutting.unit.part', totalQuantity) }} ·
-                      {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }} · ~{{
-                        totalAreaM2.toFixed(1)
-                      }}
-                      {{ $t('cutting.unit.areaM2') }}
+                      {{ materialCount }} {{ $t('cutting.unit.material', materialCount) }}
+                      <template v-if="!inOrderWizard">
+                        · ~{{ totalAreaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}
+                      </template>
                     </p>
                   </div>
                   <div
@@ -2287,10 +2291,10 @@ onBeforeRouteLeave(async () => {
                  belongs to, which is what a list of two materials needs. -->
                   <div
                     v-if="!inOrderWizard"
-                    class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[560px]:block"
+                    class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[660px]:block"
                   >
                     <div
-                      class="grid grid-cols-[26px_minmax(96px,1fr)_80px_80px_56px_62px_54px_44px] items-center gap-[7px] text-[11px] font-extrabold text-ink-muted"
+                      class="grid grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] items-center gap-[7px] w-max text-[11px] font-extrabold text-ink-muted"
                     >
                       <span aria-hidden="true" class="text-center">#</span>
                       <span aria-hidden="true" class="text-center">{{
@@ -2406,8 +2410,7 @@ onBeforeRouteLeave(async () => {
                             >
                               <template v-if="groupSize(group.materialId)"
                                 >{{ groupSize(group.materialId) }} · </template
-                              >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
-                              {{ group.areaM2.toFixed(2) }} {{ $t('cutting.unit.areaM2') }}
+                              >{{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }}
                             </span>
                           </span>
                         </span>
@@ -2457,9 +2460,9 @@ onBeforeRouteLeave(async () => {
                         {{ $t('cutting.editor.addPart') }}
                       </button>
                     </div>
-                    <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[560px]:block">
+                    <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[660px]:block">
                       <div
-                        class="grid grid-cols-[26px_minmax(96px,1fr)_80px_80px_56px_62px_54px_44px] items-center gap-[7px] text-[11px] font-extrabold text-ink-muted"
+                        class="grid grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] items-center gap-[7px] w-max text-[11px] font-extrabold text-ink-muted"
                       >
                         <span aria-hidden="true" class="text-center">№</span>
                         <span aria-hidden="true" class="text-center">{{
@@ -2618,24 +2621,23 @@ onBeforeRouteLeave(async () => {
                 </div>
               </div>
             </div>
-            <!-- `items-start` on the grid plus `sticky` on the DIRECT grid item
-                 is what gives the panel travel: a stretched item's box is the
-                 full row height, and a sticky element with no room to move
-                 never moves. Below the split it simply stacks under the board,
-                 which is what the design does — the modal stays the client
-                 editor's, where there is no rail to dock into. -->
+            <!-- Levelled with the row it is editing rather than pinned to the
+                 top: on a three-material board the selected row can be 600px
+                 down, and a panel at the top would have the operator reading two
+                 places at once. The offset animates so the move is legible as
+                 "the panel followed you". When the panel wraps under the board
+                 there is no row to level with, so the offset is dropped. -->
             <CuttingKromkaPanel
-              v-if="inOrderWizard && parts.length > 0"
-              class="min-w-0 @min-[1006px]/step:sticky @min-[1006px]/step:top-1"
+              v-if="inOrderWizard && activePart"
+              class="transition-[margin] duration-150 ease-out"
+              :style="{ marginTop: `${panelOffset}px` }"
               :part="activePart"
-              :part-number="activePart ? (displayPartIndex.get(activePart.part_ref) ?? 0) + 1 : 0"
-              :panel-material="activePart ? materialById(activePart.material_id) : null"
+              :part-number="(displayPartIndex.get(activePart.part_ref) ?? 0) + 1"
+              :panel-material="materialById(activePart.material_id)"
               :edge-options="cutting.edgeOptions"
               :edge-registry="edgeRegistry"
-              :group-size="activeGroupSize"
               :flash-side="activeSide"
               @edges-change="onPanelEdgesChange"
-              @apply-group="applyActiveEdgesToGroup"
               @close="clearActivePart"
             />
           </div>

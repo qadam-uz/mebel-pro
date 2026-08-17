@@ -363,9 +363,10 @@ caret. There is no ceiling: an oversized part and the 300-part budget already fa
 visible errors, and a silent cap would swallow the message the operator needs to read. Deleting a
 row shows an undo toast; clearing all rows still requires confirmation.
 
-The six numeric columns are fixed-width, not elastic. Left to stretch they put `Soni` a screen's
-width away from `№` on a wide monitor, so the board now ends where its content ends and the
-leftover width stays empty — or, in the staff wizard, carries the kromka panel.
+Every column except the row number is fixed-width, `Nomi` included. Left to stretch they put
+`Soni` a screen's width away from `№` on a wide monitor, so the board now ends where its content
+ends and the leftover width stays empty — or, in the staff wizard, carries the kromka panel
+beside it.
 
 Each material group shows its own edge-tape registry under the material name. Distinct
 `(edge material_id, source)` pairs get one number and colour in their first-use order; row edge
@@ -495,16 +496,24 @@ Pressed means `follow_grain=true` and the part is rotation-locked; unpressed mea
 
 **Edge picker** — two surfaces, one behaviour:
 
-- **The staff order wizard docks it.** In step 2 of the staff new-order flow, once the parts
-  column is wide enough for a 348px rail beside it, banding is a permanently docked panel to
-  the right of the board rather than a modal. Its subject is the selected row: clicking
-  anywhere in a row, or moving focus into any of its cells, selects that row; `Esc` clears the
+- **The staff order wizard docks it.** In step 2 of the staff new-order flow, banding is a
+  300px panel beside the parts board rather than a modal. The board is sized to its own
+  columns, so the panel either fits next to it or wraps underneath — a wrap, not a
+  breakpoint. It appears only while a row is selected and has no empty state: with nothing
+  selected there is nothing for it to say. Its subject is the selected row — clicking anywhere
+  in a row, or moving focus into any of its cells, selects that row; `Esc` clears the
   selection and deleting the row clears it too. The selected row carries a tint, a one-pixel
   outline (an outline rather than a border, so the columns cannot shift under it) and an
-  accent `№`. Nothing opens and nothing closes — the operator keeps the detal he is banding in
-  view, and each next detal costs one click instead of open → toggle → close. The panel has no
-  backdrop, no focus trap and no scroll lock; the board stays scrollable and keyboard-reachable
-  beside it. Below that width the panel simply stacks under the board.
+  accent `№`. The panel **levels itself with that row** rather than pinning to the top: on a
+  long board the selected row can be most of a screen down, and a panel at the top would have
+  the operator reading two places at once. Nothing opens and nothing closes — each next detal
+  costs one click instead of open → toggle → close. There is no backdrop, no focus trap and
+  no scroll lock; the board stays scrollable and keyboard-reachable beside it.
+- **What the panel holds**, top to bottom: the detal's number, name and size; four side
+  buttons, each carrying a small rectangle with its own edge drawn heavy so the glyph says
+  which side the button means; two glyph buttons beside them for the whole-part patterns
+  (band every side, band none); and the tape row, which expands into the same searchable,
+  ranked catalog the modal uses. Every toggle writes through immediately — there is no Apply.
 - **Everywhere else it stays a modal** — the client editor's board is full-width, so there is
   no rail to dock into. The description below is that modal.
 - **One modal, two in-dialog panels.** The compact glyph is display-only: its four borders
@@ -586,6 +595,16 @@ authoritative reading of the result. 768px is the app's own desktop boundary (th
 at `zoom: 90%` from 769px), so the switch lands where the layout already changes character
 rather than inventing a third regime.
 
+**The wizard's result leads with six figures.** Above the per-material rows, step 3 opens with a
+strip of headline numbers — sheets to cut, parts placed, average sheet utilisation, tape metres,
+usable offcut area, propil length — value first, unit and label beneath. They are the figures an
+operator reads out loud when the customer asks what this costs, and they were previously a
+label/value list in a side column, where they read as a footnote to the materials rather than as
+the result of the whole optimisation. The rules between the cells are drawn by the grid gap over
+a divider-coloured backdrop, so the strip reflows at any cell count without a doubled or
+orphaned border. Each material then gets one row: swatch, name and size, source chip, and its
+own fill bar with the sheet count.
+
 **The staff order flow adds a third surface, and it is not a third reading of the same thing.**
 On step 3 of the wizard a **Kesish xaritasi** card below the result shows *every* sheet at once
 as a small map in an auto-filling grid. It answers a different question from the drawing above
@@ -620,11 +639,16 @@ instead, so fewer labels print and the ones that do are legible.
    - Selecting a details row highlights all matching placements on the sheet and dims the
      rest. Clicking one SVG placement selects its part group, bolds that instance label,
      and scrolls the matching row into view. Clicking the sheet background clears selection.
-   - **Banded sides** are flagged by a short, centred accent tick set just inside the
-     placed rectangle, on each banded side only (not a full-length frame) — so the cutter
-     sees which edges take tape at a glance. The side mapping follows the part's own edges;
-     a rotated placement maps them 90° clockwise. Tick inset, length and weight are
-     normalised, so banding reads the same on a large and a small panel.
+   - **Banded sides** are flagged by a short, centred tick set just inside the placed
+     rectangle, on each banded side only (not a full-length frame) — so the cutter sees which
+     edges take tape at a glance. The tick is drawn in **its own tape's colour**, over a white
+     gutter and a dark hairline: tape colours are mostly pale, and a white tick on a white part
+     read as nothing, while the gutter keeps it from merging into a grain-locked part's
+     hairlines. A tape the registry never numbered falls back to neutral ink rather than to
+     accent — that is a data gap, and accent on this drawing is the colour its alerts use. The
+     side mapping follows the part's own edges; a rotated placement maps them 90° clockwise.
+     Tick inset, length and weight are normalised, so banding reads the same on a large and a
+     small panel.
    - **Grain-locked parts** — those whose `follow_grain` is true, which the optimizer may not
      turn — are filled with hairlines running parallel to the sheet's texture, that is along
      its long side. Free parts keep the flat fill. The pattern is normalised like the ticks

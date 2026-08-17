@@ -235,8 +235,8 @@ function bandLines(placement: CuttingPlacement) {
   const y0 = svgY(placement)
   const cx = x0 + length / 2
   const cy = y0 + width / 2
-  const halfH = Math.min(BAND_MARK / normScale.value, length * 0.6) / 2
-  const halfV = Math.min(BAND_MARK / normScale.value, width * 0.6) / 2
+  const halfH = Math.min(BAND_MARK / normScale.value, length * 0.34) / 2
+  const halfV = Math.min(BAND_MARK / normScale.value, width * 0.34) / 2
   const lines: Array<{ x1: number; y1: number; x2: number; y2: number; stroke: string }> = []
   for (const side of sides) {
     const band = part[side.field]
@@ -400,18 +400,48 @@ function offcutTransform(offcut: CuttingOffcut) {
         stroke="none"
         aria-hidden="true"
       />
-      <line
+      <!-- Three strokes per band, drawn as the tape laid on the part's edge: a
+           white gutter so the mark never merges into a grained part's hairlines,
+           a dark hairline so a white tape still reads as a mark, and the tape's
+           own colour on top. Painting only the colour lost every light tape
+           against the part. -->
+      <template
         v-for="(line, index) in bandLines(placement)"
         :key="`${placement.id}-band-${index}`"
-        :x1="line.x1"
-        :y1="line.y1"
-        :x2="line.x2"
-        :y2="line.y2"
-        :stroke="line.stroke"
-        :stroke-width="bandStrokeWidth"
-        stroke-linecap="round"
-        aria-hidden="true"
-      />
+      >
+        <line
+          :x1="line.x1"
+          :y1="line.y1"
+          :x2="line.x2"
+          :y2="line.y2"
+          stroke="var(--color-elevated)"
+          :stroke-width="bandStrokeWidth + 2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        />
+        <line
+          :x1="line.x1"
+          :y1="line.y1"
+          :x2="line.x2"
+          :y2="line.y2"
+          stroke="var(--color-ink)"
+          :stroke-width="bandStrokeWidth + 0.8"
+          stroke-opacity="0.55"
+          stroke-linecap="round"
+          aria-hidden="true"
+        />
+        <line
+          :x1="line.x1"
+          :y1="line.y1"
+          :x2="line.x2"
+          :y2="line.y2"
+          data-band="tape"
+          :stroke="line.stroke"
+          :stroke-width="bandStrokeWidth"
+          stroke-linecap="round"
+          aria-hidden="true"
+        />
+      </template>
       <text
         v-if="lengthDimFits(placement)"
         :x="placement.x_mm + placement.length_mm / 2"
