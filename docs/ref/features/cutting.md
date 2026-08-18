@@ -723,6 +723,22 @@ instead, so fewer labels print and the ones that do are legible.
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
      identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
      include every physical sheet.
+   - An **order's** document leads that page with **Hisob-kitob** — this card's receipt on
+     paper: one row per sheet material, tape, service, and any discount or surcharge, each
+     carrying the multiplication behind it (`3 list × 30 000`), a bold total, and the same
+     `Jami` restated in the title block. Tapes are stamped with their registry number ①②;
+     a client-supplied material prints `o'zingizniki` rather than a zero, and the saving it
+     bought closes the table. The figures are rebuilt from the order's own frozen prices, so
+     the page reconciles with the total the order was placed at, and it is printed **before**
+     the production tables so an offcut inventory can never push the price onto page 2. A
+     draft has no order and no receipt — its summary stays technical.
+   - Summary tables size their own rows: a cell too wide for its column — a full
+     material label, an own-material note — **wraps onto a further line** and the row grows
+     with it; nothing is truncated to an ellipsis, since half a material name identifies
+     nothing. Cells in the same row read from its first line down. The page planner measures
+     the same heights it draws, so a table of wrapped rows still breaks onto the next page
+     instead of printing past the margin. The work cards are unaffected — their four header
+     lines and the `Uzunlik · Kenglik · Soni` register are fixed-height by design.
    - The PDF carries two area-derived utilisation figures. `Ishlatildi` is parts area divided
      by sheet area; `Qoldiq bilan` adds usable offcut area before dividing. Both read `KIM`
      until 2026-08, the same rename the screen took.

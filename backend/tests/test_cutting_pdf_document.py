@@ -953,25 +953,256 @@ def test_a_new_vocabulary_snapshot_prints_the_same_summary_row() -> None:
 
 
 def test_summary_section_headers_survive_their_own_column_widths() -> None:
-    """`_clip` truncates by character count, silently and without an error.
+    """Values wrap when they outgrow their column; headers must not have to.
 
     D3.1 renamed the `KIM` column to `Ishlatildi` — three times longer, in a
     column sized for three glyphs. Nothing in the render path raises when a
-    header is clipped, and no rendered-PDF assertion reads it, so the only
-    guard against `Ishlati…` is this one: every header must fit the width its
-    own section hands `_draw_table_row`.
+    header no longer fits: it silently takes a second line and every table on
+    the page shifts down. So the guard is here — every header, in every
+    section, priced or not, fits its own column on one line.
     """
     panel = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
     result = _result(parts=[_part()], panels=[panel])
-    sections = pdf_document._summary_sections(result, [])
+    pdf_document._register_fonts()
+    sections = pdf_document._summary_sections(
+        result, [], pdf_document.PdfContext(pricing=_pricing())
+    )
 
-    clipped = [
+    wrapped = [
         (section.title, header)
         for section in sections
         for header, width in zip(section.headers, section.widths, strict=True)
-        if pdf_document._clip(header, width) != header
+        if len(pdf_document._cell_lines(header, width, bold=True)) > 1
     ]
 
-    assert clipped == []
+    assert wrapped == []
     materials = next(section for section in sections if section.title == "Materiallar")
     assert materials.headers[-1] == "Ishlatildi"
+
+
+def _pricing() -> pdf_document.PdfPricing:
+    return pdf_document.PdfPricing(
+        rows=(
+            pdf_document.PdfPriceRow(
+                group="List",
+                label="LDSP Egger H1334",
+                unit="list",
+                quantity="3",
+                unit_price_tiyin=3_000_000,
+                own_quantity="1",
+                amount_tiyin=9_000_000,
+                material_id=str(PANEL_ID),
+            ),
+            pdf_document.PdfPriceRow(
+                group="Kromka",
+                label="ABS H1334",
+                unit="m",
+                quantity="2.50",
+                unit_price_tiyin=500_000,
+                amount_tiyin=1_250_000,
+                material_id=str(EDGE_A_ID),
+            ),
+            pdf_document.PdfPriceRow(
+                group="Kromka",
+                label="ABS White",
+                unit="m",
+                own_quantity="1.20",
+                material_id=str(EDGE_B_ID),
+            ),
+            pdf_document.PdfPriceRow(
+                group="Xizmat",
+                label="Kesish xizmati",
+                unit="list",
+                quantity="4",
+                unit_price_tiyin=2_000_000,
+                amount_tiyin=8_000_000,
+            ),
+            pdf_document.PdfPriceRow(
+                group="Chegirma",
+                label="Doimiy mijoz",
+                amount_tiyin=-250_000,
+            ),
+        ),
+        total_tiyin=18_000_000,
+        saved_tiyin=3_000_000,
+    )
+
+
+def _priced_summary_sections() -> list[pdf_document.SummarySection]:
+    result = _result(
+        parts=[
+            _part(edge_top={"material_id": str(EDGE_A_ID), "source": "shop"}),
+            _part(part_ref="part-b", edge_top={"material_id": str(EDGE_B_ID), "source": "own"}),
+        ],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+        edge_shop={str(EDGE_A_ID): 2500},
+        edge_own={str(EDGE_B_ID): 1200},
+    )
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+    return pdf_document._summary_sections(
+        result, registry, pdf_document.PdfContext(pricing=_pricing())
+    )
+
+
+def test_a_priced_document_opens_its_summary_with_the_receipt() -> None:
+    """The money section leads the summary — the client's first question is the
+    price, and an offcut table must never be what pushes it onto page 2."""
+    sections = _priced_summary_sections()
+
+    assert [section.title for section in sections] == [
+        "Hisob-kitob",
+        "Materiallar",
+        "Kromkalar",
+        "Qoldiqlar",
+    ]
+
+
+def test_receipt_rows_print_the_multiplication_behind_every_figure() -> None:
+    section = _priced_summary_sections()[0]
+    rows = section.rows
+
+    assert rows[0] == [
+        "List",
+        "LDSP Egger H1334",
+        "3 list × 30 000 · 1 list o'zingizniki",
+        "90 000",
+    ]
+    # Tapes carry the same registry number the map, the register and the kromka
+    # specification stamp them with.
+    assert rows[1] == ["Kromka", "① ABS H1334", "2.50 m × 5 000", "12 500"]
+    # A tape the client supplies is not a zero-so'm line: it says who brings it.
+    assert rows[2] == ["Kromka", "② ABS White", "1.20 m o'zingizniki", "o'zingizniki"]
+    assert rows[3] == ["Xizmat", "Kesish xizmati", "4 list × 20 000", "80 000"]
+    assert rows[4] == ["Chegirma", "Doimiy mijoz", "", "-2 500"]
+    assert rows[5] == ["Jami", "", "", "180 000"]
+    assert rows[6] == ["Tejaldi", "o'z materialingiz hisobiga", "", "30 000"]
+    # The total is the figure the reader came for — it prints bold, and it is
+    # the only row that does, even once the saving line follows it.
+    assert section.bold_rows == frozenset({5})
+
+
+def test_identity_block_states_the_total_before_the_receipt_breaks_it_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body, _ = _identity_draw_calls(monkeypatch, pdf_document.PdfContext(pricing=_pricing()))
+
+    assert "Jami: 180 000 so'm" in [text for _, text, _ in body]
+
+
+def test_an_unpriced_document_prints_no_receipt() -> None:
+    """A draft with no branch has no price to state, and the summary says
+    nothing about money rather than printing an empty or zeroed receipt."""
+    result = _result(
+        parts=[_part()],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+    )
+
+    sections = pdf_document._summary_sections(result, [], pdf_document.PdfContext())
+
+    assert [section.title for section in sections] == ["Materiallar", "Kromkalar", "Qoldiqlar"]
+
+
+def test_a_value_too_wide_for_its_column_continues_on_the_next_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Summary cells wrap; they are never cut off with an ellipsis. Half a
+    material name identifies nothing, and the name is exactly the value that
+    outgrows its column."""
+    name = "LDSP Egger H1334 ST9 · Sanoma · 2750×1830×18 mm"
+    drawn: list[tuple[float, str]] = []
+
+    def spy_draw_text(
+        pdf: Any, x: float, y: float, text: str, size: float, *, bold: bool = False, gray: float = 0
+    ) -> None:
+        drawn.append((x, text))
+
+    pdf_document._register_fonts()
+    monkeypatch.setattr(pdf_document, "_draw_text", spy_draw_text)
+    widths = [160.0, 60.0]
+
+    bottom = pdf_document._draw_adaptive_table_row(
+        rl_canvas.Canvas(BytesIO(), pagesize=A4), 700.0, [name, "3"], widths
+    )
+
+    name_lines = [text for x, text in drawn if x < pdf_document._MARGIN + widths[0]]
+    assert len(name_lines) == 2
+    assert " ".join(name_lines) == name
+    assert [text for x, text in drawn if x >= pdf_document._MARGIN + widths[0]] == ["3"]
+    # The row grew by exactly the line it gained, and the planner measures the
+    # same height it just drew.
+    assert 700.0 - bottom == pdf_document._summary_row_h([name, "3"], widths)
+    assert 700.0 - bottom > pdf_document._REGISTER_ROW_H
+
+
+def _long_named_materials_result(count: int) -> CuttingResultResponse:
+    """One panel per material, each with a full-length real decor label and a
+    distinct usable offcut — so every summary section fills with rows whose
+    Material column wraps."""
+    result = _result(
+        parts=[_part()],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+    )
+    panels: list[CuttingPanelResponse] = []
+    for index in range(count):
+        material_id = uuid.UUID(int=0xC0FFEE + index)
+        result.material_snapshots[str(material_id)] = {
+            "id": str(material_id),
+            "kind": "panel",
+            "manufacturer_name": "Kronospan Rus Egorevsk",
+            "type": "dsp",
+            "name": f"K{index:03d} PW Craft Oak tabiiy yog'och tekstura",
+            "thickness_mm": "18.0",
+            "color": "Zolotoy Kraft Oak",
+            "decor_code": f"K{index:03d} PW",
+            "panel_length_mm": 2750,
+            "panel_width_mm": 1830,
+        }
+        panels.append(
+            _panel(
+                material_id,
+                panel_index=index + 1,
+                placements=[_placement("part-a", 0, 0)],
+                offcuts=[
+                    CuttingOffcutResponse(
+                        x_mm=400, y_mm=0, length_mm=600 + index, width_mm=1000, usable=True
+                    )
+                ],
+            )
+        )
+    result.panels = panels
+    result.panels_used_by_material = {str(panel.branch_material_id): 1 for panel in panels}
+    return result
+
+
+def test_a_summary_page_of_wrapping_rows_stays_inside_its_bottom_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rows are no longer a fixed height, so the planner has to measure what the
+    drawing spends — otherwise a page of wrapped rows prints off the sheet."""
+    result = _long_named_materials_result(30)
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+    context = pdf_document.PdfContext(order_number="B-1")
+    baselines: list[float] = []
+
+    def spy_draw_text(
+        pdf: Any, x: float, y: float, text: str, size: float, *, bold: bool = False, gray: float = 0
+    ) -> None:
+        baselines.append(y)
+
+    pdf_document._register_fonts()
+    sections = pdf_document._summary_sections(result, registry, context)
+    pages = pdf_document._plan_summary_pages(result, registry, context)
+    monkeypatch.setattr(pdf_document, "_draw_text", spy_draw_text)
+    canvas = rl_canvas.Canvas(BytesIO(), pagesize=A4)
+    for number, page in enumerate(pages, start=1):
+        pdf_document._draw_adaptive_summary_page(canvas, result, context, page, number, len(pages))
+
+    # The case is only meaningful once rows actually wrap and the tables span
+    # more than one page.
+    materials = next(section for section in sections if section.title == "Materiallar")
+    assert (
+        pdf_document._summary_row_h(materials.rows[0], materials.widths)
+        > pdf_document._REGISTER_ROW_H
+    )
+    assert len(pages) > 1
+    assert min(baselines) >= pdf_document._MARGIN

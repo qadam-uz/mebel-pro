@@ -47,6 +47,8 @@ from app.modules.catalog.contracts import (
     is_tape,
 )
 from app.modules.cutting.api import (
+    PdfPriceRow,
+    PdfPricing,
     clamp_own_claim,
     cutting_result_response,
     get_workshop_draft,
@@ -2901,6 +2903,107 @@ def _order_price_lines(
     panel_lines.sort(key=lambda line: line.material_name)
     edge_lines.sort(key=lambda line: line.material_name)
     return panel_lines + edge_lines
+
+
+def order_pdf_pricing(order: OrderDetailResponse) -> PdfPricing:
+    """The order's money, shaped for the cutting document's first page.
+
+    Built from the order's own frozen figures — itemized price lines, the rates
+    it was billed at, the stored subtotals — not live branch pricing, so the
+    receipt on the page reconciles with the total the order was placed at. It
+    is deliberately the same receipt the client already reads in «Buyurtmangiz»
+    before the order exists: same lines, same visible multiplication, so the
+    printed document never restates the price in a shape they have to re-learn.
+    Only the numbers are decided here; the document owns how they read.
+    """
+    rows: list[PdfPriceRow] = []
+    saved_tiyin = 0
+    for line in order.price_lines:
+        if line.kind != "panel":
+            continue
+        charged = line.panels_used or 0
+        saved_tiyin += line.own_panels * line.unit_price_tiyin
+        rows.append(
+            PdfPriceRow(
+                group="List",
+                label=line.material_name,
+                unit="list",
+                quantity=str(charged) if charged else "",
+                unit_price_tiyin=line.unit_price_tiyin,
+                own_quantity=str(line.own_panels) if line.own_panels else "",
+                # A fully client-supplied material is not a zero-so'm line: it
+                # carries no amount at all, and the document says who brings it.
+                amount_tiyin=line.line_total_tiyin if charged else None,
+                material_id=str(line.material_id),
+            )
+        )
+    banded_mm = 0
+    edge_material_tiyin = 0
+    for line in order.price_lines:
+        if line.kind != "edge":
+            continue
+        charged_mm = line.consumed_mm or 0
+        banded_mm += charged_mm + line.own_mm
+        edge_material_tiyin += line.line_total_tiyin
+        saved_tiyin += _millimetre_price(line.own_mm, line.unit_price_tiyin)
+        rows.append(
+            PdfPriceRow(
+                group="Kromka",
+                label=line.material_name,
+                unit="m",
+                quantity=_metres_text(charged_mm) if charged_mm else "",
+                unit_price_tiyin=line.unit_price_tiyin,
+                own_quantity=_metres_text(line.own_mm) if line.own_mm else "",
+                amount_tiyin=line.line_total_tiyin if charged_mm else None,
+                material_id=str(line.material_id),
+            )
+        )
+    if order.planned_panels or order.subtotal_cutting_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Xizmat",
+                label="Kesish xizmati",
+                unit="list",
+                quantity=str(order.planned_panels),
+                unit_price_tiyin=order.cutting_rate_tiyin,
+                amount_tiyin=order.subtotal_cutting_tiyin,
+            )
+        )
+    # Labour is charged on every banded millimetre, the client's own tape
+    # included — only the tape material above is theirs. What is left of the
+    # banding subtotal after the material lines is exactly that labour.
+    if banded_mm:
+        rows.append(
+            PdfPriceRow(
+                group="Xizmat",
+                label="Kromka yopishtirish",
+                unit="m",
+                quantity=_metres_text(banded_mm),
+                unit_price_tiyin=order.edge_banding_rate_tiyin,
+                amount_tiyin=order.subtotal_edge_banding_tiyin - edge_material_tiyin,
+            )
+        )
+    if order.discount_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Chegirma",
+                label=order.discount_reason or "Chegirma",
+                amount_tiyin=-order.discount_tiyin,
+            )
+        )
+    if order.surcharge_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Ustama",
+                label=order.surcharge_reason or "Ustama",
+                amount_tiyin=order.surcharge_tiyin,
+            )
+        )
+    return PdfPricing(rows=tuple(rows), total_tiyin=order.total_tiyin, saved_tiyin=saved_tiyin)
+
+
+def _metres_text(length_mm: int) -> str:
+    return f"{length_mm / 1000:.2f}"
 
 
 def _snapshot_decimal(value: object) -> Decimal | None:

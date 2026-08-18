@@ -22,6 +22,8 @@ from app.modules.cutting.optimizer import (
 )
 from app.modules.cutting.pdf_document import (
     PdfContext,
+    PdfPriceRow,
+    PdfPricing,
     render_cutting_pdf,
     render_cutting_pdf_async,
 )
@@ -71,6 +73,8 @@ __all__ = [
     "PanelSpec",
     "PartInput",
     "PdfContext",
+    "PdfPriceRow",
+    "PdfPricing",
     "PlacementResult",
     "choose_result",
     "choose_workshop_result",

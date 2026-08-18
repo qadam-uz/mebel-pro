@@ -5,7 +5,7 @@ sheet pages. The map panel itself is delegated to rendering.draw_sheet_map so
 its geometry stays in parity with the web sheet visualiser.
 """
 
-# ruff: noqa: RUF001 -- report copy uses Uzbek punctuation and circled numbers.
+# ruff: noqa: RUF001, RUF002 -- report copy uses Uzbek punctuation and circled numbers.
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from reportlab.pdfgen import canvas
 
 from app.core.material_label import edge_label as _edge_label
 from app.core.material_label import material_label as _material_label
+from app.core.money import format_som as _som
 from app.modules.cutting.rendering import (
     _FONT_BOLD,
     _FONT_REGULAR,
@@ -71,6 +72,17 @@ _MIN_PRINT_TEXT_PT = 7.0
 _MIN_EDGE_STROKE_PT = 0.8
 _PORTRAIT_SLOT_GAP = 10.0
 _REGISTER_ROW_H = 14.0
+# Summary tables set their own row height: a cell too wide for its column wraps
+# onto further lines and the row grows, rather than the value being cut off with
+# an ellipsis. A material name or an own-material note is exactly the cell that
+# overflows, and half a material name identifies nothing. A single line still
+# measures `_REGISTER_ROW_H`, so an ordinary row is unchanged.
+_SUMMARY_LINE_STEP = 8.5
+_SUMMARY_ROW_PAD = 5.5
+_SUMMARY_ROW_TOP_PAD = 3.0
+_CELL_PAD = 2.0
+# The gap between the section title and its header row, in the planner's budget.
+_SECTION_TITLE_H = 12.0
 _REGISTER_HEADER_H = 13.0
 # Every point here is a point the map does not get, and the map is width-bound
 # for a standard 2750x1830 sheet. 104 is the floor: the binding constraint is now
@@ -101,6 +113,45 @@ _REGISTER_TICK_TOP = 8.5
 
 
 @dataclass(frozen=True)
+class PdfPriceRow:
+    """One receipt line, printed the way the client's «Chek» prints it: what it
+    is, the arithmetic behind the figure, and the figure itself.
+
+    The row carries the *numbers*; this module owns how they read on paper, so
+    the caller never has to know the receipt's copy or its money format.
+    `amount_tiyin` is None for a line the workshop does not charge because the
+    client supplied the material — the row still prints, since "you bring it"
+    is not the same statement as "it costs nothing". `material_id` is carried
+    so an edge line can be stamped with the same registry number ①② the map,
+    the register and the kromka specification use.
+    """
+
+    group: str
+    label: str
+    # What the charge multiplies: `quantity` of `unit` at `unit_price_tiyin`.
+    # A missing quantity or price prints the amount alone rather than a
+    # multiplication by nothing (an order placed before rates were stored).
+    unit: str = ""
+    quantity: str = ""
+    unit_price_tiyin: int | None = None
+    # The share of the same line the client brings, in the same unit.
+    own_quantity: str = ""
+    amount_tiyin: int | None = None
+    material_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PdfPricing:
+    """The order's money, itemised — the same receipt the client reads under
+    «Buyurtmangiz», so the document and the screen state one price one way."""
+
+    rows: tuple[PdfPriceRow, ...] = ()
+    total_tiyin: int = 0
+    # What the client's own sheets and tape took off the bill; 0 hides the line.
+    saved_tiyin: int = 0
+
+
+@dataclass(frozen=True)
 class PdfContext:
     order_number: str | None = None
     client_name: str | None = None
@@ -113,6 +164,9 @@ class PdfContext:
     workshop_name: str | None = None
     branch_address: str | None = None
     branch_phone: str | None = None
+    # The money side of the document. Absent for a draft that has no price yet
+    # (no branch, no order) — the summary then prints its technical tables only.
+    pricing: PdfPricing | None = None
 
 
 class EdgeRegistryEntry(NamedTuple):
@@ -160,6 +214,10 @@ class SummarySection:
     headers: list[str]
     widths: Sequence[float]
     rows: list[list[str]]
+    # Rows to print bold, by absolute index — the receipt's total is the one
+    # figure the reader is looking for, and a table of equal rows hides it.
+    # Absolute, not page-relative, so a section split across pages keeps it.
+    bold_rows: frozenset[int] = frozenset()
 
 
 async def render_cutting_pdf_async(
@@ -903,7 +961,7 @@ def _plan_summary_pages(
     registry: list[EdgeRegistryEntry],
     context: PdfContext | None = None,
 ) -> list[list[tuple[SummarySection, int, int]]]:
-    sections = _summary_sections(result, registry)
+    sections = _summary_sections(result, registry, context)
     pages: list[list[tuple[SummarySection, int, int]]] = []
     page: list[tuple[SummarySection, int, int]] = []
     # The identity block on the first page is as tall as its wrapped columns
@@ -912,17 +970,27 @@ def _plan_summary_pages(
     identity_h = _identity_box_h(*_identity_columns(result, context or PdfContext()))
     remaining = _PAGE_H - 2 * _MARGIN - identity_h - _IDENTITY_GAP
     for section in sections:
+        # Rows are no longer a fixed height, so the planner measures each one
+        # the same way the drawing does — the alternative is a wrapped row
+        # printing past the bottom margin of the page it was budgeted onto.
+        heights = [_summary_row_h(row, section.widths) for row in section.rows]
+        needed_head = _SECTION_TITLE_H + _summary_row_h(section.headers, section.widths, bold=True)
         start = 0
         while start < len(section.rows):
-            needed_head = 27
-            if remaining < needed_head + _REGISTER_ROW_H:
+            if remaining < needed_head + heights[start]:
                 pages.append(page)
                 page = []
                 remaining = _PAGE_H - 2 * _MARGIN
-            capacity = max(1, int((remaining - needed_head) // _REGISTER_ROW_H))
-            end = min(len(section.rows), start + capacity)
+            end = start
+            used = 0.0
+            while end < len(heights) and used + heights[end] <= remaining - needed_head:
+                used += heights[end]
+                end += 1
+            if end == start:  # one row taller than a whole page: place it anyway
+                used = heights[start]
+                end = start + 1
             page.append((section, start, end))
-            remaining -= needed_head + (end - start) * _REGISTER_ROW_H + 10
+            remaining -= needed_head + used + 10
             start = end
     if page or not pages:
         pages.append(page)
@@ -930,12 +998,14 @@ def _plan_summary_pages(
 
 
 def _summary_sections(
-    result: CuttingResultResponse, registry: list[EdgeRegistryEntry]
+    result: CuttingResultResponse,
+    registry: list[EdgeRegistryEntry],
+    context: PdfContext | None = None,
 ) -> list[SummarySection]:
-    # Last column widened 38 → 58 with the KIM → Ishlatildi rename: _clip allows
-    # max(3, width / 4.4) characters, so a 10-glyph header needs ~44pt or it
-    # silently prints as "Ishlati…". _fill_width gives the slack back from the
-    # name column, which is the widest and has it to spare.
+    # Last column widened 38 → 58 with the KIM → Ishlatildi rename: a header
+    # wider than its column wraps onto a second line and pushes every table
+    # below it down, so each one is sized to hold its own label. _fill_width
+    # gives the slack back to the name column, which absorbs it by wrapping.
     material_widths = _fill_width([0, 50, 55, 52, 52, 55, 58])
     material_rows: list[list[str]] = []
     total = MaterialStats("", 0, 0, 0, 0, 0, 0)
@@ -999,7 +1069,13 @@ def _summary_sections(
     ]
     if not offcut_rows:
         offcut_rows.append(["", "Qoldiq yo'q.", ""])
+    pricing = (context or PdfContext()).pricing
+    # Money first: the client opens this document to see what the order costs,
+    # and the section that answers that must not be one the offcut table can
+    # push onto page 2. The production tables the saw reads follow it, and the
+    # work cards — the pages that actually go to the machine — are unaffected.
     return [
+        *([_pricing_section(pricing, registry)] if pricing else []),
         SummarySection(
             "Materiallar",
             [
@@ -1023,6 +1099,52 @@ def _summary_sections(
     ]
 
 
+def _pricing_section(pricing: PdfPricing, registry: list[EdgeRegistryEntry]) -> SummarySection:
+    """The receipt as a table: every row carries the multiplication behind it,
+    so the price can be checked instead of taken on faith — the same reason the
+    «Buyurtmangiz» card prints `3 × 300 000 = 900 000` rather than a subtotal.
+
+    Figures are bare numbers: the currency is stated by the two money headers,
+    once, which is also what buys the arithmetic column the width it needs.
+    """
+    numbers = {entry.material_id: entry.number for entry in registry}
+    rows = [
+        [
+            row.group,
+            _numbered_label(row, numbers),
+            _price_detail(row),
+            _som(row.amount_tiyin) if row.amount_tiyin is not None else "o'zingizniki",
+        ]
+        for row in pricing.rows
+    ]
+    rows.append(["Jami", "", "", _som(pricing.total_tiyin)])
+    total_index = len(rows) - 1
+    if pricing.saved_tiyin > 0:
+        rows.append(["Tejaldi", "o'z materialingiz hisobiga", "", _som(pricing.saved_tiyin)])
+    return SummarySection(
+        "Hisob-kitob",
+        ["Turi", "Nomi", "Hisob (so'm)", "Summa (so'm)"],
+        _fill_width([44, 0, 200, 80], name_index=1),
+        rows,
+        bold_rows=frozenset({total_index}),
+    )
+
+
+def _price_detail(row: PdfPriceRow) -> str:
+    """The arithmetic cell: `3 list × 300 000 · 2 list o'zingizniki`."""
+    parts = []
+    if row.quantity and row.unit_price_tiyin:
+        parts.append(f"{row.quantity} {row.unit} × {_som(row.unit_price_tiyin)}")
+    if row.own_quantity:
+        parts.append(f"{row.own_quantity} {row.unit} o'zingizniki")
+    return " · ".join(part.strip() for part in parts)
+
+
+def _numbered_label(row: PdfPriceRow, numbers: dict[str, int]) -> str:
+    number = numbers.get(row.material_id or "")
+    return f"{_registry_number(number)} {row.label}" if number else row.label
+
+
 def _draw_adaptive_summary_page(
     pdf: canvas.Canvas,
     result: CuttingResultResponse,
@@ -1040,10 +1162,12 @@ def _draw_adaptive_summary_page(
         y -= 20
     for section, start, end in page:
         _draw_text(pdf, _MARGIN, y, section.title, 10, bold=True)
-        y -= 12
+        y -= _SECTION_TITLE_H
         y = _draw_adaptive_table_row(pdf, y, section.headers, section.widths, bold=True)
-        for row in section.rows[start:end]:
-            y = _draw_adaptive_table_row(pdf, y, row, section.widths)
+        for index in range(start, end):
+            y = _draw_adaptive_table_row(
+                pdf, y, section.rows[index], section.widths, bold=index in section.bold_rows
+            )
         y -= 10
     _draw_page_number(pdf, number, count, _PAGE_W, _PAGE_H)
 
@@ -1075,6 +1199,13 @@ def _identity_columns(
             # The two cutting parameters the layout was computed with — without
             # them the saw operator cannot reproduce these coordinates.
             f"Arra kesigi: {result.kerf_mm} mm · chetki qirqim: {result.edge_trim_mm} mm",
+            # The one figure the client looks for first, stated before the
+            # receipt spells out how it was built.
+            *(
+                [f"Jami: {_som(context.pricing.total_tiyin)} so'm"]
+                if context.pricing is not None
+                else []
+            ),
         )
         for line in _wrap(text, _IDENTITY_FONT, _identity_right_w())
     ]
@@ -1346,9 +1477,8 @@ def _draw_adaptive_table_row(
     widths: Sequence[float],
     *,
     bold: bool = False,
-    row_h: float = _REGISTER_ROW_H,
 ) -> float:
-    return _draw_positioned_table_row(pdf, _MARGIN, y, values, widths, bold=bold, row_h=row_h)
+    return _draw_positioned_table_row(pdf, _MARGIN, y, values, widths, bold=bold)
 
 
 def _draw_positioned_table_row(
@@ -1359,18 +1489,41 @@ def _draw_positioned_table_row(
     widths: Sequence[float],
     *,
     bold: bool = False,
-    row_h: float = _REGISTER_ROW_H,
 ) -> float:
+    """One table row, as tall as its widest-wrapping cell needs.
+
+    Cells wrap inside their own column and the row grows to the tallest of
+    them; every line stays inside its cell, so a long material name costs a
+    second line rather than its own second half.
+    """
+    row_h = _summary_row_h(values, widths, bold=bold)
     cursor = x
     pdf.setStrokeGray(_HAIRLINE)
     pdf.setLineWidth(0.35)
     for value, width in zip(values, widths, strict=True):
         pdf.rect(cursor, y - row_h, width, row_h)
-        _draw_text(
-            pdf, cursor + 2, y - row_h + 2.5, _clip(value, width), _MIN_PRINT_TEXT_PT, bold=bold
-        )
+        # Top-aligned: a short cell reads against the tall cell's FIRST line,
+        # which is the one that names the row. A one-line row lands on exactly
+        # the baseline it had before rows could grow.
+        for index, line in enumerate(_cell_lines(value, width, bold=bold)):
+            baseline = y - _SUMMARY_ROW_TOP_PAD - (index + 1) * _SUMMARY_LINE_STEP
+            _draw_text(pdf, cursor + _CELL_PAD, baseline, line, _MIN_PRINT_TEXT_PT, bold=bold)
         cursor += width
     return y - row_h
+
+
+def _cell_lines(value: str, width: float, *, bold: bool = False) -> list[str]:
+    """The cell's text, wrapped to its own column and never empty."""
+    return _wrap(value, _MIN_PRINT_TEXT_PT, width - 2 * _CELL_PAD, bold=bold) or [""]
+
+
+def _summary_row_h(values: Sequence[str], widths: Sequence[float], *, bold: bool = False) -> float:
+    """The height a row needs — one line is `_REGISTER_ROW_H`, as before."""
+    lines = max(
+        len(_cell_lines(value, width, bold=bold))
+        for value, width in zip(values, widths, strict=True)
+    )
+    return max(_REGISTER_ROW_H, lines * _SUMMARY_LINE_STEP + _SUMMARY_ROW_PAD)
 
 
 def _draw_page_number(
