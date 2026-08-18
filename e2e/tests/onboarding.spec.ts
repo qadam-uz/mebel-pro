@@ -4,7 +4,6 @@ import {
   carryOneFormat,
   continueButton,
   createCatalogDekorlar,
-  escapeRegExp,
   ownerReadyPassword,
   panelFormat,
   passwordLabel,
@@ -13,6 +12,7 @@ import {
   readyOwnerToken,
   runId,
   seedPlatform,
+  tickDekor,
   updateBranchPricing,
 } from "./helpers";
 
@@ -91,9 +91,7 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   // tick the dekor (step 1 is multi-select), then pick the o'lchamlar and price
   // them. The result rows are named by dekor as well as o'lcham.
   const pickStep = page.getByRole("dialog", { name: "Dekor tanlash" });
-  await pickStep
-    .getByRole("checkbox", { name: new RegExp(escapeRegExp(panel.label)) })
-    .check();
+  await tickDekor(pickStep, panel);
   await pickStep.getByRole("button", { name: "Davom etish" }).click();
 
   const formatStep = page.getByRole("dialog", { name: "O'lchamlar va narx" });
