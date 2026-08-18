@@ -1880,7 +1880,7 @@ onBeforeRouteLeave(async () => {
 </script>
 
 <template>
-  <section>
+  <section :class="inOrderWizard ? 'wizard-page' : ''">
     <!-- The editor is a leaf with no other way out — every other client detail
          screen carries this link. `adapter.paths.drafts` so the workshop shell
          lands on its own list, and the route guard still flushes the autosave

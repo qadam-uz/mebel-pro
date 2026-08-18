@@ -125,7 +125,7 @@ async function resolve() {
 </script>
 
 <template>
-  <section>
+  <section class="wizard-page">
     <!-- Nothing exists server-side yet, so leaving here costs nothing and asks
          nothing. The button is still drawn: the head must not change shape
          between step 1 and step 2, or the strip stops reading as one journey. -->
