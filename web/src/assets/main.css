@@ -2557,6 +2557,14 @@
     padding: 4px 32px 32px;
   }
 
+  /* The order wizard's content column. Every step is a fixed-width design, so a
+     wider window gets canvas, not stretched panels. Left-aligned, not centred:
+     the flow starts at the sidebar and stays there as the window grows. */
+  .wizard-page {
+    width: 100%;
+    max-width: 1560px;
+  }
+
   @media (min-width: 921px) {
     .workshop-page {
       min-height: 0;

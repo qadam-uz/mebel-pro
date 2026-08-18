@@ -201,7 +201,7 @@ async function place() {
 </script>
 
 <template>
-  <section>
+  <section class="wizard-page">
     <!-- The last step of the flow, so it wears the flow's head. The back link
          moves down beside the button it is the alternative to; keeping it up
          here as well would put two ways back on one short screen. -->

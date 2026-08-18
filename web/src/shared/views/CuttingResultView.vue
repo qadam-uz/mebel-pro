@@ -76,7 +76,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section>
+  <section :class="inOrderWizard ? 'wizard-page' : ''">
     <!-- Step 3 of the staff order flow. Elsewhere — the client SPA, a revision —
          the result is a screen of its own and keeps the back link it always
          had. Leaving the wizard here abandons the order, never the drawing:
