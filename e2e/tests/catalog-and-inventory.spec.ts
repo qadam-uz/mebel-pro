@@ -10,6 +10,7 @@ import {
   createManufacturer,
   databaseUrl,
   escapeRegExp,
+  tickDekor,
   expectOk,
   type BranchMaterialResponse,
   type DekorResponse,
@@ -209,14 +210,6 @@ async function changeRequiredPassword(page: Page, current: string, next: string)
  */
 function rowLabel(dekor: DekorResponse, format: string) {
   return `${dekor.label} · ${format}`
-}
-
-/** Tick a dekor in step 1. The cards are checkboxes — attach is multi-select. */
-async function tickDekor(pickStep: Locator, dekor: DekorResponse) {
-  // Narrow to this run's dekor first: the picker lists every active dekor on the
-  // platform, paged, so a parallel worker's rows can push ours off page one.
-  await pickStep.getByLabel('Qidirish').fill(dekor.kod ?? dekor.nomi)
-  await pickStep.getByRole('checkbox', { name: new RegExp(escapeRegExp(dekor.label)) }).check()
 }
 
 /**

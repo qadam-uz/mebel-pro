@@ -612,3 +612,20 @@ export async function expectPdfOpensInTab(
   expect(downloaded).toBe(false);
   return popup;
 }
+
+/**
+ * Tick one dekor in the attach sheet's step 1.
+ *
+ * Narrow to this run's dekor first: the picker lists every active dekor on the
+ * platform, 100 to a page, so rows seeded by a parallel worker — or simply left
+ * behind by earlier local runs against the same database — push ours off page
+ * one and the checkbox never renders. Searching is also what a real operator
+ * does in a catalog this size.
+ */
+export async function tickDekor(
+  pickStep: Locator,
+  dekor: { kod?: string | null; nomi?: string; label: string },
+) {
+  await pickStep.getByLabel("Qidirish").fill(dekor.kod ?? dekor.nomi ?? dekor.label);
+  await pickStep.getByRole("checkbox", { name: new RegExp(escapeRegExp(dekor.label)) }).check();
+}
