@@ -617,10 +617,17 @@ export async function expectPdfOpensInTab(
  * Tick one dekor in the attach sheet's step 1.
  *
  * Narrow to this run's dekor first: the picker lists every active dekor on the
- * platform, 100 to a page, so rows seeded by a parallel worker — or simply left
- * behind by earlier local runs against the same database — push ours off page
- * one and the checkbox never renders. Searching is also what a real operator
- * does in a catalog this size.
+ * platform, 100 to a page (`BranchMaterialAttachSheet.vue`), so rows seeded by
+ * the other workers push ours off page one and the checkbox never renders.
+ * Searching is also what a real operator does in a catalog this size.
+ *
+ * The suite recreates its database per run, so a clean machine only has to
+ * survive one run's worth of seeding. It grows without bound instead when a
+ * host Postgres shadows the container on :5432: the recreate runs through
+ * `compose exec` and lands in the container, while alembic, the backend and the
+ * seeding CLI all connect to `localhost` and land on the host — see the trap in
+ * `e2e/AGENTS.md`. Either way the fix is the same, which is why it is here and
+ * not in the environment.
  */
 export async function tickDekor(
   pickStep: Locator,
