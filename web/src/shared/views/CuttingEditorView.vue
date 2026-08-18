@@ -2343,13 +2343,24 @@ onBeforeRouteLeave(async () => {
                       <span aria-hidden="true"></span>
                     </div>
                   </div>
+                  <!-- In the wizard a group is a block with a rule under it, not a
+                       bordered tinted box: the card already frames the board, and a
+                       box inside a box put a line hard against the row numbers. -->
                   <section
                     v-for="group in visibleGroups"
                     :key="group.key"
-                    class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
+                    :class="
+                      inOrderWizard
+                        ? 'overflow-visible border-b border-divider py-[18px] last:border-b-0'
+                        : 'overflow-visible rounded-lg border border-hairline bg-sunk/40'
+                    "
                   >
                     <div
-                      class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2"
+                      :class="
+                        inOrderWizard
+                          ? 'mb-3 flex flex-wrap items-center gap-2'
+                          : 'sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2'
+                      "
                     >
                       <button
                         type="button"
@@ -2466,7 +2477,7 @@ onBeforeRouteLeave(async () => {
                         {{ $t('cutting.editor.addPart') }}
                       </button>
                     </div>
-                    <div v-if="inOrderWizard" class="hidden px-3 pb-1.5 pt-2 @min-[660px]:block">
+                    <div v-if="inOrderWizard" class="hidden pb-1.5 @min-[660px]:block">
                       <div
                         class="grid grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] items-center gap-[7px] w-max text-[11px] font-extrabold text-ink-muted"
                       >
@@ -2492,8 +2503,12 @@ onBeforeRouteLeave(async () => {
                         <span aria-hidden="true"></span>
                       </div>
                     </div>
+                    <!-- The registry names every tape in the drawing; on the parts
+                         screen it is a second list of things the operator is not
+                         editing here. The kromka panel names the tape it is
+                         setting, and step 3 totals them. -->
                     <div
-                      v-if="groupEdgeRegistryEntries(group).length > 0"
+                      v-if="!inOrderWizard && groupEdgeRegistryEntries(group).length > 0"
                       class="border-t border-hairline px-3 pb-2 pt-1.5"
                     >
                       <CuttingEdgeTapeRegistry
@@ -2505,7 +2520,7 @@ onBeforeRouteLeave(async () => {
                     </div>
                     <div
                       v-if="!collapsedGroupKeys.has(group.key)"
-                      class="overflow-visible bg-elevated"
+                      :class="inOrderWizard ? 'overflow-visible' : 'overflow-visible bg-elevated'"
                     >
                       <CuttingPartRow
                         v-for="{ part, index } in group.parts"
