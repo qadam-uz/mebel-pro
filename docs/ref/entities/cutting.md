@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-22
 order: 40
 ---
 
@@ -28,16 +28,17 @@ indefinitely (no expiry); a client may have at most 50 self-made drafts open at 
 | `created_via_workshop_id` | UUID? | null for a client self-made draft. Set to the minting workshop when staff created the draft for a walk-in ([`cutting.md`](../features/cutting.md#access)): staff access is scoped by it (workshop-wide), the draft is hidden from the client until the order is placed, and it is excluded from the 50-draft cap. On such a draft `preferred_branch_id` is the staff flow's fixed branch, frozen at creation. Unfinished ones (no bound order, `revision_of_order_id` null) are listed on the workshop's **Saqlangan chizmalar** surface for resuming. |
 | `revision_of_order_id` | UUID? | null except on an order's **revision draft** ([`orders.md`](../features/orders.md#revising-a-placed-order)): staff-minted from the order's confirmed result, branch-locked to the order's branch, unique per order. A revision draft never places a new order — its only exits are apply (back onto its order) or discard — and it is client-invisible like any staff-minted draft. |
 | `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively: after a branch change, rows still holding the previous branch's material stay editable until the client re-picks. |
-| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), optional display `name` (`null` for fallback `D{row}` in the UI), `material_id` (a **branch material** of a panel-shaped dekor — the JSON key kept its name through the catalog reshape; the values were rewritten), `material_source` (currently normalised to `shop` by the editor), `follow_grain` (bool, default `true` for old snapshots; when true the part is rotation-locked), `thickened` (bool, default `false` for old snapshots — the workshop glues a strip of the same panel under the part; see [`cutting.md`](../features/cutting.md)), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <a kromka branch material>, "source": "shop" }`. Tape thickness and width are derived from each side's branch material. |
-| `own_panel_counts` / `own_edge_material_ids` | json | the client's own-material **claim**: sheets per panel branch material, and the tapes brought on their own roll. A claim, not a cap — a result applies `min(claim, panels_used)`. Ownership is per material rather than per part because a part cannot say which physical sheet carried it. Only meaningful while the draft's branch has `own_material_allowed` ([`workshop.md`](workshop.md)); the server empties both on the next write when it does not |
+| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), optional display `name` (`null` for fallback `D{row}` in the UI), `material_id` (a **branch material** of a panel-shaped format, or a [customer board](#customer-board) — the JSON key kept its name through the catalog reshapes; the values were rewritten), `material_source` (currently normalised to `shop` by the editor), `follow_grain` (bool, default `true` for old snapshots; when true the part is rotation-locked), `thickened` (bool, default `false` for old snapshots — the workshop glues a strip of the same panel under the part; see [`cutting.md`](../features/cutting.md)), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <a kromka branch material>, "source": "shop" }`. Tape thickness and width are derived from each side's branch material — a customer never brings their own tape. |
+| `own_panel_counts` / `own_edge_material_ids` | json | the client's own-material **claim**: sheets per panel material (a branch material or a customer board), and the tapes brought on their own roll. A claim, not a cap — a result applies `min(claim, panels_used)`. Ownership is per material rather than per part because a part cannot say which physical sheet carried it. Only meaningful while the draft's branch has `own_material_allowed` ([`workshop.md`](workshop.md)); the server empties both on the next write when it does not |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |
 
 Invariants: owned by the client (`client_id`) whether self-made (`created_via_workshop_id`
 null) or staff-minted for a walk-in (set); never visible beyond the access rules in
 [`cutting.md`](../features/cutting.md#access); `parts_snapshot` has 1..100
-parts; every referenced `material_id` is a branch material of a panel-shaped dekor and every
-side's `edge_*` (when non-null) one of a `kromka` dekor, both carried by the draft's branch;
+parts; every referenced `material_id` is either a branch material of a panel-shaped format
+carried by the draft's branch or a customer board recorded on this draft, and every side's
+`edge_*` (when non-null) is a `kromka` branch material of that branch;
 each optimise replaces the previous candidate
 with one engine-selected result and points `chosen_result_id` to it; an imported MAP result is
 the sole chosen result until a geometry-affecting `parts_snapshot` edit
@@ -51,6 +52,39 @@ revision apply also deletes the order's superseded confirmed result (with its pa
 placements); a self-made draft is deletable by the
 client at any time, a staff-minted one by the minting workshop's staff (cascades to results,
 panels, placements).
+
+## Customer board
+
+A sheet the walk-in carried in — **theirs, not the branch's**. Typed in the cutting editor's
+«Mijoz materiali» tab, claimed in the draft's `own_panel_counts`, priced through a substitute
+the branch does carry, and consumed into an order. Never listed in any catalog, never stocked,
+never offered to another client.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `workshop_id` / `branch_id` | UUID | the drawing's workshop and branch |
+| `name` | text? | operator-typed board name; null when they didn't name it, and the label falls back to «Mijoz materiali» plus the dimensions |
+| `type` | enum `decor_type` | **panel-shaped values only** — a customer does not bring their own edge tape. The service rejects `kromka`, and a CHECK backs it |
+| `thickness_mm` / `length_mm` / `width_mm` | numeric / int / int | all required, > 0; `length ≥ width`, normalized on write |
+| `has_grain` | bool | the per-board texture answer, typed on the form |
+| `price_tiyin` | bigint | the substitute's per-sheet price, frozen when the board was recorded — what bills the **shortfall**, not the board. `0` means the branch carries nothing of this size and staff price the shortfall by hand |
+| `stock_material_id` | UUID? | → [branch material](catalog.md#branch-material) — the substitute the shortfall is sold from; null when the branch carries nothing of that size |
+| `source_draft_id` | UUID? | the drawing it was recorded on, `ON DELETE SET NULL`. **Provenance, not the scope key** — the draft is deleted when the order is placed |
+| `created_at` | timestamp | |
+
+It used to be a `branch_materials` row flagged `customer_supplied`, which forced the branch
+catalog, the attach uniqueness index and every catalog listing to carry an exclusion for
+something that was never an offer. **The id space is unchanged by the move**:
+`own_panel_counts`, `material_snapshots`, `pricing_overrides.material_prices` and the
+optimizer's panel spec all key on a UUID string, and a board id and a branch-material id come
+from disjoint namespaces — so nothing that reads those dicts had to learn a second key shape.
+
+Invariants: created only through the cutting editor by staff on a draft of their own workshop;
+panel-shaped only; no [`stock_item`](inventory.md#stock-item) row exists for it and no stock
+movement ever names it — the **substitute** is what consume moves; visible only in the picker
+of the drawing it was recorded on; immutable after creation; never deleted (it outlives its
+draft, which is deleted on order placement).
 
 ## Cutting result
 
@@ -67,12 +101,12 @@ is stamped for audit; replacing a solver later doesn't touch past results.
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
 | `status`                                                           | enum       | `candidate` (the draft's current result) · `confirmed` (chosen and bound to an order)                                                                                                |
 | `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; an imported MAP result instead derives both from the imported layout's own geometry (the dominant gap between adjacent parts, the dominant part inset from a sheet edge — [`cutting.md`](../features/cutting.md#imports)) and falls back to `0` / `0` when the layout gives no evidence |
-| `panels_used_by_material`                                          | json       | `{ "<branch_material_id>": 3, "<branch_material_id>": 1 }` — total sheets needed per panel-shaped branch material in this result (≤ 20 per material)                                 |
+| `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total sheets needed per panel-shaped material in this result (≤ 20 per material); a key is a branch-material id or a [customer-board](#customer-board) id — disjoint namespaces, one dict                                 |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |
 | `edge_length_by_material`                                          | json       | `{ "<kromka branch_material_id>": 12500, … }` — per-tape geometric length in integer millimetres; UI/pricing displays metres.                               |
 | `parts_snapshot`                                                   | json       | source parts copied from the draft at optimise time, including each part's `name`, `follow_grain` and `thickened`, so the result remains renderable after the draft is deleted on order placement |
-| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every branch material the result references — `manufacturer_name`, `tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm` — used for labels and PDFs after catalog edits. **Frozen history is never rewritten**, so pre-reshape rows still carry the old vocabulary (`type`, `decor_code`, `color`, `name`, `thickness_mm`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`) and the label formatter reads both, new key first |
+| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every material the result references, branch materials and customer boards alike — `manufacturer_name`, `type`, `code`, `name`, `thickness_mm`, `length_mm`, `width_mm`, `tape_width_mm`, `has_grain`, `finished_sides`, plus `customer_supplied` + `stock_material_id` on a board — used for labels and PDFs after catalog edits. **Frozen history is never rewritten**, so older rows carry the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`decor_code`, `color`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`); the label formatter reads **all three**, newest key first |
 | `edge_length_shop_by_material` / `edge_length_own_by_material`     | json       | source-split geometric edge length, keyed by kromka branch material id, in integer millimetres                                                                                                |
 | `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json       | source-split edge consumption, keyed by kromka branch material id, in integer millimetres; includes the branch's `edge_overhang_mm` once per banded side ([`workshop.md`](workshop.md))                                                  |
 | `edge_banded_sides_by_material`                                    | json       | `{ "<kromka branch_material_id>": { "shop": 4, "own": 2 } }` — source-split count of banded sides feeding consumption and Phase 5 stock math                                                  |
@@ -99,22 +133,30 @@ and material snapshots.
 
 ## Cutting panel
 
-One physical sheet within a result — its branch material, its index within that material, and
+One physical sheet within a result — which material it is, its index within that material, and
 how much waste it has.
 
 | Field               | Type   | Notes                                                                                                                                                                                                                                                        |
 | ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                | UUID   | PK                                                                                                                                                                                                                                                           |
 | `cutting_result_id` | UUID   | required                                                                                                                                                                                                                                                     |
-| `branch_material_id` | UUID  | required — which branch material this sheet is, and which sheet-size + grain rules govern its placements                                                                                                                                                     |
-| `panel_index`       | int    | 1, 2, 3, … **within the result's sheets of this branch material**; unique per (result, branch material); 1..the material's count in `panels_used_by_material`                                                                                                |
+| `branch_material_id` | UUID? | a sheet the branch carries — which [branch material](catalog.md#branch-material) it is, and, through its format, which sheet size + grain rules govern its placements                                                                                        |
+| `customer_board_id` | UUID?  | a sheet the walk-in brought — a [customer board](#customer-board) instead                                                                                                                                                                                    |
+| `panel_index`       | int    | 1, 2, 3, … **within the result's sheets of this material**; unique per (result, material) on each of the two id columns; 1..the material's count in `panels_used_by_material`                                                                                |
 | `waste_area_mm2`    | bigint | ≥ 0                                                                                                                                                                                                                                                          |
 | `cut_count`         | int?   | exact number of engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows, whose cut path is not known.                                                                                                                          |
 | `cut_length_mm`     | int?   | exact Manhattan sum of the engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows.                                                                                                                                            |
 | `offcuts`           | json?  | display-only rectangles left by the optimiser or imported MAP layout: `{ x_mm, y_mm, length_mm, width_mm, usable }`. Old rows may store null; API responses expose `[]`. Usable offcuts are shown as customer-retained remainders, non-usable ones as waste. |
 
-Invariants: `panel_index` contiguous from 1 to the material's count for that result;
-immutable; deleted with its parent result.
+**Exactly one of `branch_material_id` / `customer_board_id` is set** — a DB CHECK, not a
+convention. A sheet is either one the branch carries or one the walk-in brought; those are
+disjoint namespaces with different owners, and a row claiming both or neither would leave the
+panel with no material at all. The uniqueness of `panel_index` needs **two** constraints for
+the same reason: NULLs are distinct in a unique index, so with `branch_material_id` nullable
+the branch-material constraint stops policing customer-board panels entirely.
+
+Invariants: exactly one material id set (CHECK); `panel_index` contiguous from 1 to the
+material's count for that result; immutable; deleted with its parent result.
 
 ## Cutting placement
 
@@ -134,7 +176,7 @@ was rotated), and whether it was rotated 90°.
 
 Invariants: every input part-instance (each `part_ref` × each quantity index) in the source
 parts list appears exactly once across the result's placements; the placement sits on a
-sheet whose `branch_material_id` matches the part's panel material; a locked part (grained decor
+sheet whose material id matches the part's panel material; a locked part (grained decor
 and `follow_grain=true`) is never `rotated`; placements don't overlap and stay within
 `panel − 2× edge_trim`; immutable.
 

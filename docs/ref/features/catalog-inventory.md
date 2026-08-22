@@ -2,74 +2,79 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-22
 order: 50
 ---
 
 # Catalog & inventory
 
-The two-level material catalog, the manufacturers behind it, what each branch carries and
-prices, the warehouse, and the suppliers stock comes from. The platform owns **dekorlar** —
-identity only: manufacturer, `tur`, code, name, photo, grain. A branch owns the **format**:
-its own thicknesses and sheet or tape sizes, its price, its threshold. A branch material —
-one dekor in one format at one branch — *is* the material everything downstream points at.
-**Stock** is moved in by the warehouseman and **auto-decremented by the order state machine**
+The material catalog, the manufacturers behind it, what each branch carries and prices, the
+warehouse, and the suppliers stock comes from. The platform owns the **product** in two
+layers: a **decor** is pattern identity (manufacturer, code, name, photo, grain), and a
+**decor format** is one concrete product of it (substrate, thickness, sheet size or tape
+width, finished faces). A branch owns the **commercial decision** — a branch material is
+"we carry this format, at this price, with this threshold", and *is* the material everything
+downstream points at. **Stock** is moved in by the warehouseman and **auto-decremented by the order state machine**
 as production completes — there is no reservation. The order ↔ stock contract is owned by
 [`orders.md`](orders.md) → *The stock seam*; this doc is the warehouse mechanics behind it.
 
 ## Manufacturers (platform master list)
 
 Who makes a decor — Kronospan, Egger, Rehau, and so on. A separate platform-scoped
-list: a dekor's identity includes its manufacturer (Egger H1334 and Kronospan H1334 are
-two dekorlar). Curated by platform operators.
+list: a decor's identity includes its manufacturer (Egger H1334 and Kronospan H1334 are
+two decors). Curated by platform operators.
 
 **Operations (platform operator):**
 
 - **Create / edit a manufacturer** — `name` (unique, case-insensitive), optional
-  `country` and `note`. A rename recomputes the folded search key of every dekor it makes.
+  `country` and `note`. A rename recomputes the folded search key of every decor it makes.
 - **Activate / deactivate** at the platform level. `inactive` is invisible to new
-  dekor creates and to the branch attach picker; existing dekorlar of an
+  decor creates and to the branch attach picker; existing decors of an
   inactive manufacturer keep referencing it (history preserved). No delete.
 - **List / get** — operators see all; workshop users and clients see only the
-  manufacturers attached to the dekorlar they can already see, surfaced as a dropdown
+  manufacturers attached to the decors they can already see, surfaced as a dropdown
   filter.
 
-Creating a manufacturer is a side-trip from the dekor-create form (inline-add), the
+Creating a manufacturer is a side-trip from the decor-create form (inline-add), the
 same shape as suppliers' inline-add from the arrival form.
 
-## Dekorlar (platform identity catalog)
+## Decors (platform identity catalog)
 
-A **dekor** is one decor of one manufacturer: `tur`, `kod`, `nomi`, photo, `tolali`. It
-carries **no thickness, no size and no price**. Those are branch facts, and a platform
-operator cannot know what a given workshop's supplier sells — that is the whole reason the
-old single `materials` table was split. `tur` (`ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` /
-`kromka` / `boshqa`) is the one axis that replaced the old panel-vs-edge `kind` **and** the
-old panel `type`: kromka was never a substrate, only a shape, so the two were never
-independent. Field-level detail is in [`catalog.md`](../entities/catalog.md#dekor).
+A **decor** is one *pattern* of one manufacturer: `code`, `name`, photo, `has_grain` — the
+word on screen stays «Dekor». It carries **no substrate, no thickness, no size and no price**.
+What the pattern physically *is* belongs to its [formats](#decor-formats-platform-owned):
+Egger H1145 is one decor sold as an 18 mm LDSP board *and* as a 0.8 × 22 kromka, sharing one
+photo and one name. Field-level detail is in
+[`catalog.md`](../entities/catalog.md#decor).
 
 **Operations (platform operator):**
 
-- **Create / edit a dekor** — six fields and no more: manufacturer, `tur`, optional `kod`,
-  required `nomi`, `tolali`, optional image. Nothing is typed twice: **there is no stored
-  name**, and every display string is composed by one server-side formatter and sent as
-  `label`, so the admin table, the workshop table, the cutting picker and a printed PDF can
-  never disagree about what a material is called.
+- **Create / edit a decor** — five fields and no more: manufacturer, optional `code`,
+  required `name`, `has_grain`, optional image. **No substrate field** — that moved to the
+  format. Nothing is typed twice: **there is no stored name**, and every display string is
+  composed by one server-side formatter and sent as `label`, so the admin table, the workshop
+  table, the cutting picker and a printed PDF can never disagree about what a material is
+  called.
 - **Activate / deactivate** at the platform level. `inactive` is invisible to new branch
-  attachments and to clients; existing branch materials keep referencing the dekor
-  (history preserved). No delete.
-- **List / get** — operators see all, with a **branch-usage count** per dekor; workshop users
-  see the active subset through the attach picker; clients see only formats their branch
-  carries. The catalog runs to hundreds of rows, so every list — the platform table, a
-  branch's own table, and the attach picker — **pages server-side**: filtering and search run
-  on the backend and the list grows by a *load-more* control, never a whole-table load.
-  Filters are search, `tur`, manufacturer and status.
+  attachments and to clients; existing formats and branch materials keep referencing the
+  decor (history preserved). No delete.
+- **List / get** — operators see all, with a **branch-usage count** and an **active-format
+  count** per decor; workshop users see the active subset through the attach picker; clients
+  see only formats their branch carries. The catalog runs to hundreds of rows, so every list
+  — the platform table, a branch's own table, and the attach picker — **pages server-side**:
+  filtering and search run on the backend and the list grows by a *load-more* control, never a
+  whole-table load. Filters are search, substrate, manufacturer and status; on any
+  branch-facing surface the substrate filter means **"has at least one active format of this
+  substrate"**, since the decor itself no longer has one.
 
-**Two dekorlar are the same when their codes match.** Uniqueness is `(manufacturer, tur, kod)`
-case-insensitively when there is a code, and `(manufacturer, tur, nomi)` when there is not:
-a maker's decor code identifies the decor, and a code-less decor falls back to its name. Note
-what is *no longer* part of identity — thickness and sheet size. One dekor now covers every
-format of that decor; adding an 18 mm sheet next to a 16 mm one is a branch action, not a new
-platform row.
+**Two decors are the same when their codes match.** Uniqueness is `(manufacturer, code)`
+case-insensitively when there is a code, and `(manufacturer, name)` when there is not: a
+maker's decor code identifies the decor, and a code-less decor falls back to its name. Note
+what is *no longer* part of identity — **the substrate**, alongside thickness and sheet size.
+While the substrate was in the tuple, a pattern sold as both board and tape needed two rows
+that shared a name, a photo and nothing else; the demo catalog carried 14 such twin pairs
+among 31 rows, and the reshape merged each pair into one decor with two formats. One decor now
+covers every product made in that pattern.
 
 A platform-level edit never touches existing orders (snapshots —
 [`architecture.md`](../../architecture.md#data-model-invariants)).
@@ -82,7 +87,7 @@ apostrophe shapes (`o'`, `oʻ`, `o‘`), and the same decor is routinely typed `
 each other, and the operator typing the query has no idea which spelling the catalog was
 entered in.
 
-So every dekor stores a **folded search key** — `nomi`, `kod` and the manufacturer name run
+So every decor stores a **folded search key** — `name`, `code` and the manufacturer name run
 through one folding function — and the incoming query is folded the same way. Search is then a
 plain `ILIKE` over that key. The fold, in order:
 
@@ -105,52 +110,63 @@ silently drop the very rows the fold was built to find. One surface still filter
 the cutting editor's edge picker, which loads the branch's whole tape list once and narrows it
 in the dialog ([`cutting.md`](cutting.md)); it therefore does **not** get the fold, and a
 Cyrillic query there finds nothing. Worth closing when that picker next moves.
-The key is recomputed on every dekor write and on a manufacturer rename.
+The key is recomputed on every decor write and on a manufacturer rename.
 
 Chosen over a Postgres trigram index or a search extension because the corpus is hundreds of
 rows per query, the transformation is deterministic, and one pure function is testable without
 a database. Revisit if the catalog reaches the tens of thousands, or if ranked
 relevance (rather than "matches / doesn't") becomes a requirement.
 
-## Branch materials (what a branch carries)
+## Decor formats (platform-owned)
 
-A **branch material** is one dekor in one format at one branch — thickness plus sheet
-`uzunlik × eni`, or, for kromka, thickness plus tape width. It holds the branch's price, its
-low-stock alert threshold and its branch-level visibility, and **everything downstream points
-at it**: the stock item, the cutting panel, the order line. Attaching a format creates the
-branch's stock item for it (zero on hand).
+A **decor format** is one concrete product of a decor — the thing a supplier actually sells:
+substrate (`ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`), thickness,
+sheet `length × width` **or** tape width, and, for the board substrates, how many faces are
+finished. `LDSP · 18 mm · 2800×2070 · 2 tomonlama` is a format; so is
+`Kromka · 0.8 mm · 22 mm`. Field-level detail is in
+[`catalog.md`](../entities/catalog.md#decor-format).
 
-**Operations (owner, or `manage_catalog` on the branch):**
+**Only the platform creates formats**, from the manufacturer's own catalog. A branch picks
+from what exists.
 
-- **Attach a dekor in one or more formats** — the two-step flow below.
-- **Edit price, threshold or format** — never touches existing orders (snapshots).
-- **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
-  not selectable in a new cutting; stock and history stay. No delete.
+**This reverses a decision this document used to state the other way.** The rule was "a branch
+owns the format": thickness and sheet size were columns on the branch's own row, a branch
+could invent a size inline from the attach sheet, and the argument was that a platform
+operator cannot know what a given workshop's supplier sells. The owner has reversed it,
+because the thing that argument optimised for — letting each branch describe its own shelf —
+is exactly what stopped the platform from having a product list. With per-branch formats, the
+same physical sheet is a different row, with a different id, in every workshop that carries
+it; nothing can be counted, priced or paired across workshops. Formats are now platform rows
+so that **one physical product has one id everywhere**, which is what cross-workshop
+analytics, a central price-list import and board↔tape pairing all need as their foundation.
+The accepted cost is that a branch needing a size the platform has not entered **waits** for
+it. That cost is deliberately made visible rather than hidden: the attach sheet says so on
+screen (see [*Attaching a decor*](#attaching-a-decor-to-a-branch)). Revisit if branches start
+waiting often — the measure is how many attach sessions end at that note; the first answer
+would be a "request a format" action that notifies platform ops, not a return to
+branch-created formats.
 
-Clients see a format when the dekor and the branch material are **both** `active`. Price and
-stock are not conditions: an unpriced or out-of-stock row is listed and labelled, never
-hidden.
+**Operations (platform operator):**
 
-### Attaching a dekor to a branch
+- **Create a format** on a decor — substrate, thickness, then the pair that substrate implies:
+  size for panel-shaped, tape width for `kromka`, plus `finished_sides` (1 or 2) for
+  `ldsp` / `dsp` / `mdf`. Sizes are **normalized** so `length ≥ width`: 1830×2750 and
+  2750×1830 are one format. A wrong shape for the substrate is refused by name
+  (`decor_format_shape_mismatch`), and a duplicate is refused naming the row that already
+  exists (`decor_format_exists`).
+- **Activate / deactivate** — the *only* mutation. See [*Three levels of off*](#three-levels-of-off).
+- **List** a decor's formats — active first, then by substrate, thickness and size.
 
-**Step one picks the dekor; step two picks its formats.** The old flow multi-selected
-platform rows and then priced them, because a platform row *was* a format. It cannot work
-that way now: the decision "do I stock this decor" and the decision "in which thicknesses and
-sizes" are different questions with different answers.
+**There is no edit.** Branch rows, stock, cutting panels and order history all resolve through
+a format id, so silently re-dimensioning one would rewrite what those rows mean. A format
+entered wrong is **deactivated and re-created correctly**; branches that attached the wrong
+one attach the right one.
 
-- **Step one — dekor picker.** The platform-`active` catalog, searched and filtered
-  server-side by `tur` and manufacturer. A dekor the branch **already carries stays in the
-  list**, labelled with how many of its formats the branch carries: carrying 18 mm is no
-  reason to hide the row from someone adding 16 mm.
-- **Step two — formats.** Thickness on one axis, size (or tape width) on the other, both
-  multi-select; the cross product becomes the rows to create, and combinations the branch
-  already carries render disabled. Sizes are normalized so `uzunlik ≥ eni`, so 1830×2750 and
-  2750×1830 are one format.
+The create form offers **standard sets per substrate as quick-fill chips**, hard-coded in the
+web client — a typing shortcut for the common case, not a platform fact and not a settings
+knob:
 
-The chips offered are **standard sets per `tur`, hard-coded in the web client** — suggestions
-covering the common case, not a platform fact and not a settings knob:
-
-| `tur` | Qalinlik (mm) | O'lcham / lenta eni (mm) |
+| Substrate | Qalinlik (mm) | O'lcham / lenta eni (mm) |
 |---|---|---|
 | `ldsp`, `dsp` | 10 · 16 · 18 · 25 | 2750×1830 · 2800×2070 · 2440×1830 |
 | `mdf` | 3 · 8 · 16 · 18 | 2800×2070 · 2440×1220 |
@@ -159,21 +175,95 @@ covering the common case, not a platform fact and not a settings knob:
 | `yogoch`, `boshqa` | — | — |
 
 `yogoch` and `boshqa` deliberately carry no standard set: there is no common sheet size for
-solid timber or for the "everything else" bucket, and inventing one would prefill the table
-with formats nobody stocks.
+solid timber or for the "everything else" bucket, and inventing one would prefill the form
+with formats nobody sells. These chips used to be the *branch's* attach suggestions; they
+moved to this form with the formats themselves.
 
-Beneath the standard chips sits a visually separated **"Nostandart · faqat sizda"** group:
-the thicknesses and sizes *this branch already uses* for this dekor that aren't in the
-standard set, derived from its own rows. Plus an inline **+ qo'shish** for a size or thickness
-that appears nowhere yet. **Nothing is submitted for approval** — a custom format is simply
-this branch's row, which is what "the branch owns the format" means. The group is rendered
-apart rather than merged so a branch can tell at a glance which of its formats are its own
-peculiarity.
+**`dsp` is not `ldsp`.** They stay separate substrates — chipboard without the laminate is a
+different product at a different price — and `dsp` now prints its own label, «DSP» / «ДСП»,
+instead of borrowing LDSP's. While it borrowed it, the two were indistinguishable on every
+screen and every document.
+
+### Three levels of off
+
+Three different `status` columns can retire a material, at three different levels, and they
+mean three different things. Written once, here:
+
+| Level | Who | Means | Effect | Untouched |
+|---|---|---|---|---|
+| decor `inactive` | platform | the pattern left the catalog | no new attach; hidden from clients | branch rows, stock, history |
+| **format `inactive`** | platform | **this product is no longer made** | not offered in a new attach; a small **«Ishlab chiqarishdan chiqqan»** hint on the branch's Zaxira row and in the cutting picker | branch rows, stock, price, **selling the remainder**, arrivals — a supplier may still have it on their shelf |
+| branch material `inactive` | branch | "we don't offer this" | hidden from clients; not pickable in a new cutting | stock, history |
+
+**A format's deactivation never cascades into branch rows and never hides anything a branch
+still has.** The maker stopping production says nothing about the sheets already on the shelf,
+which the branch is entitled to sell down to the last one — so client visibility is *not*
+gated on format status, only on the decor's and the branch row's. The branch retires its own
+row when the shelf is empty; that is level three, and it is the one clients see. The hint is
+there so the branch learns *before* it tries to reorder that this product has stopped being
+made — arrivals of it are still recordable, because a supplier's own shelf outlives the
+production line.
+
+**A branch that needs a format the platform has not entered asks for it.** The attach sheet
+carries the note *«Kerakli o'lcham yo'qmi? Platformaga xabar bering — formatlarni platforma
+qo'shadi.»* — there is no self-service escape hatch, and inventing one per branch is the thing
+this model exists to prevent.
+
+## Branch materials (what a branch carries)
+
+A **branch material** is one platform [format](#decor-formats-platform-owned) carried by one
+branch. It holds four facts — that the branch carries it, its price, its low-stock alert
+threshold, its branch-level visibility — and **everything downstream points at it**: the stock
+item, the cutting panel, the order line. Attaching a format creates the branch's stock item
+for it (zero on hand).
+
+**Operations (owner, or `manage_catalog` on the branch):**
+
+- **Attach one or more formats** — the two-step flow below.
+- **Edit price or threshold** — never touches existing orders (snapshots).
+- **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
+  not selectable in a new cutting; stock and history stay. No delete.
+
+**The format is not editable — it is the row's identity.** There is no "change the thickness"
+on a branch material; the dimensions are not the branch's to change. Attaching the correct
+format and retiring the wrong row is the operation, and it is the honest one: stock, price
+history and orders stay attached to the thing they were actually about.
+
+Clients see a format when the decor and the branch material are **both** `active`. Price and
+stock are not conditions: an unpriced or out-of-stock row is listed and labelled, never
+hidden. The **format's** own status is not a condition either — see
+[*Three levels of off*](#three-levels-of-off).
+
+### Attaching a decor to a branch
+
+**Step one picks the decor; step two picks its formats.** The decision "do I stock this decor"
+and the decision "in which thicknesses and sizes" are different questions with different
+answers, so they are different steps.
+
+- **Step one — decor picker.** The platform-`active` catalog, searched and filtered
+  server-side by substrate and manufacturer (substrate here means "has an active format of
+  this substrate"). A decor the branch **already carries stays in the list**, labelled with
+  how many of its formats the branch carries against how many the platform offers: carrying
+  18 mm is no reason to hide the row from someone adding 16 mm.
+- **Step two — the decor's active formats**, as checkable rows — `LDSP · 18 mm · 2800×2070 ·
+  2 tomonlama`, `Kromka · 0.8 mm · 22 mm` — with a price and a min-stock input per checked
+  row. Formats the branch already carries **stay in the list, disabled and labelled**: hiding
+  them would leave the operator wondering whether the size exists at all, which is the exact
+  question the sheet is there to answer.
+
+**The branch creates nothing here.** There are no thickness/size chips, no "Nostandart ·
+faqat sizda" group and no inline **+ qo'shish** — all three are gone with the move of formats
+to the platform. A branch that does not find the size it needs sees the note *«Kerakli
+o'lcham yo'qmi? Platformaga xabar bering — formatlarni platforma qo'shadi.»* and asks; the
+platform enters the format and it appears in step two.
 
 Attaching is **one transaction**. Every format is validated before anything is written, so a
-rejection leaves nothing behind; a format a concurrent attach already registered is **skipped,
-not rejected** — the picker had shown it as carried, so a collision is a race, not user error.
-The response names what it created and what it skipped.
+rejection leaves nothing behind; a format whose own status — or its decor's, or its
+manufacturer's — went `inactive` between the listing and the save is refused by name
+(`decor_format_inactive`), and one a concurrent
+attach already registered is **skipped, not rejected** — the picker had shown it as carried,
+so a collision is a race, not user error. The response names what it created and what it
+skipped.
 
 ### Price and threshold are optional
 
@@ -195,12 +285,14 @@ learns the numbers afterwards.
   money is guarded one step later — confirming an order that sells an unpriced material is
   refused until staff price it ([`orders.md`](orders.md)). Revisit if clients start ordering
   unpriced materials often enough that the pricing step becomes the bottleneck.
-- **`min_stock` defaults to `0`.** The column default is `0`, the API default is `0`, and
-  leaving the input empty saves `0` — a row with no monitoring rather than a refused attach.
-  The attach form still **prefills** 5 for a sheet and 50 m for a tape, editable per row,
-  because a threshold of `0` alerts only once the material is gone; the prefill is a UI
-  suggestion, not a rule the API enforces. Existing rows are never backfilled — rewriting
-  thresholds on live materials would fire a notification wave.
+- **`min_stock` defaults to `0`, and `0` means monitoring off.** The column default is `0`,
+  the API default is `0`, the attach form prefills `0`, and leaving the input empty saves
+  `0` — a row nobody is watching rather than a refused attach. A row at `0` is therefore
+  **never low and never counted**: a branch registering its supplier's whole price list (518
+  formats in one real case) would otherwise see every zero-balance row wearing the warning
+  pill, and a warning that is everywhere is nowhere. A threshold is a deliberate act — the
+  operator sets one on the materials they actually watch, from the catalog form or from the
+  stock detail. Existing rows are never backfilled.
 
 ## Branch pricing
 
@@ -235,9 +327,9 @@ the Qarzdorlik page ([`finance.md`](finance.md) → *Debts*).
 
 ## Inventory
 
-A branch holds one stock item per **branch material** — per format, not per dekor, because
+A branch holds one stock item per **branch material** — per format, not per decor, because
 16 mm and 18 mm of the same decor are different things on the shelf. A single `on_hand`
-balance in the material's stock unit (**sheet count** for panel-shaped turlar, **integer
+balance in the material's stock unit (**sheet count** for panel-shaped substrates, **integer
 millimetres** for `kromka`; UI displays tape stock as metres) and a `min_stock` threshold in
 the same unit. **No `reserved`, no `available`, no reservation** — the order never holds
 stock; it only decrements it.
@@ -252,22 +344,68 @@ stock; it only decrements it.
   a **required unit purchase price** (integer tiyin, per sheet for panels, per metre for
   tape). The server stores each line's price on its own transaction row and computes the
   authoritative line total (tape: `quantity_mm × unit price // 1000`, mirroring sale-side
-  edge pricing); the invoice carries the document-level discount and surcharge. The invoice
-  and every line commit **together or not at all** — a failure on line three leaves no invoice
-  and no stock movement. Each line then moves stock exactly as a lone arrival always did:
-  `on_hand += qty`.
+  edge pricing). The invoice and every line commit **together or not at all** — a failure on
+  line three leaves no invoice and no stock movement. Each line then moves stock exactly as a
+  lone arrival always did: `on_hand += qty`.
 
   The grouping exists because the accountant negotiates in invoice totals, not in individual
-  arrivals: a supplier's discount lives on the document as a whole, and a per-material row can
-  never carry it. Grouping is what lets the debt fold ([`finance.md`](finance.md) → *Debts*)
-  land on the same number the supplier's own paper says. Invoices are never voided or edited
-  after creation — a wrong arrival is corrected with an *Adjust*, like any other stock mistake.
+  arrivals: the whole faktura is one payable, one debt entry, one thing to argue about.
+  Grouping is what lets the debt fold ([`finance.md`](finance.md) → *Debts*) land on the same
+  number the supplier's own paper says.
+
+  **The document-level discount is not captured.** `discount_tiyin` / `surcharge_tiyin` /
+  `note` remain as columns — always 0 / null on anything entered now — but no UI writes them
+  and the edit operation refuses them, so `total_tiyin` simply equals the line sum. The
+  suppliers in scope do not write a discount line on the faktura, and two live inputs plus a
+  four-row totals ladder made every operator read arithmetic that never moved. Revisit the
+  moment a supplier starts putting a document-level discount on their paper: the columns and
+  the fold already carry it, so only the inputs and the ladder come back.
+- **Correct an arrival** (same caller) — supplier and invoice date stay editable while the
+  invoice is `recorded`, **and so do the lines**.
+  Every reader of the header is derived at read time, so a header edit self-corrects the debt
+  fold, the payment status and the list with no sync step.
+
+  A line edit is the harder half, because the movements it changes already have later
+  movements behind them carrying `balance_after` snapshots taken against the old quantity.
+  So the lines are **rewritten wholesale** rather than diffed — the invoice's stock-in rows
+  are dropped, the submitted set is inserted (keeping the arrival's original timestamp and
+  recorder, so a typo fix does not push the delivery to the top of the ledger), and every
+  touched stock item has its whole chain replayed
+  ([`inventory.md`](../entities/inventory.md) → *Stock item*). The correction may land a
+  balance **negative** — the paper is being fixed to match a world that already happened —
+  and fires the same negative-balance notification a `consume` does. Editing an invoice that
+  already carries a **recorded payment** is allowed: the payment stands and the outstanding
+  re-derives, because blocking here would trap a genuine correction and finance already
+  treats supplier overpayment as warn-not-block.
+- **Void an arrival** (same caller) — `status = voided` with a **mandatory reason**. The
+  invoice writes one reversal movement per line (`stock_in_void`, the negative of the line's
+  quantity, no price) and leaves the debt fold, the payable set and the price history at once.
+  A reversal **may take the balance negative** — the paper was wrong but the goods either
+  never arrived or already left, and refusing it would leave stock permanently too high — and
+  when it does, the same negative-balance notification fires as for a `consume`. Blocked while
+  a **recorded** expense references the invoice: money and goods reverse in separate, explicit
+  steps, so the payment is voided in [`finance.md`](finance.md) first. Nothing is deleted; a
+  voided invoice keeps its place in the list with its own badge.
+
+  This replaces the earlier rule that an invoice is never voided or edited and a wrong arrival
+  is corrected with an *Adjust*. An Adjust only fixes the **quantity**: the wrong total kept
+  feeding the supplier debt forever, the payment pill stayed wrong, and one typo cost two
+  manual corrections in two modules. With lines editable, a void is now the narrower tool —
+  the document should never have existed at all. Revisit if voids ever become routine rather
+  than exceptional: a shop voiding a large share of its arrivals is describing a data-entry
+  problem the arrival form should solve instead.
 - **List arrivals** (same caller) — the branch's invoices, newest first, filterable by
-  supplier, by free text over number / supplier / note, and by derived payment status.
+  supplier, by invoice date range, by free text over the invoice number, and by derived
+  payment status. A payment-status filter matches **recorded** invoices only. `note`
+  is deliberately not searched: nothing can enter one any more, so matching it would only
+  ever hit legacy rows. The supplier left the search box when it gained a dropdown of its
+  own — a typed query means one thing, the document number.
 - **Last price** (same caller) — read-only lookup powering each arrival line's prefill:
   the most recent priced stock-in for the material at this branch, preferring the
   selected supplier's most recent when one exists. Derived from the transaction ledger
-  at read time; no stored "latest price" column exists.
+  at read time; no stored "latest price" column exists. Lines belonging to a **voided**
+  invoice are skipped — a voided price was likely the typo that forced the void, and it must
+  not become the next suggestion. The same exclusion applies to **Ombor qiymati**.
 - **Adjust** (same caller) — signed delta with a **mandatory note**; a *decrease* can't
   take `on_hand` below 0 (a typed stock-out that would go negative is almost certainly a
   typo); an increase is always allowed, including out of a negative balance. The single tool for stock-takes and **waste write-offs** of every kind
@@ -313,6 +451,11 @@ home counts them on its *Kam qolgan material* card, which calls out how many of 
 movement past the threshold and read as noise rather than news, so the workshop asked for it
 gone (QAD-182).
 
+One predicate serves all three readers: a row is low when `on_hand < 0`, **or** when
+`min_stock > 0` and `on_hand ≤ min_stock`. The `on_hand < 0` arm is load-bearing and
+independent of the threshold — an unrecorded arrival must stay visible under the filter and
+in the card that counts negatives, whether or not anyone set a threshold for that material.
+
 Going **negative** is different: it is a discrete thing that happened, not a level. A `consume`
 that drives the balance below zero fires a notification to the branch's `manage_inventory`
 grantees and the owner — nobody is blocked, but the books going negative must not be silent.
@@ -324,16 +467,17 @@ workshop app) — there is no per-page branch filter, and the table drops the
 now-redundant branch column:
 
 - **Material katalogi** (`manage_catalog`) — the branch's own materials, **grouped by
-  dekor**: one photo + identity line per dekor, its formats as indented rows beneath
+  decor**: one photo + identity line per decor, its formats as indented rows beneath
   (o'lcham×qalinlik, narx, min qoldiq, qoldiq, holat, ⋯ menu). A group collapses. The
   grouping mirrors how the shelf is actually organised — one decor, several thicknesses —
   and stops the identity columns repeating on every row. A row whose price is unset carries
   a **"Narx yo'q"** warning pill; the row is still there, still stockable, and still listed to
-  clients — the pill is the same one they see. Filters: search, `tur`, status; the table pages
-  with a *load-more* control.
-  **+ Material** opens the two-step attach sheet (dekor picker → format chips + price /
-  threshold table). Row: Edit (modal) · client visibility toggled by a status switch in the
-  row itself. No Delete.
+  clients — the pill is the same one they see. Filters: search, substrate, status; the table
+  pages with a *load-more* control.
+  **+ Material** opens the two-step attach sheet (decor picker → the decor's platform formats,
+  with price / threshold per checked row). Row: Edit (modal — price and threshold; the format
+  is not editable) · client visibility toggled by a status switch in the row itself. No
+  Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
   — the cutting rate (`cutting_rate_tiyin`, per panel) and the edge-banding labour rate
   (`edge_banding_rate_tiyin`, per metre, all thicknesses); it's the home future branch
@@ -343,40 +487,132 @@ now-redundant branch column:
   The edge **glue-and-trim overhang** is a branch setting too, but it sits with the branch's
   other shop-floor millimetres on the branch form ([`workshop.md`](workshop.md)), not with
   the rates.
-- **Stock** (`manage_inventory`) — table: material (label + image + manufacturer
-  chip), on-hand, min-stock, unit; low-stock rows highlighted (chip + colour), and a
-  "low-stock only" toggle chip. A **negative** balance escalates from the low-stock warning
-  treatment to danger — its own chip, its own marker line ("kirim yozilmagan"), and it sorts
-  to the top of the table, because it is a state that wants an arrival recorded rather than
-  a minus sign to scroll past. The **Ombor qiymati** tile counts negative balances
-  negatively rather than clamping them away. Two page actions each open a modal: **Kirim** (the arrival
-  form, below) and **Adjust** (a signed quantity with a **required leading + or −** — "-2"
+- **Stock** (`manage_inventory`) — the **warehouse, not the catalog**: by default the table
+  lists only materials that have actually moved (at least one stock transaction), because
+  attaching a format mints a zero-balance row and a branch that registered 518 formats got a
+  tab of 518 zeroes. A «Butun katalog» toggle chip opens it to every attached material.
+  **Search and «Kam qolgan materiallar» always query the whole catalog** regardless of the
+  chip — the scope exists to cut browse noise, not to hide results, and an operator searching
+  for a material is usually about to record its first arrival. A **substrate filter** reads
+  one shelf at a time (kromka is a different question from panels), reading each row's
+  `decor_format.type`; unlike search it **narrows within the current scope** rather than
+  widening it — it is browsing, not a lookup — but it still counts as filtering for the count
+  line and the empty state. It offers **one option per substrate**, sent as the plural `types`
+  param: the options are now one-to-one with the enum, because `dsp` prints «DSP» and no
+  longer shares LDSP's label. (While it did, the filter had to fold the two values into a
+  single «LDSP» option — listing them raw printed the same label twice with no way to tell
+  them apart.) Rows stay **flat, never grouped by decor**: the tab's spine is state-first
+  ordering (negatives on top), a decor group would fight it, and with formats-per-decor near
+  one the group headers would make the list longer than the rows they collect. A row whose
+  **format** the platform has retired carries a small «Ishlab chiqarishdan chiqqan» hint —
+  it stays sellable, stockable and listed
+  ([*Three levels of off*](#three-levels-of-off)). Three empty states, because they need
+  different advice: no filter match · nothing has moved yet · the branch carries no materials
+  at all.
+
+  Table: material (label + image + manufacturer chip), on-hand, min-stock, unit; low-stock
+  rows highlighted (chip + colour). A **negative** balance escalates from the low-stock
+  warning treatment to danger — its own chip, its own marker line ("kirim yozilmagan"), and
+  it sorts to the top of the table, because it is a state that wants an arrival recorded
+  rather than a minus sign to scroll past. The **Ombor qiymati** tile counts negative
+  balances negatively rather than clamping them away.
+
+  The material's **name links to its own page** — `/workshop/inventory/materials/<branch
+  material id>`. A material is opened from a row, a colleague's link or a reload, so it is a
+  page and not a dialog; it also carries its own branch, which the server derives from the
+  material rather than reading off the topbar (`GET /workshop/inventory/materials/{id}/stock`).
+
+  The page reads: the label, format line and status pill, then four figures — *Qoldiq*
+  (danger when negative) · *Min*, editable in place through a pencil control · *Oxirgi narx*
+  with its provenance (date · supplier, or "birinchi kirim" when the material was never
+  priced) · *Qiymat*, on-hand valued at that last price and shown only when both halves are
+  real.
+
+  Beneath them the movement history, **split into the three questions an owner asks in front
+  of a shelf** — each has a different context column, and one mixed ledger would make the
+  reader do the sorting. They are **tabs**, not stacked sections: three tables under each
+  other buried the figures under a scroll. Each tab label carries its **row count**, because
+  a tab hides what it is not showing and "where are the write-offs?" must not cost a click to
+  answer; the open panel states its **net change** over the window:
+
+  - **Kirimlar** — arrivals, each linked to the faktura it came in on (`K-0019` → the invoice
+    page), with supplier, quantity, unit price and resulting balance. A void reversal sits
+    here too, marked, because it is the same document's story told backwards.
+  - **Tuzatishlar** — corrections, with the actor and the mandatory reason that justifies each.
+  - **Chiqimlar** — what production took, each linked to the **order** that took it by its own
+    `#26-1-0005` number (a `consume`, or the `restore` of a reverted step).
+
+  A correction booked from the page switches to *Tuzatishlar*, so the row explaining the new
+  balance is the one on screen. The window is the last 100 movements and the page **says so**
+  when it is full; **Barcha harakatlar** hands off to the Tranzaksiyalar tab filtered to this material, which remains
+  the flat audit journal. Page actions **Kirim yozish** (a link to the arrival page, material
+  pre-picked) and **Tuzatish** (the correction dialog — one field and a reason, so it stays a
+  dialog).
+
+  Editing *Min* here writes the same `branch_material.min_stock` the catalog form writes —
+  two doors, one fact, no copy anywhere. It is gated on `manage_inventory` rather than
+  `manage_catalog` because the threshold is warehouse policy: the decision "5 emas, 10
+  bo'lsin" is made standing in front of the shelf by the person who runs it.
+
+  Both stock operations live **on the material page only**. The Zaxira tab itself carries no
+  page-level *Kirim* / *Tuzatish* pair and its rows carry no ⋯ menu: every correction and
+  every arrival is about a specific material, so starting anywhere else means being asked
+  "which material?" a second time. An operator who arrives with a document rather than a
+  shelf in mind starts from **Kirimlar → + Kirim**, which is where a multi-material faktura
+  belongs anyway. *Tuzatish* is a signed quantity with a **required leading + or −** — "-2"
   writes off, "+5" adds — live-filtered as typed, plus the mandatory reason; this supersedes
-  the earlier direction-toggle design in favour of one explicit signed entry).
+  the earlier direction-toggle design in favour of one explicit signed entry.
 - **Kirimlar** (`manage_inventory`) — the branch's arrivals as documents, not as loose rows:
-  `K-0007` · supplier · date · N pozitsiya · total · a payment-status pill
-  (*To'langan* / *Qisman* / *To'lanmagan*, with the outstanding amount beneath a partial).
-  Search and a payment-status filter sit in the toolbar. A row expands to its lines
-  (material, quantity, unit price, line total) with the skidka / ustama and the final total
-  beneath them.
+  `K-0007` · supplier · date · N pozitsiya ·
+  total · a payment-status pill (*To'langan* / *Qisman* / *To'lanmagan*, with the outstanding
+  amount beneath a partial), replaced by a danger **Bekor qilingan** badge on a voided row.
+  The toolbar carries the shared date-range picker (opening on **all** — the arrivals list
+  is an archive, and a 30-day default would answer "nothing" to most lookups), a supplier
+  dropdown, a payment-status filter and a number search; the table pages with a *load-more*
+  control. The number is a link to the document's own page, and **+ Kirim** is a link to the
+  arrival form — both real links, so middle-click and Cmd-click work.
 
-  The **arrival form** is a header — supplier, date, and the `K-…` badge the number will take
-  — over a line table with **+ Material qo'shish**, closing on a totals block:
-  *Oraliq jami* → *Chegirma* → *Ustama* → *Jami*. Each line's price field **prefills** with the
-  last price paid — supplier-specific when the picked supplier has priced history, otherwise
-  the material's overall latest — with a provenance hint underneath (price · date · supplier;
-  "birinchi kirim" when no history). A prefill never overwrites a price the user has typed —
-  a later supplier change only updates the hint. A live line total renders in the row so the
-  warehouseman can check each one against the paper in hand; entry time must not grow.
+  A faktura is three pages, not a modal: `/workshop/inventory/invoices/new`, `/:invoice_id`
+  and `/:invoice_id/edit`. Entering a whole document is a long typing session, and a form
+  that long behind a dialog cannot be linked, reloaded, or left and come back to. Create is
+  branch-scoped (the topbar context supplies the branch); the other two are entity-scoped,
+  taking the branch from the record so a later context switch cannot retarget the document.
 
-  Two footer actions: **Saqlash**, and **Saqlash va xarajat yozish**, which saves the arrival
-  and opens the expense modal prefilled against it ([`finance.md`](finance.md)). The second
-  button is what makes the link get used — without it staff record the payment separately and
-  never attach it. It appears only for users who could open the finance ledger anyway.
-- **Transactions** (`manage_inventory`) — full log: type (`stock_in` /
+  The **detail page** reads top to bottom as the document does: `K-####` with the payment
+  pill, supplier · who recorded it, a danger strip carrying reason · who ·
+  when on a voided invoice, the lines (material, quantity, unit price, line total), **Jami**
+  as a single line, and the settlement block — paid, outstanding (danger while positive),
+  then the linked payments, voided ones struck through and tagged. Branch is not shown: the
+  topbar context owns it. Actions: **Xarajat yozish** (the deep link into the finance expense
+  modal with the faktura pre-picked, for users who could open the ledger anyway) ·
+  **Tahrirlash** · **⋯ → Bekor qilish**. The destructive action sits in the overflow so it
+  cannot be hit by a mis-aimed click on its neighbour; a voided invoice offers none of them.
+  The void opens a danger confirm naming its effect on stock and requiring a reason before
+  the button enables, and lands back on the detail page in its voided state.
+
+  The **arrival form** — the same component for create and edit — is a header (supplier, with
+  inline-add on create only; and date) over a line table with
+  **+ Material qo'shish**: per-line material combobox, quantity and unit price carrying their
+  unit suffixes, a live line total, and a remove control. Each line's price field
+  **prefills** with the last price paid — supplier-specific when the picked supplier has
+  priced history, otherwise the material's overall latest — with a provenance hint underneath
+  (price · date · supplier; *«Birinchi kirim — avvalgi narx yo'q»* when there is none). A
+  typed or seeded price is never overwritten by a prefill. The footer carries **Jami** alone:
+  with no document-level discount the line sum *is* the total, and a ladder would only
+  restate it. Leaving with unsaved edits asks first.
+
+  Actions: **Saqlash** · **Saqlash va xarajat yozish** (create only) · **Bekor**. The second
+  save is what makes the invoice→expense link get used — without it staff record the payment
+  separately and never attach it; it saves the arrival and opens the expense modal prefilled
+  against it ([`finance.md`](finance.md)), and appears only for users who could open the
+  finance ledger anyway. A stock row's **Kirim yozish** and the dashboard's negative-balance
+  work item both link to the form with `?material=`, so line 1 arrives already picked.
+- **Transactions** (`manage_inventory`) — full log: type (`stock_in` / `stock_in_void` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, unit price and total (stock-in rows only), order link (for
-  consume/restore), supplier (for stock_in), actor, note, date-time; filtered by the
+  consume/restore — the order's own `#26-1-0005` number, which the movement carries), the
+  `K-…` faktura link to the document's page (for stock_in and
+  stock_in_void), supplier (for stock_in), actor, note, date-time; filtered by the
   shared date-range picker and a **material filter** — one material's stock-in rows
   read as its purchase-price history; read-only. The same read derives **Ombor qiymati** —
   on-hand valued at each material's latest purchase price (tape: mm × per-metre), summed over
@@ -388,10 +624,11 @@ now-redundant branch column:
   expense form attributes spending to a supplier; creating and editing one stays here.
 
 The **cutting material picker** — the same component in the client and workshop apps — reads
-this same catalog, branch-scoped and grouped by dekor; it is specified in
+this same catalog, branch-scoped and grouped by decor; it is specified in
 [`cutting.md`](cutting.md). Both apps list every format the branch carries, unpriced ones
 included and marked; stock is not a filter either, so an out-of-stock or negative-balance
-material is still pickable.
+material is still pickable, and a retired format is pickable too, wearing the same
+«Ishlab chiqarishdan chiqqan» hint.
 
 States: loading (skeletons); empty (nothing attached yet → "add materials to this
 branch"); error (`trace_id`). Accessibility: low-stock and "Narx yo'q" are chip + colour, not
@@ -399,26 +636,37 @@ colour alone; modals manage focus; owner-only controls are visibly gated for non
 
 ## Edge cases
 
-- **Platform deactivates a manufacturer** — existing dekorlar keep referencing it
-  (history preserved); the manufacturer disappears from the new-dekor form; no
-  branch can attach a new dekor under that manufacturer; stock untouched.
-- **Platform deactivates a dekor branches carry** — existing branch materials keep
-  referencing it (history preserved); hidden from clients; no new branch can attach it;
+- **Platform deactivates a manufacturer** — existing decors keep referencing it
+  (history preserved); the manufacturer disappears from the new-decor form; no
+  branch can attach a new decor under that manufacturer; stock untouched.
+- **Platform deactivates a decor branches carry** — existing formats and branch materials
+  keep referencing it (history preserved); hidden from clients; no new branch can attach it;
   stock untouched.
-- **Branch deactivates a format still platform-active** — hidden from clients at
-  that branch; stock/history stay; the dekor's other formats and other branches unaffected.
+- **Platform deactivates a format branches carry** — nothing is hidden and nothing cascades:
+  the branch keeps its row, its stock, its price and its clients, and may sell the remainder
+  and even receive more of it. The row and the cutting picker gain the
+  «Ishlab chiqarishdan chiqqan» hint, and no branch can attach it any more
+  ([*Three levels of off*](#three-levels-of-off)).
+- **Branch deactivates a material still platform-active** — hidden from clients at
+  that branch; stock/history stay; the decor's other formats and other branches unaffected.
 - **Material referenced by old orders, then deactivated** — orders unaffected
   (snapshots).
 - **Sheet width entered larger than length** — **normalized, not rejected**: 1830×2750 and
-  2750×1830 are the same sheet, so the server swaps them and the row's format is stored one
-  way only. Not applicable to `kromka`, which has a tape width and no length.
-- **A format the branch already carries is re-selected** — the chip renders disabled, and if
+  2750×1830 are the same sheet, so the platform's format is stored one way only. Not
+  applicable to `kromka`, which has a tape width and no length.
+- **A format the branch already carries is re-selected** — its row renders disabled, and if
   a concurrent attach got there first the server **skips** that format and reports it in the
   response rather than failing the batch.
-- **Wrong format shape for the `tur`** — `kromka` with a sheet size, or a panel-shaped dekor
-  with a tape width, is rejected with a message naming the material. The rule needs `tur`,
-  which lives on `dekorlar`, so it is a service-layer check, not a DB constraint.
-- **A dekor attached with no price** — allowed; the row shows **"Narx yo'q"** everywhere it
+- **A format the platform entered wrong** — it is **deactivated and re-entered**, never
+  edited; branches that attached it attach the corrected one. Nothing downstream is rewritten.
+- **Wrong format shape for the substrate** — `kromka` with a sheet size, or a panel-shaped
+  substrate with a tape width or without `finished_sides`, is refused on the platform form
+  with a named error. The service checks it first for the message; a DB CHECK backs it, which
+  became possible only once the substrate moved onto the format row.
+- **A branch needs a size the platform has not entered** — it cannot create one. The attach
+  sheet says so («Kerakli o'lcham yo'qmi? Platformaga xabar bering») and the branch asks the
+  platform, which enters the format for everyone.
+- **A format attached with no price** — allowed; the row shows **"Narx yo'q"** everywhere it
   appears, clients included, and can be ordered. The order cannot be **confirmed** until the
   price exists ([`orders.md`](orders.md)).
 - **`shop` material short when an operator verifies an order** — a **warning**,

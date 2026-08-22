@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-22
 order: 50
 ---
 
@@ -91,14 +91,15 @@ The tenant is the **workshop**. One database, one app, many workshops.
 
   ```mermaid
   flowchart TD
-      D[("<b>Dekor</b><br/>platform-wide<br/>identity only")]
+      D[("<b>Decor</b><br/>platform-wide<br/>pattern identity")]
+      DF[("<b>Decor format</b><br/>platform-wide<br/>one product")]
       Cl[("<b>Client</b><br/>platform-wide<br/>no tenant")]
 
       W["<b>Workshop</b><br/><i>(tenant)</i>"]
       WU["workshop user<br/>1 owner · N staff"]
       PG["permission grant<br/>branch-scoped"]
       B["branch · 1..N"]
-      BM["branch material<br/>format + price"]
+      BM["branch material<br/>carry + price"]
       SI["stock item"]
       BP["branch pricing"]
 
@@ -110,13 +111,15 @@ The tenant is the **workshop**. One database, one app, many workshops.
       B --> SI
       B --> BP
 
-      BM -.->|one format of| D
+      DF -.->|a product of| D
+      BM -.->|we carry| DF
       Cl -.->|places order at| B
   ```
 
 One owner per workshop (exactly); a workshop user belongs to one workshop.
-**Decor identity is global** — platform-level master records; the **format and the price are
-branch-owned**, and a branch material is what everything downstream points at.
+**The product is global** — decors *and* their formats are platform-level master records, so
+one physical sheet has one id everywhere; a branch owns only **the decision to carry it and
+its price**, and that branch material is what everything downstream points at.
 **Clients are global** — bound to no workshop or branch; they pick a branch per order.
 
 - **Scope by principal** (derived from the authenticated principal, never from client input):

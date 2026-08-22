@@ -1,5 +1,5 @@
 import {
-  dekorTurLabel,
+  decorTypeLabel,
   materialOptionLabel,
   snapshotEdgeLabel,
   snapshotMaterialLabel,
@@ -18,7 +18,7 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 // backend's material_label.py. Re-exported here so the editor's long-standing
 // import path keeps working and nobody is tempted to write a second composer.
 export {
-  dekorTurLabel,
+  decorTypeLabel,
   materialOptionLabel,
   snapshotEdgeLabel,
   snapshotMaterialLabel,
@@ -49,11 +49,11 @@ export const sideLabels: Record<EdgeField, string> = {
 
 // Deterministic swatch colour for a material: a few named-colour shortcuts, then a
 // stable hash → pastel HSL so the same material always renders the same chip.
-// Callers pass `nomi` where they used to pass `color`.
+// Callers pass `name` where they used to pass `color`.
 export function colorForMaterial(value: string | null | undefined): string {
   const text = (value ?? '').toLowerCase()
   // `yong'oq` (walnut) ends in `oq`, so the compound colours have to be tested
-  // before the plain ones or every walnut dekor paints near-white.
+  // before the plain ones or every walnut decor paints near-white.
   if (text.includes('walnut') || text.includes('yong')) return '#805434'
   if (text.includes('white') || text.includes('oq')) return '#f7f4ec'
   if (text.includes('black') || text.includes('qora')) return '#2a2d33'
@@ -71,17 +71,17 @@ export function colorForMaterial(value: string | null | undefined): string {
  *
  * **It takes the frozen snapshot, not a label, and that is the whole point.**
  * `colorForMaterial` hashes whatever string it is handed, so the colour is only
- * stable if every screen hands it the same one. The picker passes the dekor's
- * `nomi`; passing the composed label here instead would paint the same board a
- * different colour one wizard step later, and give one dekor two colours in two
+ * stable if every screen hands it the same one. The picker passes the decor's
+ * `name`; passing the composed label here instead would paint the same board a
+ * different colour one wizard step later, and give one decor two colours in two
  * thicknesses — the exact recognition this swatch exists to create.
  *
  * A customer's own board is hatched rather than coloured. It is not a catalog
- * dekor, so hashing the typed name would invent an identity for something nobody
+ * decor, so hashing the typed name would invent an identity for something nobody
  * picked; the hatch is the handoff's, and it also reads at a glance as "not ours"
  * beside the `Mijoz materiali` chip.
  *
- * One deviation from the prototype: it paints each dekor a two-stop gradient,
+ * One deviation from the prototype: it paints each decor a two-stop gradient,
  * but those gradients are literals hand-authored for its five demo materials.
  * Nothing derives one for an arbitrary catalog row, so the app keeps the flat
  * colour it already shares with the picker.
@@ -93,7 +93,7 @@ export function materialSwatchStyle(snapshot: MaterialSnapshot): Record<string, 
         'repeating-linear-gradient(135deg, var(--color-hairline-soft) 0 5px, var(--color-sunk) 5px 10px)',
     }
   }
-  return { background: colorForMaterial(snapshotText(snapshot, 'nomi', 'color')) }
+  return { background: colorForMaterial(snapshotText(snapshot, 'nomi', 'color', 'name')) }
 }
 
 export function edgeShortLabel(
@@ -109,14 +109,14 @@ export function edgeShortLabel(
 
 export function edgeTinyLabel(material: ClientCatalogMaterialOption | null | undefined): string {
   if (!material) return '-'
-  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.qalinlik_mm}`
+  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.thickness_mm}`
 }
 
 // Keyboard-jump filter for the rows already loaded into the open edge-picker
 // modal. The catalog list itself is server-searched; this only narrows what is
 // on screen, which is why it stays client-side (the cutting editor's behaviour
-// is unchanged by the reshape). `name` is gone from the blob; `kod`/`nomi` carry
+// is unchanged by the reshape). `name` is gone from the blob; `code`/`name` carry
 // the signal now.
 export function edgeSearchText(material: ClientCatalogMaterialOption): string {
-  return `${material.manufacturer_name} ${material.nomi} ${material.kod ?? ''} ${material.qalinlik_mm} ${material.kromka_eni_mm ?? ''}`.toLowerCase()
+  return `${material.manufacturer_name} ${material.name} ${material.code ?? ''} ${material.thickness_mm} ${material.tape_width_mm ?? ''}`.toLowerCase()
 }

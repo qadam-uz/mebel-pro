@@ -1,10 +1,11 @@
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    DekorType,
+    DecorType,
     Permission,
     UserStatus,
 )
@@ -13,7 +14,12 @@ from app.modules.access.contracts import PermissionGrant, WorkshopUser
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_dekor, seed_manufacturer, seed_workshop_with_owner
+from tests.factories import (
+    seed_decor,
+    seed_decor_format,
+    seed_manufacturer,
+    seed_workshop_with_owner,
+)
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -31,17 +37,33 @@ async def _owner_login(client: AsyncClient, db_session: AsyncSession) -> tuple[s
     return response.json()["access_token"], str(branch.id)
 
 
-async def _seed_platform_dekor(db_session: AsyncSession) -> uuid.UUID:
+async def _seed_platform_formats(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    """One platform decor in two thicknesses — the branch attaches formats, not decors."""
     manufacturer = await seed_manufacturer(db_session)
-    dekor = await seed_dekor(
+    decor = await seed_decor(
         db_session,
         manufacturer=manufacturer,
-        tur=DekorType.LDSP,
-        kod="H1334",
-        nomi="Light oak",
-        tolali=True,
+        code="H1334",
+        name="Light oak",
+        has_grain=True,
     )
-    return dekor.id
+    thin = await seed_decor_format(
+        db_session,
+        decor=decor,
+        type=DecorType.LDSP,
+        thickness_mm=Decimal("16"),
+        length_mm=2800,
+        width_mm=2070,
+    )
+    thick = await seed_decor_format(
+        db_session,
+        decor=decor,
+        type=DecorType.LDSP,
+        thickness_mm=Decimal("18"),
+        length_mm=2800,
+        width_mm=2070,
+    )
+    return thin.id, thick.id
 
 
 async def test_onboarding_status_derives_from_setup_progress(
@@ -80,21 +102,14 @@ async def test_onboarding_status_derives_from_setup_progress(
     assert priced.json()["materials_added"] is False
     assert priced.json()["setup_complete"] is False
 
-    dekor_id = await _seed_platform_dekor(db_session)
+    thin_format_id, thick_format_id = await _seed_platform_formats(db_session)
     # An UNPRICED format does not finish onboarding: client listings drop
     # price-0 rows, so a workshop could otherwise attach 200 formats, be told
     # setup is complete, and still show clients an empty catalog.
     unpriced = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
-        json={
-            "items": [
-                {
-                    "dekor_id": str(dekor_id),
-                    "formats": [{"qalinlik_mm": "16", "uzunlik_mm": 2800, "eni_mm": 2070}],
-                }
-            ],
-        },
+        json={"items": [{"decor_format_id": str(thin_format_id)}]},
     )
     assert unpriced.status_code == 201
     still_incomplete = await client.get("/api/v1/workshop/onboarding", headers=_auth(owner_access))
@@ -107,16 +122,9 @@ async def test_onboarding_status_derives_from_setup_progress(
         json={
             "items": [
                 {
-                    "dekor_id": str(dekor_id),
-                    "formats": [
-                        {
-                            "qalinlik_mm": "18",
-                            "uzunlik_mm": 2800,
-                            "eni_mm": 2070,
-                            "price_tiyin": 25500000,
-                            "min_stock": 2,
-                        }
-                    ],
+                    "decor_format_id": str(thick_format_id),
+                    "price_tiyin": 25500000,
+                    "min_stock": 2,
                 }
             ],
         },

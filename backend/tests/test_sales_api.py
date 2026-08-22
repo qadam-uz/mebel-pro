@@ -19,11 +19,13 @@ from app.models.enums import (
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Dekor, DekorType
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, DecorFormat, DecorType
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
+from app.modules.sales.api import order_pdf_pricing
 from app.modules.sales.contracts import Order, OrderItem
+from app.modules.sales.schemas import OrderDetailResponse
 from app.modules.support.contracts import Notification
 from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch
@@ -132,11 +134,11 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="P5-P",
-        nomi="White",
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=900,
-        eni_mm=600,
+        code="P5-P",
+        name="White",
+        thickness_mm=Decimal("18"),
+        length_mm=900,
+        width_mm=600,
         price_tiyin=250_000,
         min_stock=1,
     )
@@ -144,10 +146,10 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="P5-E",
-        nomi="White",
-        qalinlik_mm=Decimal("2"),
-        kromka_eni_mm=19,
+        code="P5-E",
+        name="White",
+        thickness_mm=Decimal("2"),
+        tape_width_mm=19,
         price_tiyin=10_000,
         min_stock=1_000,
     )
@@ -1481,8 +1483,9 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
     panel_item = await db_session.scalar(
         select(StockItem)
         .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .where(StockItem.branch_id == branch_id, Dekor.tur != DekorType.KROMKA)
+        # The substrate lives on the format now, one join further out.
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+        .where(StockItem.branch_id == branch_id, DecorFormat.type != DecorType.KROMKA)
     )
     assert panel_item is not None
     panel_item.on_hand = 0
@@ -1550,3 +1553,45 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
     )
     assert stock_in.status_code == 201
     assert stock_in.json()["balance_after"] == 3
+
+
+async def test_order_cutting_pdf_carries_the_receipt_the_client_saw(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The document's first page states the money, itemized the way the client
+    already read it under «Buyurtmangiz» — from the order's own frozen prices,
+    so what is printed reconciles with the total the order was placed at."""
+    order, client_access, owner_access, _, _, _ = await _placed_order(client, db_session)
+    detail = await client.get(
+        f"/api/v1/client/orders/{order['id']}",
+        headers=_auth(client_access),
+    )
+    pricing = order_pdf_pricing(OrderDetailResponse.model_validate(detail.json()))
+    client_pdf = await client.get(
+        f"/api/v1/client/orders/{order['id']}/cutting/pdf",
+        headers=_auth(client_access),
+    )
+    workshop_pdf = await client.get(
+        f"/api/v1/workshop/orders/{order['id']}/cutting/pdf",
+        headers=_auth(owner_access),
+    )
+
+    assert [
+        (row.group, row.label, row.quantity, row.unit, row.unit_price_tiyin, row.amount_tiyin)
+        for row in pricing.rows
+    ] == [
+        ("List", pricing.rows[0].label, "1", "list", 250_000, 250_000),
+        ("Kromka", pricing.rows[1].label, "1.00", "m", 10_000, 10_000),
+        ("Xizmat", "Kesish xizmati", "1", "list", 50_000, 50_000),
+        # Banding labour is what the banding subtotal has left once the tape
+        # material line is taken out of it.
+        ("Xizmat", "Kromka yopishtirish", "1.00", "m", 20_000, 20_000),
+    ]
+    assert pricing.total_tiyin == 330_000
+    assert sum(row.amount_tiyin or 0 for row in pricing.rows) == pricing.total_tiyin
+    assert client_pdf.status_code == 200
+    assert client_pdf.headers["content-type"] == "application/pdf"
+    assert client_pdf.content.startswith(b"%PDF")
+    assert workshop_pdf.status_code == 200
+    assert workshop_pdf.content.startswith(b"%PDF")

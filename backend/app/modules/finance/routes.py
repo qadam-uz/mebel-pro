@@ -27,6 +27,7 @@ from app.modules.finance.api import (
     list_payable_orders,
     list_payable_supplier_invoices,
     list_supplier_debts,
+    recorded_by_names,
     render_statement_pdf_async,
     update_expense,
     update_income,
@@ -88,6 +89,7 @@ async def income_index(
     income_type: IncomeTypeQuery = None,
     method: MoneyMethod | None = None,
     status_filter: LedgerStatusQuery = None,
+    recorded_by_user_id: uuid.UUID | None = None,
     min_amount_tiyin: int | None = None,
     max_amount_tiyin: int | None = None,
 ) -> list[IncomeResponse]:
@@ -101,6 +103,7 @@ async def income_index(
         income_type=income_type,
         method=method,
         status_filter=status_filter,
+        recorded_by_user_id=recorded_by_user_id,
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
@@ -166,6 +169,7 @@ async def expenses_index(
     branch_id: uuid.UUID | None = None,
     category: ExpenseCategory | None = None,
     status_filter: LedgerStatusQuery = None,
+    recorded_by_user_id: uuid.UUID | None = None,
     min_amount_tiyin: int | None = None,
     max_amount_tiyin: int | None = None,
 ) -> list[ExpenseResponse]:
@@ -178,6 +182,7 @@ async def expenses_index(
         branch_id=branch_id,
         category=category,
         status_filter=status_filter,
+        recorded_by_user_id=recorded_by_user_id,
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
@@ -411,12 +416,16 @@ def _ascii_slug(value: str) -> str:
 
 
 async def _expense_responses(db: Session, rows: list[Expense]) -> list[ExpenseResponse]:
-    """Expense rows plus the `K-…` label of whatever invoice each one pays."""
+    """Expense rows plus the `K-…` label of the invoice each pays and who booked it."""
 
     numbers = await invoice_numbers_for(db, expenses=rows)
+    names = await recorded_by_names(db, user_ids=(row.recorded_by_user_id for row in rows))
     return [
         ExpenseResponse.model_validate(row).model_copy(
-            update={"invoice_no": numbers.get(row.invoice_id) if row.invoice_id else None}
+            update={
+                "invoice_no": numbers.get(row.invoice_id) if row.invoice_id else None,
+                "recorded_by_name": names.get(row.recorded_by_user_id),
+            }
         )
         for row in rows
     ]

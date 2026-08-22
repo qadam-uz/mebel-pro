@@ -4,16 +4,18 @@ import { promisify } from 'node:util'
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 
 import {
-  carryDekor,
-  createCatalogDekorlar,
-  createDekor,
+  carryFormats,
+  createCatalogDecors,
+  createDecor,
+  createDecorFormat,
   createManufacturer,
   databaseUrl,
   escapeRegExp,
-  tickDekor,
+  tickDecor,
   expectOk,
   type BranchMaterialResponse,
-  type DekorResponse,
+  type DecorResponse,
+  type DecorFormatResponse,
 } from './helpers'
 
 const execFileAsync = promisify(execFile)
@@ -140,12 +142,11 @@ async function createCatalogDekor(
   imageFileId: string | null = null,
 ) {
   const manufacturerId = await createManufacturer(request, token, `Catalog Maker ${id}`)
-  return createDekor(request, token, {
+  return createDecor(request, token, {
     manufacturer_id: manufacturerId,
-    tur: 'ldsp',
-    kod: `P3-${id}`,
-    nomi: 'White',
-    tolali: true,
+    code: `P3-${id}`,
+    name: 'White',
+    has_grain: true,
     image_file_id: imageFileId,
   })
 }
@@ -186,6 +187,10 @@ async function loginAdmin(page: Page, login: string) {
   await page.getByLabel('Login').fill(login)
   await page.getByLabel(passwordLabel).fill(adminPassword)
   await page.getByRole('button', { name: continueButton }).click()
+  // Wait for the session to land before returning. A `page.goto` to a deep
+  // admin link fired mid-login reloads the SPA with no token yet stored, and
+  // the route guard bounces it straight back to this form.
+  await expect(page.getByRole('heading', { name: 'Admin paneliga kirish' })).toHaveCount(0)
 }
 
 async function loginWorkshop(page: Page, login: string, password: string) {
@@ -205,35 +210,111 @@ async function changeRequiredPassword(page: Page, current: string, next: string)
 }
 
 /**
- * The result table names every row by its dekor as well as its o'lcham, because
- * one batch can span dekorlar — so a price/threshold field is addressed by both.
+ * The pricing table names every row by its decor as well as its format, because
+ * one batch can span decors — so a price/threshold field is addressed by both.
  */
-function rowLabel(dekor: DekorResponse, format: string) {
-  return `${dekor.label} · ${format}`
+/** The 2800×2070 sheet this spec's fixtures are built on. */
+function catalogFormat(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'ldsp',
+    thickness_mm: '18',
+    length_mm: 2800,
+    width_mm: 2070,
+    finished_sides: 2,
+    ...overrides,
+  }
+}
+
+function rowLabel(decor: DecorResponse, format: string) {
+  return `${decor.label} · ${format}`
 }
 
 /**
- * Drive the two-step attach sheet for a single dekor: tick it, then pick the
- * thickness and size chips whose cross product becomes the rows to create.
+ * The dimension tail of a format label — what a row under a decor group prints,
+ * since the group heading already carries the identity.
+ */
+function formatDims(label: string) {
+  return label.split(' · ').at(-1) as string
+}
+
+/**
+ * Drive the two-step attach sheet for a single decor: tick it, continue, then
+ * tick the PLATFORM formats to carry.
+ *
+ * Step two lists what the platform has entered — the branch cannot invent a
+ * format any more, so there are no thickness/size chips to click and no
+ * "+ qo'shish".
  */
 async function attachThroughSheet(
   page: Page,
-  dekor: DekorResponse,
-  formats: Array<{ thickness: string; size: string }>,
+  decor: DecorResponse,
+  formats: DecorFormatResponse[],
 ) {
   const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
-  await tickDekor(pickStep, dekor)
+  await tickDecor(pickStep, decor)
   await pickStep.getByRole('button', { name: 'Davom etish' }).click()
 
   const formatStep = page.getByRole('dialog', { name: "O'lchamlar va narx" })
-  for (const value of new Set(formats.map((format) => format.thickness))) {
-    await formatStep.getByRole('button', { name: `${value} mm`, exact: true }).click()
-  }
-  for (const value of new Set(formats.map((format) => format.size))) {
-    await formatStep.getByRole('button', { name: value, exact: true }).click()
+  for (const format of formats) {
+    await formatStep.getByRole('checkbox', { name: format.label }).check()
   }
   return formatStep
 }
+
+/**
+ * The reshape's central move, end to end: only the PLATFORM creates a format,
+ * and a branch can then carry it. If the admin form and the attach sheet ever
+ * disagree about what a format is, this is the test that notices.
+ */
+test('admin adds a format and the branch can then carry it', async ({ page, request }, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p3-fmt-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  // A decor with NO format yet — the branch has nothing it could attach.
+  const dekor = await createCatalogDekor(request, adminAccess, id)
+
+  await loginAdmin(page, adminLogin)
+  await page.goto(`/admin/catalog/decors/${dekor.id}`)
+  await expect(page.getByRole('heading', { name: 'Formatlar' })).toBeVisible()
+  // The decor form itself never asks for a substrate — that lives on the format.
+  await expect(page.getByText("Bu dekorda hali format yo'q.", { exact: false })).toBeVisible()
+
+  await page.getByRole('button', { name: '+ Format' }).click()
+  const formatDialog = page.getByRole('dialog', { name: 'Yangi format qo\'shish' })
+  await formatDialog.getByLabel('Qalinlik (mm)').fill('18')
+  // The standard chips are quick-fill for the PLATFORM form now — they stopped
+  // being the branch's attach suggestions.
+  await formatDialog.getByRole('button', { name: '2800×2070', exact: true }).click()
+  await formatDialog.getByRole('button', { name: "Qo'shish", exact: true }).click()
+  await expect(formatDialog).toBeHidden()
+
+  // The new row is listed, two-sided by default, and active.
+  const formatRow = page.getByRole('row', { name: /2800×2070/ })
+  await expect(formatRow).toBeVisible()
+  await expect(formatRow).toContainText('2 tomonlama')
+
+  // ...and the branch can now carry exactly that format.
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
+  await page.goto('/workshop/catalog')
+  await page.getByRole('button', { name: '+ Material', exact: true }).first().click()
+  const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
+  await tickDecor(pickStep, dekor)
+  await pickStep.getByRole('button', { name: 'Davom etish' }).click()
+
+  const formatStep = page.getByRole('dialog', { name: "O'lchamlar va narx" })
+  // Step two lists the platform's formats and nothing else: no chips, no
+  // "+ qo'shish", and the note that says who adds a missing size.
+  await expect(formatStep.getByText('Platformaga xabar bering', { exact: false })).toBeVisible()
+  await formatStep.getByRole('checkbox', { name: /2800×2070×18 mm/ }).check()
+  await formatStep.getByRole('button', { name: /qo.shish$/ }).click()
+  await expect(formatStep).toBeHidden()
+
+  const carried = await branchMaterials(request, ownerAccess, setup.branch.id as string)
+  expect(carried.map((row) => row.decor_format.decor_id)).toEqual([dekor.id])
+})
 
 test('admin creates a platform dekor through the UI', async ({ page }, testInfo) => {
   const id = runId(testInfo)
@@ -271,9 +352,9 @@ test('admin creates a platform dekor through the UI', async ({ page }, testInfo)
   await dekorDialog.getByLabel('Kod').fill(`UI-${id}`)
   // The preview card and the image field's title both render it — `.first()` is
   // the card, which is the one the operator reads while typing.
-  await expect(
-    dekorDialog.getByText(`LDSP ${makerName} UI-${id} · White`).first(),
-  ).toBeVisible()
+  // No substrate prefix any more: `type` moved to the format, so the decor card
+  // is maker + code + name and nothing else.
+  await expect(dekorDialog.getByText(`${makerName} UI-${id} · White`).first()).toBeVisible()
   await dekorDialog.getByRole('button', { name: 'Saqlash' }).click()
 
   // The kod is unique per run and part of the composed label shown in the row.
@@ -296,6 +377,8 @@ test('owner adds a branch material and records priced stock movement with prefil
   const ownerAccess = await readyOwnerToken(request, setup)
   const branchId = setup.branch.id as string
   const dekor = await createCatalogDekor(request, adminAccess, id)
+  // The PLATFORM enters the format; the branch only decides to carry it.
+  const format = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
@@ -306,9 +389,7 @@ test('owner adds a branch material and records priced stock movement with prefil
   await page.getByRole('button', { name: '+ Material', exact: true }).first().click()
   // The reshape made attaching two steps: a dekor is identity, a format is the
   // branch's own fact, so step 1 picks the dekor and step 2 the formats + price.
-  const formatStep = await attachThroughSheet(page, dekor, [
-    { thickness: '18', size: '2800×2070' },
-  ])
+  const formatStep = await attachThroughSheet(page, dekor, [format])
   // The threshold prefills at 0 for every tur: a branch registers its o'lcham
   // list before it knows a threshold, so a non-zero prefill is a number nobody
   // chose.
@@ -338,23 +419,35 @@ test('owner adds a branch material and records priced stock movement with prefil
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
 
   await page.goto('/workshop/inventory')
-  await expect(page.getByRole('heading', { name: 'Ombor' })).toBeVisible()
-  // An arrival is one supplier invoice with a line per material (QAD-149).
-  await page.getByRole('button', { name: 'Kirim', exact: true }).click()
-  const stockIn = page.getByRole('dialog', { name: 'Kirim' })
-  await stockIn.getByRole('combobox', { name: /Ta.minotchi/ }).click()
+  await expect(page.getByRole('heading', { name: 'Ombor', exact: true })).toBeVisible()
+  // An arrival is one supplier invoice with a line per material (QAD-149), and
+  // it is entered on a page of its own — «+ Kirim» is a link, not a dialog
+  // opener. It lives on the Kirimlar tab: the Zaxira tab carries no page-level
+  // actions, because both stock operations belong to a material.
+  await page.getByRole('tab', { name: 'Kirimlar' }).click()
+  await page.getByRole('link', { name: '+ Kirim', exact: true }).click()
+  await expect(page).toHaveURL(/\/workshop\/inventory\/invoices\/new$/)
+  await page.getByRole('combobox', { name: /Ta.minotchi/ }).click()
   await page.getByRole('option', { name: "Yangi ta'minotchi" }).click()
-  await stockIn.getByLabel("Yangi ta'minotchi nomi").fill(`Supplier ${id}`)
-  await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.label)
+  await page.getByLabel("Yangi ta'minotchi nomi").fill(`Supplier ${id}`)
+  await page.getByRole('combobox', { name: 'Material' }).fill(material.label)
   await page.getByRole('option', { name: new RegExp(escapeRegExp(material.label)) }).click()
-  await stockIn.getByRole('textbox', { name: /^Miqdor/ }).fill('3')
+  await page.getByRole('textbox', { name: /^Miqdor/ }).fill('3')
   // First-ever stock-in: no price history, so the field is empty with the hint.
-  await expect(stockIn.getByText('Birinchi kirim', { exact: false })).toBeVisible()
-  await stockIn.getByRole('textbox', { name: /^Narx/ }).fill('2000')
-  // The live totals mirror the server math: 3 x 2 000 so'm, no adjustments.
-  await expect(stockIn.getByText('Oraliq jami')).toBeVisible()
-  await stockIn.getByRole('button', { name: 'Saqlash', exact: true }).click()
+  await expect(page.getByText('Birinchi kirim', { exact: false })).toBeVisible()
+  await page.getByRole('textbox', { name: /^Narx/ }).fill('2000')
+  // One footer number: with the document-level skidka gone there is no ladder.
+  await expect(page.getByText('Oraliq jami')).toHaveCount(0)
+  await expect(page.getByText('Jami', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
   await expect(page.getByText(/Kirim K-\d{4} yozildi\./)).toBeVisible()
+  // Saving lands on the new document's own page.
+  await expect(page.getByRole('heading', { name: /^Kirim K-\d{4}/ })).toBeVisible()
+
+  await page.goto('/workshop/inventory')
+  // Ordering is load-bearing: the Zaxira tab defaults to the moved scope, so the
+  // row is on screen *because* the arrival just moved it. The same assertion
+  // before the Kirim would find the «Omborda hali harakat yo'q» empty state.
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
   })
@@ -362,42 +455,214 @@ test('owner adds a branch material and records priced stock movement with prefil
     stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.label)}.*3 list`) }),
   ).toBeVisible()
 
-  // The arrival is readable as a document: one K-… row carrying one position.
+  // A second arrival: the last price paid prefills the line with provenance.
+  await page.getByRole('tab', { name: 'Kirimlar' }).click()
+  await page.getByRole('link', { name: '+ Kirim', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Material' }).fill(material.label)
+  await page.getByRole('option', { name: new RegExp(escapeRegExp(material.label)) }).click()
+  await expect(page.getByRole('textbox', { name: /^Narx/ })).toHaveValue('2000')
+  await expect(page.getByText('Oxirgi narx', { exact: false })).toBeVisible()
+  await expect(page.getByText(`Supplier ${id}`, { exact: false })).toBeVisible()
+  // «Bekor» is the deliberate exit, so it leaves without the unsaved-changes guard.
+  await page.getByRole('button', { name: 'Bekor', exact: true }).click()
+
+  // A write-off starts at the material it was noticed on: the row links to the
+  // material's page, and the correction is booked there with nothing to re-pick.
+  await page.goto('/workshop/inventory')
+  await stockTable
+    .getByRole('row')
+    .filter({ hasText: material.label })
+    .getByRole('link', { name: new RegExp(`${escapeRegExp(material.label)}.*batafsil`) })
+    .click()
+  await expect(page).toHaveURL(new RegExp(`inventory/materials/${material.id}`))
+  await page.getByRole('button', { name: 'Tuzatish', exact: true }).click()
+  const adjustment = page.getByRole('dialog', { name: 'Tuzatish' })
+  // The adjust quantity is a signed value with a required +/− prefix.
+  await adjustment.getByLabel(/Tuzatish miqdori/).fill('-1')
+  await adjustment.getByLabel('Izoh').fill('E2E stock take')
+  await adjustment.getByRole('button', { name: 'Saqlash' }).click()
+  await expect(page.getByText('Ombor tuzatishi yozildi.')).toBeVisible()
+  await page.getByRole('link', { name: 'Zaxiraga qaytish' }).click()
+  await expect(stockTable.getByText('Kam qolgan', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Tranzaksiyalar' }).click()
+  await expect(page.getByRole('cell', { name: `Supplier ${id}` })).toBeVisible()
+
+  // The arrival is readable as a document and correctable as one: the row links
+  // to its detail page, the lines are editable there, and a document that
+  // should never have existed is voided — which reverses the stock it moved.
   await page.getByRole('tab', { name: 'Kirimlar' }).click()
   const invoiceRow = page
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: `Supplier ${id}` }) })
   await expect(invoiceRow).toContainText('1 pozitsiya')
   await expect(invoiceRow.getByText("To'lanmagan")).toBeVisible()
-  // QAD-184: the row expands itself — the control is an icon-only chevron named
-  // after the faktura it opens, not a "Qatorlar" label.
-  await invoiceRow.getByRole('button', { name: /qatorlari/ }).click()
-  // `exact` matters: the expanded-lines container is itself a cell whose
-  // accessible name contains the material label, so a loose match hits two.
+  await invoiceRow.getByRole('link', { name: /fakturasini ochish/ }).click()
+  await expect(page).toHaveURL(/\/workshop\/inventory\/invoices\/[0-9a-f-]{36}$/)
+  // `exact` matters: the totals row carries the same amount, so a loose match
+  // on the material label would hit more than the line cell.
   await expect(page.getByRole('cell', { name: material.label, exact: true })).toBeVisible()
+
+  // Editing a line quantity moves the balance by exactly the difference, and
+  // the replay keeps the later write-off's balance-after honest.
+  await page.getByRole('link', { name: 'Tahrirlash' }).click()
+  await expect(page).toHaveURL(/\/edit$/)
+  await page.getByRole('textbox', { name: /^Miqdor/ }).fill('5')
+  await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
+  await expect(page.getByText(/Faktura K-\d{4} yangilandi\./)).toBeVisible()
+  await expect(page.getByRole('cell', { name: '5 list' })).toBeVisible()
+
+  await page.goto('/workshop/inventory')
+  // 5 arrived, 1 written off.
+  await expect(
+    stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.label)}.*4 list`) }),
+  ).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Kirimlar' }).click()
+  await invoiceRow.getByRole('link', { name: /fakturasini ochish/ }).click()
+  // The destructive action lives in the overflow, away from the everyday two.
+  await page.getByRole('button', { name: /qo.shimcha amallar/ }).click()
+  await page.getByRole('menuitem', { name: 'Bekor qilish' }).click()
+  const voidDialog = page.getByRole('dialog', { name: 'Fakturani bekor qilish' })
+  await voidDialog.getByLabel('Bekor qilish sababi').fill('E2E: narx xato kiritilgan')
+  // The confirm names its consequence rather than echoing the dialog's own
+  // «Bekor qilish» cancel, which sits right beside it.
+  await voidDialog.getByRole('button', { name: 'Fakturani bekor qilish', exact: true }).click()
+  await expect(page.getByText(/Faktura K-\d{4} bekor qilindi\./)).toBeVisible()
+  await expect(page.getByText('Bu faktura bekor qilingan')).toBeVisible()
+
+  await page.goto('/workshop/inventory?tab=invoices')
+  await expect(invoiceRow.getByText('Bekor qilingan')).toBeVisible()
+
+  // The reversal took the 5 panels back out; the −1 write-off stays, so the
+  // branch is honestly at −1 rather than at a clamped zero (QAD-150).
   await page.getByRole('tab', { name: 'Zaxira' }).click()
+  await expect(
+    stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.label)}.*-1 list`) }),
+  ).toBeVisible()
+})
 
-  // Reopen: the last price paid prefills the line with provenance underneath.
-  await page.getByRole('button', { name: 'Kirim', exact: true }).click()
-  const stockInAgain = page.getByRole('dialog', { name: 'Kirim' })
-  await stockInAgain.getByRole('combobox', { name: 'Material' }).fill(material.label)
-  await page.getByRole('option', { name: new RegExp(escapeRegExp(material.label)) }).click()
-  await expect(stockInAgain.getByRole('textbox', { name: /^Narx/ })).toHaveValue('2000')
-  await expect(stockInAgain.getByText('Oxirgi narx', { exact: false })).toBeVisible()
-  await expect(stockInAgain.getByText(`Supplier ${id}`, { exact: false })).toBeVisible()
-  await page.keyboard.press('Escape')
+test('a first arrival puts a material on the shelf and its detail page carries the story', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p3-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const branchId = setup.branch.id as string
+  const dekor = await createCatalogDekor(request, adminAccess, id)
+  // `min_stock: 0` is monitoring OFF — this row is never low at any balance
+  // until the threshold is set from the detail modal at the end of the journey.
+  const format = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  const [material] = await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: format.id, price_tiyin: 250_000, min_stock: 0 },
+  ])
 
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
+  await page.goto('/workshop/inventory')
+  await expect(page.getByRole('heading', { name: 'Ombor', exact: true })).toBeVisible()
+  const stockTable = page.getByRole('table').filter({
+    has: page.getByRole('columnheader', { name: 'Mavjud' }),
+  })
+  const materialRow = stockTable.getByRole('row').filter({ hasText: material.label })
+
+  // The tab shows the warehouse, not the catalog: a material nobody has moved
+  // anything into is not a stock row yet, and the empty state says which
+  // emptiness this is.
+  await expect(page.getByRole('heading', { name: "Omborda hali harakat yo'q" })).toBeVisible()
+  await expect(materialRow).toHaveCount(0)
+
+  // «Butun katalog» is how the operator reaches it — which is where a first
+  // arrival starts.
+  const wholeCatalog = page.getByRole('button', { name: 'Butun katalog' })
+  await wholeCatalog.click()
+  await expect(materialRow).toContainText('0 list')
+
+  // Both stock operations live on the material, so the first arrival is started
+  // from the material's own page — the tab itself carries no page-level pair.
+  const openDetail = () =>
+    materialRow
+      .getByRole('link', { name: new RegExp(`${escapeRegExp(material.label)}.*batafsil`) })
+      .click()
+  await openDetail()
+  await page.getByRole('button', { name: 'Kirim yozish' }).click()
+  // Opened from the material, the arrival page seeds line 1 with it: the
+  // resolved label, not a picker to search the catalog all over again.
+  await expect(page).toHaveURL(new RegExp(`invoices/new\\?material=${material.id}`))
+  await expect(page.getByRole('button', { name: material.label })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Material' })).toHaveCount(0)
+  await page.getByRole('combobox', { name: /Ta.minotchi/ }).click()
+  await page.getByRole('option', { name: "Yangi ta'minotchi" }).click()
+  await page.getByLabel("Yangi ta'minotchi nomi").fill(`Supplier ${id}`)
+  await page.getByRole('textbox', { name: /^Miqdor/ }).fill('4')
+  await page.getByRole('textbox', { name: /^Narx/ }).fill('3000')
+  await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
+  await expect(page.getByText(/Kirim K-\d{4} yozildi\./)).toBeVisible()
+
+  // One movement is exactly what makes a row warehouse: back on the tab, whose
+  // default scope is the moved one, the row stands on its own.
+  await page.goto('/workshop/inventory')
+  await expect(wholeCatalog).toHaveAttribute('aria-pressed', 'false')
+  await expect(materialRow).toContainText('4 list')
+
+  // The name is the row's control, and the page it opens has its own URL.
+  await openDetail()
+  await expect(page).toHaveURL(new RegExp(`inventory/materials/${material.id}`))
+
+  // The story of the balance, told in tabs — one question at a time, each tab
+  // carrying its own count so the reader knows where the rows are.
+  await expect(page.getByRole('tab', { name: 'Kirimlar (1)' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  const arrivals = page.getByRole('tabpanel')
+  const arrival = arrivals.getByRole('row').filter({ hasText: `Supplier ${id}` })
+  await expect(arrival).toContainText('+4 list')
+  await expect(arrival.getByRole('link', { name: /K-\d{4}/ })).toBeVisible()
+  await expect(arrival).toContainText(/3[\s,]000 so'm/)
+
+  // The figures row has no landmark of its own, so the on-hand block is reached
+  // by the label that names it.
+  const onHand = page.locator('.fig').filter({ hasText: 'Mavjud' })
+  await expect(onHand).toContainText('4 list')
+
+  // A stock-take correction, booked from the page it was noticed on.
   await page.getByRole('button', { name: 'Tuzatish', exact: true }).click()
   const adjustment = page.getByRole('dialog', { name: 'Tuzatish' })
-  await adjustment.getByRole('combobox', { name: 'Material' }).fill(material.label)
-  await page.getByRole('option', { name: new RegExp(escapeRegExp(material.label)) }).click()
-  // The adjust quantity is a signed value with a required +/− prefix.
+  // Pre-picked: the material is settled, so there is nothing left to choose.
+  await expect(adjustment.getByRole('combobox', { name: 'Material' })).toHaveCount(0)
+  // Opened from the material's own page there is nothing to re-pick, so the
+  // label is plain text rather than the button the list's picker renders.
+  await expect(adjustment.getByText(material.label)).toBeVisible()
   await adjustment.getByLabel(/Tuzatish miqdori/).fill('-1')
   await adjustment.getByLabel('Izoh').fill('E2E stock take')
   await adjustment.getByRole('button', { name: 'Saqlash' }).click()
-  await expect(stockTable.getByText('Kam qolgan', { exact: true })).toBeVisible()
-  await page.getByRole('tab', { name: 'Tranzaksiyalar' }).click()
-  await expect(page.getByRole('cell', { name: `Supplier ${id}` })).toBeVisible()
+  await expect(page.getByText('Ombor tuzatishi yozildi.')).toBeVisible()
+  // The correction lands in the Tuzatishlar tab — and the page switches to it,
+  // so the row that explains the new balance is the one on screen.
+  await expect(onHand).toContainText('3 list')
+  await expect(page.getByRole('tab', { name: 'Tuzatishlar (1)' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(
+    page.getByRole('tabpanel').getByRole('row').filter({ hasText: 'E2E stock take' }),
+  ).toContainText('-1 list')
+
+  // The threshold is warehouse policy, decided in front of the shelf: 3 sheets
+  // against a threshold of 5 is low the moment it is saved.
+  await page.getByRole('button', { name: "Eng kam qoldiqni o'zgartirish" }).click()
+  await page.getByRole('textbox', { name: /Eng kam qoldiq/ }).fill('5')
+  await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
+  await expect(page.getByText('Chegara yangilandi.')).toBeVisible()
+  await expect(page.getByText('Kam', { exact: true })).toBeVisible()
+
+  // And the list the page was opened from re-derives the same way.
+  await page.getByRole('link', { name: 'Zaxiraga qaytish' }).click()
+  await expect(materialRow).toContainText('3 list')
+  await expect(materialRow).toContainText('Kam qolgan')
 })
 
 test('one dekor attached in two formats in a single pass creates two branch materials', async ({
@@ -412,18 +677,20 @@ test('one dekor attached in two formats in a single pass creates two branch mate
   const ownerAccess = await readyOwnerToken(request, setup)
   const branchId = setup.branch.id as string
   const dekor = await createCatalogDekor(request, adminAccess, id)
+  const f18 = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  const f16 = await createDecorFormat(
+    request,
+    adminAccess,
+    dekor.id,
+    catalogFormat({ thickness_mm: '16' }),
+  )
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   await page.getByRole('button', { name: '+ Material', exact: true }).first().click()
 
-  // Two thicknesses × one size: the cross product is the table of rows to create,
-  // and one attach is one transaction — this is the whole reason a dekor and a
-  // format are separate rows.
-  const formatStep = await attachThroughSheet(page, dekor, [
-    { thickness: '16', size: '2800×2070' },
-    { thickness: '18', size: '2800×2070' },
-  ])
+  // Two formats of one decor, ticked together: one attach is one transaction.
+  const formatStep = await attachThroughSheet(page, dekor, [f16, f18])
   const price16 = formatStep.getByLabel(`${rowLabel(dekor, '2800×2070×16 mm')} narxi`)
   const price18 = formatStep.getByLabel(`${rowLabel(dekor, '2800×2070×18 mm')} narxi`)
   await expect(price16).toBeVisible()
@@ -442,8 +709,8 @@ test('one dekor attached in two formats in a single pass creates two branch mate
   // Two branch materials, one dekor: the server agrees with the screen.
   const carried = await branchMaterials(request, ownerAccess, branchId)
   expect(carried).toHaveLength(2)
-  expect(new Set(carried.map((row) => row.dekor_id))).toEqual(new Set([dekor.id]))
-  expect(carried.map((row) => Number(row.qalinlik_mm)).sort()).toEqual([16, 18])
+  expect(new Set(carried.map((row) => row.decor_format.decor_id))).toEqual(new Set([dekor.id]))
+  expect(carried.map((row) => Number(row.decor_format.thickness_mm)).sort()).toEqual([16, 18])
 })
 
 test('owner attaches two dekorlar of different turlar in one pass', async ({
@@ -459,7 +726,7 @@ test('owner attaches two dekorlar of different turlar in one pass', async ({
   const branchId = setup.branch.id as string
   // A board and its matching kromka — different o'lcham axes, one save. This is
   // the job the sheet exists for: many dekorlar, one o'lcham each, one pass.
-  const { panel, edge } = await createCatalogDekorlar(request, adminAccess, id)
+  const { panel, edge } = await createCatalogDecors(request, adminAccess, id)
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
@@ -468,49 +735,39 @@ test('owner attaches two dekorlar of different turlar in one pass', async ({
   // Step 1 is multi-select, and a selection outlives the search that found it:
   // each dekor is reached by its own kod, and both stay ticked.
   const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
-  await tickDekor(pickStep, panel)
-  await tickDekor(pickStep, edge)
+  await tickDecor(pickStep, panel)
+  await tickDecor(pickStep, edge)
   await expect(pickStep.getByText('2 ta tanlandi')).toBeVisible()
   await pickStep.getByRole('button', { name: 'Davom etish' }).click()
 
-  // Step 2 gives each tur its own chip block: a tape has no sheet size and a
-  // board has no tape width, so one shared set of chips could not serve both.
+  // Step 2 lists what the PLATFORM entered, grouped by decor. There are no
+  // thickness/size chips any more — a branch cannot invent a format — so the
+  // board and the tape are simply two rows under two decor headings.
   const formatStep = page.getByRole('dialog', { name: "O'lchamlar va narx" })
-  await expect(formatStep.getByRole('group', { name: 'Qalinlik' })).toHaveCount(2)
-  await expect(formatStep.getByRole('group', { name: "List o'lchami" })).toHaveCount(1)
-  await expect(formatStep.getByRole('group', { name: 'Lenta eni' })).toHaveCount(1)
+  await formatStep.getByRole('checkbox', { name: panel.format.label }).check()
+  await formatStep.getByRole('checkbox', { name: edge.format.label }).check()
 
-  // The standard thickness sets are disjoint per tur (LDSP 10/16/18/25, kromka
-  // 0.4/0.8/1/2), so an exact chip name lands in exactly one block. The size
-  // axes are scoped to their own group, whose legend differs per tur.
-  await formatStep.getByRole('button', { name: '18 mm', exact: true }).click()
-  await formatStep
-    .getByRole('group', { name: "List o'lchami" })
-    .getByRole('button', { name: '2800×2070', exact: true })
-    .click()
-  await formatStep.getByRole('button', { name: '2 mm', exact: true }).click()
-  await formatStep
-    .getByRole('group', { name: 'Lenta eni' })
-    .getByRole('button', { name: '19 mm', exact: true })
-    .click()
-
-  // One row per dekor, each named by its own dekor, and the submit count is the
-  // whole batch rather than one dekor's share.
-  await formatStep.getByLabel(`${rowLabel(panel, FORMAT_LABEL)} narxi`).fill('2500')
-  await formatStep.getByLabel(`${rowLabel(edge, TAPE_LABEL)} narxi`).fill('700')
+  // One priced row per format, each named by its own decor, and the submit
+  // count is the whole batch rather than one decor's share.
+  await formatStep.getByLabel(`${rowLabel(panel, panel.format.label)} narxi`).fill('2500')
+  await formatStep.getByLabel(`${rowLabel(edge, edge.format.label)} narxi`).fill('700')
   await formatStep.getByRole('button', { name: /^2 ta o.lchamni qo.shish$/ }).click()
 
   // Both branch materials land, each under its own dekor group.
   await expect(page.getByRole('button', { name: `${panel.label} o'lchamlari` })).toBeVisible()
   await expect(page.getByRole('button', { name: `${edge.label} o'lchamlari` })).toBeVisible()
-  await expect(page.getByRole('row').filter({ hasText: FORMAT_LABEL })).toHaveCount(1)
-  await expect(page.getByRole('row').filter({ hasText: TAPE_LABEL })).toHaveCount(1)
+  await expect(
+    page.getByRole('row').filter({ hasText: formatDims(panel.format.label) }),
+  ).toHaveCount(1)
+  await expect(
+    page.getByRole('row').filter({ hasText: formatDims(edge.format.label) }),
+  ).toHaveCount(1)
 
   // The server agrees with the screen: one transaction, two dekorlar, two turlar.
   const carried = await branchMaterials(request, ownerAccess, branchId)
   expect(carried).toHaveLength(2)
-  expect(new Set(carried.map((row) => row.dekor_id))).toEqual(new Set([panel.id, edge.id]))
-  expect(new Set(carried.map((row) => row.dekor.tur))).toEqual(new Set(['ldsp', 'kromka']))
+  expect(new Set(carried.map((row) => row.decor_format.decor_id))).toEqual(new Set([panel.id, edge.id]))
+  expect(new Set(carried.map((row) => row.decor_format.type))).toEqual(new Set(['ldsp', 'kromka']))
 })
 
 test('an unpriced format is flagged for the workshop and still offered to the client', async ({
@@ -528,9 +785,16 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
 
   // Same dekor, two formats: 18 mm priced, 16 mm registered with no price yet —
   // the routine case of a branch listing its formats before it knows the prices.
-  const [priced, unpriced] = await carryDekor(request, ownerAccess, branchId, dekor.id, [
-    { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 250_000, min_stock: 1 },
-    { qalinlik_mm: '16', uzunlik_mm: 2800, eni_mm: 2070, min_stock: 1 },
+  const f18 = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  const f16 = await createDecorFormat(
+    request,
+    adminAccess,
+    dekor.id,
+    catalogFormat({ thickness_mm: '16' }),
+  )
+  const [priced, unpriced] = await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: f18.id, price_tiyin: 250_000, min_stock: 1 },
+    { decor_format_id: f16.id, min_stock: 1 },
   ])
   expect(priced.price_unset).toBe(false)
   expect(unpriced.price_unset).toBe(true)
@@ -583,25 +847,25 @@ test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({
   // Uzbek is written in both scripts and the Latin orthography has three
   // apostrophe shapes, so the same decor is typed four different ways. The
   // server folds both sides onto one key; nothing is filtered in the browser.
-  const latin = await createDekor(request, adminAccess, {
+  const latin = await createDecor(request, adminAccess, {
     manufacturer_id: manufacturerId,
-    tur: 'ldsp',
-    kod: `SL-${id}`,
-    nomi: "Yong'oq",
+    code: `SL-${id}`,
+    name: "Yong'oq",
   })
-  const cyrillic = await createDekor(request, adminAccess, {
+  await createDecorFormat(request, adminAccess, latin.id, catalogFormat())
+  const cyrillic = await createDecor(request, adminAccess, {
     manufacturer_id: manufacturerId,
-    tur: 'ldsp',
-    kod: `SC-${id}`,
-    nomi: 'Ёнғоқ',
+    code: `SC-${id}`,
+    name: 'Ёнғоқ',
   })
+  await createDecorFormat(request, adminAccess, cyrillic.id, catalogFormat())
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   await page.getByRole('button', { name: '+ Material', exact: true }).first().click()
   const pickStep = page.getByRole('dialog', { name: 'Dekor tanlash' })
   const search = pickStep.getByLabel('Qidirish')
-  const option = (dekor: DekorResponse) =>
+  const option = (dekor: DecorResponse) =>
     pickStep.getByRole('checkbox', { name: new RegExp(escapeRegExp(dekor.label)) })
 
   // Cyrillic query finds the Latin-named dekor…
@@ -639,8 +903,9 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   const dekor = await createCatalogDekor(request, adminAccess, id, imageFileId)
   const branchId = setup.branch.id as string
   const staffLogin = `inv-${id}`
-  await carryDekor(request, ownerAccess, branchId, dekor.id, [
-    { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 250_000, min_stock: 1 },
+  const format = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: format.id, price_tiyin: 250_000, min_stock: 1 },
   ])
   const staff = await request.post('/api/v1/workshop/users', {
     headers: { Authorization: `Bearer ${ownerAccess}` },
@@ -663,7 +928,8 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await expect(page.getByRole('link', { name: 'Filiallar' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: "Xodimlar ro'yxati" })).toHaveCount(0)
   await page.goto('/workshop/inventory')
-  await expect(page.getByRole('button', { name: 'Kirim', exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Kirimlar' }).click()
+  await expect(page.getByRole('link', { name: '+ Kirim', exact: true })).toBeVisible()
 })
 
 test('client browses the workshop directory without catalog or stock details', async ({ page, request }, testInfo) => {
@@ -676,8 +942,9 @@ test('client browses the workshop directory without catalog or stock details', a
   const imageFileId = await uploadImage(request, adminAccess, 'client-material.png')
   const dekor = await createCatalogDekor(request, adminAccess, id, imageFileId)
   const branchId = setup.branch.id as string
-  const [material] = await carryDekor(request, ownerAccess, branchId, dekor.id, [
-    { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 250_000, min_stock: 1 },
+  const format = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  const [material] = await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: format.id, price_tiyin: 250_000, min_stock: 1 },
   ])
 
   await page.goto('/client/auth/login')

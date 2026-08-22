@@ -1,7 +1,7 @@
 // Script- and apostrophe-insensitive matching for client-side option filtering.
 //
 // A TS mirror of `backend/app/core/search_fold.py`, and it has to stay one: the
-// server folds `dekorlar.search_key` the same way, so a query that finds a decor
+// server folds `decors.search_key` the same way, so a query that finds a decor
 // in the picker must find it in a locally-filtered combobox too. A workshop types
 // "сонома" on a Cyrillic keyboard for a decor stored as "Sonoma eman", and before
 // this the two simply never met.

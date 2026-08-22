@@ -214,10 +214,20 @@ class WorkshopOrderEditApplyRequest(VersionedRequest):
 
 class OrderItemResponse(APIModel):
     id: uuid.UUID
-    # The live FK, renamed with the column it mirrors (`_order_response` builds
-    # this by `model_validate(item)`, so the two names must match exactly).
-    # `material_snapshot` beside it is frozen history and keeps its old keys.
-    branch_material_id: uuid.UUID
+    # The line's material key: a branch material id, or — for a sheet the client
+    # brought — a customer board id. Two disjoint UUID namespaces, one opaque
+    # key, which is how `material_snapshots` and `own_panel_counts` are keyed
+    # too. It was `branch_material_id` while customer boards WERE branch
+    # materials; that name is now a lie, and leaving it required 500s every
+    # order line cut from a client's own sheet.
+    #
+    # Built explicitly rather than by `model_validate(item)`: `OrderItem` has no
+    # `material_id` attribute to read.
+    material_id: uuid.UUID
+    # Which namespace `material_id` came from — the one fact a reader cannot
+    # infer from the id itself. `material_snapshot` carries the same flag for
+    # rows placed after the reshape; this is the live answer.
+    customer_supplied: bool
     material_source: MaterialSource
     material_snapshot: dict[str, Any]
     part_ref: str

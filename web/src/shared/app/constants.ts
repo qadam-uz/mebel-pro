@@ -20,6 +20,9 @@ export const ORDERS_PAGE_LIMIT = 30
 /** Page size for stock transaction ledgers. */
 export const INVENTORY_TX_PAGE_LIMIT = 50
 
+/** Page size for the supplier-invoice list (load-more). */
+export const INVENTORY_INVOICE_PAGE_LIMIT = 50
+
 /** Page size for the admin + workshop material catalog tables (load-more). */
 export const MATERIALS_PAGE_LIMIT = 50
 

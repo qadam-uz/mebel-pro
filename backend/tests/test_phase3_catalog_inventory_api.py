@@ -82,8 +82,14 @@ async def _staff_access(
     return tokens.access_token
 
 
-PANEL_FORMAT = {"qalinlik_mm": "18", "uzunlik_mm": 2800, "eni_mm": 2070}
-KROMKA_FORMAT = {"qalinlik_mm": "2", "kromka_eni_mm": 19}
+PANEL_FORMAT = {
+    "type": "ldsp",
+    "thickness_mm": "18",
+    "length_mm": 2800,
+    "width_mm": 2070,
+    "finished_sides": 2,
+}
+KROMKA_FORMAT = {"type": "kromka", "thickness_mm": "2", "tape_width_mm": 19}
 
 
 async def _create_manufacturer(client: AsyncClient, access: str, name: str | None = None) -> str:
@@ -96,65 +102,106 @@ async def _create_manufacturer(client: AsyncClient, access: str, name: str | Non
     return str(created.json()["id"])
 
 
-async def _create_dekor(
+async def _create_decor(
     client: AsyncClient,
     access: str,
     *,
     manufacturer_id: str,
-    tur: str = "ldsp",
-    kod: str | None = "H1334",
-    nomi: str | None = None,
-    tolali: bool = True,
+    code: str | None = "H1334",
+    name: str | None = None,
+    has_grain: bool = True,
     image_file_id: str | None = None,
 ) -> str:
-    """Create one platform dekor — identity only, never a format or a price."""
+    """Create one platform decor — a pattern. No substrate, no format, no price."""
     body: dict[str, object] = {
         "manufacturer_id": manufacturer_id,
-        "tur": tur,
-        "kod": kod,
-        "nomi": nomi or f"Colour {uuid.uuid4().hex[:6]}",
-        "tolali": tolali,
+        "code": code,
+        "name": name or f"Colour {uuid.uuid4().hex[:6]}",
+        "has_grain": has_grain,
     }
     if image_file_id is not None:
         body["image_file_id"] = image_file_id
-    created = await client.post(
-        "/api/v1/platform/catalog/dekorlar", headers=_auth(access), json=body
-    )
+    created = await client.post("/api/v1/platform/catalog/decors", headers=_auth(access), json=body)
     assert created.status_code == 201, created.text
     return str(created.json()["id"])
 
 
-async def _create_catalog_dekor(client: AsyncClient, access: str) -> tuple[str, str]:
-    """A fresh manufacturer plus one panel-shaped dekor of it."""
+async def _create_catalog_decor(client: AsyncClient, access: str) -> tuple[str, str]:
+    """A fresh manufacturer plus one panel-shaped decor of it."""
     manufacturer_id = await _create_manufacturer(client, access)
-    dekor_id = await _create_dekor(
-        client, access, manufacturer_id=manufacturer_id, nomi="Light oak"
+    decor_id = await _create_decor(
+        client, access, manufacturer_id=manufacturer_id, name="Light oak"
     )
-    return manufacturer_id, dekor_id
+    return manufacturer_id, decor_id
+
+
+async def _create_format(
+    client: AsyncClient,
+    platform_access: str,
+    decor_id: str,
+    body: dict[str, object] | None = None,
+) -> str:
+    """Add one platform format to a decor and return its id.
+
+    Formats are platform-owned now, so every attach in these tests is a two-step
+    story: the platform enters the product, the branch decides to carry it.
+
+    Idempotent on purpose. A format's natural key is unique, so asking the
+    platform for the same product twice is a 409 that names the row that already
+    exists — and handing that id back is what lets these tests replay an attach
+    and observe the branch-side story (skipped, not rejected) rather than
+    tripping over the platform-side one. The shape and duplicate rules of the
+    create endpoint itself are pinned in tests/test_catalog_decor_formats.py.
+    """
+    fields = {
+        key: value for key, value in (body or PANEL_FORMAT).items() if key not in _BRANCH_KEYS
+    }
+    created = await client.post(
+        f"/api/v1/platform/catalog/decors/{decor_id}/formats",
+        headers=_auth(platform_access),
+        json=fields,
+    )
+    if created.status_code == 409 and created.json()["code"] == "decor_format_exists":
+        return str(created.json()["details"]["decor_format_id"])
+    assert created.status_code == 201, created.text
+    return str(created.json()["id"])
+
+
+# The two numbers that belong to the branch, not to the product. A test writes
+# them inline next to the format they apply to; `_attach` routes them to the
+# attach item and keeps them out of the platform-side create.
+_BRANCH_KEYS = frozenset({"price_tiyin", "min_stock"})
 
 
 async def _attach(
     client: AsyncClient,
     access: str,
     branch_id: uuid.UUID,
-    dekor_id: str,
+    decor_id: str,
     *,
+    platform_access: str,
     formats: list[dict[str, object]] | None = None,
     price_tiyin: int | None = None,
     min_stock: int | None = None,
 ) -> Response:
-    """POST the batch-attach body. Defaults to a single standard panel format."""
-    if formats is None:
-        fmt: dict[str, object] = dict(PANEL_FORMAT)
-        if price_tiyin is not None:
-            fmt["price_tiyin"] = price_tiyin
-        if min_stock is not None:
-            fmt["min_stock"] = min_stock
-        formats = [fmt]
+    """Create the platform format(s), then have the branch carry them."""
+    items: list[dict[str, object]] = []
+    bodies = [dict(PANEL_FORMAT)] if formats is None else formats
+    for body in bodies:
+        item: dict[str, object] = {
+            "decor_format_id": await _create_format(client, platform_access, decor_id, body)
+        }
+        row_price = body.get("price_tiyin", price_tiyin)
+        row_min_stock = body.get("min_stock", min_stock)
+        if row_price is not None:
+            item["price_tiyin"] = row_price
+        if row_min_stock is not None:
+            item["min_stock"] = row_min_stock
+        items.append(item)
     return await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(access),
-        json={"items": [{"dekor_id": dekor_id, "formats": formats}]},
+        json={"items": items},
     )
 
 
@@ -162,8 +209,9 @@ async def _attach_one(
     client: AsyncClient,
     access: str,
     branch_id: uuid.UUID,
-    dekor_id: str,
+    decor_id: str,
     *,
+    platform_access: str,
     formats: list[dict[str, object]] | None = None,
     price_tiyin: int | None = None,
     min_stock: int | None = None,
@@ -173,7 +221,8 @@ async def _attach_one(
         client,
         access,
         branch_id,
-        dekor_id,
+        decor_id,
+        platform_access=platform_access,
         formats=formats,
         price_tiyin=price_tiyin,
         min_stock=min_stock,
@@ -191,18 +240,17 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    manufacturer_id, dekor_id = await _create_catalog_dekor(client, platform_access)
+    manufacturer_id, decor_id = await _create_catalog_decor(client, platform_access)
     second_manufacturer_id = await _create_manufacturer(
         client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
     )
-    second_dekor_id = await _create_dekor(
+    second_decor_id = await _create_decor(
         client,
         platform_access,
         manufacturer_id=second_manufacturer_id,
-        tur="mdf",
-        kod="MDF-W",
-        nomi="White",
-        tolali=False,
+        code="MDF-W",
+        name="White",
+        has_grain=False,
     )
     manufacturer = await client.get(
         f"/api/v1/platform/catalog/manufacturers/{manufacturer_id}",
@@ -214,15 +262,37 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
         headers=_auth(platform_access),
         json={"name": manufacturer.json()["name"].lower(), "country": "AT"},
     )
+    # The platform enters the products before the picker can offer anything: a
+    # decor with no active format is a name nobody can attach anything of, so it
+    # is not an option at all. (`_create_format` is idempotent, so the attaches
+    # below reuse these two rows rather than making new ones.)
+    await _create_format(client, platform_access, decor_id)
+    await _create_format(client, platform_access, second_decor_id, {**PANEL_FORMAT, "type": "mdf"})
     picker = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar",
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors",
         headers=_auth(owner_access),
     )
     branch_material = await _attach_one(
-        client, owner_access, branch_id, dekor_id, price_tiyin=25500000, min_stock=2
+        client,
+        owner_access,
+        branch_id,
+        decor_id,
+        price_tiyin=25500000,
+        min_stock=2,
+        platform_access=platform_access,
     )
+    # The substrate is the format's, not the decor's, so the MDF-ness of this
+    # second row is decided here and the `?type=mdf` filter below reads it back
+    # off `decor_formats`.
     second_branch_material = await _attach(
-        client, owner_access, branch_id, second_dekor_id, price_tiyin=18800000, min_stock=1
+        client,
+        owner_access,
+        branch_id,
+        second_decor_id,
+        formats=[{**PANEL_FORMAT, "type": "mdf"}],
+        price_tiyin=18800000,
+        min_stock=1,
+        platform_access=platform_access,
     )
     stock_item = await db_session.scalar(
         select(StockItem).where(
@@ -247,17 +317,17 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
         headers=_auth(owner_access),
     )
     tur_filter = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials?tur=mdf",
+        f"/api/v1/workshop/branches/{branch_id}/materials?type=mdf",
         headers=_auth(owner_access),
     )
     picker_tur_filter = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar?tur=ldsp",
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors?type=ldsp",
         headers=_auth(owner_access),
     )
 
     assert duplicate.status_code == 409
     assert picker.status_code == 200
-    assert picker.json()["items"][0]["dekor"]["id"] == dekor_id
+    assert picker.json()["items"][0]["decor"]["id"] == decor_id
     assert picker.json()["total"] == len(picker.json()["items"])
     assert second_branch_material.status_code == 201
     assert branch_material["min_stock"] == 2
@@ -266,14 +336,14 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
     # no second copy to propagate to, which is the point of dropping the mirror.
     assert edited.json()["min_stock"] == 4
     assert manufacturer_filter.status_code == 200
-    assert [row["dekor"]["id"] for row in manufacturer_filter.json()] == [dekor_id]
+    assert [row["decor"]["id"] for row in manufacturer_filter.json()] == [decor_id]
     assert tur_filter.status_code == 200
-    assert [row["dekor"]["id"] for row in tur_filter.json()] == [second_dekor_id]
-    # The picker hides nothing now: carrying an 18 mm sheet of a dekor must not
-    # stop the operator adding the 16 mm one. The attached dekor is still listed,
+    assert [row["decor"]["id"] for row in tur_filter.json()] == [second_decor_id]
+    # The picker hides nothing now: carrying an 18 mm sheet of a decor must not
+    # stop the operator adding the 16 mm one. The attached decor is still listed,
     # with the count of formats already carried.
     assert picker_tur_filter.status_code == 200
-    assert [row["dekor"]["id"] for row in picker_tur_filter.json()["items"]] == [dekor_id]
+    assert [row["decor"]["id"] for row in picker_tur_filter.json()["items"]] == [decor_id]
     assert picker_tur_filter.json()["items"][0]["carried_format_count"] == 1
 
 
@@ -281,62 +351,87 @@ async def test_format_shape_validation_and_non_platform_rejection(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """The panel/tape shape rule moved to attach time, where the format is typed.
+    """The shape rule moved to the platform surface, where the format is written.
 
-    A dekor carries no dimensions at all now, so there is nothing to reject on
-    the platform surface — the shape rule fires when a branch says what format
-    its supplier sells. The DB cannot express it (`tur` lives on `dekorlar`), so
-    these are service-layer 400s, not IntegrityErrors.
+    A branch cannot state a shape at all any more — it names an existing
+    `decor_format_id` — so the rule fires where the product is entered, and a
+    workshop user cannot reach that endpoint. The full per-type matrix lives in
+    tests/test_catalog_decor_formats.py; what this asserts is the boundary: the
+    rule exists on the platform side, the workshop side is closed, and a batch
+    that names something unusable writes nothing.
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    manufacturer_id, panel_dekor_id = await _create_catalog_dekor(client, platform_access)
-    kromka_dekor_id = await _create_dekor(
-        client, platform_access, manufacturer_id=manufacturer_id, tur="kromka", nomi="Oak"
+    manufacturer_id, panel_decor_id = await _create_catalog_decor(client, platform_access)
+    kromka_decor_id = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="K-OAK", name="Oak"
     )
 
-    kromka_without_width = await _attach(
-        client, owner_access, branch_id, kromka_dekor_id, formats=[{"qalinlik_mm": "0.4"}]
+    async def create_format(decor_id: str, body: dict[str, object]) -> Response:
+        return await client.post(
+            f"/api/v1/platform/catalog/decors/{decor_id}/formats",
+            headers=_auth(platform_access),
+            json=body,
+        )
+
+    kromka_without_width = await create_format(
+        kromka_decor_id, {"type": "kromka", "thickness_mm": "0.4"}
     )
-    kromka_with_panel_size = await _attach(
-        client, owner_access, branch_id, kromka_dekor_id, formats=[PANEL_FORMAT]
+    kromka_with_panel_size = await create_format(
+        kromka_decor_id, {**PANEL_FORMAT, "type": "kromka"}
     )
-    panel_without_size = await _attach(
-        client, owner_access, branch_id, panel_dekor_id, formats=[{"qalinlik_mm": "18"}]
+    panel_without_size = await create_format(panel_decor_id, {"type": "ldsp", "thickness_mm": "18"})
+    panel_with_kromka_width = await create_format(
+        panel_decor_id, {**PANEL_FORMAT, "tape_width_mm": 19}
     )
-    panel_with_kromka_width = await _attach(
-        client, owner_access, branch_id, panel_dekor_id, formats=[KROMKA_FORMAT]
-    )
-    zero_thickness = await _attach(
-        client,
-        owner_access,
-        branch_id,
-        panel_dekor_id,
-        formats=[{**PANEL_FORMAT, "qalinlik_mm": "0"}],
-    )
+    zero_thickness = await create_format(panel_decor_id, {**PANEL_FORMAT, "thickness_mm": "0"})
+    # The whole platform catalog surface is closed to a workshop user — both the
+    # manufacturers it reads and the formats it writes.
     forbidden = await client.get(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(owner_access),
     )
+    forbidden_format = await client.post(
+        f"/api/v1/platform/catalog/decors/{panel_decor_id}/formats",
+        headers=_auth(owner_access),
+        json=dict(PANEL_FORMAT),
+    )
+    # And a branch naming a format that does not exist gets a 404, not a
+    # half-written batch.
+    unknown_format = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={"items": [{"decor_format_id": str(uuid.uuid4()), "price_tiyin": 1}]},
+    )
 
-    assert kromka_without_width.status_code == 400
-    assert kromka_without_width.json()["code"] == "invalid_kromka_format"
-    assert kromka_with_panel_size.status_code == 400
-    assert kromka_with_panel_size.json()["code"] == "invalid_kromka_format"
-    assert panel_without_size.status_code == 400
-    assert panel_without_size.json()["code"] == "invalid_panel_format"
-    assert panel_with_kromka_width.status_code == 400
-    assert panel_with_kromka_width.json()["code"] == "invalid_panel_format"
-    assert zero_thickness.status_code == 400
-    assert zero_thickness.json()["code"] == "invalid_thickness"
+    for response in (
+        kromka_without_width,
+        kromka_with_panel_size,
+        panel_without_size,
+        panel_with_kromka_width,
+        zero_thickness,
+    ):
+        assert response.status_code == 400, response.text
+        assert response.json()["code"] == "decor_format_shape_mismatch"
+        # The offending field is named so the admin form can put the message
+        # next to the input the operator has to fix.
+        assert response.json()["details"]["field"]
     assert forbidden.status_code == 403
-    # Nothing partially landed: one bad row rejects the whole batch.
+    assert forbidden_format.status_code == 403
+    assert unknown_format.status_code == 404
+    assert unknown_format.json()["code"] == "decor_format_not_found"
+    # Nothing partially landed: neither a format nor a branch row.
     assert (
         await db_session.scalar(
             select(func.count(BranchMaterial.id)).where(BranchMaterial.branch_id == branch_id)
         )
         == 0
     )
+    listed = await client.get(
+        f"/api/v1/platform/catalog/decors/{panel_decor_id}/formats",
+        headers=_auth(platform_access),
+    )
+    assert listed.json() == []
 
 
 async def test_panel_orientation_is_normalized_not_rejected(
@@ -345,33 +440,39 @@ async def test_panel_orientation_is_normalized_not_rejected(
 ) -> None:
     """`1830x2750` and `2750x1830` are the same sheet.
 
-    The unique index compares the columns literally, so an un-normalized second
-    attach would slip past it and give the branch two rows for one format.
+    The format's unique natural key compares the columns literally, so an
+    un-normalized second create would slip past it and give the platform two
+    products — and the branch two rows — for one sheet.
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
 
     swapped = await _attach_one(
         client,
         owner_access,
         branch_id,
-        dekor_id,
-        formats=[{"qalinlik_mm": "18", "uzunlik_mm": 1830, "eni_mm": 2750}],
+        decor_id,
+        formats=[{**PANEL_FORMAT, "length_mm": 1830, "width_mm": 2750}],
+        platform_access=platform_access,
     )
-    assert swapped["uzunlik_mm"] == 2750
-    assert swapped["eni_mm"] == 1830
+    assert swapped["decor_format"]["length_mm"] == 2750
+    assert swapped["decor_format"]["width_mm"] == 1830
 
+    # Entering the same sheet the other way round resolves to the same format
+    # (`_create_format` reads the id back off the 409), so the branch's second
+    # attach of it is a skip rather than a duplicate row.
     replay = await _attach(
         client,
         owner_access,
         branch_id,
-        dekor_id,
-        formats=[{"qalinlik_mm": "18", "uzunlik_mm": 2750, "eni_mm": 1830}],
+        decor_id,
+        formats=[{**PANEL_FORMAT, "length_mm": 2750, "width_mm": 1830}],
+        platform_access=platform_access,
     )
     assert replay.status_code == 201
     assert replay.json()["created"] == []
-    assert [key["uzunlik_mm"] for key in replay.json()["skipped"]] == [2750]
+    assert replay.json()["skipped"] == [swapped["decor_format_id"]]
 
 
 async def test_owner_branch_setup_pricing_status_and_logo_upload(
@@ -465,9 +566,15 @@ async def test_inventory_stock_in_adjustment_notifications_and_pricing(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
     material = await _attach_one(
-        client, owner_access, branch_id, dekor_id, price_tiyin=100000, min_stock=2
+        client,
+        owner_access,
+        branch_id,
+        decor_id,
+        price_tiyin=100000,
+        min_stock=2,
+        platform_access=platform_access,
     )
     branch_material_id = material["id"]
     stock_in = await client.post(
@@ -556,7 +663,7 @@ async def test_branch_scoped_staff_authorization(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
     catalog_staff = await _staff_access(
         db_session,
         workshop_id=workshop_id,
@@ -571,7 +678,13 @@ async def test_branch_scoped_staff_authorization(
     )
 
     add_material = await _attach_one(
-        client, catalog_staff, branch_id, dekor_id, price_tiyin=150000, min_stock=1
+        client,
+        catalog_staff,
+        branch_id,
+        decor_id,
+        price_tiyin=150000,
+        min_stock=1,
+        platform_access=platform_access,
     )
     branch_material_id = add_material["id"]
     catalog_stock_in = await client.post(
@@ -599,10 +712,16 @@ async def test_branch_scoped_staff_authorization(
             "supplier": {"name": "Allowed"},
         },
     )
-    # Re-attaching the same (dekor, format) is a skip, not a 409: the picker
+    # Re-attaching the same (decor, format) is a skip, not a 409: the picker
     # shows what is carried, so a repeat is a race rather than user error.
     duplicate_owner_add = await _attach(
-        client, owner_access, branch_id, dekor_id, price_tiyin=150000, min_stock=1
+        client,
+        owner_access,
+        branch_id,
+        decor_id,
+        price_tiyin=150000,
+        min_stock=1,
+        platform_access=platform_access,
     )
     deactivated = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials/{branch_material_id}/deactivate",
@@ -681,26 +800,33 @@ async def test_stock_in_pricing_math_last_price_and_validation(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    manufacturer_id, panel_dekor_id = await _create_catalog_dekor(client, platform_access)
-    edge_dekor_id = await _create_dekor(
+    manufacturer_id, panel_decor_id = await _create_catalog_decor(client, platform_access)
+    # The tape of a *different* pattern. The board's own tape would be another
+    # format of `panel_decor_id` now, not a second decor — that case is covered
+    # in tests/test_catalog_material_identity.py.
+    edge_decor_id = await _create_decor(
         client,
         platform_access,
         manufacturer_id=manufacturer_id,
-        tur="kromka",
-        kod="H1334",
-        nomi="Light oak",
+        code="H3303",
+        name="Dark oak",
     )
-    unpriced_dekor_id = await _create_dekor(
+    unpriced_decor_id = await _create_decor(
         client,
         platform_access,
         manufacturer_id=manufacturer_id,
-        tur="kromka",
-        kod=None,
-        nomi="White",
+        code=None,
+        name="White",
     )
     panel_id = (
         await _attach_one(
-            client, owner_access, branch_id, panel_dekor_id, price_tiyin=100000, min_stock=0
+            client,
+            owner_access,
+            branch_id,
+            panel_decor_id,
+            price_tiyin=100000,
+            min_stock=0,
+            platform_access=platform_access,
         )
     )["id"]
     edge_id = (
@@ -708,8 +834,9 @@ async def test_stock_in_pricing_math_last_price_and_validation(
             client,
             owner_access,
             branch_id,
-            edge_dekor_id,
+            edge_decor_id,
             formats=[{**KROMKA_FORMAT, "price_tiyin": 100000}],
+            platform_access=platform_access,
         )
     )["id"]
     unpriced_id = (
@@ -717,8 +844,16 @@ async def test_stock_in_pricing_math_last_price_and_validation(
             client,
             owner_access,
             branch_id,
-            unpriced_dekor_id,
-            formats=[{"qalinlik_mm": "0.4", "kromka_eni_mm": 19, "price_tiyin": 100000}],
+            unpriced_decor_id,
+            formats=[
+                {
+                    "type": "kromka",
+                    "thickness_mm": "0.4",
+                    "tape_width_mm": 19,
+                    "price_tiyin": 100000,
+                }
+            ],
+            platform_access=platform_access,
         )
     )["id"]
 
@@ -829,9 +964,15 @@ async def test_client_catalog_is_public_shape_and_visibility_filtered(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
     material = await _attach_one(
-        client, owner_access, branch_id, dekor_id, price_tiyin=250000, min_stock=5
+        client,
+        owner_access,
+        branch_id,
+        decor_id,
+        price_tiyin=250000,
+        min_stock=5,
+        platform_access=platform_access,
     )
     branch_material_id = material["id"]
     client_row = Client(phone="+998908888888", name="Client")
@@ -868,15 +1009,15 @@ async def test_client_catalog_is_public_shape_and_visibility_filtered(
     assert materials.status_code == 200
     listed = materials.json()[0]
     # The client sees the BRANCH material — the format it can actually order —
-    # with the dekor's identity flattened onto it, never the platform dekor id.
+    # with the decor's identity flattened onto it, never the platform decor id.
     assert listed["id"] == branch_material_id
     assert listed["price_tiyin"] == 250000
-    assert listed["qalinlik_mm"] == "18"
-    assert listed["uzunlik_mm"] == 2800
-    assert listed["eni_mm"] == 2070
-    assert listed["kromka_eni_mm"] is None
-    assert listed["nomi"] == "Light oak"
-    assert listed["tur"] == "ldsp"
+    assert listed["thickness_mm"] == "18"
+    assert listed["length_mm"] == 2800
+    assert listed["width_mm"] == 2070
+    assert listed["tape_width_mm"] is None
+    assert listed["name"] == "Light oak"
+    assert listed["type"] == "ldsp"
     assert "on_hand" not in listed
     assert "supplier_id" not in listed
     assert "min_stock" not in listed
@@ -895,20 +1036,20 @@ async def test_material_image_visibility_follows_client_branch_visibility(
     app.dependency_overrides[file_storage] = lambda: storage
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    manufacturer_id, _ = await _create_catalog_dekor(client, platform_access)
+    manufacturer_id, _ = await _create_catalog_decor(client, platform_access)
     image = await client.post(
         "/api/v1/files",
         headers=_auth(platform_access),
         files={"upload": ("material.png", b"material-image", "image/png")},
     )
-    # One photo serves every format of the dekor, so visibility is a dekor-level
+    # One photo serves every format of the decor, so visibility is a decor-level
     # question answered by "does any branch the client can see carry it".
-    image_dekor_id = await _create_dekor(
+    image_decor_id = await _create_decor(
         client,
         platform_access,
         manufacturer_id=manufacturer_id,
-        kod=None,
-        nomi="White",
+        code=None,
+        name="White",
         image_file_id=image.json()["id"],
     )
     client_row = Client(phone="+998907777777", name="Client")
@@ -924,7 +1065,13 @@ async def test_material_image_visibility_follows_client_branch_visibility(
         headers=_auth(client_tokens.access_token),
     )
     selection = await _attach_one(
-        client, owner_access, branch_id, image_dekor_id, price_tiyin=250000, min_stock=1
+        client,
+        owner_access,
+        branch_id,
+        image_decor_id,
+        price_tiyin=250000,
+        min_stock=1,
+        platform_access=platform_access,
     )
     visible_image = await client.get(
         f"/api/v1/files/{image.json()['id']}",
@@ -946,41 +1093,42 @@ async def test_material_image_visibility_follows_client_branch_visibility(
     assert hidden_after_deactivate.status_code == 403
 
 
-async def test_platform_dekorlar_list_reports_branch_usage_count(
+async def test_platform_decors_list_reports_branch_usage_count(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    # AB-22: the platform dekor list reports how many distinct branches carry any
-    # format of the dekor — 0 before any branch attaches one, 1 after.
+    # AB-22: the platform decor list reports how many distinct branches carry any
+    # format of the decor — 0 before any branch attaches one, 1 after.
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
 
-    before = await client.get("/api/v1/platform/catalog/dekorlar", headers=_auth(platform_access))
+    before = await client.get("/api/v1/platform/catalog/decors", headers=_auth(platform_access))
     assert before.status_code == 200
-    row_before = next(m for m in before.json() if m["id"] == dekor_id)
+    row_before = next(m for m in before.json() if m["id"] == decor_id)
     assert row_before["branch_usage_count"] == 0
 
-    # Two formats of the SAME dekor in ONE branch is still one branch using it.
+    # Two formats of the SAME decor in ONE branch is still one branch using it.
     attached = await _attach(
         client,
         owner_access,
         branch_id,
-        dekor_id,
+        decor_id,
         formats=[
             {**PANEL_FORMAT, "price_tiyin": 25_500_000, "min_stock": 2},
-            {**PANEL_FORMAT, "qalinlik_mm": "16", "price_tiyin": 20_000_000},
+            {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": 20_000_000},
         ],
+        platform_access=platform_access,
     )
     assert attached.status_code == 201
     assert len(attached.json()["created"]) == 2
 
-    after = await client.get("/api/v1/platform/catalog/dekorlar", headers=_auth(platform_access))
-    row_after = next(m for m in after.json() if m["id"] == dekor_id)
+    after = await client.get("/api/v1/platform/catalog/decors", headers=_auth(platform_access))
+    row_after = next(m for m in after.json() if m["id"] == decor_id)
     assert row_after["branch_usage_count"] == 1
 
 
-async def test_platform_dekorlar_list_paginates_with_limit_offset(
+async def test_platform_decors_list_paginates_with_limit_offset(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -991,28 +1139,28 @@ async def test_platform_dekorlar_list_paginates_with_limit_offset(
     platform_access = await _platform_access(db_session)
     headers = _auth(platform_access)
     for _ in range(5):
-        await _create_catalog_dekor(client, platform_access)
+        await _create_catalog_decor(client, platform_access)
 
-    full = await client.get("/api/v1/platform/catalog/dekorlar", headers=headers)
+    full = await client.get("/api/v1/platform/catalog/decors", headers=headers)
     assert full.status_code == 200
     all_ids = [row["id"] for row in full.json()]
     assert len(all_ids) == 5
 
-    first = await client.get("/api/v1/platform/catalog/dekorlar?limit=2", headers=headers)
+    first = await client.get("/api/v1/platform/catalog/decors?limit=2", headers=headers)
     assert first.status_code == 200
     assert [row["id"] for row in first.json()] == all_ids[:2]
 
-    second = await client.get("/api/v1/platform/catalog/dekorlar?limit=2&offset=2", headers=headers)
+    second = await client.get("/api/v1/platform/catalog/decors?limit=2&offset=2", headers=headers)
     assert [row["id"] for row in second.json()] == all_ids[2:4]
 
-    last = await client.get("/api/v1/platform/catalog/dekorlar?limit=2&offset=4", headers=headers)
+    last = await client.get("/api/v1/platform/catalog/decors?limit=2&offset=4", headers=headers)
     assert [row["id"] for row in last.json()] == all_ids[4:]
     assert len(last.json()) == 1  # short page → the client knows there is no more
 
     # Bounds are enforced by the query params (ge=1, le=200).
-    too_small = await client.get("/api/v1/platform/catalog/dekorlar?limit=0", headers=headers)
+    too_small = await client.get("/api/v1/platform/catalog/decors?limit=0", headers=headers)
     assert too_small.status_code == 422
-    too_large = await client.get("/api/v1/platform/catalog/dekorlar?limit=201", headers=headers)
+    too_large = await client.get("/api/v1/platform/catalog/decors?limit=201", headers=headers)
     assert too_large.status_code == 422
 
 
@@ -1021,27 +1169,36 @@ async def test_workshop_material_lists_paginate(
     db_session: AsyncSession,
 ) -> None:
     # Both workshop lists page the same way: the attach picker caps how many
-    # dekor options it returns, and a branch's carried-formats list slices
+    # decor options it returns, and a branch's carried-formats list slices
     # deterministically so its "load more" button can append.
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
     owner_headers = _auth(owner_access)
-    dekor_ids: list[str] = []
+    decor_ids: list[str] = []
     for _ in range(3):
-        _, dekor_id = await _create_catalog_dekor(client, platform_access)
-        dekor_ids.append(dekor_id)
+        _, decor_id = await _create_catalog_decor(client, platform_access)
+        # A decor the platform has entered no product for is not an option, so
+        # each one needs its format before the picker counts it.
+        await _create_format(client, platform_access, decor_id)
+        decor_ids.append(decor_id)
 
     picker_page = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar?limit=2",
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors?limit=2",
         headers=owner_headers,
     )
     assert picker_page.status_code == 200
     assert len(picker_page.json()["items"]) == 2
     assert picker_page.json()["total"] == 3
 
-    for dekor_id in dekor_ids:
+    for decor_id in decor_ids:
         await _attach_one(
-            client, owner_access, branch_id, dekor_id, price_tiyin=1_000_000, min_stock=1
+            client,
+            owner_access,
+            branch_id,
+            decor_id,
+            price_tiyin=1_000_000,
+            min_stock=1,
+            platform_access=platform_access,
         )
 
     full = await client.get(
@@ -1061,55 +1218,58 @@ async def test_workshop_material_lists_paginate(
     assert [row["id"] for row in second.json()] == carried_ids[2:]
 
 
-async def test_branch_catalog_picker_keeps_attached_dekorlar_and_reports_total(
+async def test_branch_catalog_picker_keeps_attached_decors_and_reports_total(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """The picker hides nothing: a second format of a carried dekor must stay addable.
+    """The picker hides nothing: a second format of a carried decor must stay addable.
 
-    Thickness is no longer a facet — it is a per-branch value the operator types,
-    so there is nothing to enumerate. `tur` is a fixed enum the client renders.
+    Thickness is not a facet either: it belongs to a format, and step two of the
+    sheet lists a decor's formats in full. `type` is a fixed enum the client
+    renders — and on this surface it means "has an active format of this
+    substrate", because a decor itself no longer has one.
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
     owner_headers = _auth(owner_access)
-    manufacturer_id, first_dekor_id = await _create_catalog_dekor(client, platform_access)
+    manufacturer_id, first_decor_id = await _create_catalog_decor(client, platform_access)
     other_manufacturer_id = await _create_manufacturer(
         client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
     )
-    second_panel = await _create_dekor(
-        client, platform_access, manufacturer_id=manufacturer_id, kod="H3303"
+    second_panel = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="H3303"
     )
-    edge = await _create_dekor(
-        client, platform_access, manufacturer_id=other_manufacturer_id, tur="kromka"
-    )
+    edge = await _create_decor(client, platform_access, manufacturer_id=other_manufacturer_id)
+    await _create_format(client, platform_access, first_decor_id)
+    await _create_format(client, platform_access, second_panel)
+    await _create_format(client, platform_access, edge, dict(KROMKA_FORMAT))
 
     everything = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar", headers=owner_headers
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors", headers=owner_headers
     )
     assert everything.status_code == 200
     assert everything.json()["total"] == 3
-    assert {row["dekor"]["id"] for row in everything.json()["items"]} == {
-        first_dekor_id,
+    assert {row["decor"]["id"] for row in everything.json()["items"]} == {
+        first_decor_id,
         second_panel,
         edge,
     }
 
     by_manufacturer = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar?manufacturer_id={manufacturer_id}",
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors?manufacturer_id={manufacturer_id}",
         headers=owner_headers,
     )
     assert by_manufacturer.json()["total"] == 2
     by_tur = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar?tur=kromka",
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors?type=kromka",
         headers=owner_headers,
     )
-    assert [row["dekor"]["id"] for row in by_tur.json()["items"]] == [edge]
+    assert [row["decor"]["id"] for row in by_tur.json()["items"]] == [edge]
 
     # The total counts the whole filtered set, not the requested page — the
     # picker's "Filtrdagi hammasi (N)" master checkbox depends on that.
     first_page = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar?limit=1", headers=owner_headers
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors?limit=1", headers=owner_headers
     )
     assert first_page.json()["total"] == 3
     assert len(first_page.json()["items"]) == 1
@@ -1125,103 +1285,110 @@ async def test_branch_catalog_picker_keeps_attached_dekorlar_and_reports_total(
     assert "thicknesses" not in facets.json()
 
     await _attach_one(
-        client, owner_access, branch_id, first_dekor_id, price_tiyin=500_000, min_stock=5
+        client,
+        owner_access,
+        branch_id,
+        first_decor_id,
+        price_tiyin=500_000,
+        min_stock=5,
+        platform_access=platform_access,
     )
     after = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/catalog/dekorlar", headers=owner_headers
+        f"/api/v1/workshop/branches/{branch_id}/catalog/decors", headers=owner_headers
     )
     assert after.json()["total"] == 3
     attached_row = next(
-        row for row in after.json()["items"] if row["dekor"]["id"] == first_dekor_id
+        row for row in after.json()["items"] if row["decor"]["id"] == first_decor_id
     )
     assert attached_row["carried_format_count"] == 1
 
 
-async def test_attach_spans_dekorlar_of_different_turlar_in_one_transaction(
+async def test_attach_spans_decors_and_substrates_in_one_transaction(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """The real onboarding shape: many dekorlar, each in its own o'lcham axis.
+    """The real onboarding shape: many products at once, in one save.
 
-    87% of carried dekorlar exist in exactly one o'lcham, so a branch registering
-    its supplier list picks many dekorlar at once. A board and its matching kromka
-    have different o'lcham axes (panel size vs tape width) and must still land in
-    one save — that is why the request is a list of per-dekor items.
+    A branch registering its supplier list picks many formats across many
+    decors, and a board and its matching kromka are now two formats of ONE
+    decor — different shapes (panel size vs tape width) that must still land
+    together. That is why the request is a flat list of `decor_format_id`s: a
+    format id already identifies its decor, so nesting them per decor bought
+    nothing and made a batch that spans decors read like an exception.
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
     manufacturer_id = await _create_manufacturer(client, platform_access)
-    panel_a = await _create_dekor(
-        client, platform_access, manufacturer_id=manufacturer_id, kod="P-A", nomi="Oak A"
+    oak = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="P-A", name="Oak A"
     )
-    panel_b = await _create_dekor(
-        client, platform_access, manufacturer_id=manufacturer_id, kod="P-B", nomi="Oak B"
+    walnut = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="P-B", name="Oak B"
     )
-    tape = await _create_dekor(
-        client,
-        platform_access,
-        manufacturer_id=manufacturer_id,
-        tur="kromka",
-        kod="P-A",
-        nomi="Oak A",
-        tolali=False,
-    )
+    # The board and the tape of the SAME pattern. Before the reshape these had
+    # to be two decors, because `type` was part of a decor's identity.
+    oak_board = await _create_format(client, platform_access, oak)
+    oak_tape = await _create_format(client, platform_access, oak, dict(KROMKA_FORMAT))
+    walnut_board = await _create_format(client, platform_access, walnut)
 
     created = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
             "items": [
-                {"dekor_id": panel_a, "formats": [dict(PANEL_FORMAT)]},
-                {"dekor_id": panel_b, "formats": [dict(PANEL_FORMAT)]},
-                {"dekor_id": tape, "formats": [dict(KROMKA_FORMAT)]},
+                {"decor_format_id": oak_board, "price_tiyin": 500_000},
+                {"decor_format_id": walnut_board, "price_tiyin": 510_000},
+                {"decor_format_id": oak_tape, "price_tiyin": 9_000},
             ]
         },
     )
     assert created.status_code == 201, created.text
     rows = created.json()["created"]
     assert len(rows) == 3
-    assert {row["dekor"]["id"] for row in rows} == {panel_a, panel_b, tape}
-    # Each row took the o'lcham axis of its own dekor's tur.
-    by_dekor = {row["dekor"]["id"]: row for row in rows}
-    assert by_dekor[panel_a]["uzunlik_mm"] == 2800
-    assert by_dekor[panel_a]["kromka_eni_mm"] is None
-    assert by_dekor[tape]["kromka_eni_mm"] == 19
-    assert by_dekor[tape]["uzunlik_mm"] is None
+    # Two of the three rows are the same decor — which is exactly the shape the
+    # old model could not express.
+    assert sorted(row["decor"]["id"] for row in rows) == sorted([oak, oak, walnut])
+    by_format = {row["decor_format_id"]: row["decor_format"] for row in rows}
+    assert by_format[oak_board]["length_mm"] == 2800
+    assert by_format[oak_board]["tape_width_mm"] is None
+    assert by_format[oak_tape]["tape_width_mm"] == 19
+    assert by_format[oak_tape]["length_mm"] is None
 
-    # Atomic across dekorlar: one bad o'lcham anywhere in the batch writes nothing.
+    # Atomic across decors: one unusable row anywhere in the batch writes
+    # nothing, even though the rows before it were fine.
     before = await db_session.scalar(
         select(func.count(BranchMaterial.id)).where(BranchMaterial.branch_id == branch_id)
+    )
+    thin_oak = await _create_format(
+        client, platform_access, oak, {**PANEL_FORMAT, "thickness_mm": "16"}
     )
     rejected = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
             "items": [
-                {
-                    "dekor_id": panel_a,
-                    "formats": [{"qalinlik_mm": "16", "uzunlik_mm": 2750, "eni_mm": 1830}],
-                },
-                # A panel dekor given a tape o'lcham — invalid for its tur.
-                {"dekor_id": panel_b, "formats": [dict(KROMKA_FORMAT)]},
+                {"decor_format_id": thin_oak, "price_tiyin": 480_000},
+                # A format id that names nothing the platform has entered.
+                {"decor_format_id": str(uuid.uuid4()), "price_tiyin": 1},
             ]
         },
     )
-    assert rejected.status_code == 400, rejected.text
+    assert rejected.status_code == 404, rejected.text
     after = await db_session.scalar(
         select(func.count(BranchMaterial.id)).where(BranchMaterial.branch_id == branch_id)
     )
     assert after == before
 
-    # A skip names the dekor it belongs to, since a batch spans several.
+    # A skip names the format it belongs to — the decor is derivable from it,
+    # and the picker keys its rows by format.
     replayed = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
-        json={"items": [{"dekor_id": panel_a, "formats": [dict(PANEL_FORMAT)]}]},
+        json={"items": [{"decor_format_id": oak_board, "price_tiyin": 500_000}]},
     )
     assert replayed.status_code == 201
     assert replayed.json()["created"] == []
-    assert [row["dekor_id"] for row in replayed.json()["skipped"]] == [panel_a]
+    assert replayed.json()["skipped"] == [oak_board]
 
 
 async def test_branch_materials_attach_is_atomic_and_skips_races(
@@ -1230,18 +1397,19 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
 ) -> None:
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    _, panel_dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, panel_decor_id = await _create_catalog_decor(client, platform_access)
 
     # A single invalid row rejects the whole batch and names the offender.
     rejected = await _attach(
         client,
         owner_access,
         branch_id,
-        panel_dekor_id,
+        panel_decor_id,
         formats=[
             {**PANEL_FORMAT, "price_tiyin": 500_000, "min_stock": 5},
-            {**PANEL_FORMAT, "qalinlik_mm": "16", "price_tiyin": -1},
+            {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": -1},
         ],
+        platform_access=platform_access,
     )
     assert rejected.status_code == 400
     body = rejected.json()
@@ -1253,29 +1421,34 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         == 0
     )
 
-    # Three formats of one dekor in one call — this is what "the batch" means now.
+    # Three formats of one decor in one call — this is what "the batch" means now.
     created = await _attach(
         client,
         owner_access,
         branch_id,
-        panel_dekor_id,
+        panel_decor_id,
         formats=[
             {**PANEL_FORMAT, "price_tiyin": 500_000, "min_stock": 5},
-            {**PANEL_FORMAT, "qalinlik_mm": "16", "price_tiyin": 12_000, "min_stock": 50_000},
-            {**PANEL_FORMAT, "uzunlik_mm": 2750, "eni_mm": 1830, "price_tiyin": 700_000},
+            {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": 12_000, "min_stock": 50_000},
+            {**PANEL_FORMAT, "length_mm": 2750, "width_mm": 1830, "price_tiyin": 700_000},
         ],
+        platform_access=platform_access,
     )
     assert created.status_code == 201
     assert created.json()["skipped"] == []
     rows = created.json()["created"]
-    assert {(row["qalinlik_mm"], row["uzunlik_mm"]) for row in rows} == {
+    # Dimensions are read one level down now: the branch row carries none of
+    # them, it points at the platform format that does.
+    assert {
+        (row["decor_format"]["thickness_mm"], row["decor_format"]["length_mm"]) for row in rows
+    } == {
         ("18", 2800),
         ("16", 2800),
         ("18", 2750),
     }
     # Each attach opens the branch's stock row at zero. The threshold is the
     # branch material's alone, so there is nothing on the stock row to compare.
-    thin = next(row for row in rows if row["qalinlik_mm"] == "16")
+    thin = next(row for row in rows if row["decor_format"]["thickness_mm"] == "16")
     thin_stock = await db_session.scalar(
         select(StockItem).where(StockItem.branch_material_id == uuid.UUID(str(thin["id"])))
     )
@@ -1286,26 +1459,30 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
 
     # A format a concurrent attach already registered is skipped, not an error,
     # and the existing row keeps its price.
+    thick = next(
+        row
+        for row in rows
+        if (row["decor_format"]["thickness_mm"], row["decor_format"]["length_mm"]) == ("18", 2800)
+    )
     replayed = await _attach(
         client,
         owner_access,
         branch_id,
-        panel_dekor_id,
+        panel_decor_id,
         formats=[{**PANEL_FORMAT, "price_tiyin": 900_000, "min_stock": 9}],
+        platform_access=platform_access,
     )
     assert replayed.status_code == 201
     assert replayed.json()["created"] == []
-    assert [key["qalinlik_mm"] for key in replayed.json()["skipped"]] == ["18"]
+    assert replayed.json()["skipped"] == [thick["decor_format_id"]]
     unchanged = await db_session.scalar(
-        select(BranchMaterial.price_tiyin).where(
-            BranchMaterial.branch_id == branch_id,
-            BranchMaterial.qalinlik_mm == 18,
-            BranchMaterial.uzunlik_mm == 2800,
-        )
+        select(BranchMaterial.price_tiyin).where(BranchMaterial.id == uuid.UUID(str(thick["id"])))
     )
     assert unchanged == 500_000
 
-    empty = await _attach(client, owner_access, branch_id, panel_dekor_id, formats=[])
+    empty = await _attach(
+        client, owner_access, branch_id, panel_decor_id, formats=[], platform_access=platform_access
+    )
     assert empty.status_code == 400
     assert empty.json()["code"] == "branch_materials_empty"
 
@@ -1329,10 +1506,15 @@ async def test_price_is_optional_on_attach_and_flags_the_gap(
     """
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
-    _, dekor_id = await _create_catalog_dekor(client, platform_access)
+    _, decor_id = await _create_catalog_decor(client, platform_access)
 
     attached = await _attach_one(
-        client, owner_access, branch_id, dekor_id, formats=[dict(PANEL_FORMAT)]
+        client,
+        owner_access,
+        branch_id,
+        decor_id,
+        formats=[dict(PANEL_FORMAT)],
+        platform_access=platform_access,
     )
     assert attached["price_tiyin"] == 0
     assert attached["price_unset"] is True

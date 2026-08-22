@@ -2,35 +2,40 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-22
 order: 70
 ---
 
 # Platform operations
 
-The superadmin app's ops corner: the platform identity catalog (manufacturers + dekorlar),
-scheduled background jobs, the application-error monitor, and the platform-user registry.
-Workshop provisioning and block / unblock live in
+The superadmin app's ops corner: the platform product catalog (manufacturers + decors +
+their formats), scheduled background jobs, the application-error monitor, and the
+platform-user registry. Workshop provisioning and block / unblock live in
 [`access-management.md`](access-management.md); the catalog mechanics workshops consume
 sit in [`catalog-inventory.md`](catalog-inventory.md) — this doc owns the **platform-side
 admin surfaces** for them.
 
 ## Platform catalog admin
 
-The platform-curated identity catalog every workshop picks from. Two registries operators
-manage end-to-end here: **Manufacturers** and **Dekorlar**. The full operation rules (create,
-activate / deactivate, the two-level split, the snapshot guarantee that a platform edit never
-reaches existing orders) live in [`catalog-inventory.md`](catalog-inventory.md); this section
-owns the **superadmin app's** surfaces for them.
+The platform-curated catalog every workshop picks from. Three registries operators manage
+end-to-end here: **Manufacturers**, **Dekorlar** (decors — the word on screen is unchanged)
+and, on each decor, its **Formatlar**. The full operation rules (create, activate /
+deactivate, format immutability, the three levels of "off", the snapshot guarantee that a
+platform edit never reaches existing orders) live in
+[`catalog-inventory.md`](catalog-inventory.md); this section owns the **superadmin app's**
+surfaces for them.
 
-- **Manufacturers** — Kronospan, Egger, Rehau, and so on. A dekor's identity includes
+- **Manufacturers** — Kronospan, Egger, Rehau, and so on. A decor's identity includes
   its manufacturer, so adding a new brand here precedes adding the decors it makes.
-- **Dekorlar** — one decor of one manufacturer: `tur`, code, name, photo, grain.
+- **Decors** — one decor pattern of one manufacturer: code, name, photo, grain.
+- **Decor formats** — the concrete products of a decor: substrate, thickness, sheet size or
+  tape width, finished sides. **This is new platform territory.** Formats used to be columns
+  on each branch's own row, and this admin app deliberately showed no thickness and no size;
+  they moved here so one physical product has one id across every workshop
+  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-platform-owned) carries the
+  reasoning and the accepted cost).
 
-Operators do not edit formats, per-branch prices or stock — that's workshop territory.
-**Thickness, sheet size and price appear nowhere in the admin app**, and that absence is the
-point of the reshape: a platform operator cannot know which formats a given workshop's
-supplier sells.
+Operators still do not touch **per-branch prices or stock** — that stays workshop territory.
 
 ### UX (under a **Catalog** section in the superadmin app)
 
@@ -39,28 +44,36 @@ supplier sells.
   optional note). Row actions: Edit · Activate / Deactivate. No Delete. Filters:
   status dropdown, country dropdown. Empty: "No manufacturers yet — add one before
   adding dekorlar."
-- **Dekorlar** (`/admin/catalog/dekorlar`) — table: image, `nomi` + `kod`, ishlab
-  chiqaruvchi, tur, tolali, format count, filial count, holat, action menu. Filters run
-  **server-side** and the table pages with a *load-more* control (the catalog runs to hundreds
-  of rows): search (folded — see [`catalog-inventory.md`](catalog-inventory.md#bilingual-search)),
-  `tur`, manufacturer, status.
-  **+ Yangi dekor** -> a form of exactly six fields: ishlab chiqaruvchi (picker with
-  inline-add -> opens the Manufacturers dialog without leaving this page), tur (chips), kod
+- **Dekorlar** (`/admin/catalog/decors`) — table: image, nomi + kod, ishlab
+  chiqaruvchi, tolali, format count, filial count, holat, action menu. **No substrate
+  column** — a decor no longer has one. Filters run **server-side** and the table pages with a
+  *load-more* control (the catalog runs to hundreds of rows): search (folded — see
+  [`catalog-inventory.md`](catalog-inventory.md#bilingual-search)), substrate (meaning "has a
+  format of this substrate"), manufacturer, status.
+  **+ Yangi dekor** -> a form of exactly five fields: ishlab chiqaruvchi (picker with
+  inline-add -> opens the Manufacturers dialog without leaving this page), kod
   (optional), nomi (required), tolali (Ha / Yo'q), rasm. A **live preview of the decor card**
   renders the same label the rest of the platform will show, and a duplicate warning fires on
-  `(manufacturer, tur, kod)` before save. The image field previews inside the form, keeps
+  `(manufacturer, code)` before save. The image field previews inside the form, keeps
   upload errors local to the field, and supports remove / replace before save. Row actions:
   Edit · Activate / Deactivate. No Delete. Empty: "No dekorlar yet — add manufacturers, then
   dekorlar."
-- **Dekor detail** (`/admin/catalog/dekorlar/:id`) — the identity header (photo, `nomi`,
-  label, manufacturer, tur, kod, tolali, holat, created) and a deactivate action, then what
-  **branches** did with it: the formats carried across the network and which branches carry
-  it. Both are derived and read-only — a dekor has no format of its own. Today only the
-  **branch count** is exposed; the per-format and per-branch breakdowns are placeholders
-  awaiting the platform endpoints that would serve them.
+- **Dekor detail** (`/admin/catalog/decors/:decor_id`) — the identity header (photo, nomi,
+  label, manufacturer, kod, tolali, holat, created) and a deactivate action; then a
+  **Formatlar** card — the decor's formats as rows (substrate · thickness · size or tape
+  width · finished sides on the board substrates · status · ⋯ menu with Activate /
+  Deactivate). **There is no Edit**: a format entered wrong is deactivated and re-created, so
+  the menu offers no other verb. **+ Format** opens a small form whose fields follow the
+  chosen substrate — size for panel-shaped, tape width for `kromka`, finished sides (default
+  2) for `ldsp` / `dsp` / `mdf` — with the standard sets as quick-fill chips
+  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-platform-owned)). A shape
+  mismatch reports on the dimension fields; a duplicate names the format that already exists.
+  Beneath it, what **branches** did with the decor: which branches carry which of its formats,
+  derived and read-only. Today only the **branch count** is exposed; the per-branch breakdown
+  is a placeholder awaiting the platform endpoint that would serve it.
 
-`/admin/catalog/materials` redirects to `/admin/catalog/dekorlar` — the old path is bookmarked
-in operators' browsers.
+`/admin/catalog/materials` and the older `/admin/catalog/dekorlar` both redirect to
+`/admin/catalog/decors` — those paths are bookmarked in operators' browsers.
 
 States: loading skeletons, empty, error with `trace_id`; the inline-add for
 manufacturers preserves the in-progress dekor form. Accessibility: status chip pairs

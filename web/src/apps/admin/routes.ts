@@ -32,7 +32,7 @@ export const adminRoutes: RouteRecordRaw[] = [
   {
     path: '/admin/catalog',
     name: 'admin-catalog',
-    redirect: '/admin/catalog/dekorlar',
+    redirect: '/admin/catalog/decors',
     meta: { titleKey: 'routes.catalog' },
   },
   {
@@ -42,23 +42,34 @@ export const adminRoutes: RouteRecordRaw[] = [
     meta: { titleKey: 'routes.manufacturers' },
   },
   {
-    path: '/admin/catalog/dekorlar',
-    name: 'admin-catalog-dekorlar',
-    component: () => import('@/shared/views/AdminDekorlarView.vue'),
+    path: '/admin/catalog/decors',
+    name: 'admin-catalog-decors',
+    component: () => import('@/shared/views/AdminDecorsView.vue'),
     meta: { titleKey: 'routes.dekorlar' },
   },
   {
-    path: '/admin/catalog/dekorlar/:dekor_id',
-    name: 'admin-catalog-dekor-detail',
-    component: () => import('@/shared/views/AdminDekorDetailView.vue'),
+    path: '/admin/catalog/decors/:decor_id',
+    name: 'admin-catalog-decor-detail',
+    component: () => import('@/shared/views/AdminDecorDetailView.vue'),
     meta: { titleKey: 'routes.dekorDetail' },
   },
-  // The platform `materials` table was split into dekorlar (identity) and branch
+  // The platform `materials` table was split into decors (identity) and branch
   // materials (format); the old admin path is bookmarked and linked from older
   // docs, so it redirects rather than 404s.
   {
     path: '/admin/catalog/materials',
-    redirect: '/admin/catalog/dekorlar',
+    redirect: '/admin/catalog/decors',
+  },
+  // ...and the format reshape moved the path again, from `dekorlar` to
+  // `decors`, when the schema vocabulary went English. Same reason: an
+  // operator's bookmark must not 404.
+  {
+    path: '/admin/catalog/dekorlar',
+    redirect: '/admin/catalog/decors',
+  },
+  {
+    path: '/admin/catalog/dekorlar/:decor_id',
+    redirect: (to) => `/admin/catalog/decors/${to.params.decor_id}`,
   },
   {
     path: '/admin/notifications',

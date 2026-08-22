@@ -45,6 +45,11 @@ class Permission(StrEnum):
     MANAGE_INVENTORY = "manage_inventory"
     MANAGE_FINANCE = "manage_finance"
     VIEW_FINANCE_REPORTS = "view_finance_reports"
+    # Take money for an order at the counter — and nothing else. Deliberately
+    # NOT part of `manage_finance`: whoever records a payment must not be able
+    # to void it, or a till can be emptied and the receipt erased by one hand.
+    # Editing and voiding stay `manage_finance`; so does every other ledger row.
+    RECORD_ORDER_PAYMENT = "record_order_payment"
 
 
 class MaterialStatus(StrEnum):
@@ -52,14 +57,20 @@ class MaterialStatus(StrEnum):
     INACTIVE = "inactive"
 
 
-class DekorType(StrEnum):
-    """What a dekor *is* — the single axis that replaced kind + panel type.
+class DecorType(StrEnum):
+    """What a *format* is — the single axis that replaced kind + panel type.
 
     The old model split this in two: `MaterialKind` (panel vs. edge) decided the
     shape, `PanelMaterialType` (dsp/mdf/...) the substrate. Kromka was never a
     substrate, only a shape, so the two enums were never independent. One value
     carries both facts now: `kromka` is tape-shaped, everything else is
     panel-shaped.
+
+    It hangs off `decor_formats`, not off the decor: one decor (Egger H1145) is
+    sold as an LDSP board *and* as a kromka, and making the substrate part of
+    the decor's identity is what produced the duplicate twin rows the format
+    reshape merged away. The DB type is `decor_type`; the values are unchanged
+    and are the same strings the web catalogs key their labels on.
     """
 
     LDSP = "ldsp"
@@ -73,7 +84,7 @@ class DekorType(StrEnum):
     @property
     def tape_shaped(self) -> bool:
         """True when the format is a tape (length only, no panel dimensions)."""
-        return self is DekorType.KROMKA
+        return self is DecorType.KROMKA
 
     @property
     def panel_shaped(self) -> bool:
@@ -83,6 +94,10 @@ class DekorType(StrEnum):
 
 class StockTransactionType(StrEnum):
     STOCK_IN = "stock_in"
+    # The reversal a voided supplier invoice writes, one per stock-in line. It
+    # keeps the `invoice_id` link (so the document reads as a whole) and carries
+    # no price: a voided invoice's prices stop being price history.
+    STOCK_IN_VOID = "stock_in_void"
     CONSUME = "consume"
     RESTORE = "restore"
     ADJUST = "adjust"

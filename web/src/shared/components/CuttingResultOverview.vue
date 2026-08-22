@@ -80,11 +80,14 @@ const panelMaterials = computed(() =>
 )
 
 function materialFillPercent(materialId: string) {
-  const panels = props.result.panels.filter((panel) => panel.branch_material_id === materialId)
+  const panels = props.result.panels.filter((panel) => panel.material_id === materialId)
   if (panels.length === 0) return null
   const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
-  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
+  const length = numberSnapshot(
+    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
+    0,
+  )
+  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
   if (length <= 0 || width <= 0) return null
   const sheetArea = length * width * panels.length
   const waste = panels.reduce((sum, panel) => sum + panel.waste_area_mm2, 0)
@@ -295,7 +298,7 @@ function revealDrawing() {
             :key="material.id"
             class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
           >
-            <!-- Deliberately NOT the dekor's colour, though the gap spec asks
+            <!-- Deliberately NOT the decor's colour, though the gap spec asks
                  for it here too. `colorForMaterial` is a pastel ramp built for
                  the 26-30px swatches; at 6px on white it lands near 1.5:1, under
                  DESIGN.md's 3:1 floor for a UI mark, and the ink dot it would

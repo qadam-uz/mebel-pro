@@ -283,11 +283,11 @@ const worklistRows = computed<WorklistRow[]>(() => {
       title: t('workshopAdmin.dashboard.waitNegativeStock', { material: item.material.label }),
       chip: formatStockQuantity(item.on_hand, item.display_unit),
       detail: t('workshopAdmin.dashboard.waitNegativeStockDetail'),
-      // The arrival form is a modal with no URL of its own, so Ombor honours a
-      // front-end-only query to open it (`WorkshopInventoryView`).
+      // The arrival form is a page of its own, and the row already names the
+      // material that went negative — so the link seeds line 1 with it.
       action: {
         label: t('workshopAdmin.dashboard.waitNegativeStockAction'),
-        to: `${rolePath('/workshop/inventory')}?tab=invoices&action=kirim`,
+        to: `${rolePath('/workshop/inventory/invoices/new')}?material=${item.branch_material_id}`,
       },
     })
   }

@@ -95,6 +95,45 @@ const dateTo = ref(initialRange.to ?? '')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
 const statusFilter = ref<LedgerStatus | 'all'>('recorded')
+// "Kim qabul qildi?" is the first question asked of a cash row, and reconciling
+// a till at closing time means reading one person's rows, not the whole day's.
+const actorFilter = ref<string>('all')
+// The options are accumulated from the rows the page has already seen rather
+// than fetched: the staff list is behind a permission the accountant may not
+// hold, and a name that never handled money is not a useful filter anyway.
+// Accumulated, never replaced — filtering to one person must not collapse the
+// list to that one person.
+const seenActors = ref(new Map<string, string>())
+const actorOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('finance.filter.actorAll') },
+  ...[...seenActors.value].map(([value, label]) => ({ value, label })),
+])
+
+/**
+ * The entry line under a ledger row's date: when it was booked, and by whom.
+ *
+ * It rides with the timestamp rather than taking a ninth column — both tables
+ * are already at the width where one more field starts a horizontal scroll, and
+ * "when was this entered" and "who entered it" are one fact about the row's
+ * provenance, not two.
+ */
+function entryMeta(row: { created_at: string; recorded_by_name: string | null }) {
+  const at = formatDateTime(row.created_at)
+  return row.recorded_by_name
+    ? t('finance.ledger.enteredByAt', { at, name: row.recorded_by_name })
+    : t('finance.ledger.enteredAt', { at })
+}
+
+function rememberActors(
+  rows: Array<{ recorded_by_user_id: string; recorded_by_name: string | null }>,
+) {
+  const next = new Map(seenActors.value)
+  for (const row of rows) {
+    if (!row.recorded_by_name) continue
+    next.set(row.recorded_by_user_id, row.recorded_by_name)
+  }
+  seenActors.value = next
+}
 
 // «Narrowed» means narrower than the page's own defaults — the current month,
 // every category, recorded rows. Those defaults are the resting state, so they
@@ -542,18 +581,21 @@ async function refresh() {
     date_to: dateTo.value,
     branch_id: selectedBranchId.value || null,
     status: statusFilter.value === 'all' ? null : statusFilter.value,
+    recorded_by_user_id: actorFilter.value === 'all' ? null : actorFilter.value,
   }
   if (activeTab.value === 'expense') {
     await finance.loadExpenses({
       ...base,
       category: expenseCategory.value === 'all' ? null : (expenseCategory.value as ExpenseCategory),
     })
+    rememberActors(finance.expenses)
     return
   }
   await finance.loadIncome({
     ...base,
     type: incomeType.value === 'all' ? null : (incomeType.value as IncomeType),
   })
+  rememberActors(finance.incomes)
 }
 
 watch(activeTab, (next, previous) => {
@@ -565,10 +607,13 @@ watch(activeTab, (next, previous) => {
 // preset-driven from+to change or fast dropdown edits collapse into one fetch.
 // activeTab is intentionally excluded — its own watcher above already refreshes.
 let filterTimer: number | undefined
-watch([dateFrom, dateTo, selectedBranchId, expenseCategory, incomeType, statusFilter], () => {
-  window.clearTimeout(filterTimer)
-  filterTimer = window.setTimeout(() => void refresh(), 250)
-})
+watch(
+  [dateFrom, dateTo, selectedBranchId, expenseCategory, incomeType, statusFilter, actorFilter],
+  () => {
+    window.clearTimeout(filterTimer)
+    filterTimer = window.setTimeout(() => void refresh(), 250)
+  },
+)
 
 function resetExpenseForm() {
   editingExpenseId.value = null
@@ -1323,6 +1368,15 @@ onMounted(async () => {
           :options="statusOptions"
           top-label
         />
+        <!-- Who handled the money. Offered only once the period has actually
+             shown more than one person — a filter with one option is furniture. -->
+        <ProjectDropdown
+          v-if="actorOptions.length > 2"
+          v-model="actorFilter"
+          :label="$t('finance.filter.actor')"
+          :options="actorOptions"
+          top-label
+        />
         <button
           v-if="activeTab === 'expense'"
           type="button"
@@ -1397,7 +1451,7 @@ onMounted(async () => {
                 <td class="num text-ink-muted">
                   {{ formatDate(expense.incurred_on) }}
                   <small class="block whitespace-nowrap font-sans text-[11px]">
-                    {{ $t('finance.ledger.enteredAt', { at: formatDateTime(expense.created_at) }) }}
+                    {{ entryMeta(expense) }}
                   </small>
                 </td>
                 <td>
@@ -1506,7 +1560,7 @@ onMounted(async () => {
                 <td class="num text-ink-muted">
                   {{ formatDate(income.received_on) }}
                   <small class="block whitespace-nowrap font-sans text-[11px]">
-                    {{ $t('finance.ledger.enteredAt', { at: formatDateTime(income.created_at) }) }}
+                    {{ entryMeta(income) }}
                   </small>
                 </td>
                 <td>

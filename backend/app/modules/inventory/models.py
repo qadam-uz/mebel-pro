@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, Timestamped, UUIDPrimaryKey
-from app.models.enums import StockTransactionType, SupplierStatus, enum_type
+from app.models.enums import LedgerStatus, StockTransactionType, SupplierStatus, enum_type
 
 
 class StockItem(UUIDPrimaryKey, Base):
@@ -55,8 +55,11 @@ class StockTransaction(UUIDPrimaryKey, Base):
             "(total_price_tiyin IS NULL OR total_price_tiyin >= 0)",
             name="ck_stock_transactions_price_nonnegative",
         ),
+        # A void reversal keeps its document link — the invoice reads as a whole,
+        # arrival lines and their reversals together. It carries no price, so the
+        # price CHECK above still admits only `stock_in`.
         CheckConstraint(
-            "invoice_id IS NULL OR type = 'stock_in'",
+            "invoice_id IS NULL OR type IN ('stock_in', 'stock_in_void')",
             name="ck_stock_transactions_invoice_stock_in_only",
         ),
     )
@@ -94,6 +97,19 @@ class SupplierInvoice(UUIDPrimaryKey, Timestamped, Base):
     same stored-total check) but deliberately carry no reason/approver: on an
     order staff *grant* a concession and it needs an audit trail, here they only
     transcribe what the supplier already wrote on the document.
+
+    The ledger trio (`status` / `voided_*`) is the finance one verbatim
+    (`app/modules/finance/models.py`): every reader of the header is derived at
+    read time, so voiding the document removes it from the debt fold, the payable
+    set and the price history with no cleanup step. A `recorded` invoice is
+    correctable in place, lines included — the edit rewrites the stock-in rows
+    and replays each touched item's balance chain (`service.replay_stock_chain`),
+    so the `balance_after` snapshots on later movements stay true.
+
+    `discount_tiyin` / `surcharge_tiyin` / `note` are no longer enterable — the
+    suppliers in scope do not put a document-level discount on the faktura, so
+    the inputs left the UI. The columns stay: the debt fold's arithmetic and any
+    legacy row remain valid, and the decision is cheap to reverse.
     """
 
     __tablename__ = "supplier_invoices"
@@ -125,9 +141,17 @@ class SupplierInvoice(UUIDPrimaryKey, Timestamped, Base):
     surcharge_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     total_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     note: Mapped[str | None]
+    status: Mapped[LedgerStatus] = mapped_column(
+        enum_type(LedgerStatus, "ledger_status"),
+        default=LedgerStatus.RECORDED,
+        nullable=False,
+    )
+    voided_reason: Mapped[str | None]
     recorded_by_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workshop_users.id"), nullable=False
     )
+    voided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshop_users.id"))
+    voided_at: Mapped[datetime | None]
 
 
 class Supplier(UUIDPrimaryKey, Timestamped, Base):

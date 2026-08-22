@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-08-08
+updated: 2026-08-20
 order: 55
 ---
 
@@ -36,6 +36,18 @@ back to name or price it — the accountant who keys the payments holds no order
 and a settled order has already left the payable set, so both of the obvious sources fail
 exactly when the ledger needs them. The figures are resolved for the whole listed page in
 one aggregate, not per row.
+
+### Who may record a payment
+
+Every ledger write is `manage_finance`'s, with **one exception**: creating an `order_payment`
+income also accepts **`record_order_payment`** — the counter grant. It is create-only and
+order-payment-only, because taking money and correcting the books are different jobs: a hand
+that can both book a payment and void it can empty a till and leave no trace. Editing,
+voiding, expenses and every other income type stay `manage_finance`; so does the ledger screen
+itself. The cashier's entry point is the **To'lov qabul qilish** action on the order's own page
+([`orders.md`](orders.md) → *The money seam*), prefilled with the outstanding balance and
+capped by it server-side. Full rationale and the grant's edges live in
+[`access-management.md`](access-management.md).
 
 ### Operations (`manage_finance`)
 
@@ -164,7 +176,9 @@ trust the numbers).
 
 Three sources feed the supplier side:
 
-- **Deliveries** — [supplier invoices](../entities/inventory.md#supplier-invoice), folded at
+- **Deliveries** — **recorded** [supplier invoices](../entities/inventory.md#supplier-invoice)
+  (a voided one leaves the fold and the balance self-corrects, exactly as a voided expense
+  does), folded at
   `total_tiyin`, i.e. **after** the discount the supplier put on the document. This is the
   grain the conversation actually happens in: an accountant negotiates in invoice totals, and
   summing raw line prices can never see a document-level discount, so the number here and the
@@ -244,6 +258,13 @@ chart (visible with `manage_finance` or `view_finance_reports`). The group's own
   modal dialogs. The
   date column pairs the business date with the entry timestamp beneath it — a backdated
   record shows when it was actually keyed in.
+  - Every row's date cell carries its entry line — *kiritilgan {sana} · {xodim}*: **who handled
+    the money** rides with when it was booked, because that is one fact about the row's
+    provenance and both ledgers are already at the width where a ninth column starts a
+    horizontal scroll. A **Kim yozgan** filter narrows either ledger to one person — the
+    closing-time question is one cashier's rows, not the whole day's. Its options are the
+    people the loaded period has actually shown (the staff list is behind a permission the
+    accountant may not hold), and it is offered only once more than one person appears.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, status, min / max
     amount. **+ Income** → modal form. Type and method are two- and three-way segmented
@@ -348,8 +369,10 @@ void is danger-styled and names its effect.
   recorded payments is validated ≤ `total_tiyin`.
 - **Voiding an income/expense already in a past report** — allowed; reports are
   period-scoped recomputations, so the current period reflects the void.
-- **Voided rows and debts** — a voided supplier-linked expense or adjustment leaves the
-  debt fold automatically; the balance re-derives. No cleanup job exists or is needed.
+- **Voided rows and debts** — a voided supplier-linked expense, adjustment or supplier invoice
+  leaves the debt fold automatically; the balance re-derives. No cleanup job exists or is
+  needed. Voiding the *invoice* is blocked while a recorded expense still pays it, so the
+  payment is voided here first ([`catalog-inventory.md`](catalog-inventory.md)).
 - **Wrong-looking balance** — corrected with a *Qarz tuzatish* adjustment (noted,
   auditable), never by faking a payment or a delivery: forcing the number through another
   ledger would corrupt the cash report or the warehouse to fix the debt page.

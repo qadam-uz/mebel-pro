@@ -188,9 +188,11 @@ describe('role route matrix', () => {
       '/workshops',
       '/catalog',
       '/catalog/manufacturers',
-      '/catalog/dekorlar',
-      '/catalog/dekorlar/:dekor_id',
+      '/catalog/decors',
+      '/catalog/decors/:decor_id',
       '/catalog/materials',
+      '/catalog/dekorlar',
+      '/catalog/dekorlar/:decor_id',
       '/notifications',
       '/platform/jobs',
       '/platform/errors',
@@ -205,7 +207,7 @@ describe('role route matrix', () => {
       '/',
       '/workshops',
       '/catalog/manufacturers',
-      '/catalog/dekorlar',
+      '/catalog/decors',
       '/platform/jobs',
       '/platform/errors',
       '/audit',
@@ -260,6 +262,10 @@ describe('role route matrix', () => {
       '/workshop/cutting',
       '/workshop/banding',
       '/workshop/inventory',
+      '/workshop/inventory/invoices/new',
+      '/workshop/inventory/invoices/:invoice_id',
+      '/workshop/inventory/invoices/:invoice_id/edit',
+      '/workshop/inventory/materials/:branch_material_id',
       '/workshop/catalog',
       '/workshop/settings/users',
       '/workshop/settings',
@@ -281,9 +287,13 @@ describe('role route matrix', () => {
       '/admin/workshops',
       '/admin/catalog',
       '/admin/catalog/manufacturers',
-      '/admin/catalog/dekorlar',
-      '/admin/catalog/dekorlar/:dekor_id',
+      '/admin/catalog/decors',
+      '/admin/catalog/decors/:decor_id',
       '/admin/catalog/materials',
+      // Both legacy spellings of the catalog path still redirect: the table was
+      // `materials`, then `dekorlar`, and operators have all three bookmarked.
+      '/admin/catalog/dekorlar',
+      '/admin/catalog/dekorlar/:decor_id',
       '/admin/notifications',
       '/admin/platform/jobs',
       '/admin/platform/errors',
@@ -386,13 +396,13 @@ describe('role route matrix', () => {
         })
         .map((match) => `${file}:${match[0]}`)
     })
-    const dekorlar = readFileSync(
-      join(process.cwd(), 'src', 'shared', 'views', 'AdminDekorlarView.vue'),
+    const decors = readFileSync(
+      join(process.cwd(), 'src', 'shared', 'views', 'AdminDecorsView.vue'),
       'utf8',
     )
     const requiredFormSelectIds = ['dek-manufacturer']
     const customOffenders = requiredFormSelectIds.filter((id) => {
-      const field = dekorlar.match(new RegExp(`<FormSelect[\\s\\S]*?id="${id}"[\\s\\S]*?/>`))?.[0]
+      const field = decors.match(new RegExp(`<FormSelect[\\s\\S]*?id="${id}"[\\s\\S]*?/>`))?.[0]
       return !field?.includes('required')
     })
 
@@ -400,18 +410,18 @@ describe('role route matrix', () => {
     expect(customOffenders).toEqual([])
   })
 
-  // `tur` is required but renders as a chip group, so it carries no `required`
-  // attribute for the check above to find. Its required-ness moved to form-level
-  // validation — assert that, or the reshape leaves the field guarded by nothing.
-  it('keeps the dekor tur chip group required at form level', () => {
-    const dekorlar = readFileSync(
-      join(process.cwd(), 'src', 'shared', 'views', 'AdminDekorlarView.vue'),
+  // `type` LEFT the decor form with the format reshape: a decor is a pattern,
+  // and what it physically is belongs to `decor_formats`. The field the chip
+  // group used to guard is now on the format form instead, so the old
+  // form-level requirement must be gone rather than merely unenforced.
+  it('no longer asks a decor for a substrate', () => {
+    const decors = readFileSync(
+      join(process.cwd(), 'src', 'shared', 'views', 'AdminDecorsView.vue'),
       'utf8',
     )
 
-    expect(dekorlar).toContain("set('tur', requiredText(form.tur")
-    expect(dekorlar).toContain('dekorFieldErrors.tur')
-    expect(dekorlar).toContain('dek-tur')
+    expect(decors).not.toContain('dek-type')
+    expect(decors).not.toContain('decorFieldErrors.type')
   })
 
   // The workshop order flow REUSES the client cutting editor — there must be

@@ -399,6 +399,7 @@ async def _supplier_balances(db: AsyncSession, *, scope: FinanceScope) -> dict[u
                 .where(
                     SupplierInvoice.workshop_id == workshop_id,
                     SupplierInvoice.supplier_id.is_not(None),
+                    SupplierInvoice.status == LedgerStatus.RECORDED,
                     _branch_filter(scope, SupplierInvoice.branch_id),
                 )
                 .group_by(SupplierInvoice.supplier_id)
@@ -619,6 +620,7 @@ async def _supplier_terms(
             .where(
                 SupplierInvoice.workshop_id == workshop_id,
                 SupplierInvoice.supplier_id == supplier_id,
+                SupplierInvoice.status == LedgerStatus.RECORDED,
                 _branch_filter(scope, SupplierInvoice.branch_id),
             )
             .group_by(SupplierInvoice.id)

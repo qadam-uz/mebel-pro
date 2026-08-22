@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.enums import (
     CuttingResultSource,
     CuttingResultStatus,
-    DekorType,
+    DecorType,
     MaterialSource,
 )
 from app.modules.cutting.imports.base import ImportMapLayout
@@ -172,7 +172,13 @@ class CuttingOffcutResponse(APIModel):
 
 class CuttingPanelResponse(APIModel):
     id: uuid.UUID
-    branch_material_id: uuid.UUID
+    # The panel's material key: a branch material id, or — for a sheet the
+    # walk-in brought — a customer board id. Two disjoint UUID namespaces, one
+    # opaque key, which is exactly how `material_snapshots` and
+    # `own_panel_counts` are keyed. Named `material_id` like the sibling
+    # price/warning/demand schemas; it was `branch_material_id` while customer
+    # boards were branch materials, and that name is now a lie.
+    material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
     cut_count: int | None = None
@@ -264,41 +270,51 @@ class WorkshopCuttingDraftSummary(APIModel):
 class CustomerBoardCreateRequest(BaseModel):
     """A sheet the walk-in carried in, as the operator typed it.
 
-    `nomi` is optional because the customer rarely knows what their board is;
-    the size is what the layout needs. `qalinlik_mm` is required even though the
+    `name` is optional because the customer rarely knows what their board is;
+    the size is what the layout needs. `thickness_mm` is required even though the
     handoff form omits it — it is NOT NULL on the material, part of the format
     key, and printed in every label, so inventing one server-side would make two
     genuinely different boards render identically.
     """
 
-    nomi: str | None = Field(default=None, max_length=80)
-    uzunlik_mm: int = Field(gt=0, le=6000)
-    eni_mm: int = Field(gt=0, le=6000)
-    qalinlik_mm: Decimal = Field(gt=0, le=100)
+    name: str | None = Field(default=None, max_length=80)
+    length_mm: int = Field(gt=0, le=6000)
+    width_mm: int = Field(gt=0, le=6000)
+    thickness_mm: Decimal = Field(gt=0, le=100)
     sheets: int = Field(gt=0, le=MAX_PANELS_PER_MATERIAL)
-    tolali: bool = False
+    has_grain: bool = False
 
 
 class ClientCatalogMaterialOption(APIModel):
     """One format a branch carries, as the cutting editors' pickers see it.
 
-    `id` is the branch material — the id a part's `material_id` must resolve to.
-    Listings are always branch-scoped now, so there is no `branch_carried` flag:
-    every row returned is carried by construction.
+    `id` is the id a part's `material_id` must resolve to — a branch material
+    for a carried format, a customer board for the walk-in's own sheet.
+    Listings are always branch-scoped, so there is no `branch_carried` flag:
+    every row returned is pickable by construction.
     """
 
     id: uuid.UUID
-    tur: DekorType
-    manufacturer_id: uuid.UUID
+    type: DecorType
+    # Null for a customer-supplied board: nobody knows who made the sheet the
+    # walk-in carried in, and it is not part of any manufacturer's catalog.
+    manufacturer_id: uuid.UUID | None
     manufacturer_name: str
-    kod: str | None
-    nomi: str
-    tolali: bool
+    code: str | None
+    name: str
+    has_grain: bool
     image_file_id: uuid.UUID | None
-    qalinlik_mm: Decimal
-    uzunlik_mm: int | None
-    eni_mm: int | None
-    kromka_eni_mm: int | None
+    thickness_mm: Decimal
+    length_mm: int | None
+    width_mm: int | None
+    tape_width_mm: int | None
+    # 1 or 2 for the board types, null otherwise — the platform's fact about
+    # this format, not the branch's.
+    finished_sides: int | None = None
+    # The platform retired this format (no longer produced). The row stays
+    # pickable — the branch may still hold stock — but the picker says so, the
+    # same way a deactivated decor would not: that one is simply absent.
+    discontinued: bool = False
     price_tiyin: int
     # 0 means "the branch has not priced this format yet", not "free". Only the
     # workshop-facing listing ever returns such a row; the client listing drops
@@ -306,10 +322,10 @@ class ClientCatalogMaterialOption(APIModel):
     # never sets this flag — see `customer_supplied`.
     price_unset: bool
     display_unit: str
-    # A sheet the walk-in carried in. It is a real branch material so the whole
-    # cutting/pricing path can keep keying on a material id, but the branch does
-    # not carry it: no stock, and every catalog listing excludes it. Its
-    # `price_tiyin` is the branch's price for the same size when there is one —
-    # that is what makes the SHORTAGE price itself, since the demand the quote
-    # sees is already `needed - brought`.
+    # A sheet the walk-in carried in. It is a `customer_boards` row, not a
+    # branch material — its own table, never stocked, never in any catalog,
+    # reachable only from the drawing that recorded it. Its `price_tiyin` is the
+    # branch's price for the same size when there is one; that is what makes the
+    # SHORTAGE price itself, since the demand the quote sees is already
+    # `needed - brought`.
     customer_supplied: bool = False

@@ -12,7 +12,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { roleMessageKey, useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import { branchScopeHint, branchScopeOf } from '@/shared/app/branchScope'
-import { dekorTurLabel } from '@/shared/app/materialLabel'
+import { decorTypeLabel } from '@/shared/app/materialLabel'
 import {
   adminInitials,
   adminNavMetrics,
@@ -311,7 +311,7 @@ const adminMetrics = computed(() =>
   adminNavMetrics({
     workshops: admin.workshops.length,
     manufacturers: admin.manufacturers.length,
-    dekorlar: admin.dekorlar.length,
+    decors: admin.decors.length,
     failedJobs: admin.jobs.filter((job) => job.definition.last_result === 'failed').length,
     openErrors: admin.errors.filter((error) => error.status === 'open').length,
     operators: admin.platformUsers.filter((user) => user.status === 'active').length,
@@ -1164,13 +1164,14 @@ onBeforeUnmount(() => {
                   v-for="row in workshopSearch.results.materials"
                   :key="row.id"
                   class="workshop-search-result"
-                  :to="searchDestination('/workshop/catalog', row.dekor.nomi)"
+                  :to="searchDestination('/workshop/catalog', row.decor.name)"
                   @click="closeWorkshopSearch"
                 >
                   <span>
                     <strong>{{ row.label }}</strong>
                     <small>
-                      {{ row.dekor.manufacturer_name }} · {{ dekorTurLabel(row.dekor.tur) }}
+                      {{ row.decor.manufacturer_name }} ·
+                      {{ decorTypeLabel(row.decor_format.type) }}
                     </small>
                   </span>
                   <em>{{
@@ -1189,13 +1190,13 @@ onBeforeUnmount(() => {
                   v-for="item in workshopSearch.results.stock"
                   :key="item.id"
                   class="workshop-search-result"
-                  :to="searchDestination('/workshop/inventory', item.material.dekor.nomi)"
+                  :to="searchDestination('/workshop/inventory', item.material.decor.name)"
                   @click="closeWorkshopSearch"
                 >
                   <span>
                     <strong>{{ item.material.label }}</strong>
                     <small>
-                      {{ item.material.dekor.manufacturer_name }} · {{ item.display_unit }}
+                      {{ item.material.decor.manufacturer_name }} · {{ item.display_unit }}
                     </small>
                   </span>
                   <em :class="{ danger: item.is_low_stock }">

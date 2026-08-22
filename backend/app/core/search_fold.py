@@ -6,7 +6,7 @@ routinely typed as `yong'oq`, `yongoq`, `ёнғоқ` or `yongok`. A plain `ILIKE
 over the raw name finds none of those from each other.
 
 `fold` collapses all of them onto one ASCII key. The same function is applied
-to the stored `dekorlar.search_key` and to the incoming query, so search is a
+to the stored `decors.search_key` and to the incoming query, so search is a
 plain `ILIKE '%' || fold(query) || '%'` — no trigram index, no extension, no
 per-row Python.
 

@@ -204,7 +204,7 @@ onMounted(loadAll)
             {{ openErrors.reduce((sum, row) => sum + row.count_24h, 0) }}
           </div>
           <div class="admin-kpi-detail">
-            <span>{{ openErrors.length }} ta ochiq kod</span>
+            <span>{{ openErrors.length }} ta ochiq code</span>
             <span>monitor →</span>
           </div>
         </RouterLink>
@@ -403,8 +403,8 @@ onMounted(loadAll)
           >
             Ishlab chiqaruvchilar
           </RouterLink>
-          <RouterLink :to="rolePath('/admin/catalog/dekorlar')" class="mp-button mp-button-outline">
-            Dekorlar
+          <RouterLink :to="rolePath('/admin/catalog/decors')" class="mp-button mp-button-outline">
+            Decors
           </RouterLink>
           <RouterLink :to="rolePath('/admin/platform/users')" class="mp-button mp-button-outline">
             Adminlar . {{ overview?.platform_users_active ?? 0 }}

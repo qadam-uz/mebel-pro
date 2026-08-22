@@ -30,13 +30,13 @@ from app.modules.access.api import (
 )
 from app.modules.access.contracts import Client
 from app.modules.catalog.contracts import (
-    CUSTOMER_DEKOR_ID,
     BranchMaterial,
-    Dekor,
-    DekorType,
+    Decor,
+    DecorFormat,
+    DecorType,
     Manufacturer,
 )
-from app.modules.cutting.contracts import CuttingDraft, CuttingResult
+from app.modules.cutting.contracts import CustomerBoard, CuttingDraft, CuttingResult
 from app.modules.cutting.imports.common import draft_name_from_filename
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
@@ -413,14 +413,13 @@ async def create_customer_board(
     draft_id: uuid.UUID,
     payload: CustomerBoardCreateRequest,
 ) -> ClientCatalogMaterialOption:
-    """Record a sheet the walk-in carried in as a branch material of this draft.
+    """Record a sheet the walk-in carried in, against this drawing.
 
-    A board the branch does not sell still has to be a branch material: the
-    parts, the optimizer, `own_panel_counts`, the result snapshots and every
-    order item key on a branch-material id, and a drawing-level object would
-    force a second material identity through all of them. What makes this row
-    different is that the branch does not *carry* it — no stock row, excluded
-    from every catalog listing, reachable only from this drawing.
+    Its own table, not a branch material: the branch does not carry it, has no
+    stock of it and never offers it to anyone else. `own_panel_counts`, the
+    result snapshots and every order item still key on a plain material id, and
+    a board id is a UUID from a namespace disjoint from branch materials — so
+    nothing downstream had to learn a second identity.
 
     The sheet count the operator typed is written straight into the draft's
     own-material claim, because for a customer board the claim is not a guess:
@@ -440,46 +439,56 @@ async def create_customer_board(
         branch_id=draft.preferred_branch_id,
         permission=Permission.MANAGE_ORDERS,
     )
+    # The branch decides whether it takes a customer's sheets at all — the same
+    # switch that hides the own-material controls from the client. Staff typing
+    # a board in on a branch that opted out is almost always the wrong branch,
+    # and a claim the next draft read would silently clear is worse than a 409.
+    branch = await db.get(Branch, scope.branch_id)
+    if branch is None or not branch.own_material_allowed:
+        raise APIError(
+            "own_material_not_allowed",
+            "This branch does not accept customer-supplied material",
+            status_code=status.HTTP_409_CONFLICT,
+        )
 
     # The optimizer's panel convention: the long side is the length. Normalizing
     # here rather than rejecting means the operator can type the two numbers in
     # either order, which is how a tape measure reads them.
-    uzunlik, eni = max(payload.uzunlik_mm, payload.eni_mm), min(payload.uzunlik_mm, payload.eni_mm)
+    length, width = (
+        max(payload.length_mm, payload.width_mm),
+        min(payload.length_mm, payload.width_mm),
+    )
     substitute = await _branch_substitute(
         db,
         branch_id=scope.branch_id,
-        qalinlik_mm=payload.qalinlik_mm,
-        uzunlik_mm=uzunlik,
-        eni_mm=eni,
+        thickness_mm=payload.thickness_mm,
+        length_mm=length,
+        width_mm=width,
     )
 
-    board = BranchMaterial(
+    board = CustomerBoard(
+        workshop_id=scope.workshop_id,
         branch_id=scope.branch_id,
-        dekor_id=CUSTOMER_DEKOR_ID,
-        qalinlik_mm=payload.qalinlik_mm,
-        uzunlik_mm=uzunlik,
-        eni_mm=eni,
-        kromka_eni_mm=None,
-        # The substitute's price, or 0 when the branch carries nothing of this
-        # size. This one number is what makes the SHORTAGE price itself: the
-        # quote's demand is already `needed - brought`, so a per-sheet price on
-        # this row bills only the sheets the customer did not bring, and bills
-        # nothing when they brought enough.
+        name=payload.name.strip() or None if payload.name else None,
+        # The editor does not ask what the board is made of and should not: the
+        # customer rarely knows, and the layout only needs the size. `boshqa`
+        # prints as «List», which is what the seeded `Mijoz` decor carried and
+        # therefore what every existing board's label already reads.
+        type=DecorType.BOSHQA,
+        thickness_mm=payload.thickness_mm,
+        length_mm=length,
+        width_mm=width,
+        has_grain=payload.has_grain,
         price_tiyin=substitute[1] if substitute else 0,
-        min_stock=0,
-        status=MaterialStatus.ACTIVE,
-        customer_supplied=True,
-        nomi=payload.nomi.strip() or None if payload.nomi else None,
-        tolali=payload.tolali,
-        source_draft_id=draft.id,
         stock_material_id=substitute[0] if substitute else None,
+        source_draft_id=draft.id,
     )
     db.add(board)
     await db.flush()
 
-    # Deliberately no `ensure_stock_item_for_branch_material`: a stock row would
-    # surface the board on the Ombor screen, where `on_hand <= min_stock` reads
-    # 0/0 as "low stock" and pages the owner about a sheet the shop never owned.
+    # Deliberately no stock row: a board the shop never owned on the Ombor
+    # screen would read 0/0 as "low stock" and page the owner about it. A
+    # customer board is not stockable at all now — it is not a branch material.
     claim = dict(draft.own_panel_counts or {})
     claim[str(board.id)] = payload.sheets
     draft.own_panel_counts = claim
@@ -495,10 +504,10 @@ async def create_customer_board(
         workshop_id=scope.workshop_id,
         summary="Recorded a customer-supplied board",
         details={
-            "branch_material_id": str(board.id),
-            "uzunlik_mm": uzunlik,
-            "eni_mm": eni,
-            "qalinlik_mm": str(payload.qalinlik_mm),
+            "customer_board_id": str(board.id),
+            "length_mm": length,
+            "width_mm": width,
+            "thickness_mm": str(payload.thickness_mm),
             "sheets": payload.sheets,
             "substitute_id": str(board.stock_material_id) if board.stock_material_id else None,
         },
@@ -528,9 +537,9 @@ async def _branch_substitute(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    qalinlik_mm: Decimal,
-    uzunlik_mm: int,
-    eni_mm: int,
+    thickness_mm: Decimal,
+    length_mm: int,
+    width_mm: int,
 ) -> tuple[uuid.UUID, int] | None:
     """The branch's own sheet of this exact size, to sell the shortfall from.
 
@@ -546,18 +555,18 @@ async def _branch_substitute(
     row = (
         await db.execute(
             select(BranchMaterial.id, BranchMaterial.price_tiyin)
-            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+            .join(Decor, Decor.id == DecorFormat.decor_id)
+            .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
             .where(
                 BranchMaterial.branch_id == branch_id,
-                BranchMaterial.customer_supplied.is_(False),
                 BranchMaterial.status == MaterialStatus.ACTIVE,
-                Dekor.holat == MaterialStatus.ACTIVE,
+                Decor.status == MaterialStatus.ACTIVE,
                 Manufacturer.status == MaterialStatus.ACTIVE,
-                Dekor.tur != DekorType.KROMKA,
-                BranchMaterial.qalinlik_mm == qalinlik_mm,
-                BranchMaterial.uzunlik_mm == uzunlik_mm,
-                BranchMaterial.eni_mm == eni_mm,
+                DecorFormat.type != DecorType.KROMKA,
+                DecorFormat.thickness_mm == thickness_mm,
+                DecorFormat.length_mm == length_mm,
+                DecorFormat.width_mm == width_mm,
                 BranchMaterial.price_tiyin > 0,
             )
             .order_by(BranchMaterial.price_tiyin, BranchMaterial.id)

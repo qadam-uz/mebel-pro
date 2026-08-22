@@ -28,6 +28,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
+from app.core.money import format_som
 from app.core.pdf import FONT_BOLD, FONT_REGULAR, register_pdf_fonts
 from app.modules.finance.schemas import DebtStatementResponse, DebtStatementRow
 
@@ -510,8 +511,7 @@ def _direction(balance: int) -> str:
 def _money(tiyin: int) -> str:
     """So'm with space-grouped thousands. The unit is stated once, in the header."""
 
-    som = round(tiyin / 100)
-    return f"{som:,}".replace(",", " ")
+    return format_som(tiyin)
 
 
 def _format_date(value: date) -> str:

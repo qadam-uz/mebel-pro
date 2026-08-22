@@ -94,44 +94,51 @@ async def _staff_access(
 async def _carried_material(
     client: AsyncClient, platform_access: str, owner_access: str, branch_id: uuid.UUID
 ) -> str:
-    """Create a dekor and have the branch carry it in one format.
+    """Walk the chain: manufacturer → decor → platform format → branch row.
+
+    The platform owns the pattern and the concrete product; the branch only
+    decides to carry that product at its own price.
 
     Returns the BRANCH material id — the id an invoice line, a stock row and an
-    order item all point at since the reshape.
+    order item all point at.
     """
     manufacturer = await client.post(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(platform_access),
         json={"name": f"Egger {uuid.uuid4().hex[:6]}", "country": "AT"},
     )
-    dekor = await client.post(
-        "/api/v1/platform/catalog/dekorlar",
+    decor = await client.post(
+        "/api/v1/platform/catalog/decors",
         headers=_auth(platform_access),
         json={
             "manufacturer_id": manufacturer.json()["id"],
-            "tur": "ldsp",
-            "kod": f"H{uuid.uuid4().hex[:4]}",
-            "nomi": "Sonoma oak",
-            "tolali": True,
+            "code": f"H{uuid.uuid4().hex[:4]}",
+            "name": "Sonoma oak",
+            "has_grain": True,
         },
     )
-    assert dekor.status_code == 201, dekor.text
+    assert decor.status_code == 201, decor.text
+    decor_format = await client.post(
+        f"/api/v1/platform/catalog/decors/{decor.json()['id']}/formats",
+        headers=_auth(platform_access),
+        json={
+            "type": "ldsp",
+            "thickness_mm": "18",
+            "length_mm": 2750,
+            "width_mm": 1830,
+            "finished_sides": 2,
+        },
+    )
+    assert decor_format.status_code == 201, decor_format.text
     added = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
             "items": [
                 {
-                    "dekor_id": dekor.json()["id"],
-                    "formats": [
-                        {
-                            "qalinlik_mm": "18",
-                            "uzunlik_mm": 2750,
-                            "eni_mm": 1830,
-                            "price_tiyin": 60_000_000,
-                            "min_stock": 0,
-                        }
-                    ],
+                    "decor_format_id": decor_format.json()["id"],
+                    "price_tiyin": 60_000_000,
+                    "min_stock": 0,
                 }
             ],
         },

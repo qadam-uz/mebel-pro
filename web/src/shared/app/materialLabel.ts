@@ -3,7 +3,7 @@
  * of `backend/app/core/material_label.py`.
  *
  * Most reshaped responses hand the web a server-composed `label`
- * (`DekorResponse.label`, `BranchMaterialResponse.label`, the `material_name` /
+ * (`DecorResponse.label`, `BranchMaterialResponse.label`, the `material_name` /
  * `material_label` fields on sales, finance and production lines). **Prefer that
  * label wherever it exists.** This module exists for the two places it does not:
  *
@@ -14,29 +14,42 @@
  *    `order_items.material_snapshot`) are raw dicts, never labelled by the server
  *    on the read path.
  *
- * **Two snapshot vocabularies are read, deliberately.** The catalog reshape
- * renamed the snapshot keys (`type`→`tur`, `decor_code`→`kod`, `color`→`nomi`,
- * `thickness_mm`→`qalinlik_mm`, `panel_length_mm`→`uzunlik_mm`,
- * `panel_width_mm`→`eni_mm`, `edge_width_mm`→`kromka_eni_mm`, and `name` was
- * dropped), but those two columns are frozen history and are NOT rewritten by the
- * migration — that is exactly what protects old orders. So the database holds both
- * vocabularies forever and every reader here accepts both: new key first, legacy
- * key as fallback. Dropping the legacy reads would silently render every
- * pre-reshape order, production card and result sheet as an 8-character id
- * fragment, with no error anywhere.
+ * **Three snapshot vocabularies are read, deliberately** — the mirror of the
+ * table in `material_label.py`. Snapshots are frozen history and are never
+ * rewritten by a migration, so the database holds every vocabulary the app has
+ * ever written, forever:
  *
- * One deliberate divergence from the backend: the tur prefix goes through i18n
+ * | slot         | 1. current      | 2. Uzbek        | 3. pre-reshape    |
+ * |--------------|-----------------|-----------------|-------------------|
+ * | substrate    | `type`          | `tur`           | `type`            |
+ * | decor code   | `code`          | `kod`           | `decor_code`      |
+ * | decor name   | `name`          | `nomi`          | `color`           |
+ * | thickness    | `thickness_mm`  | `qalinlik_mm`   | `thickness_mm`    |
+ * | sheet length | `length_mm`     | `uzunlik_mm`    | `panel_length_mm` |
+ * | sheet width  | `width_mm`      | `eni_mm`        | `panel_width_mm`  |
+ * | tape width   | `tape_width_mm` | `kromka_eni_mm` | `edge_width_mm`   |
+ * | finished     | `finished_sides`| —               | —                 |
+ *
+ * `name` collides: current snapshots put the DECOR name there, pre-reshape ones
+ * put the whole generated material name there. So the decor-name slot reads
+ * `nomi` and `color` BEFORE `name` — neither can occur in a current snapshot, so
+ * a current one still resolves to `name`, while a pre-reshape one keeps
+ * resolving to `color` and leaves its generated `name` to the identity slot,
+ * which is where it always rendered. Dropping any of this would silently render
+ * old orders as an 8-character id fragment, with no error anywhere.
+ *
+ * One deliberate divergence from the backend: the type prefix goes through i18n
  * (`cutting.panelType.*`), so a `ru` reader sees `ЛДСП` where the PDF prints
  * `LDSP`. That divergence predates the reshape and is preserved on purpose —
  * these keys render on screen, the Python module renders in print.
  */
 
 import { translate } from '@/shared/i18n'
-import type { DekorType } from '@/shared/stores/admin'
+import type { DecorType } from '@/shared/stores/admin'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
-/** Every `tur` a dekor can have, in the backend enum's order. */
-export const DEKOR_TYPES = [
+/** Every `type` a decor can have, in the backend enum's order. */
+export const DECOR_TYPES = [
   'ldsp',
   'dsp',
   'mdf',
@@ -44,31 +57,53 @@ export const DEKOR_TYPES = [
   'yogoch',
   'kromka',
   'boshqa',
-] as const satisfies readonly DekorType[]
+] as const satisfies readonly DecorType[]
 
 /**
- * Legacy `panel_material_type` values that never became a `tur`. They only ever
+ * Legacy `panel_material_type` values that never became a `type`. They only ever
  * appear inside pre-reshape snapshots — which is precisely why they must keep
  * resolving: `cutting.panelType.plywood` and friends are not dead keys.
  */
 export const LEGACY_PANEL_TYPES = ['plywood', 'natural_wood', 'other'] as const
 
-const LABELLED_TYPES: readonly string[] = [...DEKOR_TYPES, ...LEGACY_PANEL_TYPES]
+const LABELLED_TYPES: readonly string[] = [...DECOR_TYPES, ...LEGACY_PANEL_TYPES]
 
 /** True when the format is a tape (thickness × tape width, no length × width). */
-export function isTape(tur: DekorType | null | undefined): boolean {
-  return tur === 'kromka'
+export function isTape(type: DecorType | null | undefined): boolean {
+  return type === 'kromka'
 }
 
 /**
- * Localized `tur` label — `LDSP`, `MDF`, `Fanera`, `Yog'och`, `Kromka`, `List`.
+ * Localized `type` label — `LDSP`, `MDF`, `Fanera`, `Yog'och`, `Kromka`, `List`.
  * A value the catalog does not know is echoed verbatim rather than swallowed, so
  * a future enum member is visible instead of blank.
  */
-export function dekorTurLabel(tur: string | null | undefined): string {
-  const value = (tur ?? '').trim()
+export function decorTypeLabel(type: string | null | undefined): string {
+  const value = (type ?? '').trim()
   if (!value) return ''
   return LABELLED_TYPES.includes(value) ? translate(`cutting.panelType.${value}`) : value
+}
+
+/**
+ * The `type` choices a **filter** offers, one per distinct label.
+ *
+ * `ldsp` and `dsp` are two enum members with one name — the workshop calls both
+ * «LDSP» — so a filter listing every wire value shows the same word twice and
+ * makes the reader guess which of the two is theirs. Grouping by label keeps
+ * every decor reachable (each option carries all the wire values behind its
+ * name, for an `in_` filter) without ever printing a choice twice.
+ *
+ * A function, not a constant: the labels are translated.
+ */
+export function decorTypeFilterGroups(): Array<{ label: string; types: DecorType[] }> {
+  const groups = new Map<string, DecorType[]>()
+  for (const type of DECOR_TYPES) {
+    const label = decorTypeLabel(type)
+    const existing = groups.get(label)
+    if (existing) existing.push(type)
+    else groups.set(label, [type])
+  }
+  return [...groups].map(([label, types]) => ({ label, types }))
 }
 
 /**
@@ -112,19 +147,45 @@ export function snapshotInt(value: unknown, fallback: number): number {
 /**
  * The name slot of the base: decor code first, then whatever names exist. `name`
  * is the legacy server-generated column, gone from new snapshots; it is consulted
- * before `nomi` so a historical snapshot keeps rendering the string it always did.
+ * before `name` so a historical snapshot keeps rendering the string it always did.
  */
-function identity(snapshot: MaterialSnapshot, nomi: string): string {
-  return snapshotText(snapshot, 'kod', 'decor_code') || snapshotText(snapshot, 'name') || nomi
+function identity(snapshot: MaterialSnapshot, decorName: string): string {
+  return (
+    snapshotText(snapshot, 'code', 'kod', 'decor_code') ||
+    snapshotText(snapshot, 'name') ||
+    decorName
+  )
+}
+
+/**
+ * The decor's own name — `Sonoma eman`, never the whole generated string. See
+ * the `name` collision note in the module docstring for why `nomi`/`color` are
+ * consulted first.
+ */
+function decorName(snapshot: MaterialSnapshot): string {
+  return snapshotText(snapshot, 'nomi', 'color', 'name')
+}
+
+/**
+ * «1 tomonlama», and only for a one-sided board. Two-sided is the norm; saying
+ * so on every row would be noise, while one-sided is the exception a buyer has
+ * to see. Mirrors `_ONE_SIDED_LABEL`.
+ */
+export function finishedSidesLabel(value: unknown): string {
+  const sides = snapshotInt(value, 0)
+  return sides === 1 || sides === 2 ? translate(`catalog.finishedSides.${sides}`) : ''
 }
 
 /** Short chip text: decor code, then colour/name, then a clipped legacy name. */
 export function snapshotShortLabel(snapshot: MaterialSnapshot): string {
-  const kod = snapshotText(snapshot, 'kod', 'decor_code')
-  if (kod) return kod
-  const nomi = snapshotText(snapshot, 'nomi', 'color')
-  if (nomi) return nomi
-  const name = snapshotText(snapshot, 'name')
+  const code = snapshotText(snapshot, 'code', 'kod', 'decor_code')
+  if (code) return code
+  // Clipped: this is chip text with a fixed width. A pre-reshape snapshot puts
+  // the whole GENERATED material name in `name` ("LDSP Egger H1334 Sonoma"),
+  // which is what the clip was written for; a current snapshot puts the decor
+  // name there, and a decor name long enough to hit 18 characters needs the
+  // same treatment for the same reason.
+  const name = decorName(snapshot) || snapshotText(snapshot, 'name')
   return name ? name.slice(0, 18) : translate('cutting.material.fallback')
 }
 
@@ -136,14 +197,19 @@ export function snapshotMaterialLabel(
   snapshot: MaterialSnapshot,
   fallback = translate('cutting.material.fallback'),
 ): string {
-  const type = dekorTurLabel(snapshotText(snapshot, 'tur', 'type'))
+  const type = decorTypeLabel(snapshotText(snapshot, 'type', 'tur'))
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
-  const nomi = snapshotText(snapshot, 'nomi', 'color')
-  const thickness = snapshotText(snapshot, 'qalinlik_mm', 'thickness_mm')
-  const length = snapshotInt(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
-  const width = snapshotInt(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
+  const name = decorName(snapshot)
+  const thickness = snapshotText(snapshot, 'thickness_mm', 'qalinlik_mm')
+  const length = snapshotInt(
+    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
+    0,
+  )
+  const width = snapshotInt(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const oneSided =
+    snapshotInt(snapshotValue(snapshot, 'finished_sides'), 0) === 1 ? finishedSidesLabel(1) : ''
 
-  const base = [type, manufacturer, identity(snapshot, nomi)].filter(Boolean).join(' ') || fallback
+  const base = [type, manufacturer, identity(snapshot, name)].filter(Boolean).join(' ') || fallback
   const dimensions =
     length > 0 && width > 0
       ? `${length}×${width}${thickness ? `×${formatMm(thickness)}` : ''} mm`
@@ -152,8 +218,9 @@ export function snapshotMaterialLabel(
         : ''
   const details = [
     // Suppressed when the base already says it — «Egger Sonoma eman · Sonoma eman».
-    nomi && !base.toLowerCase().includes(nomi.toLowerCase()) ? nomi : '',
+    name && !base.toLowerCase().includes(name.toLowerCase()) ? name : '',
     dimensions,
+    oneSided,
   ].filter(Boolean)
   return [base, ...details].join(' · ')
 }
@@ -168,14 +235,17 @@ export function snapshotEdgeLabel(
   fallback = translate('cutting.edge.label'),
 ): string {
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
-  const nomi = snapshotText(snapshot, 'nomi', 'color')
-  const thickness = snapshotText(snapshot, 'qalinlik_mm', 'thickness_mm')
-  const width = snapshotInt(snapshotValue(snapshot, 'kromka_eni_mm', 'edge_width_mm'), 0)
+  const name = decorName(snapshot)
+  const thickness = snapshotText(snapshot, 'thickness_mm', 'qalinlik_mm')
+  const width = snapshotInt(
+    snapshotValue(snapshot, 'tape_width_mm', 'kromka_eni_mm', 'edge_width_mm'),
+    0,
+  )
 
-  const base = [manufacturer, identity(snapshot, nomi)].filter(Boolean).join(' ') || fallback
-  // A dekor without a `kod` puts `nomi` in the base, so the detail slot must
+  const base = [manufacturer, identity(snapshot, name)].filter(Boolean).join(' ') || fallback
+  // A decor without a `code` puts `name` in the base, so the detail slot must
   // suppress it the same way snapshotMaterialLabel does.
-  const detail = nomi && !base.toLowerCase().includes(nomi.toLowerCase()) ? nomi : ''
+  const detail = name && !base.toLowerCase().includes(name.toLowerCase()) ? name : ''
   const size =
     thickness && width > 0
       ? `${formatMm(thickness)}×${width} mm`
@@ -193,14 +263,14 @@ export function snapshotEdgeLabel(
 export function optionSnapshot(option: ClientCatalogMaterialOption): Record<string, unknown> {
   return {
     manufacturer_name: option.manufacturer_name,
-    tur: option.tur,
-    kod: option.kod,
-    nomi: option.nomi,
-    tolali: option.tolali,
-    qalinlik_mm: option.qalinlik_mm,
-    uzunlik_mm: option.uzunlik_mm,
-    eni_mm: option.eni_mm,
-    kromka_eni_mm: option.kromka_eni_mm,
+    type: option.type,
+    code: option.code,
+    name: option.name,
+    has_grain: option.has_grain,
+    thickness_mm: option.thickness_mm,
+    length_mm: option.length_mm,
+    width_mm: option.width_mm,
+    tape_width_mm: option.tape_width_mm,
   }
 }
 
@@ -216,7 +286,7 @@ export function materialOptionLabel(
   if (!option) return fallback ?? translate('cutting.material.none')
   const snapshot = optionSnapshot(option)
   const base = fallback ?? option.id.slice(0, 8)
-  return isTape(option.tur)
+  return isTape(option.type)
     ? snapshotEdgeLabel(snapshot, base)
     : snapshotMaterialLabel(snapshot, base)
 }
@@ -234,8 +304,8 @@ export function materialIdentityLabel(
   fallback?: string,
 ): string {
   if (!option) return fallback ?? translate('cutting.material.none')
-  const parts = [option.manufacturer_name, option.kod, option.nomi].filter((part): part is string =>
-    Boolean(part && part.trim()),
+  const parts = [option.manufacturer_name, option.code, option.name].filter(
+    (part): part is string => Boolean(part && part.trim()),
   )
   // Spaces, not the ` · ` the canonical label uses: with the format stripped out
   // these three read as one name — `Egger H1145 Oq daraxt` — and dots between

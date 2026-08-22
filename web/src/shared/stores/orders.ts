@@ -74,9 +74,14 @@ export interface EdgePriceLine {
 
 export interface OrderItem {
   id: string
-  // Renamed with the reshape (OrderItemResponse). The sibling price/warning/demand
-  // schemas in this file deliberately kept `material_id` — do NOT sweep them.
-  branch_material_id: string
+  // The line's material key: a branch material id, or — for a sheet the client
+  // brought in — a customer board id. Two disjoint UUID namespaces, one opaque
+  // key, exactly like `material_snapshots` and `own_panel_counts`. It was
+  // `branch_material_id` while customer boards WERE branch materials.
+  material_id: string
+  // Which namespace `material_id` came from — the one fact the id cannot tell
+  // you on its own.
+  customer_supplied: boolean
   material_source: MaterialSource
   // Frozen history: keeps its ORIGINAL key vocabulary, never rewritten by the
   // migration. Read it through the dual-vocabulary helpers in app/materialLabel.

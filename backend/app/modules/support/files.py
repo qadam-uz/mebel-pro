@@ -30,7 +30,7 @@ from app.models.enums import (
     WorkshopStatus,
 )
 from app.modules.access.api import can_access_branch
-from app.modules.catalog.contracts import BranchMaterial, Dekor
+from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat
 from app.modules.finance.contracts import Expense, Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.support.contracts import File as StoredFile
@@ -336,13 +336,13 @@ async def get_file_for_read(
     if row.entity_type is None and _is_self_uploaded(row, principal):
         return row
     # The stored literal stays `"material"` even though the image now hangs off a
-    # dekor: the reshape re-pointed `files.entity_id` at the dekor id but left the
+    # decor: the reshape re-pointed `files.entity_id` at the decor id but left the
     # tag alone on purpose. Rewriting the tag would 403 every historical catalog
     # photo for everyone but platform admins, with nothing to type-check it.
     if (
         row.entity_type == "material"
         and row.entity_id is not None
-        and await _can_read_dekor_file(db, principal=principal, dekor_id=row.entity_id)
+        and await _can_read_decor_file(db, principal=principal, decor_id=row.entity_id)
     ):
         return row
     if (
@@ -404,38 +404,35 @@ async def _detach_file_if_current(
         await db.flush()
 
 
-async def _can_read_dekor_file(
+async def _can_read_decor_file(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
-    dekor_id: uuid.UUID,
+    decor_id: uuid.UUID,
 ) -> bool:
-    """Catalog-image visibility, now anchored on the dekor.
+    """Catalog-image visibility, anchored on the decor.
 
     One photo serves every format of a decor, so the reachability test is
     "does any branch this principal can see carry *some* format of this
-    dekor" — a `branch_materials.dekor_id` join, one hop shorter than the old
-    per-material one.
+    decor" — a branch_material -> decor_format -> decor join.
     """
     if principal.principal_type is AuthenticatedPrincipalType.PLATFORM_USER:
         return True
-    dekor = await db.get(Dekor, dekor_id)
-    if dekor is None:
+    decor = await db.get(Decor, decor_id)
+    if decor is None:
         return False
     if principal.principal_type is AuthenticatedPrincipalType.CLIENT:
-        if dekor.holat is not MaterialStatus.ACTIVE:
+        if decor.status is not MaterialStatus.ACTIVE:
             return False
         return (
             await db.scalar(
                 select(BranchMaterial.id)
+                .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
                 .join(Branch, Branch.id == BranchMaterial.branch_id)
                 .join(Workshop, Workshop.id == Branch.workshop_id)
                 .where(
-                    BranchMaterial.dekor_id == dekor_id,
+                    DecorFormat.decor_id == decor_id,
                     BranchMaterial.status == MaterialStatus.ACTIVE,
-                    # Otherwise one walk-in board would make every branch a
-                    # "carrier" of the shared Mijoz dekor and grant its photo.
-                    BranchMaterial.customer_supplied.is_(False),
                     Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]),
                     Workshop.status == WorkshopStatus.ACTIVE,
                 )
@@ -451,10 +448,10 @@ async def _can_read_dekor_file(
         await db.execute(
             select(Branch)
             .join(BranchMaterial, BranchMaterial.branch_id == Branch.id)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
             .where(
-                BranchMaterial.dekor_id == dekor_id,
+                DecorFormat.decor_id == decor_id,
                 Branch.workshop_id == principal.workshop_id,
-                BranchMaterial.customer_supplied.is_(False),
             )
         )
     ).scalars()

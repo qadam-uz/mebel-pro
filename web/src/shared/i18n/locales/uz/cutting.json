@@ -31,7 +31,7 @@
   },
   "panelType": {
     "ldsp": "LDSP",
-    "dsp": "LDSP",
+    "dsp": "DSP",
     "mdf": "MDF",
     "fanera": "Fanera",
     "yogoch": "Yog'och",
@@ -68,7 +68,8 @@
     "searchLabel": "Material qidirish",
     "searchPlaceholder": "Dekor nomi yoki kodi — Sonoma, H1145, сонома",
     "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
-    "pickerEmpty": "Bu filialda material yo‘q."
+    "pickerEmpty": "Bu filialda material yo‘q.",
+    "discontinued": "Ishlab chiqarishdan chiqqan"
   },
   "customerBoard": {
     "modeLabel": "Material manbasi",

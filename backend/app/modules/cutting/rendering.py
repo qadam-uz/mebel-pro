@@ -606,13 +606,13 @@ def _material_snapshot(result: CuttingResultResponse, material_id: object) -> di
 
 
 def _panel_length(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.branch_material_id)
-    return _int_snapshot(_snapshot_size(snapshot, "uzunlik_mm", "panel_length_mm"), fallback=1000)
+    snapshot = _material_snapshot(result, panel.material_id)
+    return _int_snapshot(_snapshot_size(snapshot, "length_mm", "panel_length_mm"), fallback=1000)
 
 
 def _panel_width(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.branch_material_id)
-    return _int_snapshot(_snapshot_size(snapshot, "eni_mm", "panel_width_mm"), fallback=700)
+    snapshot = _material_snapshot(result, panel.material_id)
+    return _int_snapshot(_snapshot_size(snapshot, "width_mm", "panel_width_mm"), fallback=700)
 
 
 def _snapshot_size(snapshot: dict[str, object], key: str, legacy_key: str) -> object:

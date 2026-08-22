@@ -104,14 +104,14 @@ async def _inventory_staff(
 
 
 async def _material_named(
-    db: AsyncSession, *, branch_id: uuid.UUID, maker: str, nomi: str
+    db: AsyncSession, *, branch_id: uuid.UUID, maker: str, name: str
 ) -> MaterialFixture:
     """A carried panel whose manufacturer and decor names are both pinned."""
     return await seed_panel_material(
         db,
         branch_id=branch_id,
         manufacturer=await seed_manufacturer(db, name=f"{maker} {uuid.uuid4().hex[:6]}"),
-        nomi=nomi,
+        name=name,
         price_tiyin=1,
     )
 
@@ -120,7 +120,7 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
     workshop, branch, _ = await seed_workshop_with_owner(db_session)
     staff = await _inventory_staff(db_session, workshop_id=workshop.id, branch_id=branch.id)
     material = await seed_panel_material(
-        db_session, branch_id=branch.id, nomi="Zero stock panel", price_tiyin=1
+        db_session, branch_id=branch.id, name="Zero stock panel", price_tiyin=1
     )
     item = await _stock_item(
         db_session, branch_id=branch.id, branch_material_id=material.id, on_hand=5
@@ -196,7 +196,7 @@ async def test_consume_works_for_a_material_dropped_from_the_branch_catalog(
     material = await seed_panel_material(
         db_session,
         branch_id=branch.id,
-        nomi="Unlisted panel",
+        name="Unlisted panel",
         price_tiyin=1,
         status=MaterialStatus.INACTIVE,
     )
@@ -248,7 +248,7 @@ async def test_consume_refuses_another_branchs_material(db_session: AsyncSession
 async def test_manual_stock_out_below_zero_is_still_rejected(db_session: AsyncSession) -> None:
     workshop, branch, owner = await seed_workshop_with_owner(db_session)
     material = await seed_panel_material(
-        db_session, branch_id=branch.id, nomi="Guarded panel", price_tiyin=1
+        db_session, branch_id=branch.id, name="Guarded panel", price_tiyin=1
     )
     item = await _stock_item(
         db_session, branch_id=branch.id, branch_material_id=material.id, on_hand=3
@@ -278,8 +278,8 @@ async def test_negative_rows_sort_first_and_count_against_stock_value(
     # Ordering is by manufacturer, then decor name, then thickness — there is no
     # stored material name to sort on any more. Both names put the healthy row
     # ahead, so only the negative-first rule can pull the other one to the top.
-    healthy = await _material_named(db_session, branch_id=branch.id, maker="Aaa", nomi="Aaa panel")
-    negative = await _material_named(db_session, branch_id=branch.id, maker="Zzz", nomi="Zzz panel")
+    healthy = await _material_named(db_session, branch_id=branch.id, maker="Aaa", name="Aaa panel")
+    negative = await _material_named(db_session, branch_id=branch.id, maker="Zzz", name="Zzz panel")
     await _stock_item(db_session, branch_id=branch.id, branch_material_id=healthy.id, on_hand=4)
     await _stock_item(db_session, branch_id=branch.id, branch_material_id=negative.id, on_hand=-2)
     principal = _owner_principal(owner_id=owner.id, workshop_id=workshop.id)

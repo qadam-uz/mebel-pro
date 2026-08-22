@@ -354,5 +354,20 @@
     "missingRates": "Bu filialda kesish/kromka narxi belgilanmagan — avval rahbar narxlarni kiritishi kerak.",
     "popupBlocked": "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering.",
     "pdfFailed": "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
+  },
+  "payment": {
+    "action": "To'lov qabul qilish",
+    "title": "Buyurtmaga to'lov",
+    "amount": "Summa (so'm)",
+    "method": "To'lov usuli",
+    "date": "Sana",
+    "note": "Izoh",
+    "submit": "To'lovni yozish",
+    "saving": "Yozilmoqda",
+    "cancel": "Bekor",
+    "saved": "To'lov yozildi.",
+    "amountInvalid": "Summani to'g'ri kiriting.",
+    "overBalance": "Summa qoldiqdan katta bo'lmasin.",
+    "failed": "To'lov yozilmadi. Qayta urinib ko'ring."
   }
 }

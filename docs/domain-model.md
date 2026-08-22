@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-22
 order: 45
 ---
 
@@ -22,20 +22,23 @@ per bounded context.
 - **Client** — the workshop's customer; global to the platform, picks a branch per order.
   Optionally carries a preferred branch that seeds new cutting drafts.
 - **Workshop** — one furniture-cutting business; the tenant. Has many branches.
-- **Branch** — a physical location of a workshop. Owns its stock, its prices, and the
-  formats it carries of the platform's decors.
+- **Branch** — a physical location of a workshop. Owns its stock, its prices, and which of
+  the platform's decor formats it carries.
 - **Manufacturer** — a platform-wide master record naming who made a decor (Egger,
-  Kronospan, Rehau, …). Dekor identity includes the manufacturer.
-- **Dekor** — a platform-wide master record of one decor: its manufacturer, its `tur`
-  (`ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`), its code, its name,
-  its photo, whether it has a grain. **Identity only — no thickness, no size, no price.**
-- **Branch material** — a dekor in one concrete format (thickness plus sheet size, or
-  plus tape width) carried by one branch, at that branch's price. **This is "the
-  material"**: stock, cutting sheets and order lines all point here. The platform cannot
-  know which formats a workshop's supplier sells, so the branch owns them. A
-  `customer_supplied` branch material is the exception that proves the shape: a walk-in's
-  own sheet, excluded from every catalog and portal listing — the branch cuts it but does
-  not sell it (fields: [`ref/entities/catalog.md`](ref/entities/catalog.md)).
+  Kronospan, Rehau, …). Decor identity includes the manufacturer.
+- **Decor** — a platform-wide master record of one decor **pattern**: its manufacturer, its
+  code, its name, its photo, whether it has a grain. On screen the word stays «Dekor».
+  **Identity only — no substrate, no thickness, no size, no price.**
+- **Decor format** — one concrete product of a decor: substrate (`ldsp` / `dsp` / `mdf` /
+  `fanera` / `yogoch` / `kromka` / `boshqa`), thickness, sheet size or tape width, and how
+  many faces are finished. **Platform-owned and immutable** — a wrong one is deactivated and
+  replaced, never edited — so one physical product has one id across every workshop.
+- **Branch material** — one branch's decision to carry one format: its price, its low-stock
+  threshold, its own on/off switch. **This is "the material"**: stock, cutting sheets and
+  order lines all point here.
+- **Customer board** — a sheet a walk-in carried in, recorded on the drawing that cuts it.
+  Not a branch material and in no catalog: the branch cuts it and bills only the shortfall
+  (fields: [`ref/entities/cutting.md`](ref/entities/cutting.md)).
 - **Stock item** — a branch's on-hand balance for one branch material. **Supplier** — where
   stock arrived from (lightweight, added on demand; distinct from manufacturer).
   **Supplier invoice** — one arrival document grouping the stock-ins that came in on it,

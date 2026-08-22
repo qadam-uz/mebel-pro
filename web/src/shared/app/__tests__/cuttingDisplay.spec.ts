@@ -15,17 +15,17 @@ function material(
 ): ClientCatalogMaterialOption {
   return {
     id: 'm1',
-    tur: 'kromka',
+    type: 'kromka',
     manufacturer_id: 'mf1',
     manufacturer_name: 'Egger Group',
-    kod: 'H1334',
-    nomi: 'White',
-    tolali: false,
+    code: 'H1334',
+    name: 'White',
+    has_grain: false,
     image_file_id: null,
-    qalinlik_mm: '0.4',
-    uzunlik_mm: null,
-    eni_mm: null,
-    kromka_eni_mm: 19,
+    thickness_mm: '0.4',
+    length_mm: null,
+    width_mm: null,
+    tape_width_mm: 19,
     price_tiyin: 0,
     price_unset: true,
     display_unit: 'm',
@@ -82,9 +82,9 @@ describe('edgeTinyLabel', () => {
 describe('edgeSearchText', () => {
   // Kept, not deleted: this narrows the rows already loaded into the open edge
   // picker (a keyboard jump), it is not the catalog search. `name` left the blob
-  // with the column; `kod` and `nomi` carry the signal now.
+  // with the column; `code` and `name` carry the signal now.
   it('lower-cases a searchable blob of the material fields', () => {
     expect(edgeSearchText(material())).toBe('egger group white h1334 0.4 19')
-    expect(edgeSearchText(material({ kod: null }))).toBe('egger group white  0.4 19')
+    expect(edgeSearchText(material({ code: null }))).toBe('egger group white  0.4 19')
   })
 })

@@ -21,7 +21,7 @@ from app.modules.access.contracts import Client
 # One writer for the label and its snapshot vocabulary: catalog owns both, and
 # a second copy here is how `18` and `18.0000000000` reach two endpoints.
 from app.modules.catalog.api import branch_material_label, normalize_mm
-from app.modules.catalog.contracts import BranchMaterial, Dekor, Manufacturer
+from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer
 from app.modules.client_portal.schemas import (
     ClientBranchMaterialPreview,
     ClientBranchMaterialResponse,
@@ -207,7 +207,7 @@ async def _branch_material_previews(
 ) -> tuple[dict[uuid.UUID, list[ClientBranchMaterialPreview]], dict[uuid.UUID, int]]:
     """Top-N carried-material previews + total counts for many branches.
 
-    One dekor now fans out to one row per format a branch carries, so both the
+    One decor now fans out to one row per format a branch carries, so both the
     preview and `materials_total` count *formats*, not decors — a branch with
     one decor in three thicknesses reports three.
 
@@ -225,23 +225,25 @@ async def _branch_material_previews(
     if not branch_ids:
         return previews, totals
 
-    def _visible() -> Select[tuple[BranchMaterial, Dekor, Manufacturer]]:
+    def _visible() -> Select[tuple[BranchMaterial, DecorFormat, Decor, Manufacturer]]:
         return (
-            select(BranchMaterial, Dekor, Manufacturer)
-            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+            .join(Decor, Decor.id == DecorFormat.decor_id)
+            .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
             .where(
                 BranchMaterial.branch_id.in_(branch_ids),
                 BranchMaterial.status == MaterialStatus.ACTIVE,
-                # A customer's board is their property, not the branch shelf.
-                # Both this preview and `client_branch_materials` carry the
-                # predicate, so the "+N more" count still agrees with its list.
-                BranchMaterial.customer_supplied.is_(False),
                 # No price gate — kept identical to `client_branch_materials` so
                 # this preview's "+N more" count can never disagree with the
                 # list it links to.
-                Dekor.holat == MaterialStatus.ACTIVE,
+                Decor.status == MaterialStatus.ACTIVE,
                 Manufacturer.status == MaterialStatus.ACTIVE,
+                # Deliberately NOT gated on the FORMAT's status: a format the
+                # maker has discontinued is still on the branch's shelf and
+                # still sellable down to the last sheet (catalog-inventory.md,
+                # "Three levels of off"). The branch retires its own row when
+                # the shelf is empty; that is level three and it IS gated above.
             )
         )
 
@@ -258,29 +260,30 @@ async def _branch_material_previews(
             func.row_number()
             .over(
                 partition_by=BranchMaterial.branch_id,
-                order_by=(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm),
+                order_by=(Manufacturer.name, Decor.name, DecorFormat.thickness_mm),
             )
             .label("rank")
         )
         .subquery()
     )
     top = aliased(BranchMaterial, ranked)
-    top_dekor = aliased(Dekor, ranked)
+    top_format = aliased(DecorFormat, ranked)
+    top_decor = aliased(Decor, ranked)
     top_manufacturer = aliased(Manufacturer, ranked)
     rows = await db.execute(
-        select(top, top_dekor, top_manufacturer)
+        select(top, top_format, top_decor, top_manufacturer)
         .select_from(ranked)
         .where(ranked.c.rank <= _BRANCH_PREVIEW_LIMIT)
         .order_by(ranked.c.rank)
     )
-    for branch_material, dekor, manufacturer in rows.all():
+    for branch_material, decor_format, decor, manufacturer in rows.all():
         previews.setdefault(branch_material.branch_id, []).append(
             ClientBranchMaterialPreview(
                 id=branch_material.id,
                 manufacturer_name=manufacturer.name,
-                name=branch_material_label(branch_material, dekor, manufacturer),
+                name=branch_material_label(decor_format, decor, manufacturer, branch_material.id),
                 price_tiyin=branch_material.price_tiyin,
-                display_unit=display_unit(dekor.tur),
+                display_unit=display_unit(decor_format.type),
             )
         )
     return previews, totals
@@ -296,14 +299,13 @@ async def client_branch_materials(
     require_client(principal)
     await _visible_branch_with_workshop(db, branch_id)
     query = (
-        select(BranchMaterial, Dekor, Manufacturer)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+        select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+        .join(Decor, Decor.id == DecorFormat.decor_id)
+        .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            # A customer's board is their property, not the branch shelf.
-            BranchMaterial.customer_supplied.is_(False),
             # No price gate: a branch registers its format list long before it
             # prices it, and a client browsing the shelf should see what the
             # branch actually works with. The row carries `price_unset` so the
@@ -311,35 +313,36 @@ async def client_branch_materials(
             # unpriced material is blocked in `sales` instead. The branch-card
             # preview drops the same gate, so its "+N more" count still agrees
             # with this list — see _branch_material_previews.
-            Dekor.holat == MaterialStatus.ACTIVE,
+            Decor.status == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
-        .order_by(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm)
+        .order_by(Manufacturer.name, Decor.name, DecorFormat.thickness_mm)
     )
     normalized = search.strip() if search else ""
     if normalized:
         # Both sides folded: `Sonoma`, `сонома` and `yong'oq` all reach the same
         # rows, and the stored search_key already carries the manufacturer name,
         # so this single predicate replaces the old four-column OR.
-        query = query.where(Dekor.search_key.ilike(f"%{fold(normalized)}%"))
+        query = query.where(Decor.search_key.ilike(f"%{fold(normalized)}%"))
     rows = (await db.execute(query)).all()
     return [
         ClientBranchMaterialResponse(
             id=branch_material.id,
-            tur=dekor.tur,
+            type=decor_format.type,
             manufacturer_name=manufacturer.name,
-            kod=dekor.kod,
-            nomi=dekor.nomi,
-            tolali=dekor.tolali,
-            image_file_id=dekor.image_file_id,
-            qalinlik_mm=normalize_mm(branch_material.qalinlik_mm),
-            uzunlik_mm=branch_material.uzunlik_mm,
-            eni_mm=branch_material.eni_mm,
-            kromka_eni_mm=branch_material.kromka_eni_mm,
+            code=decor.code,
+            name=decor.name,
+            has_grain=decor.has_grain,
+            image_file_id=decor.image_file_id,
+            thickness_mm=normalize_mm(decor_format.thickness_mm),
+            length_mm=decor_format.length_mm,
+            width_mm=decor_format.width_mm,
+            tape_width_mm=decor_format.tape_width_mm,
+            finished_sides=decor_format.finished_sides,
             price_tiyin=branch_material.price_tiyin,
-            display_unit=display_unit(dekor.tur),
+            display_unit=display_unit(decor_format.type),
         )
-        for branch_material, dekor, manufacturer in rows
+        for branch_material, decor_format, decor, manufacturer in rows
     ]
 
 

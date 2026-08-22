@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-22
 order: 50
 ---
 
@@ -61,7 +61,7 @@ post-placement modification, so it is never re-priced)
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
 | `surcharge_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; no cap (reason + audit are the control) |
 | `surcharge_reason` / `surcharge_applied_by_user_id` | text? / UUID? | required if `surcharge_tiyin > 0` |
-| `price_overrides` | json | unit prices staff agreed for this order, replacing the branch rate card: `{cutting_rate_tiyin, edge_banding_rate_tiyin, material_prices: {<branch_material_id>: tiyin}}`. Absent keys mean "use the branch's price". Kept on the order because it re-prices for other reasons too (a revision, a change of who supplies the sheets) and would otherwise fall back to the list price; a revision clears it along with the discount ([`orders.md`](../features/orders.md#pricing)) |
+| `price_overrides` | json | unit prices staff agreed for this order, replacing the branch rate card: `{cutting_rate_tiyin, edge_banding_rate_tiyin, material_prices: {<material_id>: tiyin}}` (a branch-material or customer-board id). Absent keys mean "use the branch's price". Kept on the order because it re-prices for other reasons too (a revision, a change of who supplies the sheets) and would otherwise fall back to the list price; a revision clears it along with the discount ([`orders.md`](../features/orders.md#pricing)) |
 | `total_tiyin` | bigint | `cutting + materials + edge banding − discount + surcharge`; ≥ 0 |
 | `currency` | enum | `UZS` (only value in v1) |
 
@@ -114,23 +114,27 @@ into the cutting wizard for that order.
 |---|---|---|
 | `id` | UUID | PK |
 | `order_id` | UUID | required |
-| `branch_material_id` | UUID | logical reference to the panel **branch material** — one dekor in one format (the snapshot is authoritative for the order) |
+| `branch_material_id` | UUID? | logical reference to the panel **branch material** — one branch's carried [decor format](catalog.md#decor-format) (the snapshot is authoritative for the order) |
+| `customer_board_id` | UUID? | set instead when the panel was a sheet the client brought — a [customer board](cutting.md#customer-board). **Exactly one of the two id columns is set**, enforced by a CHECK |
 | `material_source` | enum | `shop` / `own` — for the panel; per-item; an order can mix |
-| `material_snapshot` | json | `{ manufacturer_name, tur, kod, nomi, tolali, qalinlik_mm, uzunlik_mm, eni_mm, kromka_eni_mm, price_tiyin }` as of order creation. Pre-reshape rows keep the old vocabulary (`name`, `type`, `color`, `decor_code`, `thickness_mm`, `panel_length_mm`, `panel_width_mm`) — frozen history is never rewritten, and the label formatter reads both |
+| `material_snapshot` | json | `{ manufacturer_name, type, code, name, has_grain, thickness_mm, length_mm, width_mm, tape_width_mm, finished_sides, price_tiyin }` as of order creation, plus `customer_supplied` + `stock_material_id` on a customer board. Older rows keep the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`color`, `decor_code`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`) — frozen history is never rewritten, and the label formatter reads all three |
 | `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material / cutting bounds |
 | `quantity` | int | ≥ 1 |
-| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { manufacturer_name, tur, kod, nomi, qalinlik_mm, kromka_eni_mm, price_tiyin } }`, where `material_id` is a `kromka` branch material (the JSON key kept its name; the values were rewritten) |
+| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { manufacturer_name, type, code, name, thickness_mm, tape_width_mm, price_tiyin } }`, where `material_id` is a `kromka` branch material (the JSON key kept its name; the values were rewritten, and older snapshots keep the vocabulary they were written with) |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
 | `unit_material_price_tiyin` | bigint | snapshot; 0 when panel `material_source = own`; ≥ 0 |
 | `edge_cost_tiyin` | bigint | snapshot for this line — sum across the four sides of `shop` edge cost; 0 when every banded side is `own`; ≥ 0 |
 | `line_total_tiyin` | bigint | `(unit_cutting + unit_material) × quantity + edge_cost`; ≥ 0 |
 
 Invariants: snapshot fields are never updated to reflect later catalog changes; `part_ref`
-corresponds to a part in the order's cutting result; `branch_material_id` is a branch material
-of a panel-shaped dekor; each side's edge `material_id` (when set) is one of a `kromka` dekor;
-grain is a property of the panel's dekor (read from `material_snapshot`); parts on a grained material
-aren't rotated at cutting time; per-side `source` is independent and may differ across sides
+corresponds to a part in the order's cutting result; **exactly one** of `branch_material_id` /
+`customer_board_id` is set (DB CHECK) — a line is cut either from a sheet the branch carries or
+from one the client brought, and a reader that only prints the line never has to branch on
+which, because the label and every price come from `material_snapshot` either way; the branch
+material, when set, is one of a panel-shaped format; each side's edge `material_id` (when set)
+is a `kromka` branch material; grain is a property of the panel's decor (read from
+`material_snapshot`); parts on a grained material aren't rotated at cutting time; per-side `source` is independent and may differ across sides
 of the same item. There is no modify path — items are created with the order and never
 replaced.
 

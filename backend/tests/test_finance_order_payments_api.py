@@ -571,3 +571,207 @@ async def test_income_page_resolves_every_order_in_one_query(
         f"ORD-2026-00002{index}" for index in range(4)
     }
     assert len(order_statements) == 1
+
+
+async def test_cashier_records_a_payment_but_can_neither_edit_nor_void_it(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`record_order_payment` is create-only, and order-payment-only.
+
+    Taking money at the counter and correcting the books are different jobs. A
+    hand that can both book a payment and erase it can empty a till and leave no
+    trace, so the narrow grant stops at *create*: edit and void keep asking for
+    `manage_finance`, and no other ledger row is reachable at all.
+    """
+
+    owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
+    buyer = await _client_row(db_session, phone="+998901112277", name="Dilshod")
+    order = await _order(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=buyer.id,
+        order_number="#26-1-0031",
+        total_tiyin=5_000_000,
+    )
+    cashier = await _staff_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.RECORD_ORDER_PAYMENT,
+    )
+    today = datetime.now(UTC).date().isoformat()
+
+    # A part payment at the counter — the everyday case.
+    created = await client.post(
+        INCOME_URL,
+        headers=_auth(cashier),
+        json={
+            "type": "order_payment",
+            "order_id": str(order.id),
+            "amount_tiyin": 2_000_000,
+            "method": "cash",
+            "received_on": today,
+        },
+    )
+    assert created.status_code == 201, created.text
+    income_id = created.json()["id"]
+
+    # The rest of the ledger stays shut: another income type is not an order
+    # payment, so the narrow grant does not reach it.
+    other = await client.post(
+        INCOME_URL,
+        headers=_auth(cashier),
+        json={
+            "type": "other",
+            "amount_tiyin": 100_000,
+            "method": "cash",
+            "received_on": today,
+            "branch_id": str(branch_id),
+        },
+    )
+    assert other.status_code == 403, other.text
+
+    # Neither correction path is the cashier's.
+    edited = await client.patch(
+        f"{INCOME_URL}/{income_id}",
+        headers=_auth(cashier),
+        json={"amount_tiyin": 1_000_000},
+    )
+    assert edited.status_code == 403, edited.text
+    voided = await client.post(
+        f"{INCOME_URL}/{income_id}/void",
+        headers=_auth(cashier),
+        json={"reason": "xato"},
+    )
+    assert voided.status_code == 403, voided.text
+
+    # The accountant can still fix it — the separation is of duties, not a dead end.
+    fixed = await client.post(
+        f"{INCOME_URL}/{income_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Mijoz e'tiroz bildirdi"},
+    )
+    assert fixed.status_code == 200, fixed.text
+    assert fixed.json()["status"] == LedgerStatus.VOIDED.value
+
+
+async def test_payment_cap_and_branch_scope_hold_for_the_cashier_too(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The narrow grant widens who may record, never what may be recorded."""
+
+    _, workshop_id, branch_id, _ = await _owner_fixture(db_session)
+    other_branch_id = await _extra_branch(db_session, workshop_id=workshop_id)
+    buyer = await _client_row(db_session, phone="+998901112288", name="Nodira")
+    order = await _order(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=buyer.id,
+        order_number="#26-1-0032",
+        total_tiyin=1_000_000,
+    )
+    foreign = await _order(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=other_branch_id,
+        client_id=buyer.id,
+        order_number="#26-2-0033",
+        total_tiyin=1_000_000,
+    )
+    cashier = await _staff_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.RECORD_ORDER_PAYMENT,
+    )
+    today = datetime.now(UTC).date().isoformat()
+
+    over = await client.post(
+        INCOME_URL,
+        headers=_auth(cashier),
+        json={
+            "type": "order_payment",
+            "order_id": str(order.id),
+            "amount_tiyin": 1_500_000,
+            "method": "cash",
+            "received_on": today,
+        },
+    )
+    assert over.status_code == 400, over.text
+
+    # A cashier is granted per branch, exactly like every other permission.
+    elsewhere = await client.post(
+        INCOME_URL,
+        headers=_auth(cashier),
+        json={
+            "type": "order_payment",
+            "order_id": str(foreign.id),
+            "amount_tiyin": 100_000,
+            "method": "cash",
+            "received_on": today,
+        },
+    )
+    assert elsewhere.status_code == 403, elsewhere.text
+
+
+async def test_ledger_names_who_handled_the_money_and_filters_by_them(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """ "Who took this cash?" is answered on the row, and is a filter.
+
+    The id was always stored; a ledger that prints it is unreadable, and an
+    owner reconciling a till needs one person's rows, not the whole day's.
+    """
+
+    owner_access, workshop_id, branch_id, owner_id = await _owner_fixture(db_session)
+    buyer = await _client_row(db_session, phone="+998901112299", name="Sardor")
+    order = await _order(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=buyer.id,
+        order_number="#26-1-0034",
+        total_tiyin=9_000_000,
+    )
+    cashier = await _staff_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.RECORD_ORDER_PAYMENT,
+    )
+    today = datetime.now(UTC).date().isoformat()
+
+    for access, amount in ((cashier, 1_000_000), (owner_access, 2_000_000)):
+        booked = await client.post(
+            INCOME_URL,
+            headers=_auth(access),
+            json={
+                "type": "order_payment",
+                "order_id": str(order.id),
+                "amount_tiyin": amount,
+                "method": "cash",
+                "received_on": today,
+            },
+        )
+        assert booked.status_code == 201, booked.text
+
+    listed = await client.get(
+        f"{INCOME_URL}?date_from={today}&date_to={today}", headers=_auth(owner_access)
+    )
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()
+    assert len(rows) == 2
+    assert {row["recorded_by_name"] for row in rows} == {"Finance Staff", "Workshop Owner"}
+
+    cashier_id = next(
+        row["recorded_by_user_id"] for row in rows if row["recorded_by_name"] == "Finance Staff"
+    )
+    filtered = await client.get(
+        f"{INCOME_URL}?date_from={today}&date_to={today}&recorded_by_user_id={cashier_id}",
+        headers=_auth(owner_access),
+    )
+    assert filtered.status_code == 200, filtered.text
+    assert [row["amount_tiyin"] for row in filtered.json()] == [1_000_000]
+    assert owner_id is not None

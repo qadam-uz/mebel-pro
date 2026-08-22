@@ -50,6 +50,9 @@ export interface Income {
   status: LedgerStatus
   voided_reason: string | null
   recorded_by_user_id: string
+  // Who handled the money — resolved server-side at read time. "Kim qabul
+  // qildi?" is the first question asked of a cash row, and an id cannot answer it.
+  recorded_by_name: string | null
   voided_by_user_id: string | null
   voided_at: string | null
   created_at: string
@@ -73,6 +76,9 @@ export interface Expense {
   status: LedgerStatus
   voided_reason: string | null
   recorded_by_user_id: string
+  // Who handled the money — resolved server-side at read time. "Kim qabul
+  // qildi?" is the first question asked of a cash row, and an id cannot answer it.
+  recorded_by_name: string | null
   voided_by_user_id: string | null
   voided_at: string | null
   created_at: string
@@ -283,6 +289,7 @@ export const useFinanceStore = defineStore('finance', () => {
     type?: IncomeType | null
     method?: MoneyMethod | null
     status?: LedgerStatus | null
+    recorded_by_user_id?: string | null
     min_amount_tiyin?: string | null
     max_amount_tiyin?: string | null
   }) {
@@ -350,6 +357,7 @@ export const useFinanceStore = defineStore('finance', () => {
     branch_id?: string | null
     category?: ExpenseCategory | null
     status?: LedgerStatus | null
+    recorded_by_user_id?: string | null
     min_amount_tiyin?: string | null
     max_amount_tiyin?: string | null
   }) {

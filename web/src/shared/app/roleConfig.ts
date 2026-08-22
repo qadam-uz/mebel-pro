@@ -137,7 +137,7 @@ export const adminConfig: RoleConfig = {
     },
     {
       labelKey: 'nav.item.dekorlar',
-      to: '/admin/catalog/dekorlar',
+      to: '/admin/catalog/decors',
       group: 'catalog',
       icon: 'package',
     },

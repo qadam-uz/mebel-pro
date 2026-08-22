@@ -6,7 +6,7 @@ import { authInit } from '@/shared/app/authInit'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import { materialOptionLabel } from '@/shared/app/materialLabel'
 import { translate } from '@/shared/i18n'
-import type { DekorType } from '@/shared/stores/admin'
+import type { DecorType } from '@/shared/stores/admin'
 import type { ImportMapLayout } from '@/shared/stores/cuttingImport'
 
 export type MaterialSource = 'shop' | 'own'
@@ -75,7 +75,11 @@ export interface CuttingPanel {
   // Renamed with the reshape (CuttingPanelResponse). NOTE: `CuttingPart.material_id`
   // and `CuttingEdgeBand.material_id` above deliberately kept their names — the
   // backend did not rename those, they just resolve to a branch-material id now.
-  branch_material_id: string
+  // The panel's material key: a branch material id, or — for a sheet the
+  // walk-in brought — a customer board id. Two disjoint UUID namespaces, one
+  // opaque key, which is how `material_snapshots` and `own_panel_counts` are
+  // keyed too.
+  material_id: string
   panel_index: number
   waste_area_mm2: number
   offcuts: CuttingOffcut[]
@@ -182,21 +186,24 @@ export interface CuttingMapImportCommitPayload {
  */
 export interface ClientCatalogMaterialOption {
   id: string
-  tur: DekorType
+  type: DecorType
   manufacturer_id: string
   manufacturer_name: string
-  kod: string | null
-  nomi: string
-  tolali: boolean
+  code: string | null
+  name: string
+  has_grain: boolean
   image_file_id: string | null
-  qalinlik_mm: string
-  uzunlik_mm: number | null
-  eni_mm: number | null
-  kromka_eni_mm: number | null
+  thickness_mm: string
+  length_mm: number | null
+  width_mm: number | null
+  tape_width_mm: number | null
   price_tiyin: number
   // 0 means "the branch has not priced this format yet", not "free". Only the
   // workshop-facing listing ever returns such a row; clients never see one.
   price_unset: boolean
+  /** The platform retired this format — still pickable (the branch may hold
+   *  stock), but the picker says so. */
+  discontinued?: boolean
   display_unit: string
   /** A sheet the walk-in carried in: a real branch material so the whole cutting
    *  path keeps keying on a material id, but one the branch does not carry — no
@@ -244,16 +251,16 @@ export function metres(mm: number) {
 export function partFitError(
   lengthMm: number,
   widthMm: number,
-  panel: Pick<ClientCatalogMaterialOption, 'uzunlik_mm' | 'eni_mm' | 'tolali'>,
+  panel: Pick<ClientCatalogMaterialOption, 'length_mm' | 'width_mm' | 'has_grain'>,
   followGrain: boolean,
   trimMm: number,
 ): 'impossible_grain' | 'part_too_large' | null {
-  if (panel.uzunlik_mm == null || panel.eni_mm == null) return null
+  if (panel.length_mm == null || panel.width_mm == null) return null
   const length = Number(lengthMm)
   const width = Number(widthMm)
   if (!Number.isFinite(length) || !Number.isFinite(width)) return null
-  const usableLength = panel.uzunlik_mm - 2 * trimMm
-  const usableWidth = panel.eni_mm - 2 * trimMm
+  const usableLength = panel.length_mm - 2 * trimMm
+  const usableWidth = panel.width_mm - 2 * trimMm
   const fitsNormal = length <= usableLength && width <= usableWidth
   const fitsRotated = width <= usableLength && length <= usableWidth
   const locked = followGrain
@@ -322,12 +329,12 @@ export const useCuttingStore = defineStore('cutting', () => {
    *  without a refetch. */
   async function createCustomerBoard(input: {
     draftId: string
-    nomi: string | null
-    uzunlik_mm: number
-    eni_mm: number
-    qalinlik_mm: number
+    name: string | null
+    length_mm: number
+    width_mm: number
+    thickness_mm: number
     sheets: number
-    tolali: boolean
+    has_grain: boolean
   }) {
     const { draftId, ...body } = input
     const option = await api.post<ClientCatalogMaterialOption>(
@@ -589,7 +596,7 @@ export const useCuttingStore = defineStore('cutting', () => {
    * chosen before the cutting flow reaches materials, and the old "no branch,
    * browse everything" mode is gone with `carried_only`. `tape` replaces the old
    * `kind`: the edge picker wants kromka, every other picker wants all
-   * panel-shaped dekorlar, which no single `tur` can express. `tape=false` must
+   * panel-shaped decors, which no single `type` can express. `tape=false` must
    * reach the server, so it is passed through `withQuery`'s falsy-preserving path.
    */
   async function loadMaterials(params: {

@@ -37,6 +37,17 @@ export function parseSomToTiyin(value: string): number | null {
   return Math.round(som * 100)
 }
 
+// The inverse of `parseSomToTiyin`: integer tiyin as the so'm string a money
+// input holds (empty for nothing to show). The tiyin remainder survives as a
+// decimal on purpose — this string is what the parser reads back on save, so
+// rounding it would silently reprice whatever the form was seeded with. Keep
+// the two functions together; they are only correct as a pair.
+export function tiyinToSomInput(tiyin: number): string {
+  if (tiyin <= 0) return ''
+  const som = tiyin / 100
+  return Number.isInteger(som) ? String(som) : som.toFixed(2)
+}
+
 // Compact money for KPI-sized numerals: sums from 1 mln so'm up are scaled to
 // "mln/mlrd" so the value always fits on one line; the exact amount travels in
 // `full` for a title tooltip. The unit is returned separately so templates can
@@ -215,6 +226,20 @@ export function formatStockQuantity(value: number, displayUnit: string): string 
     return `${metres} ${translate('formats.unit.metre')}`
   }
   return `${new Intl.NumberFormat(intlLocale()).format(value)} ${formatStockUnit(displayUnit)}`
+}
+
+/**
+ * The inverse of `parseDisplayQuantity`, for seeding a quantity *input*.
+ *
+ * Deliberately ungrouped and dot-decimal: `formatStockQuantity` renders for
+ * reading (thin spaces, a unit suffix), and feeding that back into a field the
+ * sanitizer then strips would silently change the number.
+ */
+export function formatQuantityInput(value: number, displayUnit: string): string {
+  if (displayUnit === 'm' || displayUnit === 'metre') {
+    return String(Math.round(value) / 1000)
+  }
+  return String(Math.round(value))
 }
 
 export function parseDisplayQuantity(value: string, displayUnit: string): number {

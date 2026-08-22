@@ -25,22 +25,22 @@ function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   }
 }
 
-function seedPanel(tolali: boolean) {
+function seedPanel(has_grain: boolean) {
   const cutting = useCuttingStore()
   cutting.panelOptions = [
     {
       id: 'panel-1',
-      tur: 'ldsp',
+      type: 'ldsp',
       manufacturer_id: 'maker-1',
       manufacturer_name: 'Maker',
-      kod: null,
-      nomi: 'Oak',
-      tolali,
+      code: null,
+      name: 'Oak',
+      has_grain,
       image_file_id: null,
-      qalinlik_mm: '18',
-      uzunlik_mm: 600,
-      eni_mm: 400,
-      kromka_eni_mm: null,
+      thickness_mm: '18',
+      length_mm: 600,
+      width_mm: 400,
+      tape_width_mm: null,
       price_tiyin: 0,
       price_unset: false,
       display_unit: 'sheet',

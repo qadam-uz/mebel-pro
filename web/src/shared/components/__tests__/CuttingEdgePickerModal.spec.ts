@@ -12,17 +12,17 @@ import {
 
 const panel: ClientCatalogMaterialOption = {
   id: 'panel-1',
-  tur: 'ldsp',
+  type: 'ldsp',
   manufacturer_id: 'maker-1',
   manufacturer_name: 'Maker',
-  kod: 'H1234',
-  nomi: 'Oak',
-  tolali: false,
+  code: 'H1234',
+  name: 'Oak',
+  has_grain: false,
   image_file_id: null,
-  qalinlik_mm: '18',
-  uzunlik_mm: 600,
-  eni_mm: 400,
-  kromka_eni_mm: null,
+  thickness_mm: '18',
+  length_mm: 600,
+  width_mm: 400,
+  tape_width_mm: null,
   price_tiyin: 0,
   price_unset: false,
   display_unit: 'sheet',
@@ -30,17 +30,17 @@ const panel: ClientCatalogMaterialOption = {
 
 const edge: ClientCatalogMaterialOption = {
   id: 'edge-1',
-  tur: 'kromka',
+  type: 'kromka',
   manufacturer_id: 'maker-1',
   manufacturer_name: 'Maker',
-  kod: null,
-  nomi: 'Black tape',
-  tolali: false,
+  code: null,
+  name: 'Black tape',
+  has_grain: false,
   image_file_id: null,
-  qalinlik_mm: '1',
-  uzunlik_mm: null,
-  eni_mm: null,
-  kromka_eni_mm: 19,
+  thickness_mm: '1',
+  length_mm: null,
+  width_mm: null,
+  tape_width_mm: 19,
   price_tiyin: 0,
   price_unset: false,
   display_unit: 'm',
@@ -49,34 +49,34 @@ const edge: ClientCatalogMaterialOption = {
 const decorEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-decor',
-  kod: 'H1234',
-  nomi: 'Decor tape',
-  qalinlik_mm: '2',
-  kromka_eni_mm: 22,
+  code: 'H1234',
+  name: 'Dekor tape',
+  thickness_mm: '2',
+  tape_width_mm: 22,
 }
 
 const colorEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-color',
-  kod: 'Other',
-  nomi: 'Oak',
-  qalinlik_mm: '0.4',
+  code: 'Other',
+  name: 'Oak',
+  thickness_mm: '0.4',
 }
 
 const narrowEdge: ClientCatalogMaterialOption = {
   ...edge,
   id: 'edge-narrow',
-  nomi: 'Narrow tape',
-  kromka_eni_mm: 16,
+  name: 'Narrow tape',
+  tape_width_mm: 16,
 }
 
 // `ClientCatalogMaterialOption` is the one reshaped response with no server
 // `label`, so every row composes its own through `material_label.py`'s TS
-// mirror. Assert the whole composed string, not a fixture field: a `nomi`-only
-// assertion would pass for the kod-less tapes and quietly diverge for the rest.
+// mirror. Assert the whole composed string, not a fixture field: a `name`-only
+// assertion would pass for the code-less tapes and quietly diverge for the rest.
 const PANEL_LABEL = 'LDSP Maker H1234 · Oak · 600×400×18 mm'
 const EDGE_LABEL = 'Maker Black tape · 1×19 mm'
-const DECOR_EDGE_LABEL = 'Maker H1234 · Decor tape · 2×22 mm'
+const DECOR_EDGE_LABEL = 'Maker H1234 · Dekor tape · 2×22 mm'
 const COLOR_EDGE_LABEL = 'Maker Other · Oak · 0.4×19 mm'
 
 const part: CuttingPart = {
@@ -304,7 +304,7 @@ describe('CuttingEdgePickerModal arming', () => {
       .findAll('button')
       .find((button) => button.text() === 'Hammasi')!
       .trigger('click')
-    await wrapper.get('[aria-label="Kromka qidirish"]').setValue(edge.nomi)
+    await wrapper.get('[aria-label="Kromka qidirish"]').setValue(edge.name)
     expect(wrapper.text()).toContain("Bu kromka allaqachon chizmada — 1-ro'yxatdan tanlang.")
 
     await wrapper.get('[aria-label="Kromka qidirish"]').setValue('')

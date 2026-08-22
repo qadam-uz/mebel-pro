@@ -1,15 +1,15 @@
 /**
- * Whatever carries a dekor's identity — a `Dekor`, a `BranchMaterial.dekor`, or a
+ * Whatever carries a decor's identity — a `Decor`, a `BranchMaterial.decor`, or a
  * cutting-picker option.
  *
  * `id` seeds the fallback hash, so pass the DEKOR id, not a branch-material id:
- * the 16 mm and 18 mm rows of one dekor must land on the same swatch, and the
- * same dekor must look the same at every branch.
+ * the 16 mm and 18 mm rows of one decor must land on the same swatch, and the
+ * same decor must look the same at every branch.
  */
 export interface MaterialSwatchSource {
   id: string
-  nomi: string
-  kod: string | null
+  name: string
+  code: string | null
 }
 
 const FALLBACK_SWATCHES = ['sw-1', 'sw-2', 'sw-3', 'sw-5', 'sw-6', 'sw-10']
@@ -23,7 +23,7 @@ function hash(value: string) {
 }
 
 export function materialSwatchClass(material: MaterialSwatchSource) {
-  const text = [material.nomi, material.kod].join(' ').toLowerCase()
+  const text = [material.name, material.code].join(' ').toLowerCase()
   if (/(white|oq|бел|snow|alpine)/.test(text)) return 'sw-7'
   if (/(black|qora|черн|graphite|anthracite)/.test(text)) return 'sw-8'
   if (/(grey|gray|kul|сер|silver|metal)/.test(text)) return 'sw-4'

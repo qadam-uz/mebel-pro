@@ -8,7 +8,7 @@ import pytest
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    DekorType,
+    DecorType,
     Permission,
     UserStatus,
 )
@@ -114,7 +114,7 @@ async def _materials(
     """The branch's shelf: a plain panel, a kromka, and a grained panel.
 
     `branch_id` is required since the reshape — a material *is* a branch's
-    format of a dekor, so there is no platform-wide material to reference and
+    format of a decor, so there is no platform-wide material to reference and
     every one of these must be carried by the branch to be pickable.
     """
     manufacturer = await seed_manufacturer(db)
@@ -122,12 +122,12 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="H1334",
-        nomi="Oak",
-        tolali=False,
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=600,
-        eni_mm=400,
+        code="H1334",
+        name="Oak",
+        has_grain=False,
+        thickness_mm=Decimal("18"),
+        length_mm=600,
+        width_mm=400,
         price_tiyin=250000,
         min_stock=1,
     )
@@ -135,24 +135,25 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        tur=DekorType.MDF,
-        kod="W980",
-        nomi="White",
-        tolali=True,
-        qalinlik_mm=Decimal("16"),
-        uzunlik_mm=600,
-        eni_mm=400,
+        type=DecorType.MDF,
+        code="W980",
+        name="White",
+        has_grain=True,
+        thickness_mm=Decimal("16"),
+        length_mm=600,
+        width_mm=400,
         price_tiyin=180000,
         min_stock=1,
     )
+    # The board's OWN decor, not a second one with the same code: a pattern and
+    # the kromka that matches it are two formats of one decor now, which is the
+    # case the format reshape exists for.
     edge = await seed_kromka_material(
         db,
         branch_id=branch_id,
-        manufacturer=manufacturer,
-        kod="H1334",
-        nomi="Oak",
-        qalinlik_mm=Decimal("0.4"),
-        kromka_eni_mm=19,
+        decor=panel.decor,
+        thickness_mm=Decimal("0.4"),
+        tape_width_mm=19,
         price_tiyin=1000,
         min_stock=1,
     )
@@ -185,23 +186,21 @@ async def _map_materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="MAP",
-        nomi="White",
-        tolali=False,
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=2750,
-        eni_mm=1830,
+        code="MAP",
+        name="White",
+        has_grain=False,
+        thickness_mm=Decimal("18"),
+        length_mm=2750,
+        width_mm=1830,
         price_tiyin=350000,
         min_stock=1,
     )
     edge = await seed_kromka_material(
         db,
         branch_id=branch_id,
-        manufacturer=manufacturer,
-        kod="MAP",
-        nomi="White",
-        qalinlik_mm=Decimal("0.4"),
-        kromka_eni_mm=19,
+        decor=panel.decor,
+        thickness_mm=Decimal("0.4"),
+        tape_width_mm=19,
         price_tiyin=1000,
         min_stock=1,
     )
@@ -387,12 +386,12 @@ async def _big_panel(db: AsyncSession, *, branch_id: uuid.UUID) -> MaterialFixtu
         db,
         branch_id=branch_id,
         manufacturer=await seed_manufacturer(db, name=f"BigPanels {uuid.uuid4().hex[:6]}"),
-        kod="H1000",
-        nomi="White",
-        tolali=False,
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=1000,
-        eni_mm=800,
+        code="H1000",
+        name="White",
+        has_grain=False,
+        thickness_mm=Decimal("18"),
+        length_mm=1000,
+        width_mm=800,
         price_tiyin=300000,
         min_stock=1,
     )
@@ -423,17 +422,15 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
         json={"kerf_mm": 3, "edge_trim_mm": 50},
     )
     assert patched_branch2.status_code == 200
-    # A material is a branch's own row now, so the "same" panel has to be
-    # carried by both branches — the point of the test is the kerf/trim, and the
-    # two rows are deliberately the identical format of one dekor.
+    # A material is a branch's own row, so the "same" panel has to be carried by
+    # both branches — but the FORMAT is the platform's and is literally shared.
+    # The point of the test is the kerf/trim, so the two rows deliberately point
+    # at one `decor_format_id`, at each branch's own price.
     panel = await _big_panel(db_session, branch_id=branch1_id)
     panel2 = await seed_branch_material(
         db_session,
         branch_id=uuid.UUID(branch2_id),
-        dekor=panel.dekor,
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=1000,
-        eni_mm=800,
+        decor_format=panel.decor_format,
         price_tiyin=300000,
         min_stock=1,
     )
@@ -499,7 +496,7 @@ async def test_a_branchless_draft_keeps_platform_defaults_but_cannot_optimize(
 ) -> None:
     """RESHAPED: optimizing without a branch is no longer possible.
 
-    A material *is* a branch's format of a dekor, so a draft with no
+    A material *is* a branch's format of a decor, so a draft with no
     `preferred_branch_id` has nothing to resolve its parts against and every one
     of them reports `material_not_found`. The kerf/trim platform defaults still
     show on the draft — the client can build a parts list before choosing a
@@ -1211,7 +1208,7 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
 ) -> None:
     """RESHAPED: `branch_id` is required and `carried_only` is gone.
 
-    A material *is* a branch's format of a dekor, so there is no platform-wide
+    A material *is* a branch's format of a decor, so there is no platform-wide
     catalog left to browse and nothing to mark as "not carried" — every row the
     picker returns is carried by construction. The old `branch_carried` flag and
     the `carried_only=false` browse mode are both deleted.
@@ -1225,7 +1222,7 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     _, _, branch_id, _ = await _workshop_owner_access(db_session)
     panel, edge, other_panel = await _materials(db_session, branch_id=branch_id)
     unpriced = await seed_panel_material(
-        db_session, branch_id=branch_id, kod="UNPRICED", nomi="Unpriced", price_tiyin=0
+        db_session, branch_id=branch_id, code="UNPRICED", name="Unpriced", price_tiyin=0
     )
     access, _ = await _client_access(db_session)
 
@@ -1243,7 +1240,7 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     )
 
     assert panels.status_code == 200
-    # `tape=false` (the default) means every panel-shaped dekor, not one `tur`:
+    # `tape=false` (the default) means every panel-shaped decor, not one `type`:
     # the LDSP and the MDF row both belong in a panel picker.
     assert {row["id"] for row in panels.json()} == {
         str(panel.id),
@@ -1253,19 +1250,19 @@ async def test_client_cutting_material_picker_is_always_branch_scoped(
     by_id = {row["id"]: row for row in panels.json()}
     assert by_id[str(panel.id)]["price_tiyin"] == 250000
     assert by_id[str(panel.id)]["price_unset"] is False
-    assert by_id[str(panel.id)]["qalinlik_mm"] == "18"
-    assert by_id[str(panel.id)]["uzunlik_mm"] == 600
-    assert by_id[str(panel.id)]["tur"] == "ldsp"
-    assert by_id[str(other_panel.id)]["tur"] == "mdf"
-    assert by_id[str(other_panel.id)]["tolali"] is True
+    assert by_id[str(panel.id)]["thickness_mm"] == "18"
+    assert by_id[str(panel.id)]["length_mm"] == 600
+    assert by_id[str(panel.id)]["type"] == "ldsp"
+    assert by_id[str(other_panel.id)]["type"] == "mdf"
+    assert by_id[str(other_panel.id)]["has_grain"] is True
     # The unpriced row reaches the client too, carrying the flag the picker
     # renders as "Narx yo'q" — visible shelf, honest label.
     assert by_id[str(unpriced.id)]["price_unset"] is True
     assert by_id[str(unpriced.id)]["price_tiyin"] == 0
     # Kromka is its own shape, and it carries a tape width instead of a size.
     assert [row["id"] for row in tapes.json()] == [str(edge.id)]
-    assert tapes.json()[0]["kromka_eni_mm"] == 19
-    assert tapes.json()[0]["uzunlik_mm"] is None
+    assert tapes.json()[0]["tape_width_mm"] == 19
+    assert tapes.json()[0]["length_mm"] is None
     assert tapes.json()[0]["display_unit"] == "metre"
     # No branch, no catalog — the parameter is required, not defaulted.
     assert branchless.status_code == 422
@@ -1278,7 +1275,7 @@ async def test_workshop_cutting_picker_shows_the_unpriced_rows_a_client_cannot_s
     owner_access, _, branch_id, _ = await _workshop_owner_access(db_session)
     panel, _, other_panel = await _materials(db_session, branch_id=branch_id)
     unpriced = await seed_panel_material(
-        db_session, branch_id=branch_id, kod="UNPRICED", nomi="Unpriced", price_tiyin=0
+        db_session, branch_id=branch_id, code="UNPRICED", name="Unpriced", price_tiyin=0
     )
 
     staff_view = await client.get(

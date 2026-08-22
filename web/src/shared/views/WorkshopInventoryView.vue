@@ -1,53 +1,43 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { apiErrorCode, apiTraceId } from '@/shared/api/client'
-import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
+import { apiTraceId } from '@/shared/api/client'
+import { INVENTORY_INVOICE_PAGE_LIMIT, INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine } from '@/shared/app/errorTrace'
-import {
-  sanitizeMoneyInput,
-  sanitizeQuantityInput,
-  sanitizeSignedQuantityInput,
-} from '@/shared/app/inputSanitizers'
-import { formatMm, isTape } from '@/shared/app/materialLabel'
+import { decorTypeFilterGroups, formatMm, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
+import {
+  isScopeWidened,
+  isStockFiltered,
+  stockEmptyKind,
+  stockListFilters,
+  type StockScope,
+} from '@/shared/app/stockScope'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
-import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
-import DateField from '@/shared/components/DateField.vue'
 import FilterStatus from '@/shared/components/FilterStatus.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
-import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
+import type { DecorType } from '@/shared/stores/admin'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { useFinanceStore } from '@/shared/stores/finance'
-import {
-  formatDate,
-  formatDateInputValue,
-  formatDateTime,
-  formatStockQuantity,
-  formatStockUnit,
-  formatTiyin,
-  parseDisplayQuantity,
-  parseSomToTiyin,
-} from '@/shared/formatters'
+import { formatDate, formatDateTime, formatStockQuantity, formatTiyin } from '@/shared/formatters'
 import {
   useWorkshopStore,
   type InvoicePaymentStatus,
   type StockItem,
-  type StockLastPrice,
+  type StockTransaction,
   type Supplier,
 } from '@/shared/stores/workshop'
 
@@ -59,15 +49,12 @@ const finance = useFinanceStore()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
-const today = formatDateInputValue(new Date())
 const INVENTORY_TABS = ['stock', 'invoices', 'tx', 'suppliers'] as const
 type InventoryTab = (typeof INVENTORY_TABS)[number]
 
-// The dashboard's «Kirim yozish» work-list row has to land on the arrival form,
-// which is a modal inside this page and has no URL of its own. So the page reads
-// a small front-end-only query on mount — `?tab=invoices&action=kirim` — the
-// same way it already honours `?search=`. Nothing server-side sees it, and the
-// `action` is stripped once consumed so a reload does not reopen the form.
+// `?tab=` is honoured the same way `?search=` is, so a link can name the tab it
+// means. The arrival form is no longer a modal here — it is a page of its own
+// (`/workshop/inventory/invoices/new`), so nothing has to be "opened" on mount.
 function routeTab(): InventoryTab | null {
   const value = route.query.tab
   return typeof value === 'string' && (INVENTORY_TABS as readonly string[]).includes(value)
@@ -84,11 +71,57 @@ const inventoryTabs = computed<ChoiceOption[]>(() => [
 ])
 const search = ref('')
 const lowOnly = ref(false)
+// The Zaxira tab shows the warehouse, not the catalog: by default only rows
+// that have actually moved. «Butun katalog» opens it up to every attached
+// material — the state the tab used to be in permanently.
+const wholeCatalog = ref(false)
+// One shelf holds panels and tape, but "yetarli kromka bormi?" and "qaysi list
+// tugab qolgan?" are different questions — the `type` filter is how the operator
+// asks one of them at a time. It narrows the current scope rather than widening
+// it: unlike search, it is browsing, not a lookup.
+// The picked option's key is the first wire value behind its label; the label's
+// other members ride along (see `decorTypeFilterGroups`), which is why the query
+// is a list and the dropdown never prints «LDSP» twice.
+const stockTur = ref<DecorType | 'all'>('all')
+const stockTurGroups = computed(() => decorTypeFilterGroups())
+const stockTurOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('inventory.stock.turAll') },
+  ...stockTurGroups.value.map((group) => ({ value: group.types[0], label: group.label })),
+])
+const stockTurlar = computed<DecorType[]>(
+  () => stockTurGroups.value.find((group) => group.types[0] === stockTur.value)?.types ?? [],
+)
 
+const stockScope = computed<StockScope>(() => ({
+  search: search.value,
+  lowOnly: lowOnly.value,
+  wholeCatalog: wholeCatalog.value,
+  types: stockTurlar.value,
+}))
 // A branch with 30 materials told the operator it had none, because the empty
 // state did not know a search was active (QAD-182). First-run and
 // filtered-empty are different facts and get different copy.
-const stockFiltered = computed(() => search.value.trim().length > 0 || lowOnly.value)
+const stockFiltered = computed(() => isStockFiltered(stockScope.value))
+// "The scope is forced": search and the low chip always widen to the whole
+// catalog, so while either is on the «Butun katalog» chip has nothing left to
+// decide and says so instead of pretending to toggle. The `type` filter is not
+// in here — it narrows within the scope and leaves the chip its job.
+const stockScopeForced = computed(() => isScopeWidened(stockScope.value))
+// One control clears its own filter, so a single active filter needs no reset
+// link; a combination is what leaves the operator hunting for what is still on.
+const stockFilterCount = computed(
+  () =>
+    (search.value.trim() ? 1 : 0) + (lowOnly.value ? 1 : 0) + (stockTur.value !== 'all' ? 1 : 0),
+)
+
+function resetStockFilters() {
+  search.value = ''
+  lowOnly.value = false
+  stockTur.value = 'all'
+}
+const stockEmptyState = computed(() =>
+  stockEmptyKind(stockScope.value, workshop.stockPickerItems.length > 0),
+)
 const txPreset = ref<DateRangePreset>('days30')
 const initialTxRange = presetRange('days30')
 const txDateFrom = ref(initialTxRange.from ?? '')
@@ -96,19 +129,8 @@ const txDateTo = ref(initialTxRange.to ?? '')
 // Material filter doubles as the price-history view: one material's stock-in
 // rows read as its purchase-price timeline.
 const txMaterialId = ref('all')
-const invoiceOpen = ref(false)
-const adjustmentOpen = ref(false)
-const movementSaving = ref(false)
 const supplierSaving = ref(false)
-const movementError = ref<string | null>(null)
 const supplierError = ref<string | null>(null)
-const invoiceSupplierError = ref<string | null>(null)
-// Separate from the select's error: the inline-name failure is about the text
-// input below it, and a message shown against the wrong control is invisible.
-const invoiceInlineSupplierError = ref<string | null>(null)
-const invoiceLinesError = ref<string | null>(null)
-const invoiceDiscountError = ref<string | null>(null)
-const adjustmentMaterialError = ref<string | null>(null)
 const editingSupplierId = ref<string | null>(null)
 const supplierModalOpen = ref(false)
 const stockLoadedKey = ref<string | null>(null)
@@ -117,52 +139,16 @@ const invoicesLoadedKey = ref<string | null>(null)
 const suppliersLoadedBranch = ref<string | null>(null)
 const invoiceSearch = ref('')
 const invoicePaymentFilter = ref<InvoicePaymentStatus | 'all'>('all')
-const expandedInvoiceIds = ref<string[]>([])
+// Unlike the movements tab, the arrivals list opens on the whole archive: a
+// faktura is looked up by number or supplier months after it was booked, and a
+// 30-day default would answer "yo'q" to most of those searches.
+const invoicePreset = ref<DateRangePreset>('all')
+const invoiceDateFrom = ref('')
+const invoiceDateTo = ref('')
+const invoiceSupplierId = ref('all')
 let stockSearchTimer: number | undefined
 let invoiceSearchTimer: number | undefined
 
-// A faktura is entered as a header plus lines; the lines are local drafts until
-// the whole document is saved in one request.
-interface InvoiceLineDraft {
-  key: number
-  materialId: string | null
-  quantity: string
-  unitPrice: string
-  // A typed price is never overwritten by a later last-price prefill.
-  priceEdited: boolean
-  lastPrice: StockLastPrice | null
-  lastPriceLoaded: boolean
-}
-
-let lineKeySeed = 0
-function blankLine(): InvoiceLineDraft {
-  return {
-    key: ++lineKeySeed,
-    materialId: null,
-    quantity: '',
-    unitPrice: '',
-    priceEdited: false,
-    lastPrice: null,
-    lastPriceLoaded: false,
-  }
-}
-
-const invoiceForm = reactive({
-  supplierId: null as string | null,
-  inlineSupplierName: '',
-  invoiceDate: today,
-  discount: '',
-  surcharge: '',
-  note: '',
-})
-const invoiceLines = ref<InvoiceLineDraft[]>([blankLine()])
-const adjustmentForm = reactive({
-  materialId: null as string | null,
-  // A signed quantity with a REQUIRED leading + or − ("-2" decreases, "+5"
-  // increases) — the explicit prefix is the sign-safety mechanism.
-  quantity: '',
-  note: '',
-})
 const supplierForm = reactive({
   name: '',
   phone: '',
@@ -206,233 +192,40 @@ const selectedBranchId = computed(() => {
   if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
   return accessibleBranches.value[0]?.id ?? ''
 })
-const displayUnitByMaterialId = computed(
-  () => new Map(workshop.stockItems.map((item) => [item.branch_material_id, item.display_unit])),
+/**
+ * Every material the branch carries — the source for pickers and lookups.
+ *
+ * Not `workshop.stockItems`: that list is now the *table's*, scoped to rows
+ * that have moved. A combobox fed from it would silently refuse the most
+ * common arrival there is, the first one for a material nobody has stocked.
+ * The table's rows stand in until the picker collection lands, so a modal
+ * opened from a row menu can resolve its label before the fetch returns.
+ */
+const pickerItems = computed(() =>
+  workshop.stockPickerItems.length > 0 ? workshop.stockPickerItems : workshop.stockItems,
 )
-const stockOptions = computed(() =>
-  workshop.stockItems.map((item) => ({
-    value: item.branch_material_id,
-    label: item.material.label,
-    meta:
-      item.on_hand < 0
-        ? t('inventory.stock.optionShort', {
-            quantity: formatStockQuantity(-item.on_hand, item.display_unit),
-          })
-        : t('inventory.stock.optionOnHand', {
-            quantity: formatStockQuantity(item.on_hand, item.display_unit),
-          }),
-  })),
+const displayUnitByMaterialId = computed(
+  () => new Map(pickerItems.value.map((item) => [item.branch_material_id, item.display_unit])),
 )
 const txMaterialOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('inventory.tx.materialFilterAll') },
-  ...workshop.stockItems.map((item) => ({
+  ...pickerItems.value.map((item) => ({
     value: item.branch_material_id,
     label: item.material.label,
   })),
 ])
-// Real suppliers first, "Yangi ta'minotchi" last behind a divider: it is the
-// rare path, and at the top it sat where the eye lands and read like the
-// default. `separator` draws the rule — see FormSelect.
-const activeSupplierOptions = computed(() => [
-  ...workshop.suppliers
-    .filter((supplier) => supplier.status === 'active')
-    .map((supplier) => ({
-      value: supplier.id,
-      label: supplier.name,
-      meta: supplier.phone ?? t('inventory.supplier.activeMeta'),
-    })),
-  {
-    value: 'inline',
-    label: t('inventory.supplier.inlineOption'),
-    meta: t('inventory.supplier.inlineOptionMeta'),
-    separator: true,
-  },
+const invoiceFiltered = computed(
+  () =>
+    Boolean(invoiceSearch.value.trim()) ||
+    invoicePaymentFilter.value !== 'all' ||
+    invoiceSupplierId.value !== 'all' ||
+    Boolean(invoiceDateFrom.value) ||
+    Boolean(invoiceDateTo.value),
+)
+const invoiceSupplierOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('inventory.invoices.supplierFilterAll') },
+  ...workshop.suppliers.map((supplier) => ({ value: supplier.id, label: supplier.name })),
 ])
-const selectedAdjustmentItem = computed(() => stockItemByMaterial(adjustmentForm.materialId))
-// The signed field is incomplete (not wrong) until the required prefix arrives —
-// surface a muted nudge while typing; the danger copy is reserved for submit.
-const adjustmentNeedsSign = computed(
-  () => adjustmentForm.quantity.length > 0 && !/^[+-]/.test(adjustmentForm.quantity),
-)
-
-// Type-time sanitization (PhoneInput precedent) — invalid characters never stick.
-watch(
-  () => adjustmentForm.quantity,
-  (value) => {
-    const clean = sanitizeSignedQuantityInput(value)
-    if (clean !== value) adjustmentForm.quantity = clean
-  },
-)
-watch(
-  invoiceLines,
-  (lines) => {
-    for (const line of lines) {
-      const quantity = sanitizeQuantityInput(line.quantity)
-      if (quantity !== line.quantity) line.quantity = quantity
-      const price = sanitizeMoneyInput(line.unitPrice)
-      if (price !== line.unitPrice) line.unitPrice = price
-    }
-  },
-  { deep: true },
-)
-watch(
-  () => invoiceForm.discount,
-  (value) => {
-    const clean = sanitizeMoneyInput(value)
-    if (clean !== value) invoiceForm.discount = clean
-  },
-)
-watch(
-  () => invoiceForm.surcharge,
-  (value) => {
-    const clean = sanitizeMoneyInput(value)
-    if (clean !== value) invoiceForm.surcharge = clean
-  },
-)
-
-// The unit a line's price is entered per — one panel for panels, one metre for
-// edges. Rendered as a persistent suffix inside the field, never as a
-// placeholder: the difference between 18 so'm/m and 1 800 so'm/m is the whole
-// cost base, and a hint that disappears when you type is not a label (QAD-182).
-function linePriceUnit(line: InvoiceLineDraft) {
-  const item = stockItemByMaterial(line.materialId)
-  if (!item) return t('inventory.invoice.priceUnitSom')
-  return isMetreUnit(item.display_unit)
-    ? t('inventory.invoice.priceUnitMetre')
-    : t('inventory.invoice.priceUnitSheet')
-}
-
-function lineQuantityUnit(line: InvoiceLineDraft) {
-  const item = stockItemByMaterial(line.materialId)
-  return item ? formatStockUnit(item.display_unit) : ''
-}
-
-function lineLastPriceHint(line: InvoiceLineDraft) {
-  if (!line.materialId || !line.lastPriceLoaded) return null
-  const price = line.lastPrice
-  if (!price || price.unit_price_tiyin === null) return t('inventory.invoice.firstArrival')
-  const parts = [t('inventory.invoice.lastPrice', { price: formatTiyin(price.unit_price_tiyin) })]
-  if (price.recorded_at) parts.push(formatDate(price.recorded_at))
-  if (price.supplier_name) parts.push(`«${price.supplier_name}»`)
-  return parts.join(' · ')
-}
-
-function isMetreUnit(displayUnit: string) {
-  return displayUnit === 'metre' || displayUnit === 'm'
-}
-
-// Live line total mirroring the server math exactly: panels multiply, edges take
-// millimetres x per-metre price with floor division (the sale-side mirror).
-function lineTotalTiyin(line: InvoiceLineDraft) {
-  const item = stockItemByMaterial(line.materialId)
-  const quantity = validLineQuantity(line, item)
-  const price = parseSomToTiyin(line.unitPrice)
-  if (!item || quantity === null || price === null) return null
-  return isMetreUnit(item.display_unit) ? Math.floor((quantity * price) / 1000) : quantity * price
-}
-
-const invoiceSubtotalTiyin = computed(() =>
-  invoiceLines.value.reduce((sum, line) => sum + (lineTotalTiyin(line) ?? 0), 0),
-)
-const invoiceDiscountTiyin = computed(() => parseSomToTiyin(invoiceForm.discount) ?? 0)
-const invoiceSurchargeTiyin = computed(() => parseSomToTiyin(invoiceForm.surcharge) ?? 0)
-const invoiceTotalTiyin = computed(
-  () => invoiceSubtotalTiyin.value - invoiceDiscountTiyin.value + invoiceSurchargeTiyin.value,
-)
-const invoiceDiscountTooBig = computed(
-  () => invoiceDiscountTiyin.value > invoiceSubtotalTiyin.value,
-)
-
-// A real (non-inline) selected supplier id, for supplier-specific prefill.
-const invoiceRealSupplierId = computed(() =>
-  invoiceForm.supplierId && invoiceForm.supplierId !== 'inline' ? invoiceForm.supplierId : null,
-)
-
-const lastPriceFetchTokens = new Map<number, number>()
-async function refreshLineLastPrice(line: InvoiceLineDraft) {
-  if (!selectedBranchId.value || !line.materialId) {
-    line.lastPrice = null
-    line.lastPriceLoaded = false
-    return
-  }
-  const token = (lastPriceFetchTokens.get(line.key) ?? 0) + 1
-  lastPriceFetchTokens.set(line.key, token)
-  try {
-    const fetched = await workshop.fetchMaterialLastPrice(
-      selectedBranchId.value,
-      line.materialId,
-      invoiceRealSupplierId.value,
-    )
-    if (lastPriceFetchTokens.get(line.key) !== token) return
-    line.lastPrice = fetched
-    line.lastPriceLoaded = true
-    // Prefill only into a field the user has not touched — a typed value always
-    // wins. The emptiness check is what makes that race-proof: the fetch is in
-    // flight while the price field is already reachable, and `priceEdited` only
-    // flips on the first input event, so a fast typist could otherwise have the
-    // prefill land on top of half-entered digits.
-    if (!line.priceEdited && !line.unitPrice) {
-      line.unitPrice =
-        fetched.unit_price_tiyin !== null && fetched.unit_price_tiyin > 0
-          ? String(Math.round(fetched.unit_price_tiyin / 100))
-          : ''
-    }
-  } catch {
-    if (lastPriceFetchTokens.get(line.key) !== token) return
-    // Prefill is best-effort UX; a failed fetch must never block manual entry.
-    line.lastPrice = null
-    line.lastPriceLoaded = false
-  }
-}
-
-function onLineMaterialChange(line: InvoiceLineDraft) {
-  // A price belongs to a material — switching materials restarts the prefill.
-  line.priceEdited = false
-  line.unitPrice = ''
-  line.lastPriceLoaded = false
-  void refreshLineLastPrice(line)
-  focusLineQuantity(line)
-}
-
-/**
- * Picking a material replaces the combobox with the resolved label, so the input
- * the combobox hands focus back to is unmounted in the same tick and focus falls
- * to <body> — outside the modal, where its Escape handler never sees a keypress.
- * Quantity is where the operator is going next anyway.
- */
-function focusLineQuantity(line: InvoiceLineDraft) {
-  if (!line.materialId) return
-  void nextTick(() => {
-    document.querySelector<HTMLInputElement>(`[data-qty-for="${line.key}"]`)?.focus()
-  })
-}
-
-/** The picked material's full label, for the resolved (non-input) cell. */
-function lineMaterialLabel(line: InvoiceLineDraft): string {
-  return stockOptions.value.find((option) => option.value === line.materialId)?.label ?? ''
-}
-
-/** Back to the picker. Clearing the material must clear what belonged to it. */
-function clearInvoiceLineMaterial(line: InvoiceLineDraft) {
-  line.materialId = ''
-  onLineMaterialChange(line)
-}
-
-function addInvoiceLine() {
-  invoiceLines.value = [...invoiceLines.value, blankLine()]
-}
-
-function removeInvoiceLine(key: number) {
-  const remaining = invoiceLines.value.filter((line) => line.key !== key)
-  invoiceLines.value = remaining.length > 0 ? remaining : [blankLine()]
-}
-
-watch(invoiceRealSupplierId, () => {
-  for (const line of invoiceLines.value) {
-    if (line.materialId) void refreshLineLastPrice(line)
-  }
-})
-
 const paymentStatusFilterOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('inventory.invoices.paymentAll') },
   { value: 'unpaid', label: t('inventory.invoices.unpaid'), dot: 'danger' },
@@ -446,26 +239,12 @@ function paymentStatusPill(status: InvoicePaymentStatus) {
   return { cls: 'pill p-bad', text: t('inventory.invoices.unpaid') }
 }
 
-function isInvoiceExpanded(id: string) {
-  return expandedInvoiceIds.value.includes(id)
-}
-
-function toggleInvoice(id: string) {
-  expandedInvoiceIds.value = isInvoiceExpanded(id)
-    ? expandedInvoiceIds.value.filter((row) => row !== id)
-    : [...expandedInvoiceIds.value, id]
-}
-
 const activeListEmpty = computed(() => {
   if (activeTab.value === 'stock') return workshop.stockItems.length === 0
   if (activeTab.value === 'invoices') return workshop.supplierInvoices.length === 0
   if (activeTab.value === 'tx') return workshop.stockTransactions.length === 0
   return workshop.suppliers.length === 0
 })
-
-function stockItemByMaterial(materialId: string | null): StockItem | null {
-  return workshop.stockItems.find((item) => item.branch_material_id === materialId) ?? null
-}
 
 // A negative balance means production consumed material whose arrival was never
 // recorded (QAD-150). It is not "low" — it is a bookkeeping gap that wants an
@@ -479,18 +258,29 @@ function isNegative(item: StockItem) {
 // `0.4×19 mm · kromka (metr)` for a tape. Reads the branch material's own format
 // fields — there is no stored name, and `material.label` already carries identity.
 function materialMeta(item: (typeof workshop.stockItems)[number]) {
-  const thickness = formatMm(item.material.qalinlik_mm)
-  if (isTape(item.tur)) {
+  const thickness = formatMm(item.material.decor_format.thickness_mm)
+  if (isTape(item.type)) {
     return t('inventory.stock.materialMetaTape', {
       thickness,
-      width: item.material.kromka_eni_mm ?? 0,
+      width: item.material.decor_format.tape_width_mm ?? 0,
     })
   }
   return t('inventory.stock.materialMetaPanel', {
     thickness,
-    length: item.material.uzunlik_mm ?? 0,
-    width: item.material.eni_mm ?? 0,
+    length: item.material.decor_format.length_mm ?? 0,
+    width: item.material.decor_format.width_mm ?? 0,
   })
+}
+
+// A movement's pill reads its direction: arrivals green, everything that takes
+// stock away red, corrections amber, restores neutral. A void reversal is a
+// stock-out of an arrival that should not have been booked, so it sits with the
+// other subtractions rather than borrowing the arrival's green.
+function transactionTypePill(type: StockTransaction['type']) {
+  if (type === 'stock_in') return 'pill p-ok'
+  if (type === 'adjust') return 'pill p-warn'
+  if (type === 'restore') return 'pill p-conf'
+  return 'pill p-bad'
 }
 
 function transactionDisplayUnit(materialId: string) {
@@ -520,11 +310,25 @@ function transactionFilterKey() {
 }
 
 function stockFilterKey() {
-  return [selectedBranchId.value, search.value.trim(), lowOnly.value ? 'low' : 'all'].join(':')
+  const filters = stockListFilters(stockScope.value)
+  return [
+    selectedBranchId.value,
+    filters.search,
+    filters.low_stock ? 'low' : 'all',
+    filters.moved_only ? 'moved' : 'catalog',
+    filters.types?.join('+') ?? 'any',
+  ].join(':')
 }
 
 function invoiceFilterKey() {
-  return [selectedBranchId.value, invoiceSearch.value.trim(), invoicePaymentFilter.value].join(':')
+  return [
+    selectedBranchId.value,
+    invoiceSearch.value.trim(),
+    invoicePaymentFilter.value,
+    invoiceDateFrom.value || 'open',
+    invoiceDateTo.value || 'open',
+    invoiceSupplierId.value,
+  ].join(':')
 }
 
 async function refreshActiveInventoryTab(options: { force?: boolean; offset?: number } = {}) {
@@ -545,19 +349,29 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
   workshop.inventoryTraceId = null
   try {
     if (activeTab.value === 'stock') {
-      await workshop.loadStock(branchId, {
-        search: search.value.trim(),
-        low_stock: lowOnly.value ? true : null,
-      })
+      const filters = stockListFilters(stockScope.value)
+      await workshop.loadStock(branchId, filters)
       stockLoadedKey.value = stockKey
+      // An empty moved scope has two possible causes with opposite advice —
+      // nothing has moved yet, or the branch carries nothing at all. The
+      // picker collection answers that, and only this case needs it.
+      if (workshop.stockItems.length === 0 && filters.moved_only) await ensureStockPicker()
       return
     }
     if (activeTab.value === 'invoices') {
       await workshop.loadSupplierInvoices(branchId, {
         search: invoiceSearch.value.trim() || null,
         payment_status: invoicePaymentFilter.value === 'all' ? null : invoicePaymentFilter.value,
+        supplier_id: invoiceSupplierId.value === 'all' ? null : invoiceSupplierId.value,
+        date_from: invoiceDateFrom.value || null,
+        date_to: invoiceDateTo.value || null,
+        limit: INVENTORY_INVOICE_PAGE_LIMIT,
+        offset,
       })
-      invoicesLoadedKey.value = invoiceKey
+      if (offset === 0) invoicesLoadedKey.value = invoiceKey
+      // The supplier filter needs the branch's suppliers, which otherwise only
+      // load on their own tab.
+      if (workshop.suppliers.length === 0) await workshop.loadSuppliers(branchId)
       return
     }
     if (activeTab.value === 'tx') {
@@ -590,143 +404,10 @@ async function loadMoreTransactions() {
   await refreshActiveInventoryTab({ force: true, offset: workshop.stockTransactions.length })
 }
 
-async function ensureSuppliersLoaded() {
+async function loadMoreInvoices() {
   if (!selectedBranchId.value) return
-  if (suppliersLoadedBranch.value === selectedBranchId.value) return
-  try {
-    await workshop.loadSuppliers(selectedBranchId.value)
-    suppliersLoadedBranch.value = selectedBranchId.value
-  } catch {
-    supplierError.value = 'suppliers_load_failed'
-  }
-}
-
-function validLineQuantity(line: InvoiceLineDraft, item: StockItem | null) {
-  const quantity = parseDisplayQuantity(line.quantity, item?.display_unit ?? 'piece')
-  return Number.isFinite(quantity) && quantity > 0 ? quantity : null
-}
-
-// Requires an explicit leading + or − and a positive magnitude; returns the
-// SIGNED quantity in the stock unit, or null when either is missing.
-function validAdjustmentQuantity(item: StockItem | null) {
-  const raw = adjustmentForm.quantity
-  const sign = raw.startsWith('+') ? 1 : raw.startsWith('-') ? -1 : 0
-  if (sign === 0) return null
-  const magnitude = parseDisplayQuantity(raw.slice(1), item?.display_unit ?? 'piece')
-  return Number.isFinite(magnitude) && magnitude > 0 ? sign * magnitude : null
-}
-
-// `withExpense` is what makes the invoice→expense link actually get used:
-// without it staff record the payment separately and never attach it.
-async function saveInvoice(withExpense = false) {
-  if (!selectedBranchId.value) return
-  movementSaving.value = true
-  movementError.value = null
-  invoiceSupplierError.value = null
-  invoiceInlineSupplierError.value = null
-  invoiceLinesError.value = null
-  invoiceDiscountError.value = null
-
-  if (!invoiceForm.supplierId) {
-    invoiceSupplierError.value = t('inventory.invoice.supplierRequired')
-    movementSaving.value = false
-    return
-  }
-  if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
-    invoiceInlineSupplierError.value = t('inventory.invoice.inlineSupplierRequired')
-    movementSaving.value = false
-    return
-  }
-  const lines: Array<{
-    branch_material_id: string
-    quantity: number
-    unit_price_tiyin: number
-  }> = []
-  for (const line of invoiceLines.value) {
-    const item = stockItemByMaterial(line.materialId)
-    const quantity = validLineQuantity(line, item)
-    const unitPriceTiyin = parseSomToTiyin(line.unitPrice)
-    if (!item || quantity === null || unitPriceTiyin === null) {
-      invoiceLinesError.value = t('inventory.invoice.linesInvalid')
-      movementSaving.value = false
-      return
-    }
-    lines.push({
-      branch_material_id: item.branch_material_id,
-      quantity,
-      unit_price_tiyin: unitPriceTiyin,
-    })
-  }
-  if (invoiceDiscountTooBig.value) {
-    invoiceDiscountError.value = t('inventory.invoice.discountTooBig')
-    movementSaving.value = false
-    return
-  }
-
-  try {
-    const invoice = await workshop.createSupplierInvoice(selectedBranchId.value, {
-      supplier_id: invoiceForm.supplierId === 'inline' ? null : invoiceForm.supplierId,
-      supplier:
-        invoiceForm.supplierId === 'inline'
-          ? { name: invoiceForm.inlineSupplierName.trim() }
-          : null,
-      invoice_date: invoiceForm.invoiceDate || null,
-      discount_tiyin: invoiceDiscountTiyin.value,
-      surcharge_tiyin: invoiceSurchargeTiyin.value,
-      note: invoiceForm.note || null,
-      lines,
-    })
-    resetInvoiceForm()
-    invoiceOpen.value = false
-    invoicesLoadedKey.value = null
-    toast.success(t('inventory.invoice.saved', { number: invoice.invoice_no }))
-    if (withExpense) {
-      await router.push(
-        rolePath(`/workshop/finance/expenses?create=expense&invoice_id=${invoice.id}`),
-      )
-      return
-    }
-    if (activeTab.value === 'invoices') await refreshActiveInventoryTab({ force: true })
-  } catch (errorValue) {
-    // A material can hold a (negative) stock row while sitting outside the branch
-    // catalog — production records what physically moved regardless (QAD-150).
-    // An invoice line still needs the catalog entry, so name the actual next
-    // step instead of the generic "kirim yozilmadi".
-    movementError.value =
-      apiErrorCode(errorValue) === 'branch_material_not_found'
-        ? 'branch_material_not_found'
-        : 'invoice_save_failed'
-  } finally {
-    movementSaving.value = false
-  }
-}
-
-async function recordAdjustment() {
-  if (!selectedBranchId.value) return
-  movementSaving.value = true
-  movementError.value = null
-  adjustmentMaterialError.value = null
-  const item = selectedAdjustmentItem.value
-  const quantity = validAdjustmentQuantity(item)
-  if (!item || quantity === null) {
-    adjustmentMaterialError.value = t('inventory.adjustment.materialRequired')
-    movementSaving.value = false
-    return
-  }
-  try {
-    await workshop.recordAdjustment(selectedBranchId.value, {
-      branch_material_id: item.branch_material_id,
-      quantity,
-      note: adjustmentForm.note,
-    })
-    resetAdjustmentForm()
-    adjustmentOpen.value = false
-    toast.success(t('inventory.adjustment.saved'))
-  } catch {
-    movementError.value = 'adjustment_failed'
-  } finally {
-    movementSaving.value = false
-  }
+  activeTab.value = 'invoices'
+  await refreshActiveInventoryTab({ force: true, offset: workshop.supplierInvoices.length })
 }
 
 async function saveSupplier() {
@@ -808,34 +489,11 @@ function closeSupplierModal() {
   resetSupplierForm()
 }
 
-function openInvoiceModal() {
-  resetInvoiceForm()
-  movementError.value = null
-  invoiceOpen.value = true
-  void ensureSuppliersLoaded()
-}
-
-function resetInvoiceForm() {
-  invoiceForm.supplierId = null
-  invoiceForm.inlineSupplierName = ''
-  invoiceForm.invoiceDate = today
-  invoiceForm.discount = ''
-  invoiceForm.surcharge = ''
-  invoiceForm.note = ''
-  invoiceLines.value = [blankLine()]
-  invoiceSupplierError.value = null
-  invoiceInlineSupplierError.value = null
-  invoiceLinesError.value = null
-  invoiceDiscountError.value = null
-}
-
-function resetAdjustmentForm() {
-  adjustmentForm.materialId = null
-  adjustmentForm.quantity = ''
-  adjustmentForm.note = ''
-  adjustmentMaterialError.value = null
-}
-
+/**
+ * The arrival form opened from a stock row: the page seeds line 1 from
+ * `?material=`, so the row-opened form still lands with that material picked,
+ * its last price in flight and focus in the quantity field.
+ */
 function resetSupplierForm() {
   editingSupplierId.value = null
   supplierForm.name = ''
@@ -860,19 +518,12 @@ watch(selectedBranchId, () => {
   transactionsLoadedKey.value = null
   invoicesLoadedKey.value = null
   suppliersLoadedBranch.value = null
-  expandedInvoiceIds.value = []
   workshop.clearInventory()
   void refreshActiveInventoryTab({ force: true })
 })
 
 watch(activeTab, () => {
   void refreshActiveInventoryTab()
-})
-
-// Clear the adjustment form when the modal closes so a fresh open always starts
-// empty rather than with the last entry's signed quantity.
-watch(adjustmentOpen, (open) => {
-  if (!open) resetAdjustmentForm()
 })
 
 watch(
@@ -886,11 +537,16 @@ watch([txDateFrom, txDateTo, txMaterialId], () => {
   if (activeTab.value === 'tx') void refreshActiveInventoryTab({ force: true })
 })
 
-watch([search, lowOnly], () => {
+watch([search, lowOnly, wholeCatalog, stockTur], () => {
   window.clearTimeout(stockSearchTimer)
   stockSearchTimer = window.setTimeout(() => {
     if (activeTab.value === 'stock') void refreshActiveInventoryTab({ force: true })
   }, 250)
+})
+
+watch([invoiceDateFrom, invoiceDateTo, invoiceSupplierId], () => {
+  if (activeTab.value !== 'invoices') return
+  void refreshActiveInventoryTab()
 })
 
 watch([invoiceSearch, invoicePaymentFilter], () => {
@@ -900,17 +556,24 @@ watch([invoiceSearch, invoicePaymentFilter], () => {
   }, 250)
 })
 
-// Materials feed the invoice line pickers, suppliers feed its header — both
-// live on the stock/supplier endpoints, so the Kirimlar tab loads them too.
-function primeInvoicePickers() {
+/**
+ * The branch's whole material list, for anything that has to offer a choice.
+ *
+ * Idempotent per branch inside the store, so every caller can just ask: the
+ * modals on open, the Tranzaksiyalar tab for its material filter, and the
+ * stock table when a moved-scope load came back empty and the empty state has
+ * to say which of the two emptinesses it is.
+ */
+async function ensureStockPicker() {
   if (!selectedBranchId.value) return
-  if (workshop.stockItems.length === 0) void workshop.loadStock(selectedBranchId.value)
-  void ensureSuppliersLoaded()
+  await workshop.loadStockPicker(selectedBranchId.value).catch(() => undefined)
 }
 
 watch(activeTab, (tab) => {
-  if (tab !== 'invoices') return
-  primeInvoicePickers()
+  // The transactions tab needs the picker list for its material filter and for
+  // the display unit each row's quantity is printed in. Kirimlar needs neither
+  // any more — its form left for a page of its own.
+  if (tab === 'tx') void ensureStockPicker()
 })
 
 onMounted(async () => {
@@ -918,15 +581,19 @@ onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
   await refreshActiveInventoryTab({ force: true })
   // A `?tab=` deep link opens straight on its tab, so the tab-change watcher
-  // that primes the line pickers never fired for it.
-  if (activeTab.value === 'invoices') primeInvoicePickers()
-  if (route.query.action !== 'kirim') return
-  // Consumed: drop it from the URL so a reload (or Back) does not reopen the
-  // form the operator just closed.
+  // that primes the picker never fired for it.
+  if (activeTab.value === 'tx') void ensureStockPicker()
+  // `?material=` is a filter preset for the transactions tab — «Barcha
+  // harakatlar» on the material page arrives with it — and is consumed rather
+  // than kept, so a reload does not re-apply a filter the operator cleared.
+  // The material itself is a page now, not a query on this one.
+  const deepLinkedMaterial = route.query.material
+  if (typeof deepLinkedMaterial !== 'string' || !deepLinkedMaterial) return
+  if (activeTab.value !== 'tx') return
+  txMaterialId.value = deepLinkedMaterial
   const query = { ...route.query }
-  delete query.action
+  delete query.material
   await router.replace({ query })
-  openInvoiceModal()
 })
 
 onBeforeUnmount(() => {
@@ -966,6 +633,15 @@ onBeforeUnmount(() => {
           <span>{{ $t('inventory.stock.searchLabel') }}</span>
           <input v-model="search" :placeholder="$t('inventory.stock.searchPlaceholder')" />
         </label>
+        <!-- Panels and tape share a shelf but not a question — one `type` at a
+             time is how the operator reads one of them. -->
+        <ProjectDropdown
+          v-if="activeTab === 'stock'"
+          v-model="stockTur"
+          :label="$t('inventory.stock.turLabel')"
+          :options="stockTurOptions"
+          top-label
+        />
         <button
           v-if="activeTab === 'stock'"
           type="button"
@@ -976,13 +652,44 @@ onBeforeUnmount(() => {
           <span class="mp-filter-chip-dot" aria-hidden="true"></span>
           {{ $t('inventory.stock.lowOnly') }}
         </button>
-        <label v-if="activeTab === 'invoices'" class="mp-filter-input">
+        <!-- The scope, not a filter: the table shows the warehouse, this opens
+             it to the whole catalog. While a search or the low chip is on, the
+             list is already the whole catalog — the chip says so rather than
+             offering a press that changes nothing. -->
+        <button
+          v-if="activeTab === 'stock'"
+          type="button"
+          class="mp-filter-chip"
+          :aria-pressed="wholeCatalog || stockScopeForced"
+          :disabled="stockScopeForced"
+          :title="stockScopeForced ? $t('inventory.stock.wholeCatalogForced') : undefined"
+          @click="wholeCatalog = !wholeCatalog"
+        >
+          <span class="mp-filter-chip-dot" aria-hidden="true"></span>
+          {{ $t('inventory.stock.wholeCatalog') }}
+        </button>
+        <!-- Narrower than the shared 340px: this box holds a `K-0007`, never a
+             material name — the supplier moved to its own dropdown. -->
+        <label v-if="activeTab === 'invoices'" class="mp-filter-input !max-w-[190px]">
           <span>{{ $t('inventory.invoices.searchLabel') }}</span>
           <input
             v-model="invoiceSearch"
             :placeholder="$t('inventory.invoices.searchPlaceholder')"
           />
         </label>
+        <DateRangePicker
+          v-if="activeTab === 'invoices'"
+          v-model:preset="invoicePreset"
+          v-model:date-from="invoiceDateFrom"
+          v-model:date-to="invoiceDateTo"
+        />
+        <ProjectDropdown
+          v-if="activeTab === 'invoices'"
+          v-model="invoiceSupplierId"
+          :label="$t('inventory.invoices.supplierFilterLabel')"
+          :options="invoiceSupplierOptions"
+          top-label
+        />
         <ProjectDropdown
           v-if="activeTab === 'invoices'"
           v-model="invoicePaymentFilter"
@@ -990,14 +697,13 @@ onBeforeUnmount(() => {
           :options="paymentStatusFilterOptions"
           top-label
         />
-        <button
+        <RouterLink
           v-if="activeTab === 'invoices'"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openInvoiceModal"
+          :to="rolePath('/workshop/inventory/invoices/new')"
+          class="mp-button mp-button-primary no-underline"
         >
           {{ $t('inventory.invoice.createAction') }}
-        </button>
+        </RouterLink>
         <DateRangePicker
           v-if="activeTab === 'tx'"
           v-model:preset="txPreset"
@@ -1019,337 +725,8 @@ onBeforeUnmount(() => {
         :loading="workshop.loading"
         :count="workshop.stockItems.length"
         noun="material"
-        :on-reset="
-          search.trim() && lowOnly
-            ? () => {
-                search = ''
-                lowOnly = false
-              }
-            : null
-        "
+        :on-reset="stockFilterCount > 1 ? resetStockFilters : null"
       />
-
-      <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
-        <button type="button" class="mp-button mp-button-primary" @click="openInvoiceModal">
-          {{ $t('inventory.invoice.title') }}
-        </button>
-        <button type="button" class="mp-button mp-button-outline" @click="adjustmentOpen = true">
-          {{ $t('inventory.stock.adjustAction') }}
-        </button>
-      </div>
-
-      <AppModal
-        :open="invoiceOpen"
-        :title="$t('inventory.invoice.title')"
-        max-width="max-w-3xl"
-        @close="invoiceOpen = false"
-      >
-        <form class="grid gap-4" @submit.prevent="saveInvoice(false)">
-          <!-- Header: who delivered, when, and the number the document will get. -->
-          <div class="grid gap-3 md:grid-cols-2">
-            <FormSelect
-              v-model="invoiceForm.supplierId"
-              :label="$t('inventory.invoice.supplier')"
-              :options="activeSupplierOptions"
-              :error="invoiceSupplierError"
-              @focusin="ensureSuppliersLoaded"
-            />
-            <label class="field">
-              <span>{{ $t('inventory.invoice.date') }}</span>
-              <!-- The last native date input in the app (QAD-182). It rendered
-                   in the browser's OS locale, so the same faktura read
-                   28/07/2026 here and 07/28/2026 on an en-US machine. -->
-              <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
-            </label>
-          </div>
-          <!-- The error belongs on the field that is wrong. Both supplier failures
-               used to write to the select's `:error`, so "type the new supplier's
-               name" was rendered against the dropdown — which already had a value —
-               and the operator saw nothing at all next to the empty input. -->
-          <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
-            <span>{{ $t('inventory.invoice.inlineSupplierName') }}</span>
-            <input
-              v-model="invoiceForm.inlineSupplierName"
-              class="mp-input"
-              :aria-invalid="invoiceInlineSupplierError ? 'true' : undefined"
-              aria-describedby="invoice-inline-supplier-error"
-              required
-            />
-            <small
-              v-if="invoiceInlineSupplierError"
-              id="invoice-inline-supplier-error"
-              class="mp-field-error"
-            >
-              {{ invoiceInlineSupplierError }}
-            </small>
-          </label>
-
-          <div class="grid gap-2">
-            <div class="table-wrap">
-              <table class="tbl">
-                <thead>
-                  <!-- Explicit widths: `auto` layout gave the material the same
-                       share as a two-digit quantity, so a 47-character label was
-                       clipped to 24 while three numeric columns sat half empty. -->
-                  <tr>
-                    <th class="w-[29%]">{{ $t('inventory.invoice.columnMaterial') }}</th>
-                    <th class="right w-[19%]">{{ $t('inventory.invoice.columnQuantity') }}</th>
-                    <th class="right w-[24%]">{{ $t('inventory.invoice.columnPrice') }}</th>
-                    <th class="right w-[21%]">{{ $t('inventory.invoice.columnAmount') }}</th>
-                    <th class="w-[7%]"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-for="line in invoiceLines" :key="line.key">
-                    <tr>
-                      <td class="align-top">
-                        <!-- Once picked, the material stops being an input and
-                             becomes wrapping text. A material label runs to ~371px
-                             ("LDSP Egger H1145 · Sonoma eman · 2800×2070×18 mm") and
-                             no single-line input in this modal can hold it — it was
-                             clipped to "LDSP Egger H1145 · Sonor", so the operator
-                             could not read what they had just chosen. Text wraps;
-                             an input never can.
-                             The column header carries the label on screen; the bound
-                             one stays for screen readers. -->
-                        <!-- The label IS the control: a separate "O'zgartirish"
-                             button took 81px of a 228px cell and squeezed the text
-                             to four lines. Clicking the name returns to the picker,
-                             so the full width goes to the thing being read. -->
-                        <button
-                          v-if="line.materialId"
-                          type="button"
-                          class="w-full text-left text-sm font-bold leading-snug text-ink hover:underline"
-                          :title="$t('inventory.invoice.changeMaterial')"
-                          @click="clearInvoiceLineMaterial(line)"
-                        >
-                          {{ lineMaterialLabel(line) }}
-                        </button>
-                        <SearchCombobox
-                          v-else
-                          v-model="line.materialId"
-                          :label="$t('inventory.invoice.columnMaterial')"
-                          label-class="sr-only"
-                          :options="stockOptions"
-                          compact
-                          @update:model-value="onLineMaterialChange(line)"
-                        />
-                      </td>
-                      <td class="align-top">
-                        <span class="mp-unit-field">
-                          <!-- No `placeholder="0"`: an untouched row read as a real
-                             `0 × 0` line rather than an empty one. The column
-                             header and the unit suffix already say what goes here. -->
-                          <input
-                            v-model="line.quantity"
-                            :data-qty-for="line.key"
-                            class="mp-input text-right"
-                            inputmode="decimal"
-                            :aria-label="
-                              $t('inventory.invoice.quantityAria', { unit: lineQuantityUnit(line) })
-                            "
-                          />
-                          <span class="mp-unit-suffix" aria-hidden="true">{{
-                            lineQuantityUnit(line)
-                          }}</span>
-                        </span>
-                      </td>
-                      <td class="align-top">
-                        <span class="mp-unit-field">
-                          <input
-                            v-model="line.unitPrice"
-                            class="mp-input text-right"
-                            inputmode="decimal"
-                            :aria-label="
-                              $t('inventory.invoice.priceAria', { unit: linePriceUnit(line) })
-                            "
-                            @input="line.priceEdited = true"
-                          />
-                          <span class="mp-unit-suffix" aria-hidden="true">{{
-                            linePriceUnit(line)
-                          }}</span>
-                        </span>
-                      </td>
-                      <td class="amt whitespace-nowrap align-top">
-                        {{
-                          lineTotalTiyin(line) !== null
-                            ? formatTiyin(lineTotalTiyin(line) ?? 0)
-                            : '—'
-                        }}
-                      </td>
-                      <td class="right align-top">
-                        <button
-                          type="button"
-                          class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                          :aria-label="$t('inventory.invoice.removeLineAria')"
-                          @click="removeInvoiceLine(line.key)"
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                    <!-- The last-price provenance sits UNDER the line, not inside the
-                       price cell. In the cell it wrapped to three lines, drove the
-                       row to 104px, and pushed the three inputs onto three
-                       different baselines. -->
-                    <tr v-if="lineLastPriceHint(line)" class="hint-row">
-                      <td colspan="5" class="pt-0 text-[11px] text-ink-muted">
-                        {{ lineLastPriceHint(line) }}
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-            <div>
-              <button
-                type="button"
-                class="mp-button mp-button-outline min-h-9 px-3 text-sm"
-                @click="addInvoiceLine"
-              >
-                {{ $t('inventory.invoice.addLine') }}
-              </button>
-            </div>
-            <small v-if="invoiceLinesError" class="mp-field-error">{{ invoiceLinesError }}</small>
-          </div>
-
-          <div class="grid gap-3 md:grid-cols-2">
-            <!-- `self-start`: a one-line note must not stretch to the height of
-                 the totals block sitting beside it. -->
-            <label class="field !mb-0 self-start">
-              <span>{{ $t('inventory.invoice.noteLabel') }}</span>
-              <input
-                v-model="invoiceForm.note"
-                class="mp-input"
-                :placeholder="$t('inventory.invoice.notePlaceholder')"
-              />
-            </label>
-            <!-- Chegirma and Ustama are the operator's to type; Oraliq jami and
-                 Jami are computed. They used to share one sunk panel, so two live
-                 inputs read as readouts. Editable fields sit on the page surface;
-                 only the derived numbers keep the summary treatment. -->
-            <div class="grid gap-3">
-              <div class="grid grid-cols-2 gap-3">
-                <label class="field !mb-0">
-                  <span>{{ $t('inventory.invoice.discount') }}</span>
-                  <input
-                    v-model="invoiceForm.discount"
-                    class="mp-input text-right"
-                    inputmode="numeric"
-                  />
-                </label>
-                <label class="field !mb-0">
-                  <span>{{ $t('inventory.invoice.surcharge') }}</span>
-                  <input
-                    v-model="invoiceForm.surcharge"
-                    class="mp-input text-right"
-                    inputmode="numeric"
-                  />
-                </label>
-              </div>
-              <small v-if="invoiceDiscountError" class="mp-field-error">
-                {{ invoiceDiscountError }}
-              </small>
-              <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
-                <div class="flex items-center justify-between">
-                  <span class="text-ink-soft">{{ $t('inventory.invoice.subtotal') }}</span>
-                  <span class="num">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
-                </div>
-                <div
-                  class="flex items-center justify-between border-t border-hairline-strong pt-2 text-base font-bold"
-                >
-                  <span>{{ $t('inventory.invoice.total') }}</span>
-                  <span class="num">{{ formatTiyin(invoiceTotalTiyin) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p
-            v-if="movementError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          >
-            {{
-              movementError === 'branch_material_not_found'
-                ? $t('inventory.error.branch_material_not_found')
-                : $t('inventory.error.invoice_save_failed')
-            }}
-          </p>
-          <!-- The two save actions group right; Bekor is pushed to the far left so
-               it stops competing with them. Three same-weight buttons in a row
-               gave equal billing to "cancel" and "save". DESIGN.md — one primary
-               action per screen. -->
-          <div class="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              class="mp-button mp-button-outline mr-auto"
-              @click="invoiceOpen = false"
-            >
-              {{ $t('inventory.action.cancel') }}
-            </button>
-            <button
-              v-if="canSeeDebts"
-              type="button"
-              class="mp-button mp-button-outline"
-              :disabled="movementSaving"
-              @click="saveInvoice(true)"
-            >
-              {{ $t('inventory.invoice.saveWithExpense') }}
-            </button>
-            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-              {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
-            </button>
-          </div>
-        </form>
-      </AppModal>
-
-      <AppModal
-        :open="adjustmentOpen"
-        :title="$t('inventory.adjustment.title')"
-        @close="adjustmentOpen = false"
-      >
-        <form class="grid gap-3" @submit.prevent="recordAdjustment">
-          <SearchCombobox
-            v-model="adjustmentForm.materialId"
-            :label="$t('inventory.adjustment.material')"
-            :options="stockOptions"
-            :error="adjustmentMaterialError"
-          />
-          <label class="field">
-            <span>{{
-              selectedAdjustmentItem
-                ? $t('inventory.adjustment.quantityWithUnit', {
-                    unit: formatStockUnit(selectedAdjustmentItem.display_unit),
-                  })
-                : $t('inventory.adjustment.quantity')
-            }}</span>
-            <!-- Signed quantity: "-2" decreases, "+5" increases — the prefix is
-                 required, so inputmode stays text (numeric keypads lack +/−). -->
-            <input
-              v-model="adjustmentForm.quantity"
-              class="mp-input"
-              :placeholder="$t('inventory.adjustment.quantityPlaceholder')"
-              required
-            />
-            <small v-if="adjustmentNeedsSign" class="text-ink-muted">
-              {{ $t('inventory.adjustment.signHint') }}
-            </small>
-          </label>
-          <label class="field">
-            <span>{{ $t('inventory.adjustment.noteLabel') }}</span>
-            <input v-model="adjustmentForm.note" class="mp-input" required />
-          </label>
-          <p
-            v-if="movementError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          >
-            {{ $t('inventory.error.adjustment_failed') }}
-          </p>
-          <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-            {{ movementSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
-          </button>
-        </form>
-      </AppModal>
 
       <div v-if="workshop.inventoryLoading && activeListEmpty" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
@@ -1381,13 +758,32 @@ onBeforeUnmount(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in workshop.stockItems" :key="item.id">
+              <tr v-for="item in workshop.stockItems" :key="item.id" class="row-clickable">
                 <td>
                   <div class="flex min-w-0 items-center gap-3">
-                    <span class="sw" :class="materialSwatchClass(item.material.dekor)"></span>
+                    <span class="sw" :class="materialSwatchClass(item.material.decor)"></span>
                     <span class="min-w-0">
-                      <span class="nm">{{ item.material.label }}</span>
-                      <small class="block truncate text-ink-muted">{{ materialMeta(item) }}</small>
+                      <!-- The name is the row's control: the one thing anyone
+                           comes to a stock row to do is read the material's
+                           story (QAD-184's row-is-its-own-control pattern). -->
+                      <RouterLink
+                        :to="rolePath(`/workshop/inventory/materials/${item.branch_material_id}`)"
+                        class="nm row-open row-open-text"
+                        :aria-label="
+                          $t('inventory.stock.openAria', { material: item.material.label })
+                        "
+                      >
+                        {{ item.material.label }}
+                      </RouterLink>
+                      <small class="block truncate text-ink-muted">
+                        {{ materialMeta(item) }}
+                        <!-- The platform retired the format: the shelf is still
+                             real, but nobody will reorder it — said here so a low
+                             balance does not read as "buy more". -->
+                        <template v-if="item.material.decor_format.status === 'inactive'">
+                          · {{ $t('inventory.stock.discontinued') }}
+                        </template>
+                      </small>
                     </span>
                   </div>
                 </td>
@@ -1435,10 +831,17 @@ onBeforeUnmount(() => {
               </tr>
               <tr v-if="workshop.stockItems.length === 0">
                 <td colspan="4">
+                  <!-- Three emptinesses, three answers: a filter that matched
+                       nothing · a warehouse nobody has moved anything into ·
+                       a branch carrying no materials at all. -->
                   <div class="st-empty !border-0 !py-8">
-                    <template v-if="stockFiltered">
+                    <template v-if="stockEmptyState === 'filtered'">
                       <h3>{{ $t('inventory.stock.emptyFilteredTitle') }}</h3>
                       <p>{{ $t('inventory.stock.emptyFilteredBody') }}</p>
+                    </template>
+                    <template v-else-if="stockEmptyState === 'moved'">
+                      <h3>{{ $t('inventory.stock.emptyMovedTitle') }}</h3>
+                      <p>{{ $t('inventory.stock.emptyMovedBody') }}</p>
                     </template>
                     <template v-else>
                       <h3>{{ $t('inventory.stock.emptyTitle') }}</h3>
@@ -1475,52 +878,45 @@ onBeforeUnmount(() => {
                 <th class="right">{{ $t('inventory.invoices.columnLines') }}</th>
                 <th class="right">{{ $t('inventory.invoices.columnTotal') }}</th>
                 <th>{{ $t('inventory.invoices.columnPayment') }}</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <template v-for="invoice in workshop.supplierInvoices" :key="invoice.id">
-                <tr class="row-clickable">
-                  <td class="nm">{{ invoice.invoice_no }}</td>
-                  <td>
-                    {{ invoice.supplier_name ?? '—' }}
-                    <small v-if="invoice.note" class="block truncate text-ink-muted">
-                      {{ invoice.note }}
-                    </small>
-                  </td>
-                  <td class="num text-ink-muted">{{ formatDate(invoice.invoice_date) }}</td>
-                  <td class="num right">
-                    {{
-                      $t(
-                        'inventory.invoices.lineCount',
-                        { n: invoice.line_count },
-                        invoice.line_count,
-                      )
-                    }}
-                  </td>
-                  <td class="amt">
-                    {{ formatTiyin(invoice.total_tiyin) }}
-                    <small
-                      v-if="invoice.discount_tiyin > 0 || invoice.surcharge_tiyin > 0"
-                      class="block text-[11px] text-ink-muted"
-                    >
-                      <template v-if="invoice.discount_tiyin > 0">
-                        {{
-                          $t('inventory.invoices.discountLine', {
-                            amount: formatTiyin(invoice.discount_tiyin),
-                          })
-                        }}
-                      </template>
-                      <template v-if="invoice.surcharge_tiyin > 0">
-                        {{
-                          $t('inventory.invoices.surchargeLine', {
-                            amount: formatTiyin(invoice.surcharge_tiyin),
-                          })
-                        }}
-                      </template>
-                    </small>
-                  </td>
-                  <td>
+              <tr
+                v-for="invoice in workshop.supplierInvoices"
+                :key="invoice.id"
+                class="row-clickable"
+              >
+                <td class="nm">
+                  <!-- The number is the row's control: it opens the document,
+                       which is the only thing anyone comes to this row to do.
+                       A real link, so middle-click and Cmd-click work. -->
+                  <RouterLink
+                    :to="rolePath(`/workshop/inventory/invoices/${invoice.id}`)"
+                    class="row-open row-open-text"
+                    :aria-label="$t('inventory.invoices.openAria', { invoice: invoice.invoice_no })"
+                  >
+                    {{ invoice.invoice_no }}
+                  </RouterLink>
+                </td>
+                <td>{{ invoice.supplier_name ?? '—' }}</td>
+                <td class="num text-ink-muted">{{ formatDate(invoice.invoice_date) }}</td>
+                <td class="num right">
+                  {{
+                    $t(
+                      'inventory.invoices.lineCount',
+                      { n: invoice.line_count },
+                      invoice.line_count,
+                    )
+                  }}
+                </td>
+                <!-- One number: with the document-level skidka gone from the
+                     UI the total IS the line sum. -->
+                <td class="amt">{{ formatTiyin(invoice.total_tiyin) }}</td>
+                <td>
+                  <span v-if="invoice.status === 'voided'" class="pill p-bad">
+                    <span class="pd"></span>{{ $t('inventory.invoices.voided') }}
+                  </span>
+                  <template v-else>
                     <span :class="paymentStatusPill(invoice.payment_status).cls">
                       <span class="pd"></span>{{ paymentStatusPill(invoice.payment_status).text }}
                     </span>
@@ -1534,104 +930,22 @@ onBeforeUnmount(() => {
                         })
                       }}
                     </small>
-                  </td>
-                  <td class="right">
-                    <!-- The chevron is the whole row's control (QAD-184): it
-                         stretches over the row and states the row it expands,
-                         while `aria-expanded` carries open/closed. -->
-                    <button
-                      type="button"
-                      class="mp-row-icon row-open"
-                      :aria-label="
-                        $t('inventory.invoices.expandAria', { invoice: invoice.invoice_no })
-                      "
-                      :aria-expanded="isInvoiceExpanded(invoice.id)"
-                      :aria-controls="`invoice-lines-${invoice.id}`"
-                      @click="toggleInvoice(invoice.id)"
-                    >
-                      <AppIcon
-                        name="chevron-down"
-                        :class="isInvoiceExpanded(invoice.id) ? 'rotate-180' : ''"
-                      />
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="isInvoiceExpanded(invoice.id)" :id="`invoice-lines-${invoice.id}`">
-                  <td colspan="7" class="bg-sunk">
-                    <table class="tbl">
-                      <thead>
-                        <tr>
-                          <th>{{ $t('inventory.invoice.columnMaterial') }}</th>
-                          <th class="right">{{ $t('inventory.invoice.columnQuantity') }}</th>
-                          <th class="right">{{ $t('inventory.invoice.columnPrice') }}</th>
-                          <th class="right">{{ $t('inventory.invoice.columnAmount') }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="line in invoice.lines" :key="line.transaction_id">
-                          <td class="nm">{{ line.material_name }}</td>
-                          <td class="amt">
-                            {{ formatStockQuantity(line.quantity, line.display_unit) }}
-                          </td>
-                          <td class="amt">
-                            {{
-                              line.unit_price_tiyin !== null
-                                ? formatTiyin(line.unit_price_tiyin)
-                                : '—'
-                            }}
-                          </td>
-                          <td class="amt">
-                            {{
-                              line.total_price_tiyin !== null
-                                ? formatTiyin(line.total_price_tiyin)
-                                : '—'
-                            }}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td colspan="3" class="right text-ink-soft">
-                            {{ $t('inventory.invoice.subtotal') }}
-                          </td>
-                          <td class="amt">{{ formatTiyin(invoice.subtotal_tiyin) }}</td>
-                        </tr>
-                        <tr v-if="invoice.discount_tiyin > 0">
-                          <td colspan="3" class="right text-ink-soft">
-                            {{ $t('inventory.invoice.discount') }}
-                          </td>
-                          <td class="amt danger-text">
-                            −{{ formatTiyin(invoice.discount_tiyin) }}
-                          </td>
-                        </tr>
-                        <tr v-if="invoice.surcharge_tiyin > 0">
-                          <td colspan="3" class="right text-ink-soft">
-                            {{ $t('inventory.invoice.surcharge') }}
-                          </td>
-                          <td class="amt">+{{ formatTiyin(invoice.surcharge_tiyin) }}</td>
-                        </tr>
-                        <tr>
-                          <td colspan="3" class="right font-bold">
-                            {{ $t('inventory.invoice.total') }}
-                          </td>
-                          <td class="amt font-bold">{{ formatTiyin(invoice.total_tiyin) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </template>
+                  </template>
+                </td>
+              </tr>
               <tr v-if="workshop.supplierInvoices.length === 0">
-                <td colspan="7">
+                <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
                     <h3>
                       {{
-                        invoiceSearch.trim() || invoicePaymentFilter !== 'all'
+                        invoiceFiltered
                           ? $t('inventory.invoices.emptyFilteredTitle')
                           : $t('inventory.invoices.emptyTitle')
                       }}
                     </h3>
                     <p>
                       {{
-                        invoiceSearch.trim() || invoicePaymentFilter !== 'all'
+                        invoiceFiltered
                           ? $t('inventory.invoices.emptyFilteredBody')
                           : $t('inventory.invoices.emptyBody')
                       }}
@@ -1641,6 +955,23 @@ onBeforeUnmount(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+        <div
+          v-if="workshop.supplierInvoicesHasMore"
+          class="flex justify-center border-t border-hairline p-4"
+        >
+          <button
+            class="mp-button mp-button-outline min-h-10 px-4 text-sm"
+            type="button"
+            :disabled="workshop.inventoryLoading"
+            @click="loadMoreInvoices"
+          >
+            {{
+              workshop.inventoryLoading
+                ? $t('inventory.invoices.loading')
+                : $t('inventory.invoices.loadMore')
+            }}
+          </button>
         </div>
       </section>
 
@@ -1669,6 +1000,7 @@ onBeforeUnmount(() => {
                 <th class="right">{{ $t('inventory.tx.columnPrice') }}</th>
                 <th class="right">{{ $t('inventory.tx.columnAmount') }}</th>
                 <th>{{ $t('inventory.tx.columnOrder') }}</th>
+                <th>{{ $t('inventory.tx.columnInvoice') }}</th>
                 <th>{{ $t('inventory.tx.columnSupplier') }}</th>
                 <th>{{ $t('inventory.tx.columnActor') }}</th>
                 <th>{{ $t('inventory.tx.columnNote') }}</th>
@@ -1678,17 +1010,7 @@ onBeforeUnmount(() => {
               <tr v-for="tx in workshop.stockTransactions" :key="tx.id">
                 <td class="num text-ink-muted">{{ formatDateTime(tx.created_at) }}</td>
                 <td>
-                  <span
-                    :class="
-                      tx.type === 'stock_in'
-                        ? 'pill p-ok'
-                        : tx.type === 'adjust'
-                          ? 'pill p-warn'
-                          : tx.type === 'restore'
-                            ? 'pill p-conf'
-                            : 'pill p-bad'
-                    "
-                  >
+                  <span :class="transactionTypePill(tx.type)">
                     <span class="pd"></span>{{ stockTransactionTypeLabel(tx.type) }}
                   </span>
                 </td>
@@ -1721,6 +1043,19 @@ onBeforeUnmount(() => {
                   <span v-else class="muted">—</span>
                 </td>
                 <td>
+                  <!-- A movement's document, named rather than numbered: the
+                       ledger row links straight to the faktura page. -->
+                  <RouterLink
+                    v-if="tx.invoice_id && tx.invoice_no"
+                    :to="rolePath(`/workshop/inventory/invoices/${tx.invoice_id}`)"
+                    class="id no-underline"
+                    :aria-label="$t('inventory.tx.openInvoiceAria', { invoice: tx.invoice_no })"
+                  >
+                    {{ tx.invoice_no }}
+                  </RouterLink>
+                  <span v-else class="muted">—</span>
+                </td>
+                <td>
                   <small class="text-ink-soft">{{ tx.supplier_name ?? '—' }}</small>
                 </td>
                 <td>
@@ -1731,7 +1066,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="workshop.stockTransactions.length === 0">
-                <td colspan="11">
+                <td colspan="12">
                   <div class="st-empty !border-0 !py-8">
                     <h3>{{ $t('inventory.tx.emptyTitle') }}</h3>
                     <p>{{ $t('inventory.tx.emptyBody') }}</p>

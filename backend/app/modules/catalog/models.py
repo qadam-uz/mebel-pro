@@ -1,21 +1,41 @@
-"""Platform dekor catalog and branch material/pricing models.
+"""Platform decor catalog, decor formats and branch material/pricing models.
 
-The platform owns *identity* (`dekorlar`: who makes it, what it is, what it is
-called, what it looks like). A branch owns *format* (`branch_materials`: the
-thickness and sheet/tape size its own supplier actually sells, and its price).
-Platform operators cannot know a workshop's formats, which is why the two live
-apart — one dekor fans out to as many branch materials as a branch stocks.
+The platform owns the whole product fact. `decors` is *pattern identity* — who
+makes it, what it is called, what it looks like. `decor_formats` is the concrete
+product — substrate, thickness, sheet size or tape width, finished sides. A
+branch owns only the commercial decision: `branch_materials` is "we carry this
+format, at this price, with this reorder threshold, and it is on/off".
+
+This reverses the earlier "a branch owns the format" split (see
+`docs/ref/features/catalog-inventory.md`). A format is the manufacturer's fact,
+not the branch's, and the owner wants one id per physical product across every
+workshop — the basis for cross-workshop analytics, central price-list import and
+board-to-tape pairing. The cost, a branch waiting on the platform for a new
+size, is accepted and made visible in the attach sheet.
 """
 
 import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, func, text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, SmallInteger, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, Timestamped, UUIDPrimaryKey
-from app.models.enums import DekorType, MaterialStatus, enum_type
+from app.models.enums import DecorType, MaterialStatus, enum_type
+
+# The shape rule of a decor format, as one SQL predicate. Expressible as a table
+# CHECK now that `type` lives on the format itself — it could not be before,
+# when `type` was a column of the decor and unreachable from `branch_materials`.
+DECOR_FORMAT_SHAPE_CHECK = (
+    "(type = 'kromka' AND tape_width_mm IS NOT NULL "
+    "AND length_mm IS NULL AND width_mm IS NULL AND finished_sides IS NULL) "
+    "OR (type <> 'kromka' AND tape_width_mm IS NULL "
+    "AND length_mm IS NOT NULL AND width_mm IS NOT NULL "
+    "AND length_mm >= width_mm "
+    "AND ((type IN ('ldsp', 'dsp', 'mdf') AND finished_sides IN (1, 2)) "
+    "OR (type NOT IN ('ldsp', 'dsp', 'mdf') AND finished_sides IS NULL)))"
+)
 
 
 class Manufacturer(UUIDPrimaryKey, Timestamped, Base):
@@ -32,49 +52,53 @@ class Manufacturer(UUIDPrimaryKey, Timestamped, Base):
     )
 
 
-class Dekor(UUIDPrimaryKey, Timestamped, Base):
-    """A platform-owned catalog identity: one decor of one manufacturer.
+class Decor(UUIDPrimaryKey, Timestamped, Base):
+    """A platform-owned pattern identity: one decor of one manufacturer.
 
-    Carries no thickness, no size and no price — those are per-branch facts and
-    live on `BranchMaterial`. One photo (`image_file_id`) serves every format.
+    Carries no substrate, no thickness, no size and no price. Egger H1145 is ONE
+    decor that exists as an LDSP 18 mm board *and* as a 0.8x22 kromka — both are
+    `decor_formats` of this row, sharing its photo and its name.
     """
 
-    __tablename__ = "dekorlar"
+    __tablename__ = "decors"
     __table_args__ = (
         # Uniqueness is by decor code when there is one, by name when there is
-        # not. Two partial unique indexes, not UniqueConstraints: the predicate
-        # and the lower() are expressions, which a UniqueConstraint cannot carry
-        # (same reason as `uq_manufacturers_name_ci` above). Both are
-        # `postgresql_where` and therefore *not* enforced on SQLite — the test
-        # DB proves the shape of these rules, never their uniqueness.
+        # not. `type` is deliberately NOT part of identity any more: that is
+        # exactly what forced the board/kromka twins the reshape merged away.
+        # Two partial unique indexes, not UniqueConstraints: the predicate and
+        # the lower() are expressions, which a UniqueConstraint cannot carry
+        # (same reason as `uq_manufacturers_name_ci` above). The predicate is
+        # spelled for BOTH dialects: with only `postgresql_where`, SQLite still
+        # creates the index but drops the WHERE, so the test DB enforced
+        # name-uniqueness even for two decors with different codes — a rule
+        # production does not have. `tur` used to be in the tuple and hid that.
         Index(
-            "uq_dekorlar_manufacturer_tur_kod_ci",
+            "uq_decors_manufacturer_code_ci",
             "manufacturer_id",
-            "tur",
-            func.lower(text("kod")),
+            func.lower(text("code")),
             unique=True,
-            postgresql_where=text("kod IS NOT NULL"),
+            postgresql_where=text("code IS NOT NULL"),
+            sqlite_where=text("code IS NOT NULL"),
         ),
         Index(
-            "uq_dekorlar_manufacturer_tur_nomi_ci",
+            "uq_decors_manufacturer_name_ci",
             "manufacturer_id",
-            "tur",
-            func.lower(text("nomi")),
+            func.lower(text("name")),
             unique=True,
-            postgresql_where=text("kod IS NULL"),
+            postgresql_where=text("code IS NULL"),
+            sqlite_where=text("code IS NULL"),
         ),
-        Index("ix_dekorlar_search_key", "search_key"),
+        Index("ix_decors_search_key", "search_key"),
     )
 
     manufacturer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("manufacturers.id"), nullable=False
     )
-    tur: Mapped[DekorType] = mapped_column(enum_type(DekorType, "dekor_type"), nullable=False)
-    kod: Mapped[str | None]
-    nomi: Mapped[str] = mapped_column(nullable=False)
+    code: Mapped[str | None]
+    name: Mapped[str] = mapped_column(nullable=False)
     image_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
-    tolali: Mapped[bool] = mapped_column(nullable=False)
-    holat: Mapped[MaterialStatus] = mapped_column(
+    has_grain: Mapped[bool] = mapped_column(nullable=False)
+    status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),
         default=MaterialStatus.ACTIVE,
         nullable=False,
@@ -85,61 +109,91 @@ class Dekor(UUIDPrimaryKey, Timestamped, Base):
     search_key: Mapped[str] = mapped_column(nullable=False, server_default=text("''"), default="")
 
 
+class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
+    """One concrete product of a decor — the thing a supplier actually sells.
+
+    Platform-owned and **immutable**: there is no PATCH for dimensions. A wrong
+    format is deactivated and a correct one created, because branch rows, stock,
+    cutting panels and order history all resolve through it and a silent
+    re-dimension would rewrite what those rows mean. `status` is the only
+    mutable column.
+    """
+
+    __tablename__ = "decor_formats"
+    __table_args__ = (
+        # NULLs are distinct in a Postgres unique index, so a plain
+        # UniqueConstraint over the nullable columns would let
+        # (decor, ldsp, 18, NULL, NULL, ...) in twice. COALESCE collapses them.
+        Index(
+            "uq_decor_formats_natural_key",
+            "decor_id",
+            "type",
+            "thickness_mm",
+            func.coalesce(text("length_mm"), text("0")),
+            func.coalesce(text("width_mm"), text("0")),
+            func.coalesce(text("tape_width_mm"), text("0")),
+            func.coalesce(text("finished_sides"), text("0")),
+            unique=True,
+        ),
+        CheckConstraint("thickness_mm > 0", name="ck_decor_formats_thickness_positive"),
+        CheckConstraint(
+            "tape_width_mm IS NULL OR tape_width_mm > 0",
+            name="ck_decor_formats_tape_width_positive",
+        ),
+        CheckConstraint(DECOR_FORMAT_SHAPE_CHECK, name="ck_decor_formats_shape"),
+    )
+
+    decor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("decors.id"), nullable=False)
+    type: Mapped[DecorType] = mapped_column(enum_type(DecorType, "decor_type"), nullable=False)
+    thickness_mm: Mapped[Decimal] = mapped_column(nullable=False)
+    # Panel-shaped formats carry length/width; tape-shaped ones carry
+    # tape_width. Which pair applies is decided by `type` — and unlike before,
+    # the DB can now see it, so the whole rule is a CHECK.
+    length_mm: Mapped[int | None]
+    width_mm: Mapped[int | None]
+    tape_width_mm: Mapped[int | None]
+    # How many faces are finished — laminate, film or paint. Required for the
+    # board types (ldsp/dsp/mdf), NULL for everything else. One-sided is the
+    # norm for facade MDF and for the cheap white LDSP used on hidden parts: a
+    # different product at a different price, not a variant of the two-sided
+    # sheet.
+    finished_sides: Mapped[int | None] = mapped_column(SmallInteger)
+    status: Mapped[MaterialStatus] = mapped_column(
+        enum_type(MaterialStatus, "material_status"),
+        default=MaterialStatus.ACTIVE,
+        nullable=False,
+    )
+
+
 class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
-    """A dekor in one concrete format, carried by one branch — "the material".
+    """A decor format one branch has decided to carry — "the material".
 
     Everything downstream (stock, cutting panels, order items) points here, not
-    at the dekor: a 16 mm and an 18 mm sheet of the same decor are different
-    things to cut, to stock and to price.
+    at the format: the price and the shelf are the branch's, while what the
+    sheet physically *is* belongs to the platform. Four facts are the whole row
+    — carrying it, its price, its threshold, its own on/off switch.
     """
 
     __tablename__ = "branch_materials"
     __table_args__ = (
-        # NULLs are distinct in a Postgres unique index, so a plain
-        # UniqueConstraint over the nullable format columns would let
-        # (dekor, 18mm, NULL, NULL) in twice. COALESCE collapses them.
-        #
-        # Partial on `NOT customer_supplied`: uniqueness is a statement about
-        # what a branch CARRIES, and a customer board is not carried. Every
-        # customer board points at the one seeded `Mijoz` dekor, so two walk-ins
-        # bringing 2750x1830x16 to the same branch produce an identical tuple:
-        # a full index would reject the second customer.
+        # Full, not partial: a branch either carries a format or it does not.
+        # The old index was partial only because customer-supplied boards lived
+        # in this table and two walk-ins with the same sheet collided; boards
+        # have their own table now (see cutting.models.CustomerBoard).
         Index(
-            "uq_branch_materials_branch_dekor_format",
+            "uq_branch_materials_branch_format",
             "branch_id",
-            "dekor_id",
-            "qalinlik_mm",
-            func.coalesce(text("uzunlik_mm"), text("0")),
-            func.coalesce(text("eni_mm"), text("0")),
-            func.coalesce(text("kromka_eni_mm"), text("0")),
+            "decor_format_id",
             unique=True,
-            postgresql_where=text("NOT customer_supplied"),
         ),
-        Index("ix_branch_materials_source_draft", "source_draft_id"),
         CheckConstraint("price_tiyin >= 0", name="ck_branch_materials_price_nonnegative"),
         CheckConstraint("min_stock >= 0", name="ck_branch_materials_min_stock_nonnegative"),
-        CheckConstraint("qalinlik_mm > 0", name="ck_branch_materials_qalinlik_positive"),
-        CheckConstraint(
-            "kromka_eni_mm IS NULL OR kromka_eni_mm > 0",
-            name="ck_branch_materials_kromka_eni_positive",
-        ),
-        # The full panel/tape shape rule needs `tur`, which lives on dekorlar
-        # and is unreachable from a table CHECK. Only the column-local half is
-        # enforced here; the service layer owns the rest.
-        CheckConstraint(
-            "uzunlik_mm IS NULL OR eni_mm IS NULL OR uzunlik_mm >= eni_mm",
-            name="ck_branch_materials_panel_orientation",
-        ),
     )
 
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
-    dekor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dekorlar.id"), nullable=False)
-    qalinlik_mm: Mapped[Decimal] = mapped_column(nullable=False)
-    # Panel-shaped formats carry uzunlik/eni; tape-shaped ones carry
-    # kromka_eni. Which pair applies is decided by the dekor's `tur`.
-    uzunlik_mm: Mapped[int | None]
-    eni_mm: Mapped[int | None]
-    kromka_eni_mm: Mapped[int | None]
+    decor_format_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("decor_formats.id"), nullable=False
+    )
     # 0 means "not priced yet", not "free": a branch may attach its whole
     # format list before it knows prices. Client-facing listings exclude these.
     price_tiyin: Mapped[int] = mapped_column(
@@ -151,34 +205,6 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
         default=MaterialStatus.ACTIVE,
         nullable=False,
     )
-
-    # ── Customer-supplied boards ────────────────────────────────────────────
-    # A walk-in brings sheets the branch does not sell. They still have to be a
-    # branch material, because `own_panel_counts`, `material_snapshots`, the
-    # optimizer's PanelSpec and every order item key on a branch-material id —
-    # a drawing-level object would force a second material identity through all
-    # of them. What makes this row different is only that the branch does not
-    # carry it: no stock row, excluded from every catalog listing, and reachable
-    # only from the drawing that created it.
-    customer_supplied: Mapped[bool] = mapped_column(
-        nullable=False, server_default=text("false"), default=False
-    )
-    # The operator-typed board name. `_identity()` in core/material_label.py
-    # prefers the dekor's `kod` (NULL on the seeded Mijoz dekor) and then its
-    # `nomi`, so this column is the label's identity slot. NULL inherits.
-    nomi: Mapped[str | None]
-    # `tolali` lives on the dekor, and one shared dekor cannot carry a per-board
-    # answer. NULL inherits the dekor's.
-    tolali: Mapped[bool | None]
-    # Provenance, never the discriminator: the draft is deleted when the order is
-    # placed, so scoping on this would un-scope the board mid-placement.
-    source_draft_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cutting_drafts.id", ondelete="SET NULL")
-    )
-    # The branch material the SHORTAGE is sold from when the layout needs more
-    # sheets than the customer brought. NULL means the branch carries nothing of
-    # this size — then the shortfall stays unpriced and the operator prices it.
-    stock_material_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branch_materials.id"))
 
 
 class BranchPricing(Base):

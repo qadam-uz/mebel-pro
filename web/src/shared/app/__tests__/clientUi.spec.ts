@@ -265,12 +265,12 @@ describe('draftDisplayName', () => {
         withSnapshots({
           'bm-1': {
             manufacturer_name: 'Egger',
-            tur: 'ldsp',
-            kod: 'H1334',
-            nomi: 'Sanoma',
-            qalinlik_mm: '18',
-            uzunlik_mm: 2800,
-            eni_mm: 2070,
+            type: 'ldsp',
+            code: 'H1334',
+            name: 'Sanoma',
+            thickness_mm: '18',
+            length_mm: 2800,
+            width_mm: 2070,
           },
         }),
       ),
@@ -292,15 +292,15 @@ describe('draftDisplayName', () => {
           },
         }),
       ),
-    ).toBe('LDSP Egger H1334')
+    ).toBe('DSP Egger H1334')
   })
 
   it('joins two materials and counts the rest', () => {
     const name = draftDisplayName(
       withSnapshots({
-        'bm-1': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'A' },
-        'bm-2': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'B' },
-        'bm-3': { manufacturer_name: 'Egger', tur: 'ldsp', kod: 'C' },
+        'bm-1': { manufacturer_name: 'Egger', type: 'ldsp', code: 'A' },
+        'bm-2': { manufacturer_name: 'Egger', type: 'ldsp', code: 'B' },
+        'bm-3': { manufacturer_name: 'Egger', type: 'ldsp', code: 'C' },
       }),
     )
     expect(name).toBe('LDSP Egger A + LDSP Egger B +1')

@@ -37,21 +37,32 @@ from app.models.enums import (
     UserStatus,
     WorkshopStatus,
 )
-from app.modules.access.api import can_access_branch, seed_preferred_branch_if_missing
+from app.modules.access.api import (
+    can_access_branch,
+    can_access_branch_any,
+    seed_preferred_branch_if_missing,
+)
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
+from app.modules.catalog.api import branch_material_snapshot
 from app.modules.catalog.contracts import (
     BranchMaterial,
     BranchPricing,
-    Dekor,
+    Decor,
+    DecorFormat,
     Manufacturer,
     is_tape,
 )
 from app.modules.cutting.api import (
+    PdfPriceRow,
+    PdfPricing,
     clamp_own_claim,
+    customer_board_ids,
     cutting_result_response,
     get_workshop_draft,
+    material_fk_columns,
 )
 from app.modules.cutting.contracts import (
+    CustomerBoard,
     CuttingDraft,
     CuttingPanel,
     CuttingPlacement,
@@ -252,7 +263,7 @@ async def place_client_order(
 
     await seed_preferred_branch_if_missing(db, client=client, branch_id=branch.id)
 
-    _add_order_items(db, order=order, pricing=pricing)
+    await _add_order_items(db, order=order, pricing=pricing)
 
     result.status = CuttingResultStatus.CONFIRMED
     result.order_id = order.id
@@ -300,7 +311,7 @@ async def place_client_order(
     )
 
 
-def _add_order_items(
+async def _add_order_items(
     db: AsyncSession,
     *,
     order: Order,
@@ -309,6 +320,9 @@ def _add_order_items(
     """Append one OrderItem per priced part. Shared by the client and workshop
     create paths so the line-total formula (ck_order_items_line_total_formula)
     stays in one place."""
+    board_ids = await customer_board_ids(
+        db, {uuid.UUID(str(priced.part["material_id"])) for priced in pricing.priced_parts}
+    )
     for priced in pricing.priced_parts:
         quantity = int(priced.part["quantity"])
         # The per-part panel cost is divided into an integer per-unit price; the line
@@ -323,8 +337,9 @@ def _add_order_items(
             OrderItem(
                 order_id=order.id,
                 # parts_snapshot keeps the JSON key `material_id`; what it holds
-                # is a branch_material id (the migration rewrote the values).
-                branch_material_id=uuid.UUID(str(priced.part["material_id"])),
+                # is a branch-material id, or a customer-board id for a sheet
+                # the walk-in brought. Exactly one of the two FKs is filled.
+                **material_fk_columns(uuid.UUID(str(priced.part["material_id"])), board_ids),
                 material_source=MaterialSource(str(priced.part["material_source"])),
                 material_snapshot=priced.material_snapshot,
                 part_ref=str(priced.part["part_ref"]),
@@ -471,7 +486,7 @@ async def place_workshop_order(
     db.add(order)
     await db.flush()
 
-    _add_order_items(db, order=order, pricing=pricing)
+    await _add_order_items(db, order=order, pricing=pricing)
 
     result.status = CuttingResultStatus.CONFIRMED
     result.order_id = order.id
@@ -580,10 +595,9 @@ async def begin_order_edit(
     # were typed into: `source_draft_id` is what the editor's picker re-resolves
     # them by, so without this the revision cannot see them.
     await db.execute(
-        update(BranchMaterial)
+        update(CustomerBoard)
         .where(
-            BranchMaterial.customer_supplied.is_(True),
-            BranchMaterial.id.in_([uuid.UUID(key) for key in (result.own_panel_counts or {})]),
+            CustomerBoard.id.in_([uuid.UUID(key) for key in (result.own_panel_counts or {})]),
         )
         .values(source_draft_id=draft.id)
     )
@@ -651,7 +665,7 @@ async def apply_order_edit(
     await db.delete(draft)
 
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
-    _add_order_items(db, order=order, pricing=pricing)
+    await _add_order_items(db, order=order, pricing=pricing)
 
     discount_cleared = previous_discount > 0
     surcharge_cleared = previous_surcharge > 0
@@ -962,16 +976,22 @@ async def get_order_finance_target(
     *,
     principal: AuthenticatedPrincipal,
     order_id: uuid.UUID,
-    permission: Permission,
+    permissions: frozenset[Permission],
 ) -> FinanceOrderTarget:
+    """The order a money row will name, checked against any of `permissions`.
+
+    Plural because an order payment has two legitimate authors: the accountant
+    (`manage_finance`) and the cashier at the counter (`record_order_payment`).
+    """
+
     order = await db.get(Order, order_id)
     if order is None:
         raise APIError("order_not_found", "Order not found", status_code=status.HTTP_404_NOT_FOUND)
-    if not can_access_branch(
+    if not can_access_branch_any(
         principal,
         workshop_id=order.workshop_id,
         branch_id=order.branch_id,
-        permission=permission,
+        permissions=permissions,
     ):
         raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     return FinanceOrderTarget(
@@ -1191,30 +1211,24 @@ async def _edge_material_meta(
     if not branch_material_ids:
         return {}
     # No status filter, deliberately: this labels *historical* production, and a
-    # deactivated dekor or format must still render its name rather than an id.
+    # deactivated decor or format must still render its name rather than an id.
     result = await db.execute(
-        select(BranchMaterial, Dekor, Manufacturer)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+        select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+        .join(Decor, Decor.id == DecorFormat.decor_id)
+        .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
         .where(BranchMaterial.id.in_(branch_material_ids))
     )
     return {
         str(branch_material.id): (
             edge_label(
-                {
-                    "manufacturer_name": manufacturer.name,
-                    "tur": dekor.tur.value,
-                    "kod": dekor.kod,
-                    "nomi": dekor.nomi,
-                    "qalinlik_mm": str(branch_material.qalinlik_mm),
-                    "kromka_eni_mm": branch_material.kromka_eni_mm,
-                },
+                branch_material_snapshot(decor_format, decor, manufacturer),
                 branch_material.id,
             ),
-            _normalized_decimal(branch_material.qalinlik_mm),
-            dekor.nomi,
+            _normalized_decimal(decor_format.thickness_mm),
+            decor.name,
         )
-        for branch_material, dekor, manufacturer in result.all()
+        for branch_material, decor_format, decor, manufacturer in result.all()
     }
 
 
@@ -1724,7 +1738,9 @@ def _first_name(value: str) -> str:
 
 
 def _panel_material_labels(items: Sequence[OrderItem]) -> list[str]:
-    labels = [material_label(item.material_snapshot, item.branch_material_id) for item in items]
+    labels = [
+        material_label(item.material_snapshot, order_item_material_id(item)) for item in items
+    ]
     return list(dict.fromkeys(labels))
 
 
@@ -1735,7 +1751,7 @@ def _production_job_item(item: OrderItem) -> ProductionJobItem:
         length_mm=item.length_mm,
         width_mm=item.width_mm,
         quantity=item.quantity,
-        material_label=material_label(item.material_snapshot, item.branch_material_id),
+        material_label=material_label(item.material_snapshot, order_item_material_id(item)),
         edge_top=_production_edge_side(item.edge_top),
         edge_bottom=_production_edge_side(item.edge_bottom),
         edge_left=_production_edge_side(item.edge_left),
@@ -1749,8 +1765,8 @@ def _production_edge_side(edge: dict[str, Any] | None) -> ProductionEdgeSide | N
     snapshot = edge.get("snapshot") or {}
     return ProductionEdgeSide(
         material_label=edge_label(snapshot, edge["material_id"]),
-        thickness_mm=_snapshot_decimal(_snapshot_first(snapshot, "qalinlik_mm", "thickness_mm")),
-        color=_snapshot_text(_snapshot_first(snapshot, "nomi", "color")),
+        thickness_mm=_snapshot_decimal(_snapshot_first(snapshot, "thickness_mm", "thickness_mm")),
+        color=_snapshot_text(_snapshot_first(snapshot, "name", "color")),
         source=MaterialSource(str(edge["source"])),
     )
 
@@ -2004,7 +2020,7 @@ async def set_order_prices(
 
     pricing = await _price_result(db, branch_id=order.branch_id, result=result, overrides=overrides)
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
-    _add_order_items(db, order=order, pricing=pricing)
+    await _add_order_items(db, order=order, pricing=pricing)
     await db.flush()
     # `material_prices` REPLACES the stored map rather than merging into it, so a
     # call that only edits the cutting rate drops every material override with
@@ -2101,7 +2117,7 @@ async def set_order_own_material(
         overrides=PriceOverrides.from_stored(order.price_overrides),
     )
     await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
-    _add_order_items(db, order=order, pricing=pricing)
+    await _add_order_items(db, order=order, pricing=pricing)
     await db.flush()
     # Returning sheets the client had claimed turns a demand this order was
     # exempt from into one it sells. The exemption was correct while the
@@ -2525,17 +2541,18 @@ async def _order_summary_responses(
         demanded_branch_material_ids.update(demands)
 
     stock_by_branch_material: dict[uuid.UUID, StockItem] = {}
-    materials: dict[uuid.UUID, tuple[BranchMaterial, Dekor, Manufacturer]] = {}
+    materials: dict[uuid.UUID, MaterialTriple] = {}
     if demanded_branch_material_ids:
         material_rows = (
             await db.execute(
-                select(BranchMaterial, Dekor, Manufacturer)
-                .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-                .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+                select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+                .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+                .join(Decor, Decor.id == DecorFormat.decor_id)
+                .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
                 .where(BranchMaterial.id.in_(demanded_branch_material_ids))
             )
         ).all()
-        materials = {row[0].id: (row[0], row[1], row[2]) for row in material_rows}
+        materials = {row[0].id: (row[0], row[1], row[2], row[3]) for row in material_rows}
         # A branch material is already branch-scoped, so `unique(branch_material_id)`
         # replaced the old (branch_id, material_id) pair — one key, no tuple.
         stock_rows = (
@@ -2749,7 +2766,7 @@ async def _order_response(
     ).all()
     return OrderDetailResponse(
         **base,
-        items=[OrderItemResponse.model_validate(item) for item in items],
+        items=[_order_item_response(item) for item in items],
         price_lines=_order_price_lines(items, result),
         events=[
             OrderStatusEventResponse(
@@ -2814,13 +2831,41 @@ def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialD
                 material_id=uuid.UUID(material_id),
                 material_label=edge_label(snapshot, material_id),
                 thickness_mm=_snapshot_decimal(
-                    _snapshot_first(snapshot, "qalinlik_mm", "thickness_mm")
+                    _snapshot_first(snapshot, "thickness_mm", "thickness_mm")
                 ),
-                color=_snapshot_text(_snapshot_first(snapshot, "nomi", "color")),
+                color=_snapshot_text(_snapshot_first(snapshot, "name", "color")),
                 consumed_mm=int(consumed_mm),
             )
         )
     return lines
+
+
+def _order_item_response(item: OrderItem) -> OrderItemResponse:
+    """One order line on the wire.
+
+    Explicit rather than `model_validate(item)`: `material_id` is derived from
+    whichever of the two FKs is set, and the ORM row has no such attribute.
+    """
+
+    return OrderItemResponse(
+        id=item.id,
+        material_id=order_item_material_id(item),
+        customer_supplied=item.customer_board_id is not None,
+        material_source=item.material_source,
+        material_snapshot=item.material_snapshot,
+        part_ref=item.part_ref,
+        length_mm=item.length_mm,
+        width_mm=item.width_mm,
+        quantity=item.quantity,
+        edge_top=item.edge_top,
+        edge_bottom=item.edge_bottom,
+        edge_left=item.edge_left,
+        edge_right=item.edge_right,
+        unit_cutting_price_tiyin=item.unit_cutting_price_tiyin,
+        unit_material_price_tiyin=item.unit_material_price_tiyin,
+        edge_cost_tiyin=item.edge_cost_tiyin,
+        line_total_tiyin=item.line_total_tiyin,
+    )
 
 
 def _order_price_lines(
@@ -2838,7 +2883,8 @@ def _order_price_lines(
     for item in items:
         if item.material_source is MaterialSource.SHOP:
             panel_prices.setdefault(
-                item.branch_material_id, int(item.material_snapshot.get("price_tiyin") or 0)
+                order_item_material_id(item),
+                int(item.material_snapshot.get("price_tiyin") or 0),
             )
         for edge in (item.edge_top, item.edge_bottom, item.edge_left, item.edge_right):
             if edge is None or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
@@ -2901,6 +2947,107 @@ def _order_price_lines(
     panel_lines.sort(key=lambda line: line.material_name)
     edge_lines.sort(key=lambda line: line.material_name)
     return panel_lines + edge_lines
+
+
+def order_pdf_pricing(order: OrderDetailResponse) -> PdfPricing:
+    """The order's money, shaped for the cutting document's first page.
+
+    Built from the order's own frozen figures — itemized price lines, the rates
+    it was billed at, the stored subtotals — not live branch pricing, so the
+    receipt on the page reconciles with the total the order was placed at. It
+    is deliberately the same receipt the client already reads in «Buyurtmangiz»
+    before the order exists: same lines, same visible multiplication, so the
+    printed document never restates the price in a shape they have to re-learn.
+    Only the numbers are decided here; the document owns how they read.
+    """
+    rows: list[PdfPriceRow] = []
+    saved_tiyin = 0
+    for line in order.price_lines:
+        if line.kind != "panel":
+            continue
+        charged = line.panels_used or 0
+        saved_tiyin += line.own_panels * line.unit_price_tiyin
+        rows.append(
+            PdfPriceRow(
+                group="List",
+                label=line.material_name,
+                unit="list",
+                quantity=str(charged) if charged else "",
+                unit_price_tiyin=line.unit_price_tiyin,
+                own_quantity=str(line.own_panels) if line.own_panels else "",
+                # A fully client-supplied material is not a zero-so'm line: it
+                # carries no amount at all, and the document says who brings it.
+                amount_tiyin=line.line_total_tiyin if charged else None,
+                material_id=str(line.material_id),
+            )
+        )
+    banded_mm = 0
+    edge_material_tiyin = 0
+    for line in order.price_lines:
+        if line.kind != "edge":
+            continue
+        charged_mm = line.consumed_mm or 0
+        banded_mm += charged_mm + line.own_mm
+        edge_material_tiyin += line.line_total_tiyin
+        saved_tiyin += _millimetre_price(line.own_mm, line.unit_price_tiyin)
+        rows.append(
+            PdfPriceRow(
+                group="Kromka",
+                label=line.material_name,
+                unit="m",
+                quantity=_metres_text(charged_mm) if charged_mm else "",
+                unit_price_tiyin=line.unit_price_tiyin,
+                own_quantity=_metres_text(line.own_mm) if line.own_mm else "",
+                amount_tiyin=line.line_total_tiyin if charged_mm else None,
+                material_id=str(line.material_id),
+            )
+        )
+    if order.planned_panels or order.subtotal_cutting_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Xizmat",
+                label="Kesish xizmati",
+                unit="list",
+                quantity=str(order.planned_panels),
+                unit_price_tiyin=order.cutting_rate_tiyin,
+                amount_tiyin=order.subtotal_cutting_tiyin,
+            )
+        )
+    # Labour is charged on every banded millimetre, the client's own tape
+    # included — only the tape material above is theirs. What is left of the
+    # banding subtotal after the material lines is exactly that labour.
+    if banded_mm:
+        rows.append(
+            PdfPriceRow(
+                group="Xizmat",
+                label="Kromka yopishtirish",
+                unit="m",
+                quantity=_metres_text(banded_mm),
+                unit_price_tiyin=order.edge_banding_rate_tiyin,
+                amount_tiyin=order.subtotal_edge_banding_tiyin - edge_material_tiyin,
+            )
+        )
+    if order.discount_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Chegirma",
+                label=order.discount_reason or "Chegirma",
+                amount_tiyin=-order.discount_tiyin,
+            )
+        )
+    if order.surcharge_tiyin:
+        rows.append(
+            PdfPriceRow(
+                group="Ustama",
+                label=order.surcharge_reason or "Ustama",
+                amount_tiyin=order.surcharge_tiyin,
+            )
+        )
+    return PdfPricing(rows=tuple(rows), total_tiyin=order.total_tiyin, saved_tiyin=saved_tiyin)
+
+
+def _metres_text(length_mm: int) -> str:
+    return f"{length_mm / 1000:.2f}"
 
 
 def _snapshot_decimal(value: object) -> Decimal | None:
@@ -2968,6 +3115,25 @@ async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementRe
     )
 
 
+# stock warnings and order summaries both carry the same four rows for one
+# material. Named once so the tuple's shape is stated rather than re-spelled.
+type MaterialTriple = tuple[BranchMaterial, DecorFormat, Decor, Manufacturer]
+
+
+def order_item_material_id(item: OrderItem) -> uuid.UUID:
+    """The item's material key — a branch material id or a customer board id.
+
+    Exactly one of the two FKs is set (a table CHECK guarantees it). Everything
+    that reads a line — the label, the frozen price, the stock demand map —
+    keys on that one UUID and never has to know which namespace it came from.
+    """
+
+    material_id = item.branch_material_id or item.customer_board_id
+    if material_id is None:  # pragma: no cover - the CHECK constraint forbids it
+        raise APIError("order_item_material_missing", "Order item has no material")
+    return material_id
+
+
 async def _stock_warnings(db: AsyncSession, order: Order) -> list[OrderStockWarning]:
     result = await db.get(CuttingResult, order.cutting_result_id)
     demands = _stock_demands_for_order_summary(order, result)
@@ -2975,20 +3141,21 @@ async def _stock_warnings(db: AsyncSession, order: Order) -> list[OrderStockWarn
         return []
     rows = (
         await db.execute(
-            select(StockItem, BranchMaterial, Dekor, Manufacturer)
+            select(StockItem, BranchMaterial, DecorFormat, Decor, Manufacturer)
             .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
-            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+            .join(Decor, Decor.id == DecorFormat.decor_id)
+            .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
             .where(
                 StockItem.branch_id == order.branch_id,
                 StockItem.branch_material_id.in_(demands.keys()),
             )
         )
     ).all()
-    stock_by_branch_material = {item.branch_material_id: item for item, _, _, _ in rows}
+    stock_by_branch_material = {item.branch_material_id: item for item, _, _, _, _ in rows}
     materials = {
-        branch_material.id: (branch_material, dekor, manufacturer)
-        for _, branch_material, dekor, manufacturer in rows
+        branch_material.id: (branch_material, decor_format, decor, manufacturer)
+        for _, branch_material, decor_format, decor, manufacturer in rows
     }
     return _stock_warnings_from_demands(
         demands=demands,
@@ -3018,7 +3185,7 @@ def _stock_warnings_from_demands(
     *,
     demands: dict[uuid.UUID, int],
     stock_by_branch_material: dict[uuid.UUID, StockItem],
-    materials: dict[uuid.UUID, tuple[BranchMaterial, Dekor, Manufacturer]],
+    materials: dict[uuid.UUID, MaterialTriple],
 ) -> list[OrderStockWarning]:
     warnings: list[OrderStockWarning] = []
     for branch_material_id, required in demands.items():
@@ -3047,8 +3214,8 @@ def _stock_warnings_from_demands(
                     else str(branch_material_id)
                 ),
                 # `kind` keeps its two-value wire domain (`panel` / `edge`) even
-                # though `tur` now has seven values: the client SPA switches on
-                # it, and leaking raw dekor types here would silently widen a
+                # though `type` now has seven values: the client SPA switches on
+                # it, and leaking raw decor types here would silently widen a
                 # field nothing type-checks.
                 kind=_stock_warning_kind(material),
                 on_hand=on_hand,
@@ -3059,15 +3226,16 @@ def _stock_warnings_from_demands(
     return warnings
 
 
-def _stock_warning_kind(material: tuple[BranchMaterial, Dekor, Manufacturer] | None) -> str:
+def _stock_warning_kind(material: MaterialTriple | None) -> str:
     if material is None:
         return "unknown"
-    return "edge" if is_tape(material[1].tur) else "panel"
+    return "edge" if is_tape(material[1].type) else "panel"
 
 
 def _branch_material_label(
     branch_material: BranchMaterial,
-    dekor: Dekor,
+    decor_format: DecorFormat,
+    decor: Decor,
     manufacturer: Manufacturer,
 ) -> str:
     """Live label for a carried format — there is no stored name to read.
@@ -3075,18 +3243,8 @@ def _branch_material_label(
     Used where the row is loaded fresh (stock warnings, price quotes); anything
     describing a *placed* order reads its frozen snapshot instead.
     """
-    snapshot: dict[str, Any] = {
-        "manufacturer_name": manufacturer.name,
-        "tur": dekor.tur.value,
-        "kod": dekor.kod,
-        "nomi": dekor.nomi,
-        "qalinlik_mm": str(branch_material.qalinlik_mm),
-        "uzunlik_mm": branch_material.uzunlik_mm,
-        "eni_mm": branch_material.eni_mm,
-        "kromka_eni_mm": branch_material.kromka_eni_mm,
-        "tolali": dekor.tolali,
-    }
-    if is_tape(dekor.tur):
+    snapshot = branch_material_snapshot(decor_format, decor, manufacturer)
+    if is_tape(decor_format.type):
         return edge_label(snapshot, branch_material.id)
     return material_label(snapshot, branch_material.id)
 
@@ -3159,32 +3317,32 @@ async def _price_result(
         edge_rate_value = None if pricing is None else pricing.edge_banding_rate_tiyin
     if edge_demands and edge_rate_value is None:
         raise APIError("missing_edge_banding_rate", "Branch edge banding rate is not set")
-    branch_materials = await _active_branch_materials(
+    material_prices = await _orderable_material_prices(
         db,
         branch_id=branch_id,
-        branch_material_ids=set(panel_demands) | set(edge_demands),
+        material_ids=set(panel_demands) | set(edge_demands),
     )
     # The part now names a branch material directly, so "does the branch carry
     # it" is an id-in-this-branch + still-active test rather than a catalog
     # lookup. The error codes are unchanged: they are what the SPAs match on.
     for material_id in panel_demands:
-        if material_id not in branch_materials:
+        if material_id not in material_prices:
             raise APIError("branch_does_not_carry_panel", "Branch does not carry a panel material")
     for material_id in edge_demands:
-        if material_id not in branch_materials:
+        if material_id not in material_prices:
             raise APIError("branch_does_not_carry_edge", "Branch does not carry an edge material")
 
     subtotal_cutting = (
         sum(int(value) for value in result.panels_used_by_material.values()) * cutting_rate
     )
     subtotal_materials = sum(
-        overrides.material_price(material_id, branch_materials[material_id].price_tiyin) * quantity
+        overrides.material_price(material_id, material_prices[material_id]) * quantity
         for material_id, quantity in panel_demands.items()
     )
     edge_material_total = sum(
         _millimetre_price(
             edge_demands[material_id],
-            overrides.material_price(material_id, branch_materials[material_id].price_tiyin),
+            overrides.material_price(material_id, material_prices[material_id]),
         )
         for material_id in edge_demands
     )
@@ -3198,7 +3356,7 @@ async def _price_result(
     edge_labor_total = sum(
         _millimetre_price(mm, int(edge_rate_value or 0)) for mm in edge_labour_mm.values()
     )
-    priced_parts = _priced_parts(result, branch_materials, overrides)
+    priced_parts = _priced_parts(result, material_prices, overrides)
     subtotal_edge = edge_material_total + edge_labor_total
     total = subtotal_cutting + subtotal_materials + subtotal_edge
     edge_rate = int(edge_rate_value or 0)
@@ -3227,12 +3385,8 @@ async def _price_result(
             # total the moment an override existed — invisible while overrides
             # were a rare negotiation, and permanent now that pricing an
             # unpriced material *is* an override.
-            unit_price_tiyin=overrides.material_price(
-                material_id, branch_materials[material_id].price_tiyin
-            ),
-            line_total_tiyin=overrides.material_price(
-                material_id, branch_materials[material_id].price_tiyin
-            )
+            unit_price_tiyin=overrides.material_price(material_id, material_prices[material_id]),
+            line_total_tiyin=overrides.material_price(material_id, material_prices[material_id])
             * quantity,
         )
         for material_id, quantity in panel_demands.items()
@@ -3244,7 +3398,7 @@ async def _price_result(
             # Same override-aware read as the panel lines and the subtotal.
             _millimetre_price(
                 shop_mm,
-                overrides.material_price(material_id, branch_materials[material_id].price_tiyin),
+                overrides.material_price(material_id, material_prices[material_id]),
             )
             if shop_mm > 0
             else 0
@@ -3256,7 +3410,7 @@ async def _price_result(
                 material_name=_edge_line_name(material_id),
                 consumed_mm=mm,
                 own=shop_mm == 0,
-                metre_price_tiyin=branch_materials[material_id].price_tiyin,
+                metre_price_tiyin=material_prices[material_id],
                 material_cost_tiyin=material_cost,
                 service_cost_tiyin=service_cost,
                 line_total_tiyin=material_cost + service_cost,
@@ -3335,7 +3489,10 @@ def _frozen_material_prices(items: Sequence[OrderItem]) -> dict[uuid.UUID, int]:
 
     for item in items:
         if item.material_source is MaterialSource.SHOP:
-            _record(item.branch_material_id, int(item.material_snapshot.get("price_tiyin") or 0))
+            _record(
+                order_item_material_id(item),
+                int(item.material_snapshot.get("price_tiyin") or 0),
+            )
         for field in _edge_fields():
             edge = getattr(item, field, None)
             if not edge or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
@@ -3377,25 +3534,25 @@ def _unpriced_material_ids(
 
 def _priced_parts(
     result: CuttingResult,
-    branch_materials: dict[uuid.UUID, BranchMaterial],
+    material_prices: dict[uuid.UUID, int],
     overrides: PriceOverrides = NO_PRICE_OVERRIDES,
 ) -> list[PricedPart]:
     priced: list[PricedPart] = []
-    panel_line_prices = _panel_line_prices(result, branch_materials, overrides)
+    panel_line_prices = _panel_line_prices(result, material_prices, overrides)
     for index, part in enumerate(result.parts_snapshot):
         material_id = uuid.UUID(str(part["material_id"]))
         material_source = MaterialSource(str(part["material_source"]))
         panel_price = (
             panel_line_prices[index]
-            if material_source is MaterialSource.SHOP and material_id in branch_materials
+            if material_source is MaterialSource.SHOP and material_id in material_prices
             else 0
         )
         material_snapshot = dict(result.material_snapshots.get(str(material_id), {}))
         # The snapshot carries the price this order is billed at, agreed or
         # listed — it is what the receipt reads back.
         material_snapshot["price_tiyin"] = (
-            overrides.material_price(material_id, branch_materials[material_id].price_tiyin)
-            if material_id in branch_materials
+            overrides.material_price(material_id, material_prices[material_id])
+            if material_id in material_prices
             else 0
         )
         edge_snapshots: dict[str, dict[str, Any] | None] = {}
@@ -3411,10 +3568,8 @@ def _priced_parts(
             side_mm = _side_length_mm(part, field) * quantity
             side_consumed_mm = side_mm + 30 * quantity if edge_source is MaterialSource.SHOP else 0
             price = (
-                overrides.material_price(
-                    edge_material_id, branch_materials[edge_material_id].price_tiyin
-                )
-                if edge_source is MaterialSource.SHOP and edge_material_id in branch_materials
+                overrides.material_price(edge_material_id, material_prices[edge_material_id])
+                if edge_source is MaterialSource.SHOP and edge_material_id in material_prices
                 else 0
             )
             edge_cost += _millimetre_price(side_consumed_mm, price)
@@ -3439,7 +3594,7 @@ def _priced_parts(
 
 def _panel_line_prices(
     result: CuttingResult,
-    branch_materials: dict[uuid.UUID, BranchMaterial],
+    material_prices: dict[uuid.UUID, int],
     overrides: PriceOverrides = NO_PRICE_OVERRIDES,
 ) -> list[int]:
     panel_demands = _panel_stock_demands(result)
@@ -3450,7 +3605,7 @@ def _panel_line_prices(
         material_source = MaterialSource(str(part["material_source"]))
         area = (
             int(part["length_mm"]) * int(part["width_mm"]) * int(part["quantity"])
-            if material_source is MaterialSource.SHOP and material_id in branch_materials
+            if material_source is MaterialSource.SHOP and material_id in material_prices
             else 0
         )
         row_area.append((material_id, area))
@@ -3466,7 +3621,7 @@ def _panel_line_prices(
         if area == 0 or total_area == 0:
             continue
         material_total = overrides.material_price(
-            material_id, branch_materials[material_id].price_tiyin
+            material_id, material_prices[material_id]
         ) * panel_demands.get(material_id, 0)
         allocated = material_total * area // total_area
         if index == last_index_by_material.get(material_id):
@@ -3593,30 +3748,52 @@ def _edge_stock_demands(result: CuttingResult) -> dict[uuid.UUID, int]:
     }
 
 
-async def _active_branch_materials(
+async def _orderable_material_prices(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    branch_material_ids: set[uuid.UUID],
-) -> dict[uuid.UUID, BranchMaterial]:
-    if not branch_material_ids:
+    material_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """Per-sheet / per-metre price for every material a result may bill for.
+
+    Two namespaces, one map. A branch material is priced by the branch and must
+    still be carried and active to be billable; a customer board carries the
+    substitute's price frozen when it was recorded, which is what bills the
+    SHORTAGE only — the demand the quote sees is already `needed - brought`.
+
+    A material missing from this map is what the caller turns into
+    `branch_does_not_carry_panel` / `..._edge`.
+    """
+
+    if not material_ids:
         return {}
     rows = (
-        await db.scalars(
-            select(BranchMaterial)
-            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        await db.execute(
+            select(BranchMaterial.id, BranchMaterial.price_tiyin)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+            .join(Decor, Decor.id == DecorFormat.decor_id)
             .where(
                 # branch_id is redundant with the id set for a well-formed
                 # order, and load-bearing for a malformed one: it is what stops
                 # another branch's format id from being priced here.
                 BranchMaterial.branch_id == branch_id,
-                BranchMaterial.id.in_(branch_material_ids),
+                BranchMaterial.id.in_(material_ids),
                 BranchMaterial.status == MaterialStatus.ACTIVE,
-                Dekor.holat == MaterialStatus.ACTIVE,
+                Decor.status == MaterialStatus.ACTIVE,
             )
         )
     ).all()
-    return {row.id: row for row in rows}
+    prices = {material_id: int(price) for material_id, price in rows}
+    boards = (
+        await db.execute(
+            select(CustomerBoard.id, CustomerBoard.price_tiyin).where(
+                CustomerBoard.branch_id == branch_id,
+                CustomerBoard.id.in_(material_ids),
+            )
+        )
+    ).all()
+    prices.update({board_id: int(price) for board_id, price in boards})
+    return prices
 
 
 async def _client_orderable_draft_result(

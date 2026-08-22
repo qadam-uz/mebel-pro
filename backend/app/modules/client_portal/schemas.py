@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import BranchStatus, DekorType, UserStatus
+from app.models.enums import BranchStatus, DecorType, UserStatus
 from app.schemas.common import APIModel
 
 
@@ -76,22 +76,25 @@ class ClientBranchResponse(APIModel):
 class ClientBranchMaterialResponse(APIModel):
     """One format a branch carries, as a client sees it.
 
-    `id` is the branch material — the thing that gets ordered. Identity (tur,
-    kod, nomi, tolali, image) comes from the dekor, dimensions from the branch's
-    own format. There is no `name`: the client composes the label, or reads the
-    preview's precomposed one.
+    `id` is the branch material — the thing that gets ordered. The pattern
+    (code, name, has_grain, image) comes from the decor; the substrate and every
+    dimension come from the platform's decor format. There is no composed label:
+    the client builds one, or reads the preview's precomposed one.
     """
 
     id: uuid.UUID
-    tur: DekorType
+    type: DecorType
     manufacturer_name: str
-    kod: str | None
-    nomi: str
-    tolali: bool
+    code: str | None
+    name: str
+    has_grain: bool
     image_file_id: uuid.UUID | None
-    qalinlik_mm: Decimal
-    uzunlik_mm: int | None
-    eni_mm: int | None
-    kromka_eni_mm: int | None
+    thickness_mm: Decimal
+    length_mm: int | None
+    width_mm: int | None
+    tape_width_mm: int | None
+    # 1 or 2 for the board types, null otherwise. A one-sided sheet is a
+    # different product at a different price, so the client has to see it.
+    finished_sides: int | None
     price_tiyin: int
     display_unit: str

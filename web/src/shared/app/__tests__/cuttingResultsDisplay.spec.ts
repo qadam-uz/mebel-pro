@@ -88,7 +88,7 @@ describe('cutting results display helpers', () => {
   it('computes the fill percentage from either snapshot vocabulary', () => {
     const panel = (id: string): CuttingPanel => ({
       id,
-      branch_material_id: id,
+      material_id: id,
       panel_index: 1,
       waste_area_mm2: 1_000_000,
       offcuts: [],
@@ -98,7 +98,7 @@ describe('cutting results display helpers', () => {
       panels: [panel('legacy'), panel('modern'), panel('unknown')],
       material_snapshots: {
         legacy: { panel_length_mm: 2000, panel_width_mm: 1000 },
-        modern: { uzunlik_mm: 2000, eni_mm: 1000 },
+        modern: { length_mm: 2000, width_mm: 1000 },
       },
     })
 
@@ -135,7 +135,7 @@ describe('cutting results display helpers', () => {
   it('groups active sheet placements by part with counts and rotation', () => {
     const panel: CuttingPanel = {
       id: 'panel-a',
-      branch_material_id: 'panel-a',
+      material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -198,7 +198,7 @@ describe('cutting results display helpers', () => {
     })
     const sheetOne: CuttingPanel = {
       id: 'sheet-one',
-      branch_material_id: 'panel-a',
+      material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -207,7 +207,7 @@ describe('cutting results display helpers', () => {
     }
     const sheetTwo: CuttingPanel = {
       id: 'sheet-two',
-      branch_material_id: 'panel-b',
+      material_id: 'panel-b',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -225,12 +225,12 @@ describe('cutting results display helpers', () => {
         // New vocabulary beside it, so the dual read is proven in both directions.
         'panel-b': {
           manufacturer_name: 'Egger',
-          tur: 'ldsp',
-          kod: 'Bemor',
-          nomi: 'Oq',
-          qalinlik_mm: '18',
-          uzunlik_mm: 2800,
-          eni_mm: 2070,
+          type: 'ldsp',
+          code: 'Bemor',
+          name: 'Oq',
+          thickness_mm: '18',
+          length_mm: 2800,
+          width_mm: 2070,
         },
       },
     })
@@ -253,7 +253,7 @@ describe('cutting results display helpers', () => {
   it('uses drawing-wide panel order for displayed list numbers', () => {
     const first: CuttingPanel = {
       id: 'first',
-      branch_material_id: 'panel-a',
+      material_id: 'panel-a',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -261,7 +261,7 @@ describe('cutting results display helpers', () => {
     }
     const secondMaterialFirstPanel: CuttingPanel = {
       id: 'second-material-first',
-      branch_material_id: 'panel-b',
+      material_id: 'panel-b',
       panel_index: 1,
       waste_area_mm2: 0,
       offcuts: [],
@@ -289,7 +289,7 @@ describe('resultTotals', () => {
   })
   const panel = (id: string, overrides: Partial<CuttingPanel> = {}): CuttingPanel => ({
     id,
-    branch_material_id: 'panel-a',
+    material_id: 'panel-a',
     panel_index: 1,
     waste_area_mm2: 0,
     offcuts: [],
@@ -396,7 +396,7 @@ describe('panelEdgeConsumedByMaterial', () => {
   })
   const panel = (overrides: Partial<CuttingPanel> = {}): CuttingPanel => ({
     id: 'panel-1',
-    branch_material_id: 'panel-a',
+    material_id: 'panel-a',
     panel_index: 1,
     waste_area_mm2: 0,
     offcuts: [],
@@ -494,7 +494,7 @@ describe('sheetEdgeLine', () => {
   })
   const sheet = (): CuttingPanel => ({
     id: 'panel-1',
-    branch_material_id: 'panel-a',
+    material_id: 'panel-a',
     panel_index: 1,
     waste_area_mm2: 0,
     offcuts: [],
@@ -509,7 +509,7 @@ describe('sheetEdgeLine', () => {
     const line = sheetEdgeLine(
       result({
         parts_snapshot: parts,
-        material_snapshots: { 'edge-a': { manufacturer_name: 'Egger', kod: 'H1137' } },
+        material_snapshots: { 'edge-a': { manufacturer_name: 'Egger', code: 'H1137' } },
       }),
       sheet(),
       deriveSnapshotEdgeRegistry(parts),
@@ -528,10 +528,10 @@ describe('sheetEdgeLine', () => {
         material_snapshots: {
           'edge-a': {
             manufacturer_name: 'Egger',
-            kod: 'H1137',
-            nomi: 'Kulrang eman',
-            qalinlik_mm: '2',
-            kromka_eni_mm: 19,
+            code: 'H1137',
+            name: 'Kulrang eman',
+            thickness_mm: '2',
+            tape_width_mm: 19,
           },
         },
       }),
@@ -549,8 +549,8 @@ describe('sheetEdgeLine', () => {
       result({
         parts_snapshot: parts,
         material_snapshots: {
-          'edge-a': { manufacturer_name: 'Egger', kod: 'H1137' },
-          'edge-b': { manufacturer_name: 'Egger', kod: 'H1145' },
+          'edge-a': { manufacturer_name: 'Egger', code: 'H1137' },
+          'edge-b': { manufacturer_name: 'Egger', code: 'H1145' },
         },
       }),
       sheet(),

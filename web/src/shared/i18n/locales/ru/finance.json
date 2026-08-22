@@ -210,7 +210,8 @@
     "emptyExpense": "В этом периоде расходов нет",
     "filterEmptyIncome": "Поступлений по фильтру не найдено",
     "emptyIncome": "В этом периоде поступлений нет",
-    "filterEmptyBody": "Измените или сбросьте фильтр."
+    "filterEmptyBody": "Измените или сбросьте фильтр.",
+    "enteredByAt": "внесено {at} · {name}"
   },
   "expense": {
     "createTitle": "Запись расхода",
@@ -318,5 +319,9 @@
     "bandingStartedSheet": "Кромка начата.",
     "jobFinished": "{order} завершён.",
     "jobFinishedNext": "{order} завершён. Следующий: {next}"
+  },
+  "filter": {
+    "actor": "Кто записал",
+    "actorAll": "Все сотрудники"
   }
 }

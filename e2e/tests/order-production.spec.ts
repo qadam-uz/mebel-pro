@@ -10,12 +10,12 @@ import {
 
 import {
   carryOneFormat,
-  createCatalogDekorlar,
+  createCatalogDecors,
   databaseUrl,
-  edgeFormat,
+  edgeNumbers,
   escapeRegExp,
   expectOk,
-  panelFormat,
+  panelNumbers,
   type BranchMaterialResponse,
 } from "./helpers";
 
@@ -158,7 +158,7 @@ async function carriedMaterials(
   branchId: string,
   id: string,
 ) {
-  const { panel: panelDekor, edge: edgeDekor } = await createCatalogDekorlar(
+  const { panel: panelDecor, edge: edgeDecor } = await createCatalogDecors(
     request,
     adminToken,
     id,
@@ -167,17 +167,17 @@ async function carriedMaterials(
     request,
     ownerToken,
     branchId,
-    panelDekor.id,
-    panelFormat(),
+    panelDecor.format.id,
+    panelNumbers,
   );
   const edge = await carryOneFormat(
     request,
     ownerToken,
     branchId,
-    edgeDekor.id,
-    edgeFormat(),
+    edgeDecor.format.id,
+    edgeNumbers,
   );
-  return { panelDekor, edgeDekor, panel, edge };
+  return { panelDecor, edgeDecor, panel, edge };
 }
 
 async function updateBranchPricing(
@@ -369,7 +369,7 @@ test("client places an order and workshop completes it through production queues
   const ownerAccess = await readyOwnerToken(request, setup);
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
-  const { panelDekor, panel, edge } = await carriedMaterials(
+  const { panelDecor, panel, edge } = await carriedMaterials(
     request,
     adminAccess,
     ownerAccess,
@@ -409,7 +409,7 @@ test("client places an order and workshop completes it through production queues
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
   await page.getByRole("button", { name: "+ Material tanlash" }).click();
-  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL);
+  await chooseMaterial(page, panelDecor.label, PANEL_FORMAT_LABEL);
   await page.getByLabel("Uzunlik millimetr").fill("260");
   await page.getByLabel("Kenglik millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");

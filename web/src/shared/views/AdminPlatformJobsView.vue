@@ -117,7 +117,7 @@ watch(
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Ish nomi</th>
+              <th>Ish name</th>
               <th>Jadval</th>
               <th>Oxirgi ishlashi</th>
               <th>Natija</th>

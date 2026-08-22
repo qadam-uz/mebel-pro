@@ -266,17 +266,17 @@ describe('shortMaterialName', () => {
   function option(overrides: Partial<ClientCatalogMaterialOption>): ClientCatalogMaterialOption {
     return {
       id: 'bm-abcdefgh-9999',
-      tur: 'ldsp',
+      type: 'ldsp',
       manufacturer_id: 'mf1',
       manufacturer_name: 'Egger',
-      kod: null,
-      nomi: '',
-      tolali: false,
+      code: null,
+      name: '',
+      has_grain: false,
       image_file_id: null,
-      qalinlik_mm: '18',
-      uzunlik_mm: 2800,
-      eni_mm: 2070,
-      kromka_eni_mm: null,
+      thickness_mm: '18',
+      length_mm: 2800,
+      width_mm: 2070,
+      tape_width_mm: null,
       price_tiyin: 0,
       price_unset: true,
       display_unit: 'sheet',
@@ -284,11 +284,11 @@ describe('shortMaterialName', () => {
     }
   }
 
-  // Three rungs now, not four: `name` is gone and `color` became `nomi`.
-  it('prefers kod, then nomi, then an id fragment', () => {
-    expect(shortMaterialName(option({ kod: 'H1334', nomi: 'Sanoma' }))).toBe('H1334')
-    expect(shortMaterialName(option({ kod: null, nomi: 'Sanoma' }))).toBe('Sanoma')
-    expect(shortMaterialName(option({ kod: null, nomi: '' }))).toBe('bm-abcde')
+  // Three rungs now, not four: `name` is gone and `color` became `name`.
+  it('prefers code, then name, then an id fragment', () => {
+    expect(shortMaterialName(option({ code: 'H1334', name: 'Sanoma' }))).toBe('H1334')
+    expect(shortMaterialName(option({ code: null, name: 'Sanoma' }))).toBe('Sanoma')
+    expect(shortMaterialName(option({ code: null, name: '' }))).toBe('bm-abcde')
   })
 
   it('falls back to the catalog string when there is no material at all', () => {

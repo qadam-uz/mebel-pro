@@ -1,9 +1,9 @@
-import { dekorTurLabel as sharedDekorTurLabel } from '@/shared/app/materialLabel'
+import { decorTypeLabel as sharedDecorTurLabel } from '@/shared/app/materialLabel'
 import type { DropdownOption, NavGroupId, NavItem } from '@/shared/app/roleConfig'
 import type {
   ActionLog,
   ErrorRecordStatus,
-  DekorType,
+  DecorType,
   JobRunStatus,
   MaterialStatus,
   PlatformUserStatus,
@@ -31,7 +31,7 @@ export function matchesNeedle(fields: string[], needle: string): boolean {
 export type AdminNavMetricKey =
   | 'workshops'
   | 'manufacturers'
-  | 'dekorlar'
+  | 'decors'
   | 'failedJobs'
   | 'openErrors'
   | 'operators'
@@ -52,7 +52,7 @@ export function adminInitials(value: string | null | undefined, fallback = 'PL')
 export function adminNavMetrics(input: {
   workshops: number
   manufacturers: number
-  dekorlar: number
+  decors: number
   failedJobs: number
   openErrors: number
   operators: number
@@ -60,7 +60,7 @@ export function adminNavMetrics(input: {
   return new Map<string, AdminNavMetric>([
     ['/admin/workshops', { key: 'workshops', value: input.workshops }],
     ['/admin/catalog/manufacturers', { key: 'manufacturers', value: input.manufacturers }],
-    ['/admin/catalog/dekorlar', { key: 'dekorlar', value: input.dekorlar }],
+    ['/admin/catalog/decors', { key: 'decors', value: input.decors }],
     [
       '/admin/platform/jobs',
       {
@@ -248,11 +248,11 @@ export function adminJobLogText(value: string | null | undefined) {
 }
 
 // The admin app is not internationalized (zero `$t(` calls in its views), but the
-// tur→label map is: it is the same map the cutting editor and the order history
+// type→label map is: it is the same map the cutting editor and the order history
 // render through, so it lives once in app/materialLabel.ts. Only the "no filter"
 // case is a local literal.
-export function dekorTurLabel(tur: DekorType | null | undefined) {
-  return tur ? sharedDekorTurLabel(tur) : 'Hammasi'
+export function decorTypeLabel(type: DecorType | null | undefined) {
+  return type ? sharedDecorTurLabel(type) : 'Hammasi'
 }
 
 // AB-119: dashboard counters are plain tallies — grouped for readability, never
@@ -350,9 +350,9 @@ const ADMIN_ERROR_MESSAGES: Record<string, string> = {
   manufacturer_not_found: "Ishlab chiqaruvchi topilmadi — ro'yxatni yangilang.",
   manufacturer_name_exists: 'Bu ishlab chiqaruvchi allaqachon bor.',
   material_not_found: "Material topilmadi — ro'yxatni yangilang.",
-  dekor_not_found: "Dekor topilmadi — ro'yxatni yangilang.",
-  dekor_nomi_required: 'Dekor nomini yozing.',
-  dekor_exists: 'Bu ishlab chiqaruvchida shu tur va kod bilan dekor allaqachon bor.',
+  decor_not_found: "Dekor topilmadi — ro'yxatni yangilang.",
+  decor_name_required: 'Dekor nomini yozing.',
+  decor_exists: 'Bu ishlab chiqaruvchida shu kod bilan dekor allaqachon bor.',
   // Platform monitor
   error_not_found: "Xatolik yozuvi topilmadi — ro'yxatni yangilang.",
   job_not_found: "Bunday fon vazifa ro'yxatdan o'tmagan.",

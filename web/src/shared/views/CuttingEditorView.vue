@@ -297,7 +297,7 @@ function catalogChoice(material: ClientCatalogMaterialOption): ChoiceOption {
   return {
     value: material.id,
     label: materialLabel(material),
-    meta: `${material.nomi}${material.kod ? ` · ${material.kod}` : ''}`,
+    meta: `${material.name}${material.code ? ` · ${material.code}` : ''}`,
   }
 }
 const panelChoices = computed<ChoiceOption[]>(() => cutting.panelOptions.map(catalogChoice))
@@ -459,7 +459,7 @@ function groupSize(materialId: string | null) {
   if (!materialId) return ''
   const material = materialById(materialId)
   if (!material) return ''
-  const parts = [material.uzunlik_mm, material.eni_mm, material.qalinlik_mm].filter(Boolean)
+  const parts = [material.length_mm, material.width_mm, material.thickness_mm].filter(Boolean)
   return parts.length >= 2 ? parts.join('×') : ''
 }
 
@@ -551,10 +551,10 @@ function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
     )
     if (!usesEdge) continue
     const panel = materialById(part.material_id)
-    const panelThickness = Number(panel?.qalinlik_mm)
+    const panelThickness = Number(panel?.thickness_mm)
     if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
       return t('cutting.edge.narrowWarning', {
-        width: edge.kromka_eni_mm,
+        width: edge.tape_width_mm,
         thickness: panelThickness,
       })
     }
@@ -589,7 +589,7 @@ watch(
 
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
-  if (!panel || panel.uzunlik_mm == null || panel.eni_mm == null) return null
+  if (!panel || panel.length_mm == null || panel.width_mm == null) return null
   const trimMm = activeTrimMm.value
   if (trimMm == null) return null
   const code = partFitError(
@@ -600,8 +600,8 @@ function partSizeError(part: CuttingPart): string | null {
     trimMm,
   )
   if (!code) return null
-  const usableLength = panel.uzunlik_mm - 2 * trimMm
-  const usableWidth = panel.eni_mm - 2 * trimMm
+  const usableLength = panel.length_mm - 2 * trimMm
+  const usableWidth = panel.width_mm - 2 * trimMm
   if (code === 'impossible_grain')
     return t('cutting.editor.grainFitError', { length: usableLength, width: usableWidth })
   return t('cutting.editor.sizeFitError', {
@@ -799,12 +799,12 @@ const materialPickerMode = ref<MaterialPickerMode>('shop')
 const customerBoardSaving = ref(false)
 const customerBoardError = ref<string | null>(null)
 const customerBoard = ref({
-  nomi: '',
+  name: '',
   uzunlik: '',
   eni: '',
   qalinlik: '16',
   sheets: '',
-  tolali: false,
+  has_grain: false,
 })
 
 // The draft whose customer boards the picker may see. Null on the unsaved first
@@ -826,12 +826,12 @@ function resetCustomerBoard() {
   customerBoardError.value = null
   customerBoardSaving.value = false
   customerBoard.value = {
-    nomi: '',
+    name: '',
     uzunlik: '',
     eni: '',
     qalinlik: '16',
     sheets: '',
-    tolali: false,
+    has_grain: false,
   }
 }
 
@@ -874,12 +874,12 @@ async function submitCustomerBoard() {
     }
     const option = await cutting.createCustomerBoard({
       draftId: boardDraftId,
-      nomi: customerBoard.value.nomi.trim() || null,
-      uzunlik_mm: uzunlik,
-      eni_mm: eni,
-      qalinlik_mm: qalinlik,
+      name: customerBoard.value.name.trim() || null,
+      length_mm: uzunlik,
+      width_mm: eni,
+      thickness_mm: qalinlik,
       sheets,
-      tolali: customerBoard.value.tolali,
+      has_grain: customerBoard.value.has_grain,
     })
     closeMaterialPicker()
     addRow(option.id, null)
@@ -1147,7 +1147,7 @@ function closeMaterialPicker() {
 // backend folds both the stored key and the query through one normalizer
 // (app/core/search_fold.py), so "сонома" finds "Sonoma eman" and "yongok" finds
 // "Yong'oq". Filtering the loaded array here would only ever match the script the
-// dekor happens to be stored in — the exact complaint this replaces.
+// decor happens to be stored in — the exact complaint this replaces.
 const materialPickerSearch = ref('')
 let materialSearchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1185,7 +1185,7 @@ async function reloadPanelOptions(search: string) {
   })
 }
 
-// The picker reads like the catalog table: one photo + identity line per dekor,
+// The picker reads like the catalog table: one photo + identity line per decor,
 // its formats listed beneath as the selectable rows. Grouping only changes how
 // the same list is drawn — picking is still one format, one click.
 interface MaterialPickerGroup {
@@ -1196,35 +1196,35 @@ interface MaterialPickerGroup {
   materials: ClientCatalogMaterialOption[]
 }
 
-// `ClientCatalogMaterialOption` carries no `dekor_id`, so the dekor is keyed by
-// the tuple that identifies one: manufacturer + tur + kod/nomi.
-function dekorKey(material: ClientCatalogMaterialOption) {
-  return [material.manufacturer_id, material.tur, material.kod ?? '', material.nomi].join('|')
+// `ClientCatalogMaterialOption` carries no `decor_id`, so the decor is keyed by
+// the tuple that identifies one: manufacturer + type + code/name.
+function decorKey(material: ClientCatalogMaterialOption) {
+  return [material.manufacturer_id, material.type, material.code ?? '', material.name].join('|')
 }
 
 // The identity half of the canonical label — the same composer the format rows
-// use, handed a snapshot with no dimensions so it stops after «· nomi».
-function dekorTitle(material: ClientCatalogMaterialOption) {
+// use, handed a snapshot with no dimensions so it stops after «· name».
+function decorTitle(material: ClientCatalogMaterialOption) {
   return snapshotMaterialLabel(
     {
       manufacturer_name: material.manufacturer_name,
-      tur: material.tur,
-      kod: material.kod,
-      nomi: material.nomi,
+      type: material.type,
+      code: material.code,
+      name: material.name,
     },
-    material.nomi || material.id.slice(0, 8),
+    material.name || material.id.slice(0, 8),
   )
 }
 
 function materialFormatLabel(material: ClientCatalogMaterialOption) {
-  const thickness = formatMm(material.qalinlik_mm)
-  if (isTape(material.tur) && material.kromka_eni_mm != null) {
-    return t('catalog.meta.tapeFormat', { thickness, width: material.kromka_eni_mm })
+  const thickness = formatMm(material.thickness_mm)
+  if (isTape(material.type) && material.tape_width_mm != null) {
+    return t('catalog.meta.tapeFormat', { thickness, width: material.tape_width_mm })
   }
-  if (material.uzunlik_mm != null && material.eni_mm != null) {
+  if (material.length_mm != null && material.width_mm != null) {
     return t('catalog.meta.panelFormat', {
-      length: material.uzunlik_mm,
-      width: material.eni_mm,
+      length: material.length_mm,
+      width: material.width_mm,
       thickness,
     })
   }
@@ -1235,13 +1235,13 @@ const materialPickerGroups = computed<MaterialPickerGroup[]>(() => {
   const groups: MaterialPickerGroup[] = []
   const indexByKey = new Map<string, number>()
   for (const material of cutting.panelOptions) {
-    const key = dekorKey(material)
+    const key = decorKey(material)
     let group = groups[indexByKey.get(key) ?? -1]
     if (!group) {
       group = {
         key,
         imageFileId: material.image_file_id,
-        title: dekorTitle(material),
+        title: decorTitle(material),
         grainLabel: materialPickerGrainLabel(material),
         materials: [],
       }
@@ -1311,20 +1311,20 @@ function applyMaterialPicker(materialId: string) {
 }
 
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
-  return material.tolali ? t('cutting.material.grained') : t('cutting.material.grainless')
+  return material.has_grain ? t('cutting.material.grained') : t('cutting.material.grainless')
 }
 
 function groupSwatchStyle(materialId: string) {
   const material = materialById(materialId)
   return materialSwatchStyle({
-    nomi: material?.nomi ?? null,
+    name: material?.name ?? null,
     customer_supplied: material?.customer_supplied === true,
   })
 }
 
 function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
   return {
-    background: colorForMaterial(material.nomi || material.id),
+    background: colorForMaterial(material.name || material.id),
   }
 }
 
@@ -2375,9 +2375,9 @@ onBeforeRouteLeave(async () => {
                             class="size-4 shrink-0 text-ink-muted"
                             aria-hidden="true"
                           />
-                          <!-- One dekor, one colour, all the way through: this swatch,
+                          <!-- One decor, one colour, all the way through: this swatch,
                          the picker one step back and the result one step on all
-                         hash the dekor's `nomi`. Hashing the composed label here
+                         hash the decor's `name`. Hashing the composed label here
                          instead would repaint the same board between two screens
                          of the same wizard. -->
                           <span
@@ -2401,7 +2401,7 @@ onBeforeRouteLeave(async () => {
                             aria-hidden="true"
                           ></span>
                           <!-- In the wizard the name owns the first line and the counts
-                         drop under it, so a long dekor name has the row's whole
+                         drop under it, so a long decor name has the row's whole
                          width instead of competing with the figures for it. -->
                           <span class="min-w-0 flex-1">
                             <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -2909,7 +2909,7 @@ onBeforeRouteLeave(async () => {
               <small class="text-ink-muted">{{ $t('cutting.customerBoard.optional') }}</small></span
             >
             <input
-              v-model="customerBoard.nomi"
+              v-model="customerBoard.name"
               class="mp-input"
               maxlength="80"
               :placeholder="$t('cutting.customerBoard.namePlaceholder')"
@@ -2957,12 +2957,12 @@ onBeforeRouteLeave(async () => {
             type="button"
             class="inline-flex h-[38px] w-fit items-center gap-2 rounded-lg border border-hairline px-3.5 text-[13.5px] font-semibold transition"
             :class="
-              customerBoard.tolali
+              customerBoard.has_grain
                 ? 'bg-accent-soft text-accent-strong'
                 : 'bg-elevated text-ink hover:bg-sunk'
             "
-            :aria-pressed="customerBoard.tolali"
-            @click="customerBoard.tolali = !customerBoard.tolali"
+            :aria-pressed="customerBoard.has_grain"
+            @click="customerBoard.has_grain = !customerBoard.has_grain"
           >
             {{ $t('cutting.customerBoard.textured') }}
           </button>
@@ -3044,6 +3044,14 @@ onBeforeRouteLeave(async () => {
                   class="rounded-full bg-warning-soft px-2 py-0.5 text-[12.5px] font-semibold text-warning"
                 >
                   {{ $t('cutting.material.priceUnset') }}
+                </span>
+                <!-- Retired by the platform, still on the shelf: a hint, not a
+                     block — the operator may well be cutting the last of it. -->
+                <span
+                  v-if="material.discontinued"
+                  class="rounded-full bg-sunk px-2 py-0.5 text-[12.5px] font-semibold text-ink-muted"
+                >
+                  {{ $t('cutting.material.discontinued') }}
                 </span>
               </span>
               <span

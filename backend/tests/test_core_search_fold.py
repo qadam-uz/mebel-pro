@@ -1,6 +1,6 @@
 """Unit tests for the catalog search fold.
 
-`fold` is applied to both the stored `dekorlar.search_key` and the incoming
+`fold` is applied to both the stored `decors.search_key` and the incoming
 query, so what these tests really pin is *which spellings find each other*: any
 two inputs that fold to the same string are mutually findable, and any two that
 do not, are not. See app/core/search_fold.py.

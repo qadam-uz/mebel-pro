@@ -5,13 +5,13 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 import {
   carryOneFormat,
-  createCatalogDekorlar,
+  createCatalogDecors,
   databaseUrl,
-  edgeFormat,
+  edgeNumbers,
   escapeRegExp,
   expectOk,
   expectPdfOpensInTab,
-  panelFormat,
+  panelNumbers,
   type BranchMaterialResponse,
 } from './helpers'
 
@@ -146,14 +146,14 @@ async function carriedMaterials(
   branchId: string,
   id: string,
 ) {
-  const { panel: panelDekor, edge: edgeDekor } = await createCatalogDekorlar(
+  const { panel: panelDecor, edge: edgeDecor } = await createCatalogDecors(
     request,
     adminToken,
     id,
   )
-  const panel = await carryOneFormat(request, ownerToken, branchId, panelDekor.id, panelFormat())
-  const edge = await carryOneFormat(request, ownerToken, branchId, edgeDekor.id, edgeFormat())
-  return { panelDekor, edgeDekor, panel, edge }
+  const panel = await carryOneFormat(request, ownerToken, branchId, panelDecor.format.id, panelNumbers)
+  const edge = await carryOneFormat(request, ownerToken, branchId, edgeDecor.format.id, edgeNumbers)
+  return { panelDecor, edgeDecor, panel, edge }
 }
 
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
@@ -353,7 +353,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
   const setup = await provisionWorkshop(request, adminAccess, id)
   const ownerAccess = await readyOwnerToken(request, setup)
   const branchId = setup.branch.id as string
-  const { panelDekor, panel, edge } = await carriedMaterials(
+  const { panelDecor, panel, edge } = await carriedMaterials(
     request,
     adminAccess,
     ownerAccess,
@@ -393,7 +393,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
   await page.getByRole('button', { name: '+ Material tanlash' }).click()
-  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL)
+  await chooseMaterial(page, panelDecor.label, PANEL_FORMAT_LABEL)
   await page.getByLabel("Uzunlik millimetr").fill('260')
   await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
@@ -434,7 +434,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   const setup = await provisionWorkshop(request, adminAccess, id)
   const ownerAccess = await readyOwnerToken(request, setup)
   const branchId = setup.branch.id as string
-  const { panelDekor } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
+  const { panelDecor } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
 
   await page.goto('/client/auth/login')
   await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))
@@ -460,7 +460,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
   await page.getByRole('button', { name: '+ Material tanlash' }).click()
-  await chooseMaterial(page, panelDekor.label, PANEL_FORMAT_LABEL)
+  await chooseMaterial(page, panelDecor.label, PANEL_FORMAT_LABEL)
   await page.getByLabel("Uzunlik millimetr").fill('260')
   await page.getByLabel('Kenglik millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')

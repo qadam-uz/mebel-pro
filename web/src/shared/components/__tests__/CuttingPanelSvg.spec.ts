@@ -12,7 +12,7 @@ import type {
 
 const panel: CuttingPanel = {
   id: 'panel-1',
-  branch_material_id: 'mat-1',
+  material_id: 'mat-1',
   panel_index: 1,
   waste_area_mm2: 0,
   offcuts: [],
@@ -208,7 +208,7 @@ describe('CuttingPanelSvg edge banding', () => {
   })
 
   // Pre-reshape snapshots are frozen history: they carry `panel_length_mm` /
-  // `panel_width_mm` and no `tur`. The fixtures above are that legacy vocabulary;
+  // `panel_width_mm` and no `type`. The fixtures above are that legacy vocabulary;
   // this one is its post-reshape twin, and both must drive the same geometry.
   it('reads panel size from a post-reshape snapshot', () => {
     const wrapper = mount(CuttingPanelSvg, {
@@ -216,7 +216,7 @@ describe('CuttingPanelSvg edge banding', () => {
         result: {
           ...result,
           material_snapshots: {
-            'mat-1': { tur: 'ldsp', nomi: 'Panel', uzunlik_mm: 1000, eni_mm: 700 },
+            'mat-1': { type: 'ldsp', name: 'Panel', length_mm: 1000, width_mm: 700 },
           },
         } as unknown as CuttingResult,
         panel,
