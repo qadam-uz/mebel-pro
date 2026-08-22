@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -27,14 +27,18 @@ import AppModal from '@/shared/components/AppModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
+import DateField from '@/shared/components/DateField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import OrderOwnMaterialModal from '@/shared/components/OrderOwnMaterialModal.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
 import OrderPricesModal from '@/shared/components/OrderPricesModal.vue'
+import { apiErrorCode } from '@/shared/api/client'
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
+import { useFinanceStore, type MoneyMethod } from '@/shared/stores/finance'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatDateInputValue, formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import { translatePlural } from '@/shared/i18n'
 import { useAuthStore } from '@/shared/stores/auth'
 import {
@@ -59,6 +63,7 @@ const cutting = useCuttingStore()
 const auth = useAuthStore()
 const permissions = useWorkshopPermissions()
 const toast = useToast()
+const finance = useFinanceStore()
 const orders = useOrdersStore()
 const { t } = useI18n()
 const orderId = computed(() => String(route.params.order_id))
@@ -132,8 +137,90 @@ const canCompleteBanding = computed(() => {
   )
 })
 const canViewSettlement = computed(() =>
-  permissions.canAnyOnBranch([p.manageFinance, p.viewFinanceReports], order.value?.branch_id),
+  permissions.canAnyOnBranch(
+    // The cashier sees the settlement because they are about to change it —
+    // taking money without seeing the balance is how a double payment happens.
+    [p.manageFinance, p.viewFinanceReports, p.recordOrderPayment],
+    order.value?.branch_id,
+  ),
 )
+// Taking money at the counter: the accountant may, and so may whoever holds the
+// narrow counter grant. Neither can edit or void here — that stays in Moliya,
+// deliberately, so the hand that books a payment cannot erase it.
+const canRecordPayment = computed(() =>
+  permissions.canAnyOnBranch([p.manageFinance, p.recordOrderPayment], order.value?.branch_id),
+)
+const paymentBalanceTiyin = computed(() => order.value?.settlement?.balance_tiyin ?? 0)
+const paymentOpen = ref(false)
+const paymentSaving = ref(false)
+const paymentError = ref<string | null>(null)
+const paymentForm = reactive({
+  amount: '',
+  method: 'cash' as MoneyMethod,
+  receivedOn: formatDateInputValue(new Date()),
+  note: '',
+})
+const paymentMethodOptions = computed<ChoiceOption[]>(() => [
+  { value: 'cash', label: t('finance.method.cash') },
+  { value: 'bank_transfer', label: t('finance.method.bank') },
+  { value: 'other', label: t('finance.method.other') },
+])
+const paymentAmountTiyin = computed(() => parseSomToTiyin(paymentForm.amount))
+const paymentOverBalance = computed(
+  () => paymentAmountTiyin.value !== null && paymentAmountTiyin.value > paymentBalanceTiyin.value,
+)
+
+watch(
+  () => paymentForm.amount,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) paymentForm.amount = clean
+  },
+)
+
+function openPaymentDialog() {
+  // Prefilled with what is owed: the common case at the counter is settling in
+  // full, and a part payment is one edit away.
+  paymentForm.amount = String(Math.max(paymentBalanceTiyin.value, 0) / 100)
+  paymentForm.method = 'cash'
+  paymentForm.receivedOn = formatDateInputValue(new Date())
+  paymentForm.note = ''
+  paymentError.value = null
+  paymentOpen.value = true
+}
+
+async function savePayment() {
+  const current = order.value
+  const amount = paymentAmountTiyin.value
+  if (!current) return
+  if (amount === null || amount <= 0 || paymentOverBalance.value) {
+    paymentError.value = t('orders.payment.amountInvalid')
+    return
+  }
+  paymentSaving.value = true
+  paymentError.value = null
+  try {
+    await finance.createIncome({
+      type: 'order_payment',
+      order_id: current.id,
+      amount_tiyin: amount,
+      method: paymentForm.method,
+      received_on: paymentForm.receivedOn,
+      note: paymentForm.note || null,
+    })
+    paymentOpen.value = false
+    toast.success(t('orders.payment.saved'))
+    // The settlement block is served with the order, so the page re-reads it.
+    await loadDetail()
+  } catch (errorValue) {
+    paymentError.value =
+      apiErrorCode(errorValue) === 'order_payment_over_total'
+        ? t('orders.payment.overBalance')
+        : t('orders.payment.failed')
+  } finally {
+    paymentSaving.value = false
+  }
+}
 // Revision (orders.md "Revising a placed order"): pre-production only.
 const canEditOrder = computed(
   () => canManageOrders.value && ['new', 'confirmed'].includes(order.value?.status ?? ''),
@@ -508,7 +595,7 @@ function warningQuantity(
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   // New snapshots carry no `name` column; the label is composed from the same
   // fields the server would use, reading the legacy keys for frozen history.
-  const snapshot = current.material_snapshots[panel.branch_material_id]
+  const snapshot = current.material_snapshots[panel.material_id]
   const label = snapshotMaterialLabel(snapshot, t('orders.detail.sheetFallback'))
   return `${label} · ${panel.panel_index}`
 }
@@ -1497,12 +1584,82 @@ onBeforeUnmount(() => {
                     >{{ formatTiyin(order.settlement.balance_tiyin) }}</span
                   >
                 </div>
+                <!-- The money is taken where the order is read: the counter is
+                     one person, and sending them to Moliya to find this order
+                     again is four steps and a second search. -->
+                <button
+                  v-if="canRecordPayment && order.settlement.balance_tiyin > 0"
+                  type="button"
+                  class="mp-button mp-button-primary mt-1 min-h-9 px-3 text-xs"
+                  @click="openPaymentDialog"
+                >
+                  {{ $t('orders.payment.action') }}
+                </button>
               </template>
             </div>
           </div>
         </section>
       </div>
     </template>
+
+    <!-- One field and a method: a counter payment is not a ledger form. Editing
+         and voiding are deliberately absent — they live in Moliya, with the
+         permission that owns them. -->
+    <AppModal :open="paymentOpen" :title="$t('orders.payment.title')" @close="paymentOpen = false">
+      <form class="grid gap-3" @submit.prevent="savePayment">
+        <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-ink-soft">{{ $t('orders.detail.balance') }}</span>
+            <span class="num font-bold">{{ formatTiyin(paymentBalanceTiyin) }}</span>
+          </div>
+        </div>
+        <label class="field">
+          <span>{{ $t('orders.payment.amount') }}</span>
+          <input
+            v-model="paymentForm.amount"
+            class="mp-input text-right"
+            inputmode="decimal"
+            :aria-invalid="paymentOverBalance ? 'true' : undefined"
+            aria-describedby="order-payment-error"
+            required
+          />
+          <small v-if="paymentOverBalance" id="order-payment-error" class="mp-field-error">
+            {{ $t('orders.payment.overBalance') }}
+          </small>
+        </label>
+        <FormSelect
+          v-model="paymentForm.method"
+          :label="$t('orders.payment.method')"
+          :options="paymentMethodOptions"
+        />
+        <label class="field">
+          <span>{{ $t('orders.payment.date') }}</span>
+          <DateField v-model="paymentForm.receivedOn" required />
+        </label>
+        <label class="field">
+          <span>{{ $t('orders.payment.note') }}</span>
+          <input v-model="paymentForm.note" class="mp-input" />
+        </label>
+        <p
+          v-if="paymentError"
+          class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+        >
+          {{ paymentError }}
+        </p>
+        <div class="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="mp-button mp-button-outline mr-auto"
+            @click="paymentOpen = false"
+          >
+            {{ $t('orders.payment.cancel') }}
+          </button>
+          <button type="submit" class="mp-button mp-button-primary" :disabled="paymentSaving">
+            {{ paymentSaving ? $t('orders.payment.saving') : $t('orders.payment.submit') }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <AppModal :open="historyOpen" :title="$t('orders.detail.history')" @close="historyOpen = false">
       <template v-if="order">

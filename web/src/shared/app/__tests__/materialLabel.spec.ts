@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  dekorTurLabel,
+  decorTypeFilterGroups,
+  decorTypeLabel,
+  finishedSidesLabel,
   formatMm,
   isTape,
   materialOptionLabel,
@@ -14,17 +16,17 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 function option(overrides: Partial<ClientCatalogMaterialOption> = {}): ClientCatalogMaterialOption {
   return {
     id: 'bm-12345678-abcd',
-    tur: 'kromka',
+    type: 'kromka',
     manufacturer_id: 'mf1',
     manufacturer_name: 'Egger',
-    kod: 'H1334 ST9',
-    nomi: 'Sanoma',
-    tolali: false,
+    code: 'H1334 ST9',
+    name: 'Sanoma',
+    has_grain: false,
     image_file_id: null,
-    qalinlik_mm: '0.4',
-    uzunlik_mm: null,
-    eni_mm: null,
-    kromka_eni_mm: 20,
+    thickness_mm: '0.4',
+    length_mm: null,
+    width_mm: null,
+    tape_width_mm: 20,
     price_tiyin: 0,
     price_unset: true,
     display_unit: 'm',
@@ -50,31 +52,86 @@ describe('formatMm', () => {
   })
 })
 
-describe('dekorTurLabel / isTape', () => {
-  it('labels both ldsp and dsp LDSP, exactly like the backend map', () => {
-    expect(dekorTurLabel('ldsp')).toBe('LDSP')
-    expect(dekorTurLabel('dsp')).toBe('LDSP')
-    expect(dekorTurLabel('mdf')).toBe('MDF')
-    expect(dekorTurLabel('fanera')).toBe('Fanera')
-    expect(dekorTurLabel('yogoch')).toBe("Yog'och")
-    expect(dekorTurLabel('kromka')).toBe('Kromka')
-    expect(dekorTurLabel('boshqa')).toBe('List')
+describe('decorTypeLabel / isTape', () => {
+  it('gives every type its own label, exactly like the backend map', () => {
+    // `dsp` used to borrow LDSP's word, which made chipboard and laminated
+    // chipboard indistinguishable on every screen and document even though they
+    // are different products at different prices.
+    expect(decorTypeLabel('ldsp')).toBe('LDSP')
+    expect(decorTypeLabel('dsp')).toBe('DSP')
+    expect(decorTypeLabel('mdf')).toBe('MDF')
+    expect(decorTypeLabel('fanera')).toBe('Fanera')
+    expect(decorTypeLabel('yogoch')).toBe("Yog'och")
+    expect(decorTypeLabel('kromka')).toBe('Kromka')
+    expect(decorTypeLabel('boshqa')).toBe('List')
   })
 
   it('still labels the legacy snapshot-only panel types', () => {
     // These live on frozen pre-reshape snapshots forever. Dropping them renders
     // every historical order with a raw enum token in the type slot.
-    expect(dekorTurLabel('plywood')).toBe('Fanera')
-    expect(dekorTurLabel('natural_wood')).toBe("Yog'och")
-    expect(dekorTurLabel('other')).toBe('List')
+    expect(decorTypeLabel('plywood')).toBe('Fanera')
+    expect(decorTypeLabel('natural_wood')).toBe("Yog'och")
+    expect(decorTypeLabel('other')).toBe('List')
   })
 
   it('echoes an unknown value and treats only kromka as tape-shaped', () => {
-    expect(dekorTurLabel('carbon')).toBe('carbon')
-    expect(dekorTurLabel(null)).toBe('')
+    expect(decorTypeLabel('carbon')).toBe('carbon')
+    expect(decorTypeLabel(null)).toBe('')
     expect(isTape('kromka')).toBe(true)
     expect(isTape('ldsp')).toBe(false)
     expect(isTape(null)).toBe(false)
+  })
+})
+
+describe('finished sides', () => {
+  it('prints «1 tomonlama» for a one-sided board and nothing for a two-sided one', () => {
+    // Two-sided is the norm; saying so on every row would be noise. One-sided
+    // is a different product at a different price, and the buyer has to see it.
+    const base = {
+      manufacturer_name: 'Egger',
+      type: 'ldsp',
+      code: 'H1334',
+      name: 'Sanoma',
+      thickness_mm: '18',
+      length_mm: 2800,
+      width_mm: 2070,
+    }
+    expect(snapshotMaterialLabel({ ...base, finished_sides: 1 })).toBe(
+      'LDSP Egger H1334 · Sanoma · 2800×2070×18 mm · 1 tomonlama',
+    )
+    expect(snapshotMaterialLabel({ ...base, finished_sides: 2 })).toBe(
+      'LDSP Egger H1334 · Sanoma · 2800×2070×18 mm',
+    )
+    // A kromka and a plank carry no finished-face count at all.
+    expect(snapshotMaterialLabel({ ...base, finished_sides: null })).toBe(
+      'LDSP Egger H1334 · Sanoma · 2800×2070×18 mm',
+    )
+  })
+
+  it('labels the two values and ignores anything else', () => {
+    expect(finishedSidesLabel(1)).toBe('1 tomonlama')
+    expect(finishedSidesLabel(2)).toBe('2 tomonlama')
+    expect(finishedSidesLabel(null)).toBe('')
+    expect(finishedSidesLabel(0)).toBe('')
+  })
+})
+
+describe('decorTypeFilterGroups', () => {
+  it('offers one choice per label, with every wire value behind it', () => {
+    // The grouping stays — it is what stops two types with one name showing the
+    // same option twice — but now that `dsp` has its own word, every group
+    // happens to hold exactly one value. The helper is kept rather than
+    // inlined: the moment two types share a label again, the filter must not
+    // silently start printing a duplicate choice.
+    expect(decorTypeFilterGroups()).toEqual([
+      { label: 'LDSP', types: ['ldsp'] },
+      { label: 'DSP', types: ['dsp'] },
+      { label: 'MDF', types: ['mdf'] },
+      { label: 'Fanera', types: ['fanera'] },
+      { label: "Yog'och", types: ['yogoch'] },
+      { label: 'Kromka', types: ['kromka'] },
+      { label: 'List', types: ['boshqa'] },
+    ])
   })
 })
 
@@ -86,12 +143,12 @@ describe('snapshotMaterialLabel — dual vocabulary', () => {
     expect(
       snapshotMaterialLabel({
         manufacturer_name: 'Egger',
-        tur: 'ldsp',
-        kod: 'H1334 ST9',
-        nomi: 'Sanoma',
-        qalinlik_mm: '18',
-        uzunlik_mm: 2800,
-        eni_mm: 2070,
+        type: 'ldsp',
+        code: 'H1334 ST9',
+        name: 'Sanoma',
+        thickness_mm: '18',
+        length_mm: 2800,
+        width_mm: 2070,
       }),
     ).toBe('LDSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
   })
@@ -107,19 +164,21 @@ describe('snapshotMaterialLabel — dual vocabulary', () => {
         panel_length_mm: 2800,
         panel_width_mm: 2070,
       }),
-    ).toBe('LDSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
+      // `dsp` reads «DSP» now — it stopped borrowing LDSP's word.
+    ).toBe('DSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
   })
 
   it('prefers the new key when a snapshot somehow carries both', () => {
     expect(
       snapshotMaterialLabel({
         manufacturer_name: 'Egger',
-        tur: 'mdf',
-        type: 'dsp',
-        kod: 'NEW',
+        type: 'mdf',
+        tur: 'dsp',
+        code: 'NEW',
+        kod: 'UZ',
         decor_code: 'OLD',
-        nomi: 'Sanoma',
-        qalinlik_mm: '18',
+        name: 'Sanoma',
+        thickness_mm: '18',
       }),
     ).toBe('MDF Egger NEW · Sanoma · 18 mm')
   })
@@ -128,11 +187,11 @@ describe('snapshotMaterialLabel — dual vocabulary', () => {
     expect(
       snapshotMaterialLabel({
         manufacturer_name: 'Egger',
-        tur: 'ldsp',
-        nomi: 'Sonoma eman',
-        qalinlik_mm: '18',
-        uzunlik_mm: 2800,
-        eni_mm: 2070,
+        type: 'ldsp',
+        name: 'Sonoma eman',
+        thickness_mm: '18',
+        length_mm: 2800,
+        width_mm: 2070,
       }),
     ).toBe('LDSP Egger Sonoma eman · 2800×2070×18 mm')
   })
@@ -148,20 +207,20 @@ describe('snapshotMaterialLabel — dual vocabulary', () => {
         panel_length_mm: 2800,
         panel_width_mm: 2070,
       }),
-    ).toBe('LDSP Kronospan TD-W18 · White · 2800×2070×18 mm')
+    ).toBe('DSP Kronospan TD-W18 · White · 2800×2070×18 mm')
   })
 
   it('falls back to the thickness-only detail when a size is missing', () => {
-    // A kromka row has uzunlik_mm/eni_mm null — this must not print «null×null mm».
+    // A kromka row has length_mm/width_mm null — this must not print «null×null mm».
     expect(
       snapshotMaterialLabel({
         manufacturer_name: 'Egger',
-        tur: 'kromka',
-        kod: 'H1334',
-        nomi: 'Sanoma',
-        qalinlik_mm: '2.0',
-        uzunlik_mm: null,
-        eni_mm: null,
+        type: 'kromka',
+        code: 'H1334',
+        name: 'Sanoma',
+        thickness_mm: '2.0',
+        length_mm: null,
+        width_mm: null,
       }),
     ).toBe('Kromka Egger H1334 · Sanoma · 2 mm')
   })
@@ -177,10 +236,10 @@ describe('snapshotEdgeLabel — dual vocabulary', () => {
     expect(
       snapshotEdgeLabel({
         manufacturer_name: 'Egger',
-        kod: 'H1334 ST9',
-        nomi: 'Sanoma',
-        qalinlik_mm: '0.4',
-        kromka_eni_mm: 20,
+        code: 'H1334 ST9',
+        name: 'Sanoma',
+        thickness_mm: '0.4',
+        tape_width_mm: 20,
       }),
     ).toBe('Egger H1334 ST9 · Sanoma · 0.4×20 mm')
   })
@@ -202,9 +261,9 @@ describe('snapshotEdgeLabel — dual vocabulary', () => {
     expect(
       snapshotEdgeLabel({
         manufacturer_name: 'Egger',
-        nomi: 'Sonoma eman',
-        qalinlik_mm: '2',
-        kromka_eni_mm: 36,
+        name: 'Sonoma eman',
+        thickness_mm: '2',
+        tape_width_mm: 36,
       }),
     ).toBe('Egger Sonoma eman · 2×36 mm')
   })
@@ -212,9 +271,9 @@ describe('snapshotEdgeLabel — dual vocabulary', () => {
 
 describe('snapshotShortLabel', () => {
   it('uses kod, then nomi, then a clipped legacy name — in both vocabularies', () => {
-    expect(snapshotShortLabel({ kod: 'H1334', nomi: 'Oak' })).toBe('H1334')
+    expect(snapshotShortLabel({ code: 'H1334', name: 'Oak' })).toBe('H1334')
     expect(snapshotShortLabel({ decor_code: 'H1334', color: 'Oak', name: 'Panel' })).toBe('H1334')
-    expect(snapshotShortLabel({ kod: null, nomi: 'Oak' })).toBe('Oak')
+    expect(snapshotShortLabel({ code: null, name: 'Oak' })).toBe('Oak')
     expect(snapshotShortLabel({ decor_code: null, color: 'Oak', name: 'Panel' })).toBe('Oak')
     expect(snapshotShortLabel({ name: 'Generated material label' })).toBe('Generated material')
   })
@@ -229,18 +288,18 @@ describe('materialOptionLabel', () => {
     expect(
       materialOptionLabel(
         option({
-          tur: 'ldsp',
-          qalinlik_mm: '18',
-          uzunlik_mm: 2800,
-          eni_mm: 2070,
-          kromka_eni_mm: null,
+          type: 'ldsp',
+          thickness_mm: '18',
+          length_mm: 2800,
+          width_mm: 2070,
+          tape_width_mm: null,
         }),
       ),
     ).toBe('LDSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
   })
 
   it('falls back to the first 8 characters of the branch-material id', () => {
-    expect(materialOptionLabel(option({ manufacturer_name: '', kod: null, nomi: '' }))).toBe(
+    expect(materialOptionLabel(option({ manufacturer_name: '', code: null, name: '' }))).toBe(
       'bm-12345 · 0.4×20 mm',
     )
   })

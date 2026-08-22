@@ -7072,6 +7072,19 @@
     margin: 8px 0 20px;
   }
 
+  /* Four figures instead of three — the material detail's Qoldiq · Min ·
+     Oxirgi narx · Qiymat row. Declared above the 640px collapse on purpose, so
+     a phone still gets the single column rather than this two-up step. */
+  .figs-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @media (max-width: 900px) {
+    .figs-4 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   @media (max-width: 640px) {
     .figs {
       grid-template-columns: minmax(0, 1fr);

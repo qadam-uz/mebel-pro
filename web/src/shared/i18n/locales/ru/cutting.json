@@ -31,7 +31,7 @@
   },
   "panelType": {
     "ldsp": "ЛДСП",
-    "dsp": "ЛДСП",
+    "dsp": "ДСП",
     "mdf": "МДФ",
     "fanera": "Фанера",
     "yogoch": "Дерево",
@@ -68,7 +68,8 @@
     "searchLabel": "Поиск материала",
     "searchPlaceholder": "Название или код декора — Sonoma, H1145, сонома",
     "searchEmpty": "По этому запросу материалов не найдено.",
-    "pickerEmpty": "В этом филиале нет материалов."
+    "pickerEmpty": "В этом филиале нет материалов.",
+    "discontinued": "Снят с производства"
   },
   "customerBoard": {
     "modeLabel": "Источник материала",

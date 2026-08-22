@@ -154,12 +154,19 @@ class OrderItem(UUIDPrimaryKey, Base):
             "+ edge_cost_tiyin)",
             name="ck_order_items_line_total_formula",
         ),
+        CheckConstraint(
+            "(branch_material_id IS NOT NULL) <> (customer_board_id IS NOT NULL)",
+            name="ck_order_items_material_exactly_one",
+        ),
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), nullable=False)
-    branch_material_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("branch_materials.id"), nullable=False
-    )
+    # Exactly one of the two is set — a line is cut either from a sheet the
+    # branch carries or from one the client brought in. The label and every
+    # price on this row come from `material_snapshot` regardless, so a reader
+    # that only prints the line never has to branch on which FK is filled.
+    branch_material_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branch_materials.id"))
+    customer_board_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customer_boards.id"))
     material_source: Mapped[MaterialSource] = mapped_column(
         enum_type(MaterialSource, "material_source"),
         nullable=False,

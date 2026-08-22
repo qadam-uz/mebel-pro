@@ -2,12 +2,15 @@
 
 from app.modules.inventory.invoices import (
     InvoiceLineRecord,
+    InvoicePaymentRecord,
     InvoiceRecord,
     create_invoice,
     get_invoice,
     invoice_for_payment,
     list_invoices,
     list_payable_invoices,
+    update_invoice,
+    void_invoice,
 )
 from app.modules.inventory.service import (
     LastPriceRecord,
@@ -18,14 +21,17 @@ from app.modules.inventory.service import (
     display_unit,
     ensure_stock_item_for_branch_material,
     get_last_price,
+    is_low_stock,
     list_stock,
     list_suppliers,
     list_transactions,
     record_adjustment,
     record_stock_in,
     restore_order_stock,
+    set_min_stock,
     set_supplier_status,
     stock_in_total_tiyin,
+    stock_row_for_material,
     stock_unit,
     stock_value,
     update_supplier,
@@ -33,6 +39,7 @@ from app.modules.inventory.service import (
 
 __all__ = [
     "InvoiceLineRecord",
+    "InvoicePaymentRecord",
     "InvoiceRecord",
     "LastPriceRecord",
     "StockRecord",
@@ -45,6 +52,7 @@ __all__ = [
     "get_invoice",
     "get_last_price",
     "invoice_for_payment",
+    "is_low_stock",
     "list_invoices",
     "list_payable_invoices",
     "list_stock",
@@ -53,9 +61,13 @@ __all__ = [
     "record_adjustment",
     "record_stock_in",
     "restore_order_stock",
+    "set_min_stock",
     "set_supplier_status",
     "stock_in_total_tiyin",
+    "stock_row_for_material",
     "stock_unit",
     "stock_value",
+    "update_invoice",
     "update_supplier",
+    "void_invoice",
 ]

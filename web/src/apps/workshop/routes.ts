@@ -219,6 +219,55 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
       branchScope: 'branch',
     },
   },
+  // Arrival documents are pages, not modals: an operator types a whole faktura
+  // here, and a form that long behind a dialog cannot be linked, reloaded or
+  // left and come back to. Declared BEFORE nothing else — `/invoices/new` sits
+  // above `:invoice_id` so the literal segment is not read as an id.
+  {
+    path: '/workshop/inventory/invoices/new',
+    name: 'workshop-invoice-new',
+    component: () => import('@/shared/views/WorkshopInvoiceFormView.vue'),
+    meta: {
+      titleKey: 'routes.invoiceNew',
+      workshopAccess: { any: [p.manageInventory] },
+      // A new arrival is entered into whichever branch the topbar names.
+      branchScope: 'branch',
+    },
+  },
+  {
+    path: '/workshop/inventory/invoices/:invoice_id',
+    name: 'workshop-invoice-detail',
+    component: () => import('@/shared/views/WorkshopInvoiceDetailView.vue'),
+    meta: {
+      titleKey: 'routes.invoiceDetail',
+      workshopAccess: { any: [p.manageInventory] },
+      // An existing faktura carries its own branch; the picker steps aside.
+      branchScope: 'entity',
+    },
+  },
+  {
+    path: '/workshop/inventory/invoices/:invoice_id/edit',
+    name: 'workshop-invoice-edit',
+    component: () => import('@/shared/views/WorkshopInvoiceFormView.vue'),
+    meta: {
+      titleKey: 'routes.invoiceEdit',
+      workshopAccess: { any: [p.manageInventory] },
+      branchScope: 'entity',
+    },
+  },
+  // A material is a page too, and for the same reason the faktura is: it is
+  // reached from a row, a link or a reload, and it carries its own branch (the
+  // server derives it from the material) rather than depending on the topbar.
+  {
+    path: '/workshop/inventory/materials/:branch_material_id',
+    name: 'workshop-material-detail',
+    component: () => import('@/shared/views/WorkshopMaterialDetailView.vue'),
+    meta: {
+      titleKey: 'routes.materialDetail',
+      workshopAccess: { any: [p.manageInventory] },
+      branchScope: 'entity',
+    },
+  },
   {
     path: '/workshop/catalog',
     name: 'workshop-catalog',

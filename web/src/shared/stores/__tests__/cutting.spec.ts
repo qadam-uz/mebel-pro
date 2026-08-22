@@ -74,10 +74,10 @@ function draft(id = 'draft-1'): CuttingDraft {
 
 const WALK_IN = { id: 'client-9', name: 'Ali Valiyev', phone: '+998901112233' }
 
-const basePanel: Pick<ClientCatalogMaterialOption, 'uzunlik_mm' | 'eni_mm' | 'tolali'> = {
-  uzunlik_mm: 600,
-  eni_mm: 400,
-  tolali: true,
+const basePanel: Pick<ClientCatalogMaterialOption, 'length_mm' | 'width_mm' | 'has_grain'> = {
+  length_mm: 600,
+  width_mm: 400,
+  has_grain: true,
 }
 
 // Drives every store action that talks to the API and returns the request
@@ -298,9 +298,9 @@ describe('partFitError', () => {
     [false, true, 'impossible_grain'],
     [false, false, null],
   ] as const)(
-    'uses follow_grain as the rotation lock for tolali=%s and follow_grain=%s',
+    'uses follow_grain as the rotation lock for has_grain=%s and follow_grain=%s',
     (materialGrain, followGrain, expected) => {
-      const panel = { ...basePanel, tolali: materialGrain }
+      const panel = { ...basePanel, has_grain: materialGrain }
 
       expect(partFitError(360, 500, panel, followGrain, 10)).toBe(expected)
     },

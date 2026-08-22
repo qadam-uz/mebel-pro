@@ -45,7 +45,7 @@ vi.mock('@/shared/api/client', () => {
 })
 
 // Length is all these tests inspect (append/replace + has-more), so id-only rows
-// stand in for the real Dekor / BranchMaterial shapes. Row shape is invisible
+// stand in for the real Decor / BranchMaterial shapes. Row shape is invisible
 // here by design — the value of this file is the QUERY assertions.
 function page(size: number, prefix: string): { id: string }[] {
   return Array.from({ length: size }, (_, index) => ({ id: `${prefix}-${index}` }))
@@ -56,7 +56,7 @@ function lastGetUrl(): string {
   return calls[calls.length - 1][0]
 }
 
-describe('admin store — dekorlar pagination', () => {
+describe('admin store — dekors pagination', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(api.get).mockReset()
@@ -66,10 +66,10 @@ describe('admin store — dekorlar pagination', () => {
     vi.mocked(api.get).mockResolvedValueOnce(page(MATERIALS_PAGE_LIMIT, 'm'))
     const store = useAdminStore()
 
-    await store.loadDekorlar()
+    await store.loadDecors()
 
-    expect(store.dekorlar).toHaveLength(MATERIALS_PAGE_LIMIT)
-    expect(store.dekorlarHasMore).toBe(true)
+    expect(store.decors).toHaveLength(MATERIALS_PAGE_LIMIT)
+    expect(store.decorsHasMore).toBe(true)
     expect(lastGetUrl()).toContain(`limit=${MATERIALS_PAGE_LIMIT}`)
     expect(lastGetUrl()).toContain('offset=0')
   })
@@ -77,30 +77,30 @@ describe('admin store — dekorlar pagination', () => {
   it('appends the next page and clears has-more when it is short', async () => {
     vi.mocked(api.get).mockResolvedValueOnce(page(MATERIALS_PAGE_LIMIT, 'm'))
     const store = useAdminStore()
-    await store.loadDekorlar()
+    await store.loadDecors()
 
     vi.mocked(api.get).mockResolvedValueOnce(page(10, 'm2'))
-    await store.loadDekorlar({ offset: store.dekorlar.length })
+    await store.loadDecors({ offset: store.decors.length })
 
-    expect(store.dekorlar).toHaveLength(MATERIALS_PAGE_LIMIT + 10)
-    expect(store.dekorlarHasMore).toBe(false)
+    expect(store.decors).toHaveLength(MATERIALS_PAGE_LIMIT + 10)
+    expect(store.decorsHasMore).toBe(false)
     expect(lastGetUrl()).toContain(`offset=${MATERIALS_PAGE_LIMIT}`)
   })
 
   it('replaces (does not append) on a filter reload at offset 0', async () => {
     vi.mocked(api.get).mockResolvedValueOnce(page(MATERIALS_PAGE_LIMIT, 'm'))
     const store = useAdminStore()
-    await store.loadDekorlar()
+    await store.loadDecors()
 
     vi.mocked(api.get).mockResolvedValueOnce(page(3, 'search'))
-    await store.loadDekorlar({ search: 'oak', tur: 'ldsp', manufacturerIds: ['mfr-1', 'mfr-2'] })
+    await store.loadDecors({ search: 'oak', type: 'ldsp', manufacturerIds: ['mfr-1', 'mfr-2'] })
 
-    expect(store.dekorlar).toHaveLength(3)
-    expect(store.dekorlarHasMore).toBe(false)
+    expect(store.decors).toHaveLength(3)
+    expect(store.decorsHasMore).toBe(false)
     const url = lastGetUrl()
-    expect(url).toContain('/platform/catalog/dekorlar')
+    expect(url).toContain('/platform/catalog/decors')
     expect(url).toContain('search=oak')
-    expect(url).toContain('tur=ldsp')
+    expect(url).toContain('type=ldsp')
     expect(url).toContain('manufacturer_ids=mfr-1')
     expect(url).toContain('manufacturer_ids=mfr-2')
   })
@@ -151,15 +151,15 @@ describe('workshop store — branch materials pagination', () => {
 
     await store.fetchCatalogOptions('branch-1', {
       manufacturer_id: 'mfr-9',
-      tur: 'kromka',
+      type: 'kromka',
       limit: 100,
       offset: 100,
     })
 
     const url = lastGetUrl()
-    expect(url).toContain('/workshop/branches/branch-1/catalog/dekorlar')
+    expect(url).toContain('/workshop/branches/branch-1/catalog/decors')
     expect(url).toContain('manufacturer_id=mfr-9')
-    expect(url).toContain('tur=kromka')
+    expect(url).toContain('type=kromka')
     expect(url).toContain('offset=100')
   })
 })

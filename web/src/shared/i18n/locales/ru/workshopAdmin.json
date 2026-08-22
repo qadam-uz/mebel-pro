@@ -28,6 +28,7 @@
   },
   "stockType": {
     "stock_in": "Приход",
+    "stock_in_void": "Отмена прихода",
     "consume": "Расход",
     "restore": "Возврат",
     "adjust": "Корректировка"
@@ -42,7 +43,8 @@
     "manage_catalog": "Каталог материалов",
     "manage_inventory": "Склад",
     "manage_finance": "Финансовые записи",
-    "view_finance_reports": "Финансовые отчёты"
+    "view_finance_reports": "Финансовые отчёты",
+    "record_order_payment": "Приём оплаты по заказу"
   },
   "assignment": {
     "cutter": "Распильщик",

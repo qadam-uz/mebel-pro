@@ -10,8 +10,8 @@ export function edgeRank(
   edge: ClientCatalogMaterialOption,
 ): number {
   if (!panel) return 2
-  if (panel.kod && edge.kod && panel.kod === edge.kod) return 0
-  if (panel.nomi && edge.nomi && panel.nomi.toLowerCase() === edge.nomi.toLowerCase()) return 1
+  if (panel.code && edge.code && panel.code === edge.code) return 0
+  if (panel.name && edge.name && panel.name.toLowerCase() === edge.name.toLowerCase()) return 1
   return 2
 }
 
@@ -22,34 +22,34 @@ export interface RankedEdge {
 
 export function widthPenalty(
   panelThickness: number | null | undefined,
-  edge: Pick<ClientCatalogMaterialOption, 'kromka_eni_mm'>,
+  edge: Pick<ClientCatalogMaterialOption, 'tape_width_mm'>,
 ): number {
   if (panelThickness == null || !Number.isFinite(panelThickness)) return 0
-  const width = Number(edge.kromka_eni_mm)
+  const width = Number(edge.tape_width_mm)
   if (!Number.isFinite(width)) return 0
   return width < panelThickness ? 10_000 + (panelThickness - width) : width - panelThickness
 }
 
 export function edgeTooNarrow(
   panelThickness: number | null | undefined,
-  edge: Pick<ClientCatalogMaterialOption, 'kromka_eni_mm'> | null | undefined,
+  edge: Pick<ClientCatalogMaterialOption, 'tape_width_mm'> | null | undefined,
 ): boolean {
   if (!edge || panelThickness == null || !Number.isFinite(panelThickness)) return false
-  const width = Number(edge.kromka_eni_mm)
+  const width = Number(edge.tape_width_mm)
   return Number.isFinite(width) && width < panelThickness
 }
 
 /**
  * Edges sorted by rank → width fit → thickness → manufacturer + identity,
  * carrying the rank. The last tiebreak used to read the server's stored `name`;
- * `kod || nomi` is that string's identity slot (material_label.py `_identity`),
+ * `code || name` is that string's identity slot (material_label.py `_identity`),
  * which keeps the ordering the picker has always had.
  */
 export function rankedEdges(
   panel: ClientCatalogMaterialOption | null | undefined,
   edges: ClientCatalogMaterialOption[],
 ): RankedEdge[] {
-  const panelThickness = panel ? Number(panel.qalinlik_mm) : null
+  const panelThickness = panel ? Number(panel.thickness_mm) : null
   return edges
     .map((material) => ({ material, rank: edgeRank(panel, material) }))
     .sort((left, right) => {
@@ -57,11 +57,11 @@ export function rankedEdges(
       const leftWidthPenalty = widthPenalty(panelThickness, left.material)
       const rightWidthPenalty = widthPenalty(panelThickness, right.material)
       if (leftWidthPenalty !== rightWidthPenalty) return leftWidthPenalty - rightWidthPenalty
-      const leftThickness = Number(left.material.qalinlik_mm)
-      const rightThickness = Number(right.material.qalinlik_mm)
+      const leftThickness = Number(left.material.thickness_mm)
+      const rightThickness = Number(right.material.thickness_mm)
       if (leftThickness !== rightThickness) return leftThickness - rightThickness
       const identity = (edge: ClientCatalogMaterialOption) =>
-        `${edge.manufacturer_name} ${edge.kod || edge.nomi}`
+        `${edge.manufacturer_name} ${edge.code || edge.name}`
       return identity(left.material).localeCompare(identity(right.material))
     })
 }

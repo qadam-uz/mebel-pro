@@ -19,7 +19,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Dekor, DekorType
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, DecorFormat, DecorType
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
@@ -134,11 +134,11 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="P5-P",
-        nomi="White",
-        qalinlik_mm=Decimal("18"),
-        uzunlik_mm=900,
-        eni_mm=600,
+        code="P5-P",
+        name="White",
+        thickness_mm=Decimal("18"),
+        length_mm=900,
+        width_mm=600,
         price_tiyin=250_000,
         min_stock=1,
     )
@@ -146,10 +146,10 @@ async def _materials(
         db,
         branch_id=branch_id,
         manufacturer=manufacturer,
-        kod="P5-E",
-        nomi="White",
-        qalinlik_mm=Decimal("2"),
-        kromka_eni_mm=19,
+        code="P5-E",
+        name="White",
+        thickness_mm=Decimal("2"),
+        tape_width_mm=19,
         price_tiyin=10_000,
         min_stock=1_000,
     )
@@ -1483,8 +1483,9 @@ async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
     panel_item = await db_session.scalar(
         select(StockItem)
         .join(BranchMaterial, BranchMaterial.id == StockItem.branch_material_id)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .where(StockItem.branch_id == branch_id, Dekor.tur != DekorType.KROMKA)
+        # The substrate lives on the format now, one join further out.
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+        .where(StockItem.branch_id == branch_id, DecorFormat.type != DecorType.KROMKA)
     )
     assert panel_item is not None
     panel_item.on_hand = 0

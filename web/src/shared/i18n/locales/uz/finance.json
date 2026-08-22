@@ -210,7 +210,8 @@
     "emptyExpense": "Bu davrda xarajat yo'q",
     "filterEmptyIncome": "Filtrga mos tushum topilmadi",
     "emptyIncome": "Bu davrda tushum yo'q",
-    "filterEmptyBody": "Filtrni o'zgartiring yoki tozalang."
+    "filterEmptyBody": "Filtrni o'zgartiring yoki tozalang.",
+    "enteredByAt": "kiritilgan {at} · {name}"
   },
   "expense": {
     "createTitle": "Xarajat yozish",
@@ -318,5 +319,9 @@
     "bandingStartedSheet": "Kromka boshlandi.",
     "jobFinished": "{order} yakunlandi.",
     "jobFinishedNext": "{order} yakunlandi. Keyingi: {next}"
+  },
+  "filter": {
+    "actor": "Kim yozgan",
+    "actorAll": "Barcha xodimlar"
   }
 }

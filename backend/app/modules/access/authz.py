@@ -58,6 +58,31 @@ def can_access_branch(
     return PermissionGrantKey(permission=permission, branch_id=branch_id) in principal.grants
 
 
+def can_access_branch_any(
+    principal: AuthenticatedPrincipal,
+    *,
+    workshop_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    permissions: frozenset[Permission],
+) -> bool:
+    """`can_access_branch` for an operation more than one grant may perform.
+
+    Recording an order payment is the case that needed it: the accountant does
+    it with `manage_finance`, the cashier with `record_order_payment`, and the
+    check has to admit either without duplicating the branch and owner rules.
+    """
+
+    return any(
+        can_access_branch(
+            principal,
+            workshop_id=workshop_id,
+            branch_id=branch_id,
+            permission=permission,
+        )
+        for permission in permissions
+    )
+
+
 def require_manage_orders_workshop(principal: AuthenticatedPrincipal) -> uuid.UUID:
     """Require a workshop principal holding ``manage_orders`` on ≥1 branch;
     return their workshop id. Owner bypass applies (an owner holds every

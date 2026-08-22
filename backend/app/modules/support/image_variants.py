@@ -1,6 +1,6 @@
 """Downscaled renditions of an uploaded image.
 
-A dekor photo arrives as the operator's original — measured in production at
+A decor photo arrives as the operator's original — measured in production at
 2160x2160 and 1.5 MB — and is then drawn into a 34 px swatch. A catalog page
 holds fifty of them, so the browser was fetching ~2.2 MB to paint about 1700 px
 of image. These renditions exist so each screen can ask for roughly what it

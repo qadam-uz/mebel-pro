@@ -28,17 +28,22 @@ from app.modules.cutting.pdf_document import (
     render_cutting_pdf_async,
 )
 from app.modules.cutting.service import (
+    CUSTOMER_BOARD_DEFAULT_NAME,
+    CUSTOMER_BOARD_MANUFACTURER_NAME,
     choose_result,
     clamp_own_claim,
     client_catalog_materials,
     commit_imported_map,
     create_draft,
+    customer_board_ids,
+    customer_board_snapshot,
     cutting_result_pdf_context,
     cutting_result_response,
     delete_draft,
     get_client_result,
     get_draft,
     list_drafts,
+    material_fk_columns,
     optimize_draft,
     update_draft,
 )
@@ -57,6 +62,8 @@ from app.modules.cutting.workshop_service import (
 )
 
 __all__ = [
+    "CUSTOMER_BOARD_DEFAULT_NAME",
+    "CUSTOMER_BOARD_MANUFACTURER_NAME",
     "DEFAULT_CUT_PARAMS",
     "DEFAULT_EDGE_OVERHANG_MM",
     "DEFAULT_EDGE_TRIM_MM",
@@ -85,6 +92,8 @@ __all__ = [
     "create_customer_board",
     "create_draft",
     "create_workshop_draft",
+    "customer_board_ids",
+    "customer_board_snapshot",
     "cutting_result_pdf_context",
     "cutting_result_response",
     "delete_draft",
@@ -95,6 +104,7 @@ __all__ = [
     "get_workshop_result",
     "list_drafts",
     "list_workshop_drafts",
+    "material_fk_columns",
     "optimize_draft",
     "optimize_workshop_draft",
     "parse_import_file",

@@ -6,7 +6,7 @@ from datetime import date
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import AccountReadyPrincipal, Session
-from app.models.enums import SupplierStatus
+from app.models.enums import DecorType, SupplierStatus
 from app.modules.catalog.api import branch_material_response_from_models
 from app.modules.inventory.api import (
     StockRecord,
@@ -14,12 +14,15 @@ from app.modules.inventory.api import (
     create_supplier,
     display_unit,
     get_last_price,
+    is_low_stock,
     list_stock,
     list_suppliers,
     list_transactions,
     record_adjustment,
     record_stock_in,
+    set_min_stock,
     set_supplier_status,
+    stock_row_for_material,
     stock_unit,
     stock_value,
     update_supplier,
@@ -29,6 +32,7 @@ from app.modules.inventory.schemas import (
     StockInRequest,
     StockItemResponse,
     StockLastPriceResponse,
+    StockMinStockRequest,
     StockTransactionResponse,
     StockValueResponse,
     SupplierCreateRequest,
@@ -37,11 +41,18 @@ from app.modules.inventory.schemas import (
 )
 
 router = APIRouter(prefix="/workshop/branches/{branch_id}", tags=["inventory"])
+# The stock surface's one write that moves no stock. It lives under the module's
+# `/workshop/inventory` prefix (the one `invoice_routes` already uses) because
+# the threshold is a policy edit on a material, not a movement on a balance.
+stock_router = APIRouter(prefix="/workshop/inventory", tags=["inventory"])
 SUPPLIER_STATUS_QUERY = Query(default=None, alias="status")
 # Opt-in cap for callers that render a preview rather than the table (the global
 # search shows five rows). Default stays unbounded so the inventory screen, which
 # pages client-side, keeps seeing every row.
 STOCK_LIMIT_QUERY = Query(default=None, ge=1, le=200)
+# Repeated query param (?types=ldsp&types=dsp) — the catalog's `types` shape.
+# A module-level singleton so the default isn't a Query() call (ruff B008).
+TYPES_QUERY = Query(default=None)
 
 
 @router.get("/stock", response_model=list[StockItemResponse])
@@ -51,6 +62,11 @@ async def stock_index(
     db: Session,
     search: str | None = None,
     low_stock: bool = False,
+    # Off by default so every existing caller — the global search preview, the
+    # material pickers — keeps seeing the branch's whole catalog. Only the
+    # Zaxira table asks for the moved scope.
+    moved_only: bool = False,
+    types: list[DecorType] | None = TYPES_QUERY,
     limit: int | None = STOCK_LIMIT_QUERY,
 ) -> list[StockItemResponse]:
     rows = await list_stock(
@@ -59,6 +75,8 @@ async def stock_index(
         branch_id=branch_id,
         search=search,
         low_stock_only=low_stock,
+        moved_only=moved_only,
+        types=types,
         limit=limit,
     )
     return [_stock_response(row) for row in rows]
@@ -237,6 +255,43 @@ async def suppliers_deactivate(
     return SupplierResponse.model_validate(row)
 
 
+# The material page reads its own row by material alone: a page URL has to work
+# from a link or a reload, and the branch is derivable from the material.
+@stock_router.get("/materials/{branch_material_id}/stock", response_model=StockItemResponse)
+async def material_stock_get(
+    branch_material_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> StockItemResponse:
+    row = await stock_row_for_material(
+        db,
+        principal=principal,
+        branch_material_id=branch_material_id,
+    )
+    return _stock_response(row)
+
+
+@stock_router.put(
+    "/branches/{branch_id}/stock/{branch_material_id}/min-stock",
+    response_model=StockItemResponse,
+)
+async def stock_min_stock_update(
+    branch_id: uuid.UUID,
+    branch_material_id: uuid.UUID,
+    payload: StockMinStockRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> StockItemResponse:
+    row = await set_min_stock(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        branch_material_id=branch_material_id,
+        min_stock=payload.min_stock,
+    )
+    return _stock_response(row)
+
+
 def _stock_response(row: StockRecord) -> StockItemResponse:
     item = row.stock_item
     return StockItemResponse(
@@ -244,14 +299,14 @@ def _stock_response(row: StockRecord) -> StockItemResponse:
         branch_id=item.branch_id,
         branch_material_id=item.branch_material_id,
         material=branch_material_response_from_models(
-            row.branch_material, row.dekor, row.manufacturer
+            row.branch_material, row.decor_format, row.decor, row.manufacturer
         ),
-        tur=row.dekor.tur,
-        stock_unit=stock_unit(row.dekor.tur),
-        display_unit=display_unit(row.dekor.tur),
+        type=row.decor_format.type,
+        stock_unit=stock_unit(row.decor_format.type),
+        display_unit=display_unit(row.decor_format.type),
         on_hand=item.on_hand,
         min_stock=row.branch_material.min_stock,
-        is_low_stock=item.on_hand <= row.branch_material.min_stock,
+        is_low_stock=is_low_stock(item.on_hand, row.branch_material.min_stock),
         updated_at=item.updated_at,
     )
 
@@ -269,6 +324,9 @@ def _transaction_response(row: TransactionRecord) -> StockTransactionResponse:
         unit_price_tiyin=tx.unit_price_tiyin,
         total_price_tiyin=tx.total_price_tiyin,
         order_id=tx.order_id,
+        order_number=row.order_number,
+        invoice_id=tx.invoice_id,
+        invoice_no=row.invoice_no,
         supplier_id=tx.supplier_id,
         supplier_name=row.supplier.name if row.supplier else None,
         actor_user_id=tx.actor_user_id,

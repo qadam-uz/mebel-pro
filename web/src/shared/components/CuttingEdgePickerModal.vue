@@ -140,7 +140,7 @@ function recommendedEdgeForPart() {
 function panelThicknessForPart() {
   if (!props.part) return null
   const panel = materialById(props.part.material_id)
-  const thickness = Number(panel?.qalinlik_mm)
+  const thickness = Number(panel?.thickness_mm)
   if (!Number.isFinite(thickness)) return null
   return thickenedState.value ? thickness * 2 : thickness
 }
@@ -153,14 +153,14 @@ function panelForEdgeRanking() {
   const panel = props.part ? materialById(props.part.material_id) : null
   if (!panel || !thickenedState.value) return panel
   const doubled = panelThicknessForPart()
-  return doubled == null ? panel : { ...panel, qalinlik_mm: String(doubled) }
+  return doubled == null ? panel : { ...panel, thickness_mm: String(doubled) }
 }
 
-function narrowWarning(material: { kromka_eni_mm: number | null } | null | undefined) {
+function narrowWarning(material: { tape_width_mm: number | null } | null | undefined) {
   const panelThickness = panelThicknessForPart()
   if (!material || panelThickness == null || !edgeTooNarrow(panelThickness, material)) return null
   return t('cutting.edge.narrowWarning', {
-    width: material.kromka_eni_mm,
+    width: material.tape_width_mm,
     thickness: panelThickness,
   })
 }
@@ -291,7 +291,7 @@ function sideAria(side: EdgeField) {
 }
 
 const edgeThicknesses = computed(() =>
-  [...new Set(cutting.edgeOptions.map((material) => material.qalinlik_mm))]
+  [...new Set(cutting.edgeOptions.map((material) => material.thickness_mm))]
     .filter((value): value is string => Boolean(value))
     .sort((left, right) => Number(left) - Number(right)),
 )
@@ -312,7 +312,7 @@ const catalogFilteredEdges = computed(() => {
   return rankedEdges(panelForEdgeRanking(), cutting.edgeOptions)
     .filter(({ material }) =>
       edgePickerThickness.value !== 'all'
-        ? material.qalinlik_mm === edgePickerThickness.value
+        ? material.thickness_mm === edgePickerThickness.value
         : true,
     )
     .filter(({ material }) => {
@@ -929,14 +929,14 @@ onBeforeUnmount(() => {
             >
               <span
                 class="size-4 shrink-0 rounded border border-hairline-strong"
-                :style="{ background: colorForMaterial(material.nomi) }"
+                :style="{ background: colorForMaterial(material.name) }"
               ></span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-bold text-ink">{{
                   edgeShortLabel(material)
                 }}</span>
                 <span class="block text-xs text-ink-muted">
-                  {{ material.qalinlik_mm }} mm · {{ material.kromka_eni_mm }} mm
+                  {{ material.thickness_mm }} mm · {{ material.tape_width_mm }} mm
                 </span>
                 <span v-if="narrowWarning(material)" class="block text-xs text-warning">
                   {{ narrowWarning(material) }}
@@ -961,14 +961,14 @@ onBeforeUnmount(() => {
             >
               <span
                 class="size-4 shrink-0 rounded border border-hairline-strong"
-                :style="{ background: colorForMaterial(material.nomi) }"
+                :style="{ background: colorForMaterial(material.name) }"
               ></span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-bold text-ink">{{
                   edgeShortLabel(material)
                 }}</span>
                 <span class="block text-xs text-ink-muted">
-                  {{ material.qalinlik_mm }} mm · {{ material.kromka_eni_mm }} mm
+                  {{ material.thickness_mm }} mm · {{ material.tape_width_mm }} mm
                 </span>
                 <span v-if="narrowWarning(material)" class="block text-xs text-warning">
                   {{ narrowWarning(material) }}

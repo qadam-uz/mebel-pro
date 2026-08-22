@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/shared/api/client'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
-import type { Dekor, DekorType } from '@/shared/stores/admin'
-import { useWorkshopStore, type BranchMaterial } from '@/shared/stores/workshop'
+import type { Decor, DecorFormat, DecorType } from '@/shared/stores/admin'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 vi.mock('@/shared/app/authInit', () => ({
   authInit: () => ({ accessToken: 'access-token' }),
@@ -38,59 +38,57 @@ vi.mock('@/shared/api/client', () => {
   }
 })
 
-function dekor(id: string, tur: DekorType = 'ldsp'): Dekor {
+function decor(id: string): Decor {
   return {
     id,
     manufacturer_id: 'maker-1',
     manufacturer_name: 'Egger',
-    tur,
-    kod: `H${id}`,
-    nomi: 'Dub Sonoma',
-    tolali: false,
+    code: `H${id}`,
+    name: 'Dub Sonoma',
+    has_grain: false,
     image_file_id: null,
-    holat: 'active',
+    status: 'active',
     label: `Dekor ${id}`,
     branch_usage_count: 0,
+    format_count: 2,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }
 }
 
-/** A row this branch already carries — feeds the carried / non-standard chips. */
-function branchMaterial(dekorId: string, format: Partial<BranchMaterial>): BranchMaterial {
+/** One platform format of `decorId`. Formats are platform-owned now. */
+function format(id: string, decorId: string, overrides: Partial<DecorFormat> = {}): DecorFormat {
+  const type = (overrides.type ?? 'ldsp') as DecorType
   return {
-    id: `bm-${dekorId}-${format.qalinlik_mm}`,
-    branch_id: 'branch-1',
-    dekor_id: dekorId,
-    dekor: dekor(dekorId),
-    qalinlik_mm: '18',
-    uzunlik_mm: null,
-    eni_mm: null,
-    kromka_eni_mm: null,
-    price_tiyin: 0,
-    price_unset: true,
-    min_stock: 0,
+    id,
+    decor_id: decorId,
+    type,
+    thickness_mm: '18',
+    length_mm: 2800,
+    width_mm: 2070,
+    tape_width_mm: null,
+    finished_sides: 2,
     status: 'active',
-    label: 'Dekor d-1',
+    label: `LDSP Egger H${decorId} · 2800×2070×18 mm`,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
-    ...format,
+    ...overrides,
   }
 }
 
-/** A row the attach call reports back as created — the store prepends it. */
-function created(dekorId: string): BranchMaterial {
-  return branchMaterial(dekorId, { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070 })
-}
-
-/** `GET .../catalog/dekorlar` returns the picker page; `.../catalog/filters` the facets. */
+/**
+ * `GET .../catalog/decors` is step 1's page; `.../decors/{id}/formats` is step
+ * 2's list; `.../catalog/filters` the facets.
+ */
 function respondWith(
-  items: { dekor: Dekor; carried_format_count: number }[],
-  total = items.length,
+  items: { decor: Decor; carried_format_count: number; available_format_count: number }[],
+  formatsByDecor: Record<string, { decor_format: DecorFormat; carried: boolean }[]> = {},
 ) {
   vi.mocked(api.get).mockImplementation(async (path: string) => {
     if (path.includes('/catalog/filters')) return { manufacturers: [] }
-    if (path.includes('/catalog/dekorlar')) return { items, total }
+    const formatsMatch = /\/catalog\/decors\/([^/]+)\/formats/.exec(path)
+    if (formatsMatch) return formatsByDecor[formatsMatch[1]] ?? []
+    if (path.includes('/catalog/decors')) return { items, total: items.length }
     return []
   })
 }
@@ -104,104 +102,82 @@ function mountSheet() {
 
 type Sheet = ReturnType<typeof mountSheet>
 
-/** Tick the nth dekor card (step 1 is multi-select — cards are checkboxes). */
-async function tickDekor(wrapper: Sheet, index = 0) {
+async function tickDecor(wrapper: Sheet, index = 0) {
   await wrapper.findAll('li input[type="checkbox"]')[index].trigger('change')
 }
 
 async function continueToFormats(wrapper: Sheet) {
   await wrapper.find('button.mp-button-primary').trigger('click')
+  await flushPromises()
 }
 
-/** Step 1 → step 2 on the first dekor alone — the single-dekor path. */
-async function pickFirstDekor(wrapper: Sheet) {
-  await tickDekor(wrapper, 0)
-  await continueToFormats(wrapper)
+/** Every format checkbox in step two, in render order. */
+function formatBoxes(wrapper: Sheet) {
+  return wrapper.findAll('label input[type="checkbox"]')
 }
 
-/** Click a chip by its visible text (`18 mm`, `2800×2070`, …). */
-async function clickChip(wrapper: Sheet, text: string, blockIndex = 0) {
-  const block = wrapper.findAll('fieldset')
-  // Two fieldsets per tur block: qalinlik, then o'lcham / lenta eni.
-  const scope = [block[blockIndex * 2], block[blockIndex * 2 + 1]]
-  const chip = scope.flatMap((node) => node.findAll('button')).find((node) => node.text() === text)
-  if (!chip) throw new Error(`chip not found: ${text}`)
-  await chip.trigger('click')
-}
-
-describe('BranchMaterialAttachSheet', () => {
+describe('BranchMaterialAttachSheet — step two picks platform formats', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.mocked(api.get).mockReset()
-    vi.mocked(api.post).mockReset()
+    vi.clearAllMocks()
   })
 
-  // A dekor the branch already carries is never hidden — carrying 18 mm does not
-  // stop you adding 16 mm — so the picker labels it instead of dropping it.
-  it('lists carried dekorlar with their format count instead of hiding them', async () => {
-    respondWith([
-      { dekor: dekor('d-1'), carried_format_count: 2 },
-      { dekor: dekor('d-2'), carried_format_count: 0 },
-    ])
+  it('lists the decor’s active formats, with carried ones disabled', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 1, available_format_count: 2 }], {
+      'd-1': [
+        { decor_format: format('f-1', 'd-1'), carried: false },
+        {
+          decor_format: format('f-2', 'd-1', { thickness_mm: '16', label: 'LDSP 16 mm' }),
+          carried: true,
+        },
+      ],
+    })
     const wrapper = mountSheet()
     await flushPromises()
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
 
-    expect(wrapper.text()).toContain('Dekor d-1')
-    expect(wrapper.text()).toContain('Dekor d-2')
-    expect(wrapper.text()).toContain("2 o'lcham bor")
+    const boxes = formatBoxes(wrapper)
+    expect(boxes).toHaveLength(2)
+    expect(boxes[0].attributes('disabled')).toBeUndefined()
+    // Carried rows stay in the list rather than vanishing: hiding them leaves
+    // the branch wondering whether the size exists at all.
+    expect(boxes[1].attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('LDSP 16 mm')
   })
 
-  // "Davom etish" needs a selection; nothing ticked is not a step.
-  it('blocks "Davom etish" until at least one dekor is ticked', async () => {
-    respondWith([{ dekor: dekor('d-1'), carried_format_count: 0 }])
+  it('offers no way to invent a format, and says who can add one', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
+      'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],
+    })
     const wrapper = mountSheet()
     await flushPromises()
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
 
-    expect(wrapper.find('button.mp-button-primary').attributes('disabled')).toBeDefined()
-    await tickDekor(wrapper, 0)
-    expect(wrapper.find('button.mp-button-primary').attributes('disabled')).toBeUndefined()
-    expect(wrapper.text()).toContain('1 ta tanlandi')
+    // The old "Nostandart · faqat sizda" group and its "+ qo'shish" are gone:
+    // a format is the manufacturer's fact, entered once by the platform.
+    expect(wrapper.text()).not.toContain('Nostandart')
+    expect(wrapper.text()).not.toContain("+ qo'shish")
+    // ...and the wait that replaces them is made visible.
+    expect(wrapper.text()).toContain('Platformaga xabar bering')
   })
 
-  // The threshold prefills 0 for every tur: a branch registers its format list
-  // before it knows a threshold, so a non-zero prefill would be a number nobody
-  // chose. QAD-159's 5 / 50 m prefill is deliberately reversed here.
-  it('prefills the low-stock threshold at 0 for both a panel and kromka', async () => {
-    respondWith([{ dekor: dekor('d-1', 'ldsp'), carried_format_count: 0 }])
-    const panel = mountSheet()
-    await flushPromises()
-    await pickFirstDekor(panel)
-    await clickChip(panel, '18 mm')
-    await clickChip(panel, '2800×2070')
-    expect(
-      panel.find<HTMLInputElement>(
-        '[aria-label="Dekor d-1 · 2800×2070×18 mm kam qoldiq chegarasi"]',
-      ).element.value,
-    ).toBe('0')
-
-    respondWith([{ dekor: dekor('d-2', 'kromka'), carried_format_count: 0 }])
-    const tape = mountSheet()
-    await flushPromises()
-    await pickFirstDekor(tape)
-    await clickChip(tape, '0.4 mm')
-    await clickChip(tape, '19 mm')
-    expect(
-      tape.find<HTMLInputElement>('[aria-label="Dekor d-2 · 0.4×19 mm kam qoldiq chegarasi"]')
-        .element.value,
-    ).toBe('0')
-  })
-
-  // Price is optional now: a branch routinely registers its whole format list
-  // before it knows prices, so an empty field means 0 tiyin, not a rejection.
-  it('attaches an unpriced o’lcham, sending price_tiyin: 0', async () => {
-    respondWith([{ dekor: dekor('d-1'), carried_format_count: 0 }])
-    vi.mocked(api.post).mockResolvedValue({ created: [created('d-1')], skipped: [] })
+  it('posts one item per ticked format, keyed by decor_format_id', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 2 }], {
+      'd-1': [
+        { decor_format: format('f-1', 'd-1'), carried: false },
+        { decor_format: format('f-2', 'd-1', { thickness_mm: '16' }), carried: false },
+      ],
+    })
+    vi.mocked(api.post).mockResolvedValue({ created: [], skipped: [] })
     const wrapper = mountSheet()
     await flushPromises()
-    await pickFirstDekor(wrapper)
-    await clickChip(wrapper, '18 mm')
-    await clickChip(wrapper, '2800×2070')
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
 
+    await formatBoxes(wrapper)[0].trigger('change')
+    await formatBoxes(wrapper)[1].trigger('change')
     await wrapper.find('button.mp-button-primary').trigger('click')
     await flushPromises()
 
@@ -209,238 +185,47 @@ describe('BranchMaterialAttachSheet', () => {
     expect(path).toBe('/workshop/branches/branch-1/materials')
     expect(body).toEqual({
       items: [
-        {
-          dekor_id: 'd-1',
-          formats: [
-            {
-              qalinlik_mm: '18',
-              uzunlik_mm: 2800,
-              eni_mm: 2070,
-              price_tiyin: 0,
-              min_stock: 0,
-            },
-          ],
-        },
+        // Price left blank means "not priced yet" — 0 tiyin, not a rejection.
+        { decor_format_id: 'f-1', price_tiyin: 0, min_stock: 0 },
+        { decor_format_id: 'f-2', price_tiyin: 0, min_stock: 0 },
       ],
     })
   })
 
-  // The job this sheet exists for: many dekorlar, one o'lcham, one save. The
-  // chips are picked ONCE and apply to every selected dekor of that tur.
-  it('sends one item per dekor when several share one o’lcham', async () => {
-    respondWith([
-      { dekor: dekor('d-1'), carried_format_count: 0 },
-      { dekor: dekor('d-2'), carried_format_count: 0 },
-    ])
-    vi.mocked(api.post).mockResolvedValue({
-      created: [created('d-1'), created('d-2')],
-      skipped: [],
+  it('never submits a carried format even if it is somehow still in the list', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 1, available_format_count: 1 }], {
+      'd-1': [{ decor_format: format('f-1', 'd-1'), carried: true }],
     })
+    vi.mocked(api.post).mockResolvedValue({ created: [], skipped: [] })
     const wrapper = mountSheet()
     await flushPromises()
-    await tickDekor(wrapper, 0)
-    await tickDekor(wrapper, 1)
-    await continueToFormats(wrapper)
-    await clickChip(wrapper, '18 mm')
-    await clickChip(wrapper, '2800×2070')
-
-    await wrapper.find('button.mp-button-primary').trigger('click')
-    await flushPromises()
-
-    const [, body] = vi.mocked(api.post).mock.calls[0]
-    expect(body).toEqual({
-      items: [
-        {
-          dekor_id: 'd-1',
-          formats: [
-            { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 0, min_stock: 0 },
-          ],
-        },
-        {
-          dekor_id: 'd-2',
-          formats: [
-            { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 0, min_stock: 0 },
-          ],
-        },
-      ],
-    })
-  })
-
-  // A board and its matching kromka have different o'lcham axes and still belong
-  // in one save, so each tur gets its own chip block.
-  it('gives every tur in the selection its own chip block', async () => {
-    respondWith([
-      { dekor: dekor('d-1', 'ldsp'), carried_format_count: 0 },
-      { dekor: dekor('d-2', 'kromka'), carried_format_count: 0 },
-    ])
-    vi.mocked(api.post).mockResolvedValue({
-      created: [created('d-1'), created('d-2')],
-      skipped: [],
-    })
-    const wrapper = mountSheet()
-    await flushPromises()
-    await tickDekor(wrapper, 0)
-    await tickDekor(wrapper, 1)
+    await tickDecor(wrapper)
     await continueToFormats(wrapper)
 
-    // Four fieldsets: qalinlik + o'lcham for LDSP, qalinlik + lenta eni for kromka.
-    expect(wrapper.findAll('fieldset')).toHaveLength(4)
-    expect(wrapper.text()).toContain('Lenta eni')
-
-    await clickChip(wrapper, '18 mm', 0)
-    await clickChip(wrapper, '2800×2070', 0)
-    await clickChip(wrapper, '2 mm', 1)
-    await clickChip(wrapper, '19 mm', 1)
-
-    await wrapper.find('button.mp-button-primary').trigger('click')
-    await flushPromises()
-
-    const [, body] = vi.mocked(api.post).mock.calls[0]
-    expect(body).toEqual({
-      items: [
-        {
-          dekor_id: 'd-1',
-          formats: [
-            { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070, price_tiyin: 0, min_stock: 0 },
-          ],
-        },
-        {
-          dekor_id: 'd-2',
-          formats: [{ qalinlik_mm: '2', kromka_eni_mm: 19, price_tiyin: 0, min_stock: 0 }],
-        },
-      ],
-    })
+    await formatBoxes(wrapper)[0].trigger('change')
+    expect(wrapper.find('button.mp-button-primary').attributes('disabled')).toBeDefined()
+    expect(api.post).not.toHaveBeenCalled()
   })
 
-  // "Filtrdagi hammasi (N)" covers the filter, not the loaded page — it pages
-  // through the rest server-side before selecting.
-  it('selects every dekor in the filter, paging past the loaded page', async () => {
-    const page1 = [
-      { dekor: dekor('d-1'), carried_format_count: 0 },
-      { dekor: dekor('d-2'), carried_format_count: 0 },
-    ]
-    const page2 = [{ dekor: dekor('d-3'), carried_format_count: 0 }]
-    vi.mocked(api.get).mockImplementation(async (path: string) => {
-      if (path.includes('/catalog/filters')) return { manufacturers: [] }
-      if (path.includes('/catalog/dekorlar')) {
-        return { items: path.includes('offset=2') ? page2 : page1, total: 3 }
-      }
-      return []
-    })
-    const wrapper = mountSheet()
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Filtrdagi hammasi (3)')
-    // The master checkbox sits outside the card list.
-    await wrapper.find('input[type="checkbox"]').trigger('change')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('3 ta tanlandi')
-  })
-
-  // Both axes are multi-select; the cross product is what gets created.
-  it('posts the cross product of the picked qalinliklar and o’lchamlar', async () => {
-    respondWith([{ dekor: dekor('d-1'), carried_format_count: 0 }])
-    vi.mocked(api.post).mockResolvedValue({
-      created: [created('d-1'), created('d-1'), created('d-1'), created('d-1')],
-      skipped: [],
-    })
-    const wrapper = mountSheet()
-    await flushPromises()
-    await pickFirstDekor(wrapper)
-    await clickChip(wrapper, '16 mm')
-    await clickChip(wrapper, '18 mm')
-    await clickChip(wrapper, '2750×1830')
-    await clickChip(wrapper, '2800×2070')
-
-    await wrapper.find('button.mp-button-primary').trigger('click')
-    await flushPromises()
-
-    const [, body] = vi.mocked(api.post).mock.calls[0]
-    expect((body as { items: { formats: unknown[] }[] }).items[0].formats).toHaveLength(4)
-  })
-
-  // A combination the branch already carries is shown, disabled, and left out of
-  // the payload — the server would skip it anyway, but the operator should see why.
-  it('disables an already-carried combination and never submits it', async () => {
-    respondWith([{ dekor: dekor('d-1'), carried_format_count: 1 }])
-    vi.mocked(api.post).mockResolvedValue({ created: [created('d-1')], skipped: [] })
-    const wrapper = mountSheet()
-    const workshop = useWorkshopStore()
-    workshop.branchMaterials = [
-      branchMaterial('d-1', { qalinlik_mm: '18', uzunlik_mm: 2800, eni_mm: 2070 }),
-    ]
-    await flushPromises()
-    await pickFirstDekor(wrapper)
-    await clickChip(wrapper, '18 mm')
-    await clickChip(wrapper, '2800×2070')
-    await clickChip(wrapper, '2750×1830')
-
-    expect(wrapper.text()).toContain("Allaqachon qo'shilgan")
-    await wrapper.find('button.mp-button-primary').trigger('click')
-    await flushPromises()
-
-    const [, body] = vi.mocked(api.post).mock.calls[0]
-    expect(body).toEqual({
-      items: [
-        {
-          dekor_id: 'd-1',
-          formats: [
-            {
-              qalinlik_mm: '18',
-              uzunlik_mm: 2750,
-              eni_mm: 1830,
-              price_tiyin: 0,
-              min_stock: 0,
-            },
-          ],
-        },
-      ],
-    })
-  })
-
-  // The branch's own off-standard qalinliklar get their own group, so a standard
-  // set never silently grows. The group is scoped by TUR, not by the selected
-  // dekor: the operator is usually adding dekorlar the branch does not carry yet.
-  it('offers the branch’s own non-standard qalinlik under "Nostandart"', async () => {
-    respondWith([{ dekor: dekor('d-9'), carried_format_count: 0 }])
-    const wrapper = mountSheet()
-    const workshop = useWorkshopStore()
-    workshop.branchMaterials = [
-      branchMaterial('d-1', { qalinlik_mm: '22', uzunlik_mm: 2800, eni_mm: 2070 }),
-    ]
-    await flushPromises()
-    await pickFirstDekor(wrapper)
-
-    expect(wrapper.text()).toContain('Nostandart')
-    expect(wrapper.findAll('fieldset button').map((node) => node.text())).toContain('22 mm')
-  })
-
-  // A duplicate o'lcham is skipped server-side, not rejected — the caller has to
-  // be able to say "1 added, 1 already there".
   it('reports created and skipped counts to its parent', async () => {
-    respondWith([{ dekor: dekor('d-1'), carried_format_count: 0 }])
-    vi.mocked(api.post).mockResolvedValue({
-      created: [created('d-1')],
-      skipped: [
-        {
-          dekor_id: 'd-1',
-          qalinlik_mm: '18',
-          uzunlik_mm: 2800,
-          eni_mm: 2070,
-          kromka_eni_mm: null,
-        },
-      ],
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
+      'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],
+    })
+    const store = useWorkshopStore()
+    vi.spyOn(store, 'attachBranchMaterials').mockResolvedValue({
+      created: [],
+      // A format a concurrent attach already registered — a race, not user
+      // error, so the sheet surfaces it as a notice.
+      skipped: ['f-9'],
     })
     const wrapper = mountSheet()
     await flushPromises()
-    await pickFirstDekor(wrapper)
-    await clickChip(wrapper, '18 mm')
-    await clickChip(wrapper, '2800×2070')
-
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
+    await formatBoxes(wrapper)[0].trigger('change')
     await wrapper.find('button.mp-button-primary').trigger('click')
     await flushPromises()
 
-    expect(wrapper.emitted('attached')?.[0]).toEqual([{ created: 1, skipped: 1 }])
+    expect(wrapper.emitted('attached')?.[0]).toEqual([{ created: 0, skipped: 1 }])
   })
 })

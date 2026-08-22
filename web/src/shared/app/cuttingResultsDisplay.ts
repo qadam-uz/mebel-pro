@@ -39,11 +39,14 @@ export function numberSnapshot(value: unknown, fallback: number) {
 export { snapshotShortLabel }
 
 export function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
-  const snapshot = result.material_snapshots[panel.branch_material_id]
+  const snapshot = result.material_snapshots[panel.material_id]
   // Frozen history: pre-reshape snapshots only have panel_length_mm/panel_width_mm.
   // Drop the legacy read and every historical result silently shows '-' here.
-  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
-  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
+  const length = numberSnapshot(
+    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
+    0,
+  )
+  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
   if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return '-'
   return `${Math.max(0, 100 - (panel.waste_area_mm2 / (length * width)) * 100).toFixed(1)}%`
 }
@@ -182,8 +185,8 @@ export function panelEdgeConsumedByMaterial(
  *    its own. You cannot pull 17.52 m off two different rolls, so a combined
  *    number is the one thing the operator holding this card cannot act on. They
  *    list in registry-number order, the numbering the editor gave them.
- * 2. The tape is named by its **short** label (the dekor code), not the composed
- *    one the aside prints. This app builds a tape label from manufacturer, dekor
+ * 2. The tape is named by its **short** label (the decor code), not the composed
+ *    one the aside prints. This app builds a tape label from manufacturer, decor
  *    and size — three `·`-separated fields — and dropping two of those into a
  *    caption that already separates its own fields with `·` leaves a chain whose
  *    only grouping cue is a comma, wrapping three lines deep in a 370px card.
@@ -343,8 +346,8 @@ export function resultSheetPartGroups(result: CuttingResult): ResultSheetPartGro
     panelId: panel.id,
     sheetLabel: translate('cutting.result.sheetLabel', { n: panelDisplayIndex(result, panel) }),
     materialLabel: snapshotMaterialLabel(
-      result.material_snapshots[panel.branch_material_id],
-      panel.branch_material_id.slice(0, 8),
+      result.material_snapshots[panel.material_id],
+      panel.material_id.slice(0, 8),
     ),
     groups: groupPanelPlacements(result, panel).sort(
       (left, right) => rank(left.partRef) - rank(right.partRef),

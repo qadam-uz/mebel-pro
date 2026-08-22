@@ -101,5 +101,39 @@
   "price": {
     "unset": "Narx yo'q",
     "unsetHint": "Bu o'lcham mijozlarga ko'rinmaydi — narx qo'ying."
+  },
+  "finishedSides": {
+    "1": "1 tomonlama",
+    "2": "2 tomonlama",
+    "label": "Qoplamali tomonlar",
+    "hint": "Faqat list turlari uchun — LDSP, DSP, MDF."
+  },
+  "formats": {
+    "title": "Formatlar",
+    "subtitle": "Bu dekor qaysi mahsulot sifatida ishlab chiqariladi",
+    "add": "+ Format",
+    "empty": "Bu dekorda hali format yo'q. Birinchisini qo'shing — filiallar faqat shu ro'yxatdan tanlaydi.",
+    "colType": "Tur",
+    "colThickness": "Qalinlik",
+    "colSize": "O'lcham",
+    "colSides": "Tomonlar",
+    "colStatus": "Holat",
+    "branches": "Filiallar",
+    "formTitle": "Yangi format qo'shish",
+    "type": "Tur",
+    "thickness": "Qalinlik (mm)",
+    "length": "Uzunlik (mm)",
+    "width": "Eni (mm)",
+    "tapeWidth": "Lenta eni (mm)",
+    "quickFill": "Tez tanlash",
+    "submit": "Qo'shish",
+    "cancel": "Bekor qilish",
+    "immutable": "Format o'zgartirilmaydi — noto'g'risini o'chirib, to'g'risini qo'shing.",
+    "deactivate": "Ishlab chiqarishdan chiqarish",
+    "activate": "Qaytarish",
+    "discontinued": "Ishlab chiqarishdan chiqqan",
+    "created": "Format qo'shildi.",
+    "statusChanged": "Format holati yangilandi.",
+    "saveFailed": "Format saqlanmadi."
   }
 }

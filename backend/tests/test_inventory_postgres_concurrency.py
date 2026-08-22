@@ -11,12 +11,12 @@ from app.core.security import hash_password
 from app.models import Base, import_all_models
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    DekorType,
+    DecorType,
     MaterialStatus,
     SupplierStatus,
 )
 from app.modules.access.contracts import WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Dekor, Manufacturer
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Decor, Manufacturer
 from app.modules.inventory.api import create_invoice, record_adjustment
 from app.modules.inventory.contracts import (
     StockItem,
@@ -88,23 +88,23 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
             manufacturer = Manufacturer(name="Egger", status=MaterialStatus.ACTIVE)
             setup.add_all([owner, manufacturer])
             await setup.flush()
-            dekor = Dekor(
+            decor = Decor(
                 manufacturer_id=manufacturer.id,
-                tur=DekorType.LDSP,
-                kod=None,
-                nomi="Oak",
-                tolali=True,
-                holat=MaterialStatus.ACTIVE,
-                search_key=make_search_key(nomi="Oak", kod=None, manufacturer_name="Egger"),
+                type=DecorType.LDSP,
+                code=None,
+                name="Oak",
+                has_grain=True,
+                status=MaterialStatus.ACTIVE,
+                search_key=make_search_key(name="Oak", code=None, manufacturer_name="Egger"),
             )
-            setup.add(dekor)
+            setup.add(decor)
             await setup.flush()
             material = BranchMaterial(
                 branch_id=branch.id,
-                dekor_id=dekor.id,
-                qalinlik_mm=Decimal("18"),
-                uzunlik_mm=2800,
-                eni_mm=2070,
+                decor_id=decor.id,
+                thickness_mm=Decimal("18"),
+                length_mm=2800,
+                width_mm=2070,
                 price_tiyin=100000,
                 min_stock=0,
                 status=MaterialStatus.ACTIVE,
@@ -214,23 +214,23 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
             manufacturer = Manufacturer(name="Kronospan", status=MaterialStatus.ACTIVE)
             setup.add_all([owner, manufacturer])
             await setup.flush()
-            dekor = Dekor(
+            decor = Decor(
                 manufacturer_id=manufacturer.id,
-                tur=DekorType.LDSP,
-                kod=None,
-                nomi="Ash",
-                tolali=True,
-                holat=MaterialStatus.ACTIVE,
-                search_key=make_search_key(nomi="Ash", kod=None, manufacturer_name="Kronospan"),
+                type=DecorType.LDSP,
+                code=None,
+                name="Ash",
+                has_grain=True,
+                status=MaterialStatus.ACTIVE,
+                search_key=make_search_key(name="Ash", code=None, manufacturer_name="Kronospan"),
             )
-            setup.add(dekor)
+            setup.add(decor)
             await setup.flush()
             material = BranchMaterial(
                 branch_id=branch.id,
-                dekor_id=dekor.id,
-                qalinlik_mm=Decimal("18"),
-                uzunlik_mm=2800,
-                eni_mm=2070,
+                decor_id=decor.id,
+                thickness_mm=Decimal("18"),
+                length_mm=2800,
+                width_mm=2070,
                 price_tiyin=100000,
                 min_stock=0,
                 status=MaterialStatus.ACTIVE,

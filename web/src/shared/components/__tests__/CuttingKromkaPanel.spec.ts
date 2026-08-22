@@ -29,17 +29,17 @@ function material(
 ): ClientCatalogMaterialOption {
   return {
     id: 'tape-1',
-    tur: 'kromka',
+    type: 'kromka',
     manufacturer_id: 'maker-1',
     manufacturer_name: 'Maker',
-    kod: 'K1',
-    nomi: 'Kromka Oq',
-    tolali: false,
+    code: 'K1',
+    name: 'Kromka Oq',
+    has_grain: false,
     image_file_id: null,
-    qalinlik_mm: '2',
-    uzunlik_mm: null,
-    eni_mm: null,
-    kromka_eni_mm: 19,
+    thickness_mm: '2',
+    length_mm: null,
+    width_mm: null,
+    tape_width_mm: 19,
     price_tiyin: 100000,
     price_unset: false,
     display_unit: 'm',
@@ -47,9 +47,9 @@ function material(
   }
 }
 
-const PANEL = material({ id: 'panel-1', tur: 'ldsp', nomi: 'Oq daraxt', qalinlik_mm: '18' })
-const TAPE_A = material({ id: 'tape-a', nomi: 'Kromka A' })
-const TAPE_B = material({ id: 'tape-b', nomi: 'Kromka B' })
+const PANEL = material({ id: 'panel-1', type: 'ldsp', name: 'Oq daraxt', thickness_mm: '18' })
+const TAPE_A = material({ id: 'tape-a', name: 'Kromka A' })
+const TAPE_B = material({ id: 'tape-b', name: 'Kromka B' })
 
 function mountPanel(props: Partial<InstanceType<typeof CuttingKromkaPanel>['$props']> = {}) {
   return mount(CuttingKromkaPanel, {

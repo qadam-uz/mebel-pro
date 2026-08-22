@@ -10,8 +10,8 @@ must not refuse the orders that are legitimately free of charge.
 
 import uuid
 
-from app.models.enums import DekorType, MaterialStatus
-from app.modules.catalog.contracts import BranchMaterial, Dekor
+from app.models.enums import DecorType, MaterialStatus
+from app.modules.catalog.contracts import BranchMaterial, DecorFormat
 from app.modules.cutting.contracts import CuttingResult
 from app.modules.sales.contracts import Order, OrderItem
 from app.modules.sales.service import (
@@ -80,10 +80,12 @@ async def _panel_material_id(db: AsyncSession, order_id: object) -> uuid.UUID:
     row = await db.scalar(
         select(OrderItem)
         .join(BranchMaterial, BranchMaterial.id == OrderItem.branch_material_id)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
+        # The substrate hangs off the format now, one join further out: the
+        # branch row carries only the commercial decision.
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
         .where(
             OrderItem.order_id == uuid.UUID(str(order_id)),
-            Dekor.tur != DekorType.KROMKA,
+            DecorFormat.type != DecorType.KROMKA,
         )
     )
     assert row is not None, "the placed order should have a panel line"

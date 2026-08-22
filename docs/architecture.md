@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-22
 order: 70
 ---
 
@@ -106,9 +106,9 @@ retired layer-first packages) are working instructions and live in the repo's
 | `access` | platform/workshop/client identity, sessions, OTP, password gates, permission checks |
 | `client_portal` | client profile, public branch browsing, client-visible catalog reads |
 | `workshop` | workshops, branches, branch context, workshop settings |
-| `catalog` | manufacturers, platform dekorlar, branch materials (format + price), branch pricing |
+| `catalog` | manufacturers, platform decors + decor formats, branch materials (carry + price), branch pricing |
 | `inventory` | stock items, suppliers, stock transactions, stock consume/restore seams |
-| `cutting` | cutting drafts, optimizer results, panel layouts, PDFs |
+| `cutting` | cutting drafts, optimizer results, panel layouts, customer boards, PDFs |
 | `sales` | orders, order state transitions, frozen price snapshots, order status events |
 | `finance` | income, expenses, settlement summaries, finance and production reports |
 | `support` | files, audit/status logs, notifications inbox |
@@ -135,7 +135,7 @@ Three rules every module respects.
 - **Integer-tiyin money.** Every currency value — DB column, API field, intermediate computation
   — is integer tiyin (1 UZS = 100 tiyin). The frontend converts for display only. Money is the
   high-criticality axis; float currency is a bug waiting to happen.
-- **No deletes for business entities.** Workshops, branches, dekorlar, branch materials, workshop and
+- **No deletes for business entities.** Workshops, branches, decors, decor formats, branch materials, workshop and
   platform users go to an `inactive` / `blocked` status — there is no `DELETE` path, and no
   `deleted_at` / `is_deleted` flag; the active state is the status enum. History (orders, audit,
   status events, cutting results) is kept forever; deletion would orphan it.

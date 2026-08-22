@@ -101,7 +101,7 @@ const tapeColor = computed(() => {
   const entry = props.edgeRegistry.find((row) => row.key === edgeRegistryKey(id, 'shop'))
   if (entry) return entry.colorStyle.bg
   const option = props.edgeOptions.find((edge) => edge.id === id)
-  return option ? colorForMaterial(option.nomi) : 'var(--color-hairline)'
+  return option ? colorForMaterial(option.name) : 'var(--color-hairline)'
 })
 
 // ── Writing ─────────────────────────────────────────────────────────────────
@@ -200,9 +200,9 @@ const tapeRows = computed(() => {
       )
       return {
         material: row.material,
-        color: entry ? entry.colorStyle.bg : colorForMaterial(row.material.nomi),
+        color: entry ? entry.colorStyle.bg : colorForMaterial(row.material.name),
         tooNarrow: edgeTooNarrow(
-          props.panelMaterial ? Number(props.panelMaterial.qalinlik_mm) : null,
+          props.panelMaterial ? Number(props.panelMaterial.thickness_mm) : null,
           row.material,
         ),
         on: row.material.id === activeTapeId.value,
@@ -213,7 +213,7 @@ const tapeRows = computed(() => {
 const activeTapeMeta = computed(() => {
   const tape = activeTape.value
   if (!tape) return ''
-  return [tape.qalinlik_mm ? `${tape.qalinlik_mm} mm` : '', tape.kromka_eni_mm ?? '']
+  return [tape.thickness_mm ? `${tape.thickness_mm} mm` : '', tape.tape_width_mm ?? '']
     .filter(Boolean)
     .join(' × ')
 })
@@ -331,7 +331,7 @@ const subline = computed(() => {
         ></span>
         <span class="min-w-0 flex-1">
           <span class="block truncate text-[13px] font-semibold text-ink">
-            {{ activeTape ? activeTape.nomi : $t('cutting.edge.panelNoTape') }}
+            {{ activeTape ? activeTape.name : $t('cutting.edge.panelNoTape') }}
           </span>
           <span class="num block text-[11.5px] text-ink-muted">{{ activeTapeMeta }}</span>
         </span>
@@ -376,10 +376,10 @@ const subline = computed(() => {
             ></span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[12.5px] font-semibold text-ink">
-                {{ row.material.nomi }}
+                {{ row.material.name }}
               </span>
               <span class="num block text-[11.5px] text-ink-muted">
-                {{ row.material.qalinlik_mm }} mm × {{ row.material.kromka_eni_mm }}
+                {{ row.material.thickness_mm }} mm × {{ row.material.tape_width_mm }}
                 <span v-if="row.tooNarrow" class="text-danger">
                   · {{ $t('cutting.edge.tooNarrow') }}
                 </span>

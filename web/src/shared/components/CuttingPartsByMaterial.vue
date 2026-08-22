@@ -55,7 +55,15 @@ function materialLabelFor(materialId: string) {
 function edgeLabelFor(materialId: string) {
   const snapshot = props.result.material_snapshots[materialId]
   const name = typeof snapshot?.name === 'string' ? snapshot.name.trim() : ''
-  return name || snapshotEdgeLabel(snapshot, materialId.slice(0, 8))
+  // `name` means two different things (see `materialLabel.ts`): the whole
+  // pre-composed label in a PRE-RESHAPE snapshot, and just the decor name in a
+  // current one. Returning it verbatim for a current snapshot printed «Kulrang
+  // eman» where the tape's size belongs, so the pre-composed short-circuit is
+  // taken only when a legacy marker proves the snapshot is that old.
+  const legacy =
+    snapshot !== undefined &&
+    ('color' in snapshot || 'decor_code' in snapshot || 'edge_width_mm' in snapshot)
+  return (legacy && name) || snapshotEdgeLabel(snapshot, materialId.slice(0, 8))
 }
 
 /** Only the tapes a given material group actually uses — the editor's rule. */

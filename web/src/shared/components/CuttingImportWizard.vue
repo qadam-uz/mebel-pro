@@ -387,7 +387,7 @@ function selectedPanelMatchesMap(key: string): boolean | null {
   const group = mapGroupForKey(key)
   const panel = pickedPanelMaterial(key)
   if (!group || !panel) return null
-  return panel.uzunlik_mm === group.width_mm && panel.eni_mm === group.height_mm
+  return panel.length_mm === group.width_mm && panel.width_mm === group.height_mm
 }
 
 function buildPartsFromParsed() {

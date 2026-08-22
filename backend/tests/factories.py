@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.core.security import hash_password
-from app.models.enums import DekorType, MaterialStatus
+from app.models.enums import DecorType, MaterialStatus
 from app.modules.access.contracts import PlatformUser, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, Dekor, Manufacturer
+from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer
 
-# The one formula for `dekorlar.search_key`. Tests insert dekorlar straight
+# The one formula for `decors.search_key`. Tests insert decors straight
 # through the ORM (no service call), so they must fill the key the same way
-# `create_dekor` does or every search assertion silently matches nothing.
+# `create_decor` does or every search assertion silently matches nothing.
 from app.modules.catalog.service import _search_key
 from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch, Workshop
@@ -79,27 +79,29 @@ async def seed_workshop_with_owner(
     return workshop, branch, owner
 
 
-def make_search_key(*, nomi: str, kod: str | None, manufacturer_name: str) -> str:
-    """`dekorlar.search_key` for a hand-built Dekor row.
+def make_search_key(*, name: str, code: str | None, manufacturer_name: str) -> str:
+    """`decors.search_key` for a hand-built Decor row.
 
-    Exposed so tests that construct a `Dekor` directly (rather than through
-    `seed_dekor`) still fill the key with the service's formula.
+    Exposed so tests that construct a `Decor` directly (rather than through
+    `seed_decor`) still fill the key with the service's formula.
     """
-    return _search_key(nomi=nomi, kod=kod, manufacturer_name=manufacturer_name)
+    return _search_key(name=name, code=code, manufacturer_name=manufacturer_name)
 
 
 @dataclass(frozen=True)
 class MaterialFixture:
-    """A seeded material as the reshaped model defines it: three rows.
+    """A seeded material as the reshaped model defines it: four rows.
 
-    Identity is platform-owned (`manufacturer` + `dekor`), format is
-    branch-owned (`branch_material`). `.id` is the branch material's — that is
-    the id stock, cutting panels and order items all point at, and the one a
-    request payload means when it says `material_id`.
+    The platform owns the pattern (`manufacturer` + `decor`) and the product
+    (`decor_format`); the branch owns only the decision to carry it
+    (`branch_material`). `.id` is the branch material's — that is the id stock,
+    cutting panels and order items all point at, and the one a request payload
+    means when it says `material_id`.
     """
 
     manufacturer: Manufacturer
-    dekor: Dekor
+    decor: Decor
+    decor_format: DecorFormat
     branch_material: BranchMaterial
 
     @property
@@ -107,12 +109,16 @@ class MaterialFixture:
         return self.branch_material.id
 
     @property
-    def dekor_id(self) -> uuid.UUID:
-        return self.dekor.id
+    def decor_id(self) -> uuid.UUID:
+        return self.decor.id
 
     @property
-    def tur(self) -> DekorType:
-        return self.dekor.tur
+    def decor_format_id(self) -> uuid.UUID:
+        return self.decor_format.id
+
+    @property
+    def type(self) -> DecorType:
+        return self.decor_format.type
 
 
 async def seed_manufacturer(
@@ -128,26 +134,60 @@ async def seed_manufacturer(
     return row
 
 
-async def seed_dekor(
+async def seed_decor(
     db: AsyncSession,
     *,
     manufacturer: Manufacturer,
-    tur: DekorType = DekorType.LDSP,
-    kod: str | None = None,
-    nomi: str = "Sonoma eman",
-    tolali: bool = False,
-    holat: MaterialStatus = MaterialStatus.ACTIVE,
+    code: str | None = None,
+    name: str = "Sonoma eman",
+    has_grain: bool = False,
+    status: MaterialStatus = MaterialStatus.ACTIVE,
     image_file_id: uuid.UUID | None = None,
-) -> Dekor:
-    row = Dekor(
+) -> Decor:
+    """A decor pattern. No substrate — that belongs to its formats."""
+    row = Decor(
         manufacturer_id=manufacturer.id,
-        tur=tur,
-        kod=kod,
-        nomi=nomi,
-        tolali=tolali,
-        holat=holat,
+        code=code,
+        name=name,
+        has_grain=has_grain,
+        status=status,
         image_file_id=image_file_id,
-        search_key=_search_key(nomi=nomi, kod=kod, manufacturer_name=manufacturer.name),
+        search_key=_search_key(name=name, code=code, manufacturer_name=manufacturer.name),
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def seed_decor_format(
+    db: AsyncSession,
+    *,
+    decor: Decor,
+    type: DecorType = DecorType.LDSP,
+    thickness_mm: Decimal = Decimal("18"),
+    length_mm: int | None = 2750,
+    width_mm: int | None = 1830,
+    tape_width_mm: int | None = None,
+    finished_sides: int | None = None,
+    status: MaterialStatus = MaterialStatus.ACTIVE,
+) -> DecorFormat:
+    """One concrete product of a decor.
+
+    `finished_sides` defaults to the two-sided norm for the board types and to
+    NULL for everything else, so a caller that does not care about it still
+    produces a row the shape CHECK accepts.
+    """
+    if finished_sides is None and type in (DecorType.LDSP, DecorType.DSP, DecorType.MDF):
+        finished_sides = 2
+    row = DecorFormat(
+        decor_id=decor.id,
+        type=type,
+        thickness_mm=thickness_mm,
+        length_mm=length_mm,
+        width_mm=width_mm,
+        tape_width_mm=tape_width_mm,
+        finished_sides=finished_sides,
+        status=status,
     )
     db.add(row)
     await db.flush()
@@ -158,22 +198,15 @@ async def seed_branch_material(
     db: AsyncSession,
     *,
     branch_id: uuid.UUID,
-    dekor: Dekor,
-    qalinlik_mm: Decimal = Decimal("18"),
-    uzunlik_mm: int | None = None,
-    eni_mm: int | None = None,
-    kromka_eni_mm: int | None = None,
+    decor_format: DecorFormat,
     price_tiyin: int = 0,
     min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
 ) -> BranchMaterial:
+    """The branch's decision to carry one platform format, at its own price."""
     row = BranchMaterial(
         branch_id=branch_id,
-        dekor_id=dekor.id,
-        qalinlik_mm=qalinlik_mm,
-        uzunlik_mm=uzunlik_mm,
-        eni_mm=eni_mm,
-        kromka_eni_mm=kromka_eni_mm,
+        decor_format_id=decor_format.id,
         price_tiyin=price_tiyin,
         min_stock=min_stock,
         status=status,
@@ -188,35 +221,57 @@ async def seed_panel_material(
     *,
     branch_id: uuid.UUID,
     manufacturer: Manufacturer | None = None,
-    tur: DekorType = DekorType.LDSP,
-    kod: str | None = "H1334",
-    nomi: str = "Sonoma eman",
-    tolali: bool = False,
-    qalinlik_mm: Decimal = Decimal("18"),
-    uzunlik_mm: int = 2750,
-    eni_mm: int = 1830,
+    decor: Decor | None = None,
+    type: DecorType = DecorType.LDSP,
+    code: str | None = "H1334",
+    name: str = "Sonoma eman",
+    has_grain: bool = False,
+    thickness_mm: Decimal = Decimal("18"),
+    length_mm: int = 2750,
+    width_mm: int = 1830,
+    finished_sides: int | None = None,
     price_tiyin: int = 250000,
     min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
-    holat: MaterialStatus = MaterialStatus.ACTIVE,
+    decor_status: MaterialStatus = MaterialStatus.ACTIVE,
+    format_status: MaterialStatus = MaterialStatus.ACTIVE,
 ) -> MaterialFixture:
-    """A panel-shaped dekor the branch carries in one format."""
-    maker = manufacturer or await seed_manufacturer(db)
-    dekor = await seed_dekor(
-        db, manufacturer=maker, tur=tur, kod=kod, nomi=nomi, tolali=tolali, holat=holat
+    """A panel-shaped format the branch carries.
+
+    Pass `decor` to hang a second format off an existing pattern — a board and
+    its matching kromka are two formats of ONE decor now, which is the case
+    worth exercising.
+    """
+    maker = manufacturer or (
+        await seed_manufacturer(db) if decor is None else await _manufacturer_of(db, decor)
+    )
+    pattern = decor or await seed_decor(
+        db, manufacturer=maker, code=code, name=name, has_grain=has_grain, status=decor_status
+    )
+    decor_format = await seed_decor_format(
+        db,
+        decor=pattern,
+        type=type,
+        thickness_mm=thickness_mm,
+        length_mm=length_mm,
+        width_mm=width_mm,
+        finished_sides=finished_sides,
+        status=format_status,
     )
     branch_material = await seed_branch_material(
         db,
         branch_id=branch_id,
-        dekor=dekor,
-        qalinlik_mm=qalinlik_mm,
-        uzunlik_mm=uzunlik_mm,
-        eni_mm=eni_mm,
+        decor_format=decor_format,
         price_tiyin=price_tiyin,
         min_stock=min_stock,
         status=status,
     )
-    return MaterialFixture(manufacturer=maker, dekor=dekor, branch_material=branch_material)
+    return MaterialFixture(
+        manufacturer=maker,
+        decor=pattern,
+        decor_format=decor_format,
+        branch_material=branch_material,
+    )
 
 
 async def seed_kromka_material(
@@ -224,28 +279,51 @@ async def seed_kromka_material(
     *,
     branch_id: uuid.UUID,
     manufacturer: Manufacturer | None = None,
-    kod: str | None = "H1334",
-    nomi: str = "Sonoma eman",
-    qalinlik_mm: Decimal = Decimal("0.4"),
-    kromka_eni_mm: int = 19,
+    decor: Decor | None = None,
+    code: str | None = "H1334",
+    name: str = "Sonoma eman",
+    thickness_mm: Decimal = Decimal("0.4"),
+    tape_width_mm: int = 19,
     price_tiyin: int = 1000,
     min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
-    holat: MaterialStatus = MaterialStatus.ACTIVE,
+    decor_status: MaterialStatus = MaterialStatus.ACTIVE,
+    format_status: MaterialStatus = MaterialStatus.ACTIVE,
 ) -> MaterialFixture:
-    """A tape-shaped dekor the branch carries in one format."""
-    maker = manufacturer or await seed_manufacturer(db)
-    dekor = await seed_dekor(
-        db, manufacturer=maker, tur=DekorType.KROMKA, kod=kod, nomi=nomi, holat=holat
+    """A tape-shaped format the branch carries."""
+    maker = manufacturer or (
+        await seed_manufacturer(db) if decor is None else await _manufacturer_of(db, decor)
+    )
+    pattern = decor or await seed_decor(
+        db, manufacturer=maker, code=code, name=name, status=decor_status
+    )
+    decor_format = await seed_decor_format(
+        db,
+        decor=pattern,
+        type=DecorType.KROMKA,
+        thickness_mm=thickness_mm,
+        length_mm=None,
+        width_mm=None,
+        tape_width_mm=tape_width_mm,
+        status=format_status,
     )
     branch_material = await seed_branch_material(
         db,
         branch_id=branch_id,
-        dekor=dekor,
-        qalinlik_mm=qalinlik_mm,
-        kromka_eni_mm=kromka_eni_mm,
+        decor_format=decor_format,
         price_tiyin=price_tiyin,
         min_stock=min_stock,
         status=status,
     )
-    return MaterialFixture(manufacturer=maker, dekor=dekor, branch_material=branch_material)
+    return MaterialFixture(
+        manufacturer=maker,
+        decor=pattern,
+        decor_format=decor_format,
+        branch_material=branch_material,
+    )
+
+
+async def _manufacturer_of(db: AsyncSession, decor: Decor) -> Manufacturer:
+    row = await db.get(Manufacturer, decor.manufacturer_id)
+    assert row is not None
+    return row

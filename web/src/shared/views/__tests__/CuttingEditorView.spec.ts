@@ -467,7 +467,7 @@ describe('CuttingEditorView app-supplied branch', () => {
   })
 })
 
-// The picker reads like the catalog table: one photo + identity line per dekor,
+// The picker reads like the catalog table: one photo + identity line per decor,
 // its formats listed beneath. Selection is unchanged — one format, one click, no
 // extra step — and there is no "this branch does not carry it" state left, because
 // the catalog endpoint is branch-scoped.
@@ -479,17 +479,17 @@ describe('CuttingEditorView material picker', () => {
   function option(overrides: Partial<ClientCatalogMaterialOption> = {}) {
     return {
       id: 'm-1',
-      tur: 'ldsp',
+      type: 'ldsp',
       manufacturer_id: 'mfr-1',
       manufacturer_name: 'Egger',
-      kod: 'H1334',
-      nomi: 'Dub Sonoma',
-      tolali: true,
+      code: 'H1334',
+      name: 'Dub Sonoma',
+      has_grain: true,
       image_file_id: null,
-      qalinlik_mm: '18',
-      uzunlik_mm: 2800,
-      eni_mm: 2070,
-      kromka_eni_mm: null,
+      thickness_mm: '18',
+      length_mm: 2800,
+      width_mm: 2070,
+      tape_width_mm: null,
       price_tiyin: 120_000,
       price_unset: false,
       display_unit: 'sheet',
@@ -504,12 +504,12 @@ describe('CuttingEditorView material picker', () => {
     )
     cutting.panelOptions = [
       option({ id: 'm-18' }),
-      option({ id: 'm-16', qalinlik_mm: '16', uzunlik_mm: 2750, eni_mm: 1830 }),
+      option({ id: 'm-16', thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
       option({
         id: 'm-other',
-        kod: 'W980',
-        nomi: 'Oq',
-        qalinlik_mm: '18',
+        code: 'W980',
+        name: 'Oq',
+        thickness_mm: '18',
         price_tiyin: 0,
         price_unset: true,
       }),
@@ -523,7 +523,7 @@ describe('CuttingEditorView material picker', () => {
 
     const groups = wrapper.findAll('[role="dialog"] section')
     expect(groups).toHaveLength(2)
-    // Identity once per dekor — the label without its format tail — then the
+    // Identity once per decor — the label without its format tail — then the
     // formats as the rows underneath.
     expect(groups[0].text()).toContain('LDSP Egger H1334 · Dub Sonoma')
     expect(groups[0].findAll('button').map((button) => button.text())).toEqual([

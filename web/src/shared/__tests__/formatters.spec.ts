@@ -10,6 +10,7 @@ import {
   formatStockQuantity,
   formatStockUnit,
   formatTiyin,
+  tiyinToSomInput,
   formatTiyinParts,
   parseDisplayQuantity,
   parseSomToTiyin,
@@ -103,6 +104,18 @@ describe('shared formatters', () => {
     expect(parseSomToTiyin('12,5')).toBe(1_250)
     expect(parseSomToTiyin('12.5')).toBe(1_250)
     expect(parseSomToTiyin('340000')).toBe(34_000_000)
+  })
+
+  it('round-trips tiyin through a money input without repricing it', () => {
+    // The pair must be lossless: an arrival seeded into the edit form and saved
+    // untouched has to come back as the same number. Rounding here once turned
+    // 16.83 so'm/m into 17.00 on a no-op save and moved the supplier's balance.
+    for (const tiyin of [1_683, 170_000, 1, 99, 26_520_000, 100]) {
+      expect(parseSomToTiyin(tiyinToSomInput(tiyin))).toBe(tiyin)
+    }
+    expect(tiyinToSomInput(1_683)).toBe('16.83')
+    expect(tiyinToSomInput(170_000)).toBe('1700')
+    expect(tiyinToSomInput(0)).toBe('')
   })
 
   it("rejects unclear or non-positive so'm inputs instead of coercing to 0", () => {

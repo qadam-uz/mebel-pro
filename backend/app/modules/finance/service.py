@@ -1,7 +1,7 @@
 """Finance ledger and report use cases."""
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -21,6 +21,7 @@ from app.models.enums import (
     Permission,
 )
 from app.modules.access.api import BranchScope, resolve_branch_scope
+from app.modules.access.contracts import WorkshopUser
 from app.modules.finance.contracts import Expense, Income
 from app.modules.finance.schemas import (
     ExpenseCreateRequest,
@@ -64,6 +65,12 @@ class FinanceScope:
 
 READ_PERMISSIONS = frozenset({Permission.MANAGE_FINANCE, Permission.VIEW_FINANCE_REPORTS})
 WRITE_PERMISSIONS = frozenset({Permission.MANAGE_FINANCE})
+# Recording an order payment is the one ledger write a non-accountant may do:
+# the cashier at the counter takes the money and hands over a receipt. It is
+# **create-only and order-payment-only** — editing, voiding, expenses and every
+# other income type stay `WRITE_PERMISSIONS`, so the hand that books a payment
+# cannot also erase it.
+ORDER_PAYMENT_WRITE_PERMISSIONS = WRITE_PERMISSIONS | {Permission.RECORD_ORDER_PAYMENT}
 
 
 async def list_incomes(
@@ -76,6 +83,7 @@ async def list_incomes(
     income_type: IncomeType | None = None,
     method: MoneyMethod | None = None,
     status_filter: LedgerStatus | None = None,
+    recorded_by_user_id: uuid.UUID | None = None,
     min_amount_tiyin: int | None = None,
     max_amount_tiyin: int | None = None,
 ) -> list[Income]:
@@ -103,6 +111,8 @@ async def list_incomes(
         query = query.where(Income.method == method)
     if status_filter is not None:
         query = query.where(Income.status == status_filter)
+    if recorded_by_user_id is not None:
+        query = query.where(Income.recorded_by_user_id == recorded_by_user_id)
     if min_amount_tiyin is not None:
         query = query.where(Income.amount_tiyin >= min_amount_tiyin)
     if max_amount_tiyin is not None:
@@ -122,10 +132,12 @@ async def income_responses(
     an N+1 on the busiest finance screen.
     """
     refs = await _income_order_refs(db, incomes=incomes)
+    names = await recorded_by_names(db, user_ids=(row.recorded_by_user_id for row in incomes))
     rows: list[IncomeResponse] = []
     for income in incomes:
         response = IncomeResponse.model_validate(income)
         response.order = refs.get(income.order_id) if income.order_id is not None else None
+        response.recorded_by_name = names.get(income.recorded_by_user_id)
         rows.append(response)
     return rows
 
@@ -133,6 +145,29 @@ async def income_responses(
 async def income_response(db: AsyncSession, *, income: Income) -> IncomeResponse:
     """One ledger row, shaped exactly like a row of the list."""
     return (await income_responses(db, incomes=[income]))[0]
+
+
+async def recorded_by_names(
+    db: AsyncSession,
+    *,
+    user_ids: Iterable[uuid.UUID],
+) -> dict[uuid.UUID, str]:
+    """Full names for the staff who recorded a set of ledger rows.
+
+    "Who took this money" is the first question asked of a cash row, and an id
+    prefix does not answer it. Resolved set-based for the whole page — a lookup
+    per row would be an N+1 on the busiest finance screen.
+    """
+
+    ids = frozenset(user_ids)
+    if not ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(WorkshopUser.id, WorkshopUser.full_name).where(WorkshopUser.id.in_(ids))
+        )
+    ).all()
+    return {row[0]: row[1] for row in rows}
 
 
 async def _income_order_refs(
@@ -203,7 +238,7 @@ async def create_income(
             db,
             principal=principal,
             order_id=order_id,
-            permission=Permission.MANAGE_FINANCE,
+            permissions=ORDER_PAYMENT_WRITE_PERMISSIONS,
         )
         if payload.branch_id is not None and payload.branch_id != target.branch_id:
             raise APIError("scope_mismatch", "Income branch does not match order branch")
@@ -272,7 +307,9 @@ async def update_income(
             db,
             principal=principal,
             order_id=_required_order_id(income),
-            permission=Permission.MANAGE_FINANCE,
+            # An edit is an accountant's act, not a cashier's — the narrow
+            # payment grant deliberately does not reach here.
+            permissions=WRITE_PERMISSIONS,
         )
         await _assert_order_payment_cap(
             db,
@@ -371,6 +408,7 @@ async def list_expenses(
     branch_id: uuid.UUID | None = None,
     category: ExpenseCategory | None = None,
     status_filter: LedgerStatus | None = None,
+    recorded_by_user_id: uuid.UUID | None = None,
     min_amount_tiyin: int | None = None,
     max_amount_tiyin: int | None = None,
 ) -> list[Expense]:
@@ -395,6 +433,8 @@ async def list_expenses(
         query = query.where(Expense.category == category)
     if status_filter is not None:
         query = query.where(Expense.status == status_filter)
+    if recorded_by_user_id is not None:
+        query = query.where(Expense.recorded_by_user_id == recorded_by_user_id)
     if min_amount_tiyin is not None:
         query = query.where(Expense.amount_tiyin >= min_amount_tiyin)
     if max_amount_tiyin is not None:

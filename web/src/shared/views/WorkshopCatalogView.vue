@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * "Material katalogi" — what this branch carries, grouped by dekor.
+ * "Material katalogi" — what this branch carries, grouped by decor.
  *
- * The catalog reshape split identity (a platform dekor) from format (a branch
+ * The catalog reshape split identity (a platform decor) from format (a branch
  * row), so a flat list repeated the same decor name once per thickness. The table
- * groups instead: one photo + identity line per dekor, its formats as indented
+ * groups instead: one photo + identity line per decor, its formats as indented
  * rows beneath. A format with `price_unset` carries a "Narx yo'q" pill — it is
  * hidden from the client-facing catalog until it is priced, and this is the only
  * screen where that gap is fixable.
@@ -17,7 +17,7 @@ import { apiTraceId } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
-import { DEKOR_TYPES, dekorTurLabel, formatMm, isTape } from '@/shared/app/materialLabel'
+import { DECOR_TYPES, decorTypeLabel, formatMm, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -41,7 +41,7 @@ import {
   parseDisplayQuantity,
   parseSomToTiyin,
 } from '@/shared/formatters'
-import type { Dekor, DekorType, MaterialStatus } from '@/shared/stores/admin'
+import type { Decor, DecorType, MaterialStatus } from '@/shared/stores/admin'
 import {
   useWorkshopStore,
   type BranchMaterial,
@@ -55,7 +55,7 @@ const route = useRoute()
 const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>('all')
-const turFilter = ref<'all' | DekorType>('all')
+const turFilter = ref<'all' | DecorType>('all')
 const search = ref('')
 
 // Same defect as Ombor (QAD-182): with a search on, the branch reported it held
@@ -86,7 +86,7 @@ const materialError = ref<string | null>(null)
 const editingBranchMaterialId = ref<string | null>(null)
 const materialModalOpen = ref(false)
 const attachSheetOpen = ref(false)
-const collapsedDekorIds = ref<Set<string>>(new Set())
+const collapsedDecorIds = ref<Set<string>>(new Set())
 let searchTimer: number | undefined
 const materialForm = reactive({
   // Deliberately empty, not '0': a pre-filled 0 satisfies `required` and lets a
@@ -121,10 +121,10 @@ const statusOptions = computed<DropdownOption[]>(() => [
   { value: 'inactive', label: t('catalog.status.inactive'), dot: 'muted' },
 ])
 // All seven wire values, including `dsp` — it shares the `LDSP` label but is a
-// distinct enum member, and omitting it would leave those dekorlar unfilterable.
+// distinct enum member, and omitting it would leave those decors unfilterable.
 const turOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('catalog.filter.turAll') },
-  ...DEKOR_TYPES.map((value) => ({ value, label: dekorTurLabel(value) })),
+  ...DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
 ])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
@@ -136,26 +136,26 @@ const thresholdColumn = computed(() => lowStockThresholdColumn())
 const thresholdHint = computed(() => lowStockThresholdHint())
 const materialThresholdUnit = computed(() => {
   const row = editingBranchMaterial.value
-  return row ? thresholdUnit(row.dekor.tur) : t('catalog.unit.piece')
+  return row ? thresholdUnit(row.decor_format.type) : t('catalog.unit.piece')
 })
 const materialPriceUnit = computed(() => {
   const row = editingBranchMaterial.value
-  return row ? priceUnit(row.dekor.tur) : ''
+  return row ? priceUnit(row.decor_format.type) : ''
 })
 
-interface DekorGroup {
-  dekor: Dekor
+interface DecorGroup {
+  decor: Decor
   rows: BranchMaterial[]
 }
 
 // Grouped in server order, first appearance wins: the list is paginated, so the
 // grouping must never reorder rows or a "load more" would shuffle the table.
-const dekorGroups = computed<DekorGroup[]>(() => {
-  const groups = new Map<string, DekorGroup>()
+const decorGroups = computed<DecorGroup[]>(() => {
+  const groups = new Map<string, DecorGroup>()
   for (const row of workshop.branchMaterials) {
-    const group = groups.get(row.dekor_id)
+    const group = groups.get(row.decor_format.decor_id)
     if (group) group.rows.push(row)
-    else groups.set(row.dekor_id, { dekor: row.dekor, rows: [row] })
+    else groups.set(row.decor_format.decor_id, { decor: row.decor, rows: [row] })
   }
   return [...groups.values()]
 })
@@ -184,29 +184,30 @@ function applyRouteSearch() {
 
 /** `2800×2070×18 mm` for a panel, `0.4×19 mm` for a tape. */
 function formatLabel(row: BranchMaterial) {
-  const thickness = formatMm(row.qalinlik_mm)
-  if (isTape(row.dekor.tur)) {
-    return row.kromka_eni_mm !== null
-      ? t('catalog.meta.tapeFormat', { thickness, width: row.kromka_eni_mm })
+  const format = row.decor_format
+  const thickness = formatMm(format.thickness_mm)
+  if (isTape(format.type)) {
+    return format.tape_width_mm !== null
+      ? t('catalog.meta.tapeFormat', { thickness, width: format.tape_width_mm })
       : `${thickness} mm`
   }
-  return row.uzunlik_mm !== null && row.eni_mm !== null
+  return format.length_mm !== null && format.width_mm !== null
     ? t('catalog.meta.panelFormat', {
-        length: row.uzunlik_mm,
-        width: row.eni_mm,
+        length: format.length_mm,
+        width: format.width_mm,
         thickness,
       })
     : `${thickness} mm`
 }
 
-function priceUnit(tur: DekorType) {
-  return isTape(tur) ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
+function priceUnit(type: DecorType) {
+  return isTape(type) ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
 }
 
 // Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
 // digits stay aligned on the column's right edge.
 function thresholdParts(row: BranchMaterial) {
-  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.dekor.tur))
+  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type))
   const splitAt = text.lastIndexOf(' ')
   return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
 }
@@ -220,25 +221,25 @@ function isLowStock(row: BranchMaterial) {
   return onHandByMaterialId.value.get(row.id)?.low ?? false
 }
 
-function swatchSource(dekor: Dekor) {
-  return { id: dekor.id, nomi: dekor.nomi, kod: dekor.kod }
+function swatchSource(decor: Decor) {
+  return { id: decor.id, name: decor.name, code: decor.code }
 }
 
-function isCollapsed(dekorId: string) {
-  return collapsedDekorIds.value.has(dekorId)
+function isCollapsed(decorId: string) {
+  return collapsedDecorIds.value.has(decorId)
 }
 
-function toggleDekor(dekorId: string) {
-  const next = new Set(collapsedDekorIds.value)
-  if (next.has(dekorId)) next.delete(dekorId)
-  else next.add(dekorId)
-  collapsedDekorIds.value = next
+function toggleDecor(decorId: string) {
+  const next = new Set(collapsedDecorIds.value)
+  if (next.has(decorId)) next.delete(decorId)
+  else next.add(decorId)
+  collapsedDecorIds.value = next
 }
 
 function tableFilters(offset = 0): BranchMaterialFilters {
   return {
     status: statusFilter.value === 'all' ? null : statusFilter.value,
-    tur: turFilter.value === 'all' ? null : turFilter.value,
+    type: turFilter.value === 'all' ? null : turFilter.value,
     search: search.value,
     offset,
   }
@@ -255,7 +256,7 @@ async function loadBranchTable(offset = 0) {
 
 // Full refresh (mount, branch switch, after save): reset the table to page one.
 // Stock rides along so the Qoldiq column has numbers; the attach sheet loads its
-// own dekor options when it opens.
+// own decor options when it opens.
 function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
@@ -284,7 +285,7 @@ async function saveBranchMaterial() {
     const row = editingBranchMaterial.value
     const minStock = parseDisplayQuantity(
       materialForm.minStock,
-      row && isTape(row.dekor.tur) ? 'm' : 'pcs',
+      row && isTape(row.decor_format.type) ? 'm' : 'pcs',
     )
     // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100
     // tiyin). null covers both unparseable input and 0 — a 0 so'm material must
@@ -336,9 +337,9 @@ function editBranchMaterial(row: BranchMaterial) {
   // An unpriced format opens with an empty field, not "0" — the operator is here
   // to set a price, and a prefilled 0 is the value we are asking them to replace.
   materialForm.priceTiyin = row.price_unset ? '' : String(row.price_tiyin / 100)
-  // Existing rows keep whatever threshold they were saved with — the per-tur
+  // Existing rows keep whatever threshold they were saved with — the per-type
   // defaults apply to new attachments only (no backfill, QAD-159).
-  materialForm.minStock = isTape(row.dekor.tur)
+  materialForm.minStock = isTape(row.decor_format.type)
     ? String(row.min_stock / 1000)
     : String(row.min_stock)
   materialError.value = null
@@ -410,7 +411,7 @@ watch(
 watch(selectedBranchId, () => {
   materialModalOpen.value = false
   attachSheetOpen.value = false
-  collapsedDekorIds.value = new Set()
+  collapsedDecorIds.value = new Set()
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -575,7 +576,7 @@ onBeforeUnmount(() => {
       <section v-else class="card">
         <!-- QAD-159: `tbl-fluid` drops the shared 680px floor for this table only —
              long Russian decor names used to force the whole page sideways. The
-             dekor line wraps instead, and the columns that repeat what the group
+             decor line wraps instead, and the columns that repeat what the group
              header already says (Tur) or matter least on a phone fall away as
              width runs out. -->
         <div class="table-wrap">
@@ -594,42 +595,39 @@ onBeforeUnmount(() => {
                 <th class="nowrap">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
-            <tbody v-for="group in dekorGroups" :key="group.dekor.id">
-              <!-- Group header: the dekor's identity once, then its formats. -->
+            <tbody v-for="group in decorGroups" :key="group.decor.id">
+              <!-- Group header: the decor's identity once, then its formats. -->
               <tr class="bg-sunk">
                 <td colspan="6">
                   <button
                     type="button"
                     class="flex w-full min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    :aria-expanded="!isCollapsed(group.dekor.id)"
-                    :aria-label="$t('catalog.table.expandDekor', { name: group.dekor.label })"
-                    @click="toggleDekor(group.dekor.id)"
+                    :aria-expanded="!isCollapsed(group.decor.id)"
+                    :aria-label="$t('catalog.table.expandDekor', { name: group.decor.label })"
+                    @click="toggleDecor(group.decor.id)"
                   >
                     <AuthFileImage
-                      v-if="group.dekor.image_file_id"
-                      :file-id="group.dekor.image_file_id"
-                      :alt="group.dekor.label"
+                      v-if="group.decor.image_file_id"
+                      :file-id="group.decor.image_file_id"
+                      :alt="group.decor.label"
                       class="size-[34px] shrink-0 rounded-md object-cover"
                     />
                     <span
                       v-else
                       class="sw"
-                      :class="materialSwatchClass(swatchSource(group.dekor))"
+                      :class="materialSwatchClass(swatchSource(group.decor))"
                     ></span>
                     <span class="grid min-w-0 flex-1 gap-0.5">
-                      <span class="nm break-words">{{ group.dekor.label }}</span>
+                      <span class="nm break-words">{{ group.decor.label }}</span>
                       <small class="block break-words text-ink-muted">
-                        {{ group.dekor.manufacturer_name }} ·
+                        {{ group.decor.manufacturer_name }} ·
                         {{ $t('catalog.meta.formatCount', { n: group.rows.length }) }}
                       </small>
-                    </span>
-                    <span class="mp-chip shrink-0 lg:hidden">
-                      {{ dekorTurLabel(group.dekor.tur) }}
                     </span>
                   </button>
                 </td>
               </tr>
-              <template v-if="!isCollapsed(group.dekor.id)">
+              <template v-if="!isCollapsed(group.decor.id)">
                 <tr v-for="row in group.rows" :key="row.id" class="row-clickable">
                   <td>
                     <div class="grid min-w-0 gap-0.5 pl-[46px]">
@@ -653,7 +651,7 @@ onBeforeUnmount(() => {
                            scrolling sideways. The numbers move here instead of being
                            dropped. -->
                       <small class="block text-ink-muted sm:hidden">
-                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.dekor.tur) }} ·
+                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.decor_format.type) }} ·
                         {{ thresholdColumn }}: {{ thresholdParts(row).value }}
                         {{ thresholdParts(row).unit }}
                       </small>
@@ -663,14 +661,14 @@ onBeforeUnmount(() => {
                     </div>
                   </td>
                   <td class="nowrap hidden lg:table-cell">
-                    <span :class="isTape(row.dekor.tur) ? 'pill p-eb' : 'pill p-cut'">
-                      <span class="pd"></span>{{ dekorTurLabel(row.dekor.tur) }}
+                    <span :class="isTape(row.decor_format.type) ? 'pill p-eb' : 'pill p-cut'">
+                      <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
                     </span>
                   </td>
                   <td class="amt nowrap hidden sm:table-cell">
                     {{ formatTiyin(row.price_tiyin) }}
                     <small class="block font-normal text-ink-muted">
-                      {{ priceUnit(row.dekor.tur) }}
+                      {{ priceUnit(row.decor_format.type) }}
                     </small>
                   </td>
                   <td class="amt muted nowrap hidden sm:table-cell">
@@ -723,7 +721,7 @@ onBeforeUnmount(() => {
                 </tr>
               </template>
             </tbody>
-            <tbody v-if="dekorGroups.length === 0">
+            <tbody v-if="decorGroups.length === 0">
               <tr>
                 <td colspan="6">
                   <div class="st-empty !border-0 !py-8">

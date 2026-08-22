@@ -11,15 +11,22 @@ import {
 import { authInit } from '@/shared/app/authInit'
 import {
   CATALOG_PICKER_LIMIT,
+  INVENTORY_INVOICE_PAGE_LIMIT,
   INVENTORY_TX_PAGE_LIMIT,
   MATERIALS_PAGE_LIMIT,
 } from '@/shared/app/constants'
-import type { Dekor, DekorType, MaterialStatus } from '@/shared/stores/admin'
+import type { Decor, DecorFormat, DecorType, MaterialStatus } from '@/shared/stores/admin'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 
 export type BranchStatus = 'active' | 'temporarily_closed' | 'inactive'
 export type SupplierStatus = 'active' | 'inactive'
-export type StockTransactionType = 'stock_in' | 'consume' | 'restore' | 'adjust'
+export type StockTransactionType =
+  | 'stock_in'
+  // The reversal a voided arrival document writes, one per line.
+  | 'stock_in_void'
+  | 'consume'
+  | 'restore'
+  | 'adjust'
 
 export interface BranchContextItem {
   id: string
@@ -99,19 +106,19 @@ export interface BranchPricing {
 }
 
 /**
- * THE material: a dekor in one concrete format, owned by one branch. Identity is
- * nested under `.dekor`; the format lives here. There is no stored name — render
+ * THE material: a decor in one concrete format, owned by one branch. Identity is
+ * nested under `.decor`; the format lives here. There is no stored name — render
  * `label`, which the server composes (backend/app/core/material_label.py).
  */
 export interface BranchMaterial {
   id: string
   branch_id: string
-  dekor_id: string
-  dekor: Dekor
-  qalinlik_mm: string
-  uzunlik_mm: number | null
-  eni_mm: number | null
-  kromka_eni_mm: number | null
+  decor_format_id: string
+  // One nesting level each, never flattened: `decor_format.thickness_mm` says
+  // WHERE the number is owned — the platform, not this branch — which is the
+  // whole point of the format reshape.
+  decor_format: DecorFormat
+  decor: Decor
   price_tiyin: number
   // price_tiyin === 0 means unpriced, not free. Client-facing listings drop these
   // rows; workshop-facing ones flag them so the gap is visible where it is fixable.
@@ -123,11 +130,23 @@ export interface BranchMaterial {
   updated_at: string
 }
 
-// A dekor the branch may attach. It is never hidden once carried — carrying 18 mm
+// A decor the branch may attach. It is never hidden once carried — carrying 18 mm
 // does not stop you adding 16 mm — so the count says how many formats are already in.
 export interface BranchCatalogOption {
-  dekor: Dekor
+  decor: Decor
   carried_format_count: number
+  // Active formats the platform offers for this decor. `carried === available`
+  // is what the picker greys out as "nothing left to add".
+  available_format_count: number
+}
+
+/** One active format in step two of the attach sheet, with the branch's answer. */
+export interface BranchCatalogFormatOption {
+  decor_format: DecorFormat
+  // Carried rows stay in the list, disabled. Hiding them would leave the branch
+  // wondering whether the size exists at all — the exact question step two is
+  // there to answer.
+  carried: boolean
 }
 
 // QAD-159: the picker needs an honest "Filtrdagi hammasi (N)" count, so this
@@ -139,57 +158,38 @@ export interface BranchCatalogOptionsPage {
 
 // Manufacturers only. Thickness used to be a facet here because it was a
 // platform-catalog fact; it is now a per-branch format the operator types in, so
-// there is nothing left to enumerate. `tur` is a fixed enum rendered without asking.
+// there is nothing left to enumerate. `type` is a fixed enum rendered without asking.
 export interface BranchCatalogFilters {
   manufacturers: { id: string; name: string }[]
 }
 
-/** One (thickness + size) combination of a dekor a branch wants to carry. */
-export interface BranchMaterialFormatInput {
-  qalinlik_mm: string
-  uzunlik_mm?: number
-  eni_mm?: number
-  kromka_eni_mm?: number
+/** One (thickness + size) combination of a decor a branch wants to carry. */
+/** One platform format the branch wants to carry, with its own numbers. */
+export interface BranchMaterialAttachItem {
+  decor_format_id: string
   // Both optional server-side, defaulting to 0: a branch routinely registers its
-  // whole format list before it knows prices.
+  // whole list before it knows prices.
   price_tiyin?: number
   min_stock?: number
 }
 
-/** One dekor and the o'lchamlar the branch wants to carry it in. */
-export interface BranchMaterialAttachItem {
-  dekor_id: string
-  formats: BranchMaterialFormatInput[]
-}
-
 /**
- * Attach several dekorlar, each in one or more o'lchamlar, in ONE transaction.
+ * Carry several platform formats in ONE transaction.
  *
- * A list rather than a single dekor because that is the shape of the real job:
- * 87% of carried dekorlar exist in exactly one o'lcham, so a branch registering
- * its supplier list picks many dekorlar and one o'lcham, not the reverse.
- * Per-dekor `formats` keeps a mixed batch possible — a board and its matching
- * kromka have different o'lcham axes and still belong in one save.
+ * A flat list of format ids rather than decor-then-formats: the branch no
+ * longer invents formats, so there is nothing per-decor left to nest — a format
+ * id already names its decor.
  */
 export interface BranchMaterialAttachRequest {
   items: BranchMaterialAttachItem[]
 }
 
-/** Identifies one o'lcham of one dekor within a branch. */
-export interface BranchMaterialFormatKey {
-  dekor_id: string
-  qalinlik_mm: string
-  uzunlik_mm: number | null
-  eni_mm: number | null
-  kromka_eni_mm: number | null
-}
-
 export interface BranchMaterialAttachResponse {
   created: BranchMaterial[]
-  // Formats this branch already carries. The picker shows what is carried, so a
-  // duplicate here is a race, not user error — surface it as "already carried,
+  // Format ids this branch already carries. The picker shows what is carried, so
+  // a duplicate here is a race, not user error — surface it as "already carried,
   // skipped", never as a failure.
-  skipped: BranchMaterialFormatKey[]
+  skipped: string[]
 }
 
 export interface Supplier {
@@ -209,7 +209,7 @@ export interface StockItem {
   branch_id: string
   branch_material_id: string
   material: BranchMaterial
-  tur: DekorType
+  type: DecorType
   stock_unit: string
   display_unit: string
   on_hand: number
@@ -222,6 +222,8 @@ export interface StockTransaction {
   id: string
   stock_item_id: string
   branch_material_id: string
+  invoice_id: string | null
+  invoice_no: string | null
   // Server-composed label, not a stored column — leave it alone.
   material_name: string
   type: StockTransactionType
@@ -230,6 +232,9 @@ export interface StockTransaction {
   unit_price_tiyin: number | null
   total_price_tiyin: number | null
   order_id: string | null
+  // The order's own `#26-1-0003` number — a consume/restore row's context has to
+  // be a document the reader recognises, not an id prefix.
+  order_number: string | null
   supplier_id: string | null
   supplier_name: string | null
   actor_user_id: string | null
@@ -244,12 +249,21 @@ export interface SupplierInvoiceLine {
   transaction_id: string
   branch_material_id: string
   material_name: string
-  tur: DekorType
+  type: DecorType
   display_unit: string
   quantity: number
   unit_price_tiyin: number | null
   total_price_tiyin: number | null
   note: string | null
+}
+
+export type LedgerStatus = 'recorded' | 'voided'
+
+export interface SupplierInvoicePayment {
+  expense_id: string
+  spent_on: string
+  amount_tiyin: number
+  status: LedgerStatus
 }
 
 export interface SupplierInvoice {
@@ -260,6 +274,7 @@ export interface SupplierInvoice {
   supplier_id: string | null
   supplier_name: string | null
   invoice_no: string
+  // The number on the supplier's own paper — free text, not the `K-…` we mint.
   invoice_date: string
   subtotal_tiyin: number
   discount_tiyin: number
@@ -270,16 +285,46 @@ export interface SupplierInvoice {
   paid_tiyin: number
   outstanding_tiyin: number
   payment_status: InvoicePaymentStatus
+  status: LedgerStatus
+  voided_reason: string | null
+  voided_at: string | null
+  voided_by_name: string | null
   recorded_by_user_id: string
   recorded_by_name: string | null
   created_at: string
   lines: SupplierInvoiceLine[]
+  // Only the single-invoice read fills this; list rows carry an empty array.
+  payments: SupplierInvoicePayment[]
 }
 
 export interface SupplierInvoiceFilters {
   supplier_id?: string | null
   search?: string | null
   payment_status?: InvoicePaymentStatus | null
+  date_from?: string | null
+  date_to?: string | null
+  limit?: number
+  offset?: number
+}
+
+export interface SupplierInvoiceLineInput {
+  branch_material_id: string
+  quantity: number
+  unit_price_tiyin: number
+}
+
+/**
+ * The correction an invoice accepts. `lines` omitted is a header-only edit;
+ * `lines` present is the FULL desired set — the server rewrites the invoice's
+ * stock-in rows to match and replays each touched material's balance chain.
+ *
+ * `note` / `discount_tiyin` / `surcharge_tiyin` are gone: the server refuses
+ * them outright, so they must not reappear here.
+ */
+export interface SupplierInvoicePatch {
+  supplier_id?: string | null
+  invoice_date?: string | null
+  lines?: SupplierInvoiceLineInput[]
 }
 
 export interface StockLastPrice {
@@ -287,6 +332,20 @@ export interface StockLastPrice {
   recorded_at: string | null
   supplier_id: string | null
   supplier_name: string | null
+}
+
+export interface StockListFilters {
+  search?: string
+  low_stock?: boolean | null
+  // Restrict to rows with at least one movement — the Zaxira table's default
+  // scope, and nothing else's: the pickers and the global search preview must
+  // keep seeing the branch's whole catalog.
+  moved_only?: boolean
+  /**
+   * The decor types to list — panels and kromka share a shelf but not a
+   * question. Plural because one label can cover two enum members («LDSP»).
+   */
+  types?: DecorType[] | null
 }
 
 export interface StockTransactionFilters {
@@ -299,11 +358,11 @@ export interface StockTransactionFilters {
 
 export interface BranchMaterialFilters {
   search?: string
-  tur?: DekorType | null
+  type?: DecorType | null
   status?: MaterialStatus | null
   manufacturer_id?: string | null
-  // Narrows the grouped-by-dekor table to one dekor's formats.
-  dekor_id?: string | null
+  // Narrows the grouped-by-decor table to one decor's formats.
+  decor_id?: string | null
   offset?: number
   limit?: number
 }
@@ -316,6 +375,10 @@ export const permissionCatalog = [
   'manage_inventory',
   'manage_finance',
   'view_finance_reports',
+  // Granted alongside an order permission in practice — it admits the counter
+  // payment, not the order itself. Separate so nobody who already manages
+  // orders silently gains the ability to write money rows.
+  'record_order_payment',
 ] as const
 
 export const useWorkshopStore = defineStore('workshop', () => {
@@ -332,11 +395,18 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
   const stockItems = ref<StockItem[]>([])
+  // The table's list and the pickers' list are two different questions. The
+  // Zaxira table asks for the *moved* scope; a material combobox must offer the
+  // whole branch catalog, or an arrival for a never-stocked material — the most
+  // common first arrival there is — would be impossible to enter.
+  const stockPickerItems = ref<StockItem[]>([])
+  const stockPickerBranchId = ref<string | null>(null)
   const lowStockItems = ref<StockItem[]>([])
   const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
   const supplierInvoices = ref<SupplierInvoice[]>([])
+  const supplierInvoicesHasMore = ref(false)
   const users = ref<WorkshopUser[]>([])
   const selectedUser = ref<WorkshopUser | null>(null)
   const sessions = ref<SessionResponse[]>([])
@@ -359,6 +429,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const auth = useAuthStore()
   let usersLoadRequestId = 0
   let catalogLoadRequestId = 0
+  let lastStockFilters: StockListFilters = {}
 
   function upsertUser(user: WorkshopUser) {
     users.value = [...users.value.filter((current) => current.id !== user.id), user]
@@ -522,14 +593,14 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   // The add-material picker is server-searched and capped — never the whole
-  // catalog — so opening the sheet on the full dekor set doesn't freeze. Returns
+  // catalog — so opening the sheet on the full decor set doesn't freeze. Returns
   // the page so a caller can render an honest "Filtrdagi hammasi (N)" without the
   // store holding more than the visible list.
   async function fetchCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
     return api.get<BranchCatalogOptionsPage>(
-      withQuery(`/workshop/branches/${id}/catalog/dekorlar`, {
+      withQuery(`/workshop/branches/${id}/catalog/decors`, {
         search: filters.search,
-        tur: filters.tur,
+        type: filters.type,
         manufacturer_id: filters.manufacturer_id,
         limit: filters.limit ?? CATALOG_PICKER_LIMIT,
         offset: filters.offset,
@@ -543,6 +614,20 @@ export const useWorkshopStore = defineStore('workshop', () => {
     catalogOptions.value = page.items
     catalogOptionsTotal.value = page.total
     return page
+  }
+
+  /**
+   * Step two of the attach sheet: this decor's ACTIVE formats, carried flagged.
+   *
+   * Inactive formats are absent rather than disabled — the platform has said the
+   * product is no longer made, so offering a branch the chance to start carrying
+   * one would be offering a dead end.
+   */
+  async function fetchCatalogFormats(id: string, decorId: string) {
+    return api.get<BranchCatalogFormatOption[]>(
+      `/workshop/branches/${id}/catalog/decors/${decorId}/formats`,
+      authInit(),
+    )
   }
 
   async function loadCatalogFilters(id: string) {
@@ -566,9 +651,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
       const rows = await api.get<BranchMaterial[]>(
         withQuery(`/workshop/branches/${id}/materials`, {
           search: filters.search,
-          tur: filters.tur,
+          type: filters.type,
           manufacturer_id: filters.manufacturer_id,
-          dekor_id: filters.dekor_id,
+          decor_id: filters.decor_id,
           status: filters.status,
           limit: MATERIALS_PAGE_LIMIT,
           offset,
@@ -595,7 +680,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   /**
-   * Attach several dekorlar, each in one or more o'lchamlar, in one server-side
+   * Attach several decors, each in one or more o'lchamlar, in one server-side
    * transaction. The batch is all-or-nothing on *validity* — one malformed
    * o'lcham writes nothing — but never on duplication: an o'lcham this branch
    * already carries comes back under `skipped` instead of failing the call.
@@ -608,7 +693,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       authInit(),
     )
     branchMaterials.value = [...result.created, ...branchMaterials.value]
-    await loadStock(id).catch(() => undefined)
+    await refreshStockCollections(id)
     await loadCatalogOptions(id).catch(() => undefined)
     return result
   }
@@ -620,7 +705,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       authInit(),
     )
     patchBranchMaterial(updated)
-    await loadStock(id).catch(() => undefined)
+    await refreshStockCollections(id)
     return updated
   }
 
@@ -640,16 +725,18 @@ export const useWorkshopStore = defineStore('workshop', () => {
     return updated
   }
 
-  async function loadStock(
-    id: string,
-    filters: { search?: string; low_stock?: boolean | null } = {},
-  ) {
+  async function loadStock(id: string, filters: StockListFilters = {}) {
+    // Remembered so a mutation can refresh the table under the filters the
+    // operator is actually looking at, instead of dropping them to unfiltered.
+    lastStockFilters = filters
     stockItems.value = await readOrDrop(
       () =>
         api.get<StockItem[]>(
           withQuery(`/workshop/branches/${id}/stock`, {
             search: filters.search,
             low_stock: filters.low_stock ? true : undefined,
+            moved_only: filters.moved_only ? true : undefined,
+            types: filters.types ?? undefined,
           }),
           authInit(),
         ),
@@ -657,6 +744,71 @@ export const useWorkshopStore = defineStore('workshop', () => {
         stockItems.value = []
       },
     )
+  }
+
+  /**
+   * The unfiltered branch catalog behind every material combobox.
+   *
+   * Cached per branch — the pickers ask on every modal open, and the answer
+   * only changes when stock or the catalog moves, which is exactly when
+   * `invalidateStockPicker` is called.
+   */
+  async function loadStockPicker(id: string, options: { force?: boolean } = {}) {
+    if (!options.force && stockPickerBranchId.value === id) return
+    stockPickerItems.value = await readOrDrop(
+      () => api.get<StockItem[]>(`/workshop/branches/${id}/stock`, authInit()),
+      () => {
+        stockPickerItems.value = []
+        stockPickerBranchId.value = null
+      },
+    )
+    stockPickerBranchId.value = id
+  }
+
+  // Every stock mutation moves a balance the pickers print in their meta line,
+  // and may mint the very first movement for a row — so both collections are
+  // stale together and are refreshed together.
+  async function refreshStockCollections(id: string) {
+    await loadStock(id, lastStockFilters).catch(() => undefined)
+    if (stockPickerBranchId.value === id) {
+      await loadStockPicker(id, { force: true }).catch(() => undefined)
+    }
+  }
+
+  function patchStockItem(updated: StockItem) {
+    const swap = (rows: StockItem[]) =>
+      rows.map((row) => (row.branch_material_id === updated.branch_material_id ? updated : row))
+    stockItems.value = swap(stockItems.value)
+    stockPickerItems.value = swap(stockPickerItems.value)
+  }
+
+  /**
+   * The low-stock threshold, written from the stock surface by `manage_inventory`.
+   *
+   * The same `branch_materials.min_stock` the catalog form edits — two doors,
+   * one fact. The response is the refreshed row, patched in place so the open
+   * detail modal re-derives its pill without a list reload.
+   */
+  /**
+   * One material's balance row, addressed by the material alone.
+   *
+   * The material page is reached by URL — a link, a reload, a colleague's
+   * message — so it cannot depend on the topbar already naming the right
+   * branch. The server derives the branch from the material and checks the
+   * reader against *that* branch.
+   */
+  async function fetchMaterialStock(branchMaterialId: string) {
+    return api.get<StockItem>(`/workshop/inventory/materials/${branchMaterialId}/stock`, authInit())
+  }
+
+  async function updateStockMinStock(id: string, branchMaterialId: string, minStock: number) {
+    const updated = await api.put<StockItem>(
+      `/workshop/inventory/branches/${id}/stock/${branchMaterialId}/min-stock`,
+      { min_stock: minStock },
+      authInit(),
+    )
+    patchStockItem(updated)
+    return updated
   }
 
   async function loadLowStock(branchIds: string[]) {
@@ -728,6 +880,26 @@ export const useWorkshopStore = defineStore('workshop', () => {
     stockTransactionsHasMore.value = page.length === limit
   }
 
+  /**
+   * One page of movements, returned rather than stored.
+   *
+   * The material detail modal shows a material's own history while the
+   * Tranzaksiyalar tab keeps whatever page and filters the operator left it on
+   * — two readers of one endpoint, so only the tab owns `stockTransactions`.
+   */
+  async function fetchStockTransactions(id: string, filters: StockTransactionFilters = {}) {
+    return api.get<StockTransaction[]>(
+      withQuery(`/workshop/branches/${id}/stock-transactions`, {
+        branch_material_id: filters.branch_material_id,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        limit: filters.limit ?? INVENTORY_TX_PAGE_LIMIT,
+        offset: filters.offset ?? 0,
+      }),
+      authInit(),
+    )
+  }
+
   async function loadSuppliers(id: string, status?: SupplierStatus | null) {
     suppliers.value = await readOrDrop(
       () =>
@@ -756,7 +928,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   async function loadSupplierInvoices(id: string, filters: SupplierInvoiceFilters = {}) {
-    supplierInvoices.value = await readOrDrop(
+    const limit = filters.limit ?? INVENTORY_INVOICE_PAGE_LIMIT
+    const offset = filters.offset ?? 0
+    const page = await readOrDrop(
       () =>
         api.get<SupplierInvoice[]>(
           withQuery('/workshop/inventory/invoices', {
@@ -764,22 +938,68 @@ export const useWorkshopStore = defineStore('workshop', () => {
             supplier_id: filters.supplier_id,
             search: filters.search,
             payment_status: filters.payment_status,
+            date_from: filters.date_from,
+            date_to: filters.date_to,
+            limit,
+            offset,
           }),
           authInit(),
         ),
       () => {
         supplierInvoices.value = []
+        supplierInvoicesHasMore.value = false
       },
+    )
+    supplierInvoices.value = offset === 0 ? page : [...supplierInvoices.value, ...page]
+    supplierInvoicesHasMore.value = page.length === limit
+  }
+
+  /** One arrival document with its lines and its linked payments. */
+  async function fetchSupplierInvoice(invoiceId: string) {
+    return api.get<SupplierInvoice>(`/workshop/inventory/invoices/${invoiceId}`, authInit())
+  }
+
+  // Header facts, and optionally the whole line set. A line edit moves stock
+  // server-side, so the branch's balances are stale the moment this returns —
+  // the caller refetches them.
+  async function updateSupplierInvoice(invoiceId: string, payload: SupplierInvoicePatch) {
+    const updated = await api.patch<SupplierInvoice>(
+      `/workshop/inventory/invoices/${invoiceId}`,
+      payload,
+      authInit(),
+    )
+    patchSupplierInvoice(updated)
+    return updated
+  }
+
+  // Reverses every line's stock server-side, so the branch's balances are stale
+  // the moment this returns — the caller refetches them.
+  async function voidSupplierInvoice(invoiceId: string, reason: string) {
+    const voided = await api.post<SupplierInvoice>(
+      `/workshop/inventory/invoices/${invoiceId}/void`,
+      { reason },
+      authInit(),
+    )
+    patchSupplierInvoice(voided)
+    return voided
+  }
+
+  function patchSupplierInvoice(updated: SupplierInvoice) {
+    supplierInvoices.value = supplierInvoices.value.map((row) =>
+      row.id === updated.id ? updated : row,
     )
   }
 
   function clearInventory() {
     suppliers.value = []
     stockItems.value = []
+    stockPickerItems.value = []
+    stockPickerBranchId.value = null
     lowStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
     supplierInvoices.value = []
+    supplierInvoicesHasMore.value = false
     inventoryError.value = null
     inventoryTraceId.value = null
   }
@@ -841,7 +1061,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       authInit(),
     )
     supplierInvoices.value = [invoice, ...supplierInvoices.value]
-    await loadStock(id).catch(() => undefined)
+    await refreshStockCollections(id)
     if ((payload as { supplier?: unknown }).supplier) await loadSuppliers(id).catch(() => undefined)
     return invoice
   }
@@ -853,7 +1073,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       authInit(),
     )
     stockTransactions.value = [transaction, ...stockTransactions.value]
-    await loadStock(id).catch(() => undefined)
+    await refreshStockCollections(id)
     if ((payload as { supplier?: unknown }).supplier) await loadSuppliers(id).catch(() => undefined)
     return transaction
   }
@@ -865,7 +1085,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       authInit(),
     )
     stockTransactions.value = [transaction, ...stockTransactions.value]
-    await loadStock(id).catch(() => undefined)
+    await refreshStockCollections(id)
     return transaction
   }
 
@@ -1103,6 +1323,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
+    stockPickerItems.value = []
+    stockPickerBranchId.value = null
     lowStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
@@ -1145,11 +1367,13 @@ export const useWorkshopStore = defineStore('workshop', () => {
     branchMaterialsHasMore,
     suppliers,
     stockItems,
+    stockPickerItems,
     lowStockItems,
     stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
     supplierInvoices,
+    supplierInvoicesHasMore,
     users,
     selectedUser,
     sessions,
@@ -1180,17 +1404,25 @@ export const useWorkshopStore = defineStore('workshop', () => {
     updateBranchPricing,
     loadCatalogOptions,
     fetchCatalogOptions,
+    fetchCatalogFormats,
     loadCatalogFilters,
     loadBranchMaterials,
     attachBranchMaterials,
     updateBranchMaterial,
     setBranchMaterialStatus,
     loadStock,
+    loadStockPicker,
+    updateStockMinStock,
+    fetchMaterialStock,
     loadLowStock,
     loadStockValue,
     loadStockTransactions,
+    fetchStockTransactions,
     loadSuppliers,
     loadSupplierInvoices,
+    fetchSupplierInvoice,
+    updateSupplierInvoice,
+    voidSupplierInvoice,
     loadInventory,
     clearInventory,
     createSupplier,

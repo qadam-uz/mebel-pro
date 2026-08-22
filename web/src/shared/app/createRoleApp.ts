@@ -334,8 +334,13 @@ export async function mountRoleApp(
     return true
   })
 
-  router.afterEach((to) => {
+  router.afterEach((to, _from, failure) => {
     clearStaleChunkMark()
+    // `afterEach` fires for *aborted* navigations too, and `to` is then the
+    // destination the user never reached. Retitling on one leaves the tab strip
+    // naming a page that is not on screen — visible the moment a leave guard
+    // says no (the arrival form's unsaved-changes confirm).
+    if (failure) return
     document.title = roleDocumentTitle(to.meta.titleKey, roleConfig)
     if (roleConfig.role === 'admin') focusAdminContent(to.meta)
   })

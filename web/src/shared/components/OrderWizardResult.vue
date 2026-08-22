@@ -38,9 +38,12 @@ function swatchFor(materialId: string) {
 
 function materialSize(materialId: string) {
   const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
-  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
-  const thickness = snapshotValue(snapshot, 'qalinlik_mm', 'thickness_mm')
+  const length = numberSnapshot(
+    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
+    0,
+  )
+  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const thickness = snapshotValue(snapshot, 'thickness_mm', 'qalinlik_mm')
   if (length <= 0 || width <= 0) return ''
   const base = `${length}×${width}`
   return thickness ? `${base}×${Number(thickness)}` : base
@@ -49,10 +52,13 @@ function materialSize(materialId: string) {
 // Averaged over this material's own panels: a material is judged against itself,
 // not against a result-wide figure two materials would have to share.
 function materialFill(materialId: string) {
-  const panels = props.result.panels.filter((panel) => panel.branch_material_id === materialId)
+  const panels = props.result.panels.filter((panel) => panel.material_id === materialId)
   const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(snapshotValue(snapshot, 'uzunlik_mm', 'panel_length_mm'), 0)
-  const width = numberSnapshot(snapshotValue(snapshot, 'eni_mm', 'panel_width_mm'), 0)
+  const length = numberSnapshot(
+    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
+    0,
+  )
+  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
   if (panels.length === 0 || length <= 0 || width <= 0) return null
   const waste = panels.reduce((sum, panel) => sum + panel.waste_area_mm2, 0)
   return Math.max(0, Math.min(100, 100 - (waste / (length * width * panels.length)) * 100))
@@ -138,14 +144,14 @@ const sheets = computed(() =>
     panel,
     index: panelDisplayIndex(props.result, panel),
     label: snapshotMaterialLabel(
-      props.result.material_snapshots[panel.branch_material_id],
-      panel.branch_material_id.slice(0, 8),
+      props.result.material_snapshots[panel.material_id],
+      panel.material_id.slice(0, 8),
     ),
-    swatch: swatchFor(panel.branch_material_id),
-    size: materialSize(panel.branch_material_id),
+    swatch: swatchFor(panel.material_id),
+    size: materialSize(panel.material_id),
     edgeLine: sheetEdgeLine(props.result, panel, edgeRegistry.value),
     fill: panelFillPercent(props.result, panel),
-    own: (props.result.own_panel_counts?.[panel.branch_material_id] ?? 0) > 0,
+    own: (props.result.own_panel_counts?.[panel.material_id] ?? 0) > 0,
   })),
 )
 

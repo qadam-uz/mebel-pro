@@ -3,16 +3,16 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   carryOneFormat,
   continueButton,
-  createCatalogDekorlar,
+  createCatalogDecors,
   ownerReadyPassword,
-  panelFormat,
+  panelNumbers,
   passwordLabel,
   platformToken,
   provisionWorkshop,
   readyOwnerToken,
   runId,
   seedPlatform,
-  tickDekor,
+  tickDecor,
   updateBranchPricing,
 } from "./helpers";
 
@@ -43,7 +43,7 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await seedPlatform(adminLogin);
   const adminAccess = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, adminAccess, id);
-  const { panel } = await createCatalogDekorlar(request, adminAccess, id);
+  const { panel } = await createCatalogDecors(request, adminAccess, id);
 
   // Step 1 — the account gate pins the fresh owner to the password form; after
   // the forced change the owner lands on the home checklist automatically.
@@ -87,18 +87,20 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await page.getByRole("button", { name: "+ Material", exact: true }).first().click();
   await expect(catalogHint).toHaveCount(0);
 
-  // The catalog reshape split identity from o'lcham, so attaching is two steps:
-  // tick the dekor (step 1 is multi-select), then pick the o'lchamlar and price
-  // them. The result rows are named by dekor as well as o'lcham.
+  // The catalog reshape split identity from format, so attaching is two steps:
+  // tick the dekor (step 1 is multi-select), then tick the platform formats and
+  // price them. The result rows are named by dekor as well as format.
   const pickStep = page.getByRole("dialog", { name: "Dekor tanlash" });
-  await tickDekor(pickStep, panel);
+  await tickDecor(pickStep, panel);
   await pickStep.getByRole("button", { name: "Davom etish" }).click();
 
   const formatStep = page.getByRole("dialog", { name: "O'lchamlar va narx" });
-  await formatStep.getByRole("button", { name: "18 mm", exact: true }).click();
-  await formatStep.getByRole("button", { name: "2800×2070", exact: true }).click();
+  // Step two lists the PLATFORM's formats — the branch picks, it does not invent.
   await formatStep
-    .getByLabel(`${panel.label} · 2800×2070×18 mm narxi`)
+    .getByRole("checkbox", { name: panel.format.label })
+    .check();
+  await formatStep
+    .getByLabel(`${panel.label} · ${panel.format.label} narxi`)
     .fill("250000");
   await formatStep.getByRole("button", { name: /o'lchamni qo'shish/ }).click();
 
@@ -123,14 +125,14 @@ test("an established owner sees no checklist and no spotlight", async ({
   const setup = await provisionWorkshop(request, adminAccess, id);
   // Complete the whole setup via the API — the derived status must read done.
   const ownerAccess = await readyOwnerToken(request, setup);
-  const { panel } = await createCatalogDekorlar(request, adminAccess, id);
+  const { panel } = await createCatalogDecors(request, adminAccess, id);
   await updateBranchPricing(request, ownerAccess, setup.branch.id as string);
   await carryOneFormat(
     request,
     ownerAccess,
     setup.branch.id as string,
-    panel.id,
-    panelFormat(),
+    panel.format.id,
+    panelNumbers,
   );
 
   await page.goto("/workshop/");

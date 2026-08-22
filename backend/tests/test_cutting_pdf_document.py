@@ -7,7 +7,9 @@ The `material_snapshots` fixtures here deliberately use the **legacy** key
 vocabulary (`kind`/`type`/`name`/`color`/`decor_code`/`panel_length_mm`/…).
 `cutting_results.material_snapshots` is frozen history the reshape migration does
 not rewrite, so the PDF must keep rendering pre-reshape results byte-identically.
-`test_a_new_vocabulary_snapshot_renders_the_same_pdf` covers the other side.
+`test_a_new_vocabulary_snapshot_prints_the_same_summary_row` covers the other
+side, with `_NEW_PANEL_SNAPSHOT` holding exactly what
+`catalog.branch_material_snapshot` writes today.
 """
 
 import re
@@ -68,7 +70,7 @@ def _panel(
 ) -> CuttingPanelResponse:
     return CuttingPanelResponse(
         id=uuid.uuid4(),
-        branch_material_id=panel_id,
+        material_id=panel_id,
         panel_index=panel_index,
         waste_area_mm2=0,
         cut_count=cut_count,
@@ -124,7 +126,7 @@ def _result(
                 "id": str(PANEL_ID),
                 "kind": "panel",
                 "manufacturer_name": "Egger",
-                "type": "dsp",
+                "type": "ldsp",
                 "name": "H1334 ST9",
                 "thickness_mm": "18.0",
                 "color": "Sanoma",
@@ -136,7 +138,7 @@ def _result(
                 "id": str(PANEL_B_ID),
                 "kind": "panel",
                 "manufacturer_name": "Kronospan",
-                "type": "dsp",
+                "type": "ldsp",
                 "name": "TD-W18",
                 "thickness_mm": "18.0",
                 "color": "White",
@@ -870,27 +872,30 @@ def test_every_planned_page_gets_its_own_sheet() -> None:
 # Dual-vocabulary snapshot reads
 # --------------------------------------------------------------------------- #
 
+# Exactly what `catalog.branch_material_snapshot` writes today: the decor's
+# identity plus its format's shape, in the current English vocabulary.
 _NEW_PANEL_SNAPSHOT = {
-    "id": str(PANEL_ID),
-    "dekor_id": str(uuid.uuid4()),
-    "manufacturer_id": str(uuid.uuid4()),
     "manufacturer_name": "Egger",
-    "tur": "ldsp",
-    "kod": "H1334 ST9",
-    "nomi": "Sanoma",
-    "qalinlik_mm": "18",
-    "uzunlik_mm": 1000,
-    "eni_mm": 1000,
-    "kromka_eni_mm": None,
-    "tolali": False,
-    "image_file_id": None,
+    "code": "H1334 ST9",
+    "name": "Sanoma",
+    "has_grain": False,
+    "type": "ldsp",
+    "thickness_mm": "18",
+    "length_mm": 1000,
+    "width_mm": 1000,
+    "tape_width_mm": None,
+    "finished_sides": 2,
 }
 
+# The same physical sheet as written before the reshape. `type` is `ldsp` in
+# both: `dsp` is a genuinely different product now that it prints «DSP» instead
+# of borrowing LDSP's label, so using it here would be comparing two sheets
+# rather than two vocabularies.
 _LEGACY_PANEL_SNAPSHOT = {
     "id": str(PANEL_ID),
     "kind": "panel",
     "manufacturer_name": "Egger",
-    "type": "dsp",
+    "type": "ldsp",
     "name": "H1334 ST9",
     "thickness_mm": "18.0",
     "color": "Sanoma",
@@ -1149,7 +1154,7 @@ def _long_named_materials_result(count: int) -> CuttingResultResponse:
             "id": str(material_id),
             "kind": "panel",
             "manufacturer_name": "Kronospan Rus Egorevsk",
-            "type": "dsp",
+            "type": "ldsp",
             "name": f"K{index:03d} PW Craft Oak tabiiy yog'och tekstura",
             "thickness_mm": "18.0",
             "color": "Zolotoy Kraft Oak",
@@ -1170,7 +1175,7 @@ def _long_named_materials_result(count: int) -> CuttingResultResponse:
             )
         )
     result.panels = panels
-    result.panels_used_by_material = {str(panel.branch_material_id): 1 for panel in panels}
+    result.panels_used_by_material = {str(panel.material_id): 1 for panel in panels}
     return result
 
 

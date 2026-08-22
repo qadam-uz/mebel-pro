@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-18
+updated: 2026-08-22
 order: 80
 ---
 
@@ -101,7 +101,7 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 
 ### Parts and materials
 
-- A part's panel material is a **branch material** — one dekor in one format, carried by the
+- A part's panel material is a **branch material** — one platform format, carried by the
   selected branch ([`catalog-inventory.md`](catalog-inventory.md)). **Branch scoping is
   structural**: the catalog reads require a branch, a branch is required before the parts
   editor opens (see _Branch selector_), and every row the picker shows is carried by
@@ -137,18 +137,21 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   ([`orders.md`](orders.md#pricing)).
 - **A customer may bring a sheet the branch does not sell.** The editor's material picker has a
   second tab, `Mijoz materiali`, where staff type the board's size, its thickness, how many the
-  customer brought, and whether it is textured. The board becomes a **branch material scoped to
-  that drawing**: `customer_supplied` marks it, `source_draft_id` says whose it is, and every
-  catalog listing — the branch's own material screen, the client portal, onboarding's
-  "materials added" probe, dekor-photo access — excludes it. Only this drawing's picker sees
-  it. It has to be a branch material rather than a drawing-level object because
-  `own_panel_counts`, `material_snapshots`, the optimizer's panel spec and every order item key
-  on a branch-material id; a second identity would have to be threaded through all of them.
-  - Every board points at one platform-seeded `Mijoz` dekor. A dekor per board would need
-    platform-operator rights the counter does not have, and would grow the admin catalog
-    without bound. That is also why the format uniqueness index is **partial** on
-    `NOT customer_supplied`: two customers bringing the same size to one branch produce the
-    same (dekor, format) tuple, and a full index would reject the second of them.
+  customer brought, and whether it is textured. The board becomes a
+  **[customer board](../entities/cutting.md#customer-board)** — its own row in
+  `customer_boards`, belonging to the drawing and then to the order: `source_draft_id` says
+  whose it is, and only this drawing's picker sees it. Nothing about it reaches a catalog.
+  - **It is not a branch material.** It used to be one, flagged `customer_supplied`, on the
+    reasoning that `own_panel_counts`, `material_snapshots`, the optimizer's panel spec and
+    every order item key on a branch-material id. They key on a **UUID string**, and a board
+    id and a branch-material id come from disjoint namespaces — so the second identity cost
+    nothing to thread, while the flag cost every catalog listing (the branch's own material
+    screen, the client portal, onboarding's "materials added" probe, decor-photo access), the
+    attach uniqueness index and the seeded `Mijoz` decor an exclusion for something that was
+    never an offer. All of that is gone: `cutting_panels` and `order_items` carry either a
+    `branch_material_id` or a `customer_board_id`, exactly one, enforced by a CHECK.
+  - The board carries its own `type`, size, thickness and `has_grain` — panel-shaped only,
+    since a customer does not bring their own edge tape.
   - The sheet count typed on the form is written straight into `own_panel_counts` — for a
     customer board the claim is not a guess, the sheets are on the floor.
   - **The shortfall is sold from branch stock.** At creation the board resolves a *substitute*:
@@ -162,8 +165,8 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   - Kromka keeps today's rule: `own_edge_material_ids` claims **catalog tapes only**.
   - The `Teksturali material` checkbox names the board and its snapshot; it does **not** lock
     the layout. Rotation is decided per part by `Burilish`, as on any other material.
-- **Edge tape is a branch material too** — a `kromka` dekor in one thickness × tape width.
-  Each side of a part is either `null` (no banding) or one of those formats. The picker UX
+- **Edge tape is a branch material too** — a `kromka` format (one thickness × tape width) the
+  branch carries. Each side of a part is either `null` (no banding) or one of those formats. The picker UX
   pins decor-matching edges at the top of one material list, then prefers tape widths that
   cover the selected panel thickness with the closest fit. Narrow tapes sink to the bottom and
   show a warning, but stay selectable (see _UX_).
@@ -193,18 +196,18 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **Tekstura lock = part instruction.** Each part carries `follow_grain` (default `true`).
   When it is true the part is rotation-locked; when false the algorithm may rotate the part
   90°. If a locked part can't fit in its forced orientation, the run fails with
-  `impossible_grain`. The dekor's `tolali` flag remains metadata for
+  `impossible_grain`. The decor's `has_grain` flag remains metadata for
   materials, but it no longer gates this per-part instruction.
 
-| Dekor `tolali` | Part `follow_grain` | Rotation                |
+| Decor `has_grain` | Part `follow_grain` | Rotation                |
 | -------------- | ------------------- | ----------------------- |
 | `true`                     | `true`              | locked; no 90° rotation |
 | `true`                     | `false`             | free rotation           |
 | `false`                    | `true`              | locked; no 90° rotation |
 | `false`                    | `false`             | free rotation           |
 
-- **One branch material → one sheet size.** The size is part of the branch material's
-  identity, so the same decor in another size is a different row the branch carries; custom
+- **One branch material → one sheet size.** The size belongs to the platform format the row
+  carries, so the same decor in another size is a different format and a different row; custom
   panel sizes per run are future.
 - **Kerf and edge trim are per-branch settings**, not global constants — each branch owns its
   saw's kerf and its own edge trim (usable area = panel − 2× edge trim), editable by the
@@ -493,8 +496,8 @@ The parts table:
 | Column       | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Panel**    | opens the material picker — the branch's carried panel formats, **grouped by dekor**: one photo + identity line per dekor, its formats as the selectable rows beneath, exactly as the workshop's catalog table draws them. Selection is still **one format, one click**; grouping changes how the list is drawn, not how many steps it takes. There is no manufacturer / type / thickness / sort bar (it duplicated the identity line and added clutter), and no widen-to-full-catalog toggle — a branch is required before the editor opens and the list is always the branch's own. Selected row shows the picked format's label (e.g. `LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm`) |
-| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the dekor's `tolali` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Panel**    | opens the material picker — the branch's carried panel formats, **grouped by decor**: one photo + identity line per decor, its formats as the selectable rows beneath, exactly as the workshop's catalog table draws them. Selection is still **one format, one click**; grouping changes how the list is drawn, not how many steps it takes. There is no manufacturer / type / thickness / sort bar (it duplicated the identity line and added clutter), and no widen-to-full-catalog toggle — a branch is required before the editor opens and the list is always the branch's own. Selected row shows the picked format's label (e.g. `LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm`) |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the decor's `has_grain` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -858,7 +861,7 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 
 - [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order and which
   cutting metrics drive which price component.
-- [`catalog-inventory.md`](catalog-inventory.md) — the two-level catalog: the platform's
-  dekorlar and the branch's own formats, which are what the editor actually picks from.
+- [`catalog-inventory.md`](catalog-inventory.md) — the catalog the editor picks from: the
+  platform's decors and formats, and the branch's decision to carry them.
 - [PackingSolver provider spec](https://github.com/BerdiyorovAbrorjon/cutting-engine/blob/main/docs/PACKINGSOLVER_PROVIDER_SPEC.md)
   — the internal multi-provider optimizer contract, validation, fallback, and deployment rules.

@@ -10,6 +10,7 @@ from app.modules.access.auth import (
 from app.modules.access.authz import (
     BranchScope,
     can_access_branch,
+    can_access_branch_any,
     require_manage_orders_workshop,
     resolve_branch_scope,
     resolve_branch_scope_any,
@@ -72,6 +73,7 @@ __all__ = [
     "authenticate_platform_user",
     "authenticate_workshop_user",
     "can_access_branch",
+    "can_access_branch_any",
     "change_password",
     "create_session",
     "find_or_create_client",

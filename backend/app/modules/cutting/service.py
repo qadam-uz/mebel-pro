@@ -11,7 +11,7 @@ from typing import Any
 
 import anyio.to_thread
 from fastapi import status
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -22,11 +22,15 @@ from app.models.enums import (
     CuttingResultStatus,
     MaterialStatus,
 )
-from app.modules.catalog.api import normalize_mm
+from app.modules.catalog.api import (
+    branch_material_snapshot,
+    normalize_mm,
+)
 from app.modules.catalog.contracts import (
     BranchMaterial,
-    Dekor,
-    DekorType,
+    Decor,
+    DecorFormat,
+    DecorType,
     Manufacturer,
     is_panel,
     is_tape,
@@ -38,6 +42,7 @@ from app.modules.client_portal.api import (
     visible_branch,
 )
 from app.modules.cutting.contracts import (
+    CustomerBoard,
     CuttingDraft,
     CuttingPanel,
     CuttingPlacement,
@@ -79,6 +84,43 @@ from app.modules.workshop.contracts import Branch, Workshop
 DRAFT_LIMIT = 50
 IMPORTED_MAP_ALGORITHM_NAME = "imported-2dplace-map"
 IMPORTED_MAP_ALGORITHM_VERSION = "map-1"
+
+
+# The customer-board label vocabulary. It used to come from a seeded `Mijoz`
+# manufacturer plus a `materiali` decor that every board pointed at; both rows
+# are gone with the format reshape, and these two literals are what keep the
+# label reading exactly as it always did: "List Mijoz materiali" plus the size.
+CUSTOMER_BOARD_MANUFACTURER_NAME = "Mijoz"
+CUSTOMER_BOARD_DEFAULT_NAME = "materiali"
+
+
+def _board_price_tiyin(board: CustomerBoard) -> int:
+    return board.price_tiyin
+
+
+def customer_board_snapshot(board: CustomerBoard) -> dict[str, Any]:
+    """Freeze one customer board's identity + size onto a result or order item.
+
+    Same key vocabulary as `catalog.branch_material_snapshot`, plus the two
+    facts only a board has: `customer_supplied`, which is what every downstream
+    reader branches on, and `stock_material_id`, which the stock seam reads at
+    "Kesish tugadi" to consume the substitute for the billed shortfall.
+    """
+
+    return {
+        "manufacturer_name": CUSTOMER_BOARD_MANUFACTURER_NAME,
+        "code": None,
+        "name": board.name or CUSTOMER_BOARD_DEFAULT_NAME,
+        "has_grain": board.has_grain,
+        "type": board.type.value,
+        "thickness_mm": str(board.thickness_mm),
+        "length_mm": board.length_mm,
+        "width_mm": board.width_mm,
+        "tape_width_mm": None,
+        "finished_sides": None,
+        "customer_supplied": True,
+        "stock_material_id": (str(board.stock_material_id) if board.stock_material_id else None),
+    }
 
 
 async def _resolve_cut_params(db: AsyncSession, branch_id: uuid.UUID | None) -> CutParams:
@@ -551,10 +593,13 @@ async def _apply_optimize(
     )
     db.add(result)
     await db.flush()
+    board_ids = await customer_board_ids(
+        db, {panel.material_id for panel in optimizer_result.panels}
+    )
     for panel in optimizer_result.panels:
         panel_row = CuttingPanel(
             cutting_result_id=result.id,
-            branch_material_id=panel.material_id,
+            **material_fk_columns(panel.material_id, board_ids),
             panel_index=panel.panel_index,
             waste_area_mm2=panel.waste_area_mm2,
             cut_count=panel.cut_count,
@@ -576,6 +621,13 @@ async def _apply_optimize(
                     rotated=placement.rotated,
                 )
             )
+    # The claim lives on the DRAFT precisely so it survives a re-optimise; this
+    # run just deleted every candidate and minted a new one, so it has to be
+    # re-projected or the client is billed for sheets they carried in. It bites
+    # hardest for a customer-supplied board, whose entire price is the
+    # shortfall: the board's claim is written when the board is recorded, which
+    # is always before the layout exists.
+    await _project_own_panels_onto_results(db, draft=draft)
     draft.chosen_result_id = result.id
     draft.updated_at = now
     await db.flush()
@@ -678,7 +730,7 @@ async def client_catalog_materials(
     """The client's material picker — always a single branch's own shelf.
 
     `branch_id` is required: since the reshape a "material" *is* a branch's
-    format of a dekor, so there is nothing to browse platform-wide.
+    format of a decor, so there is nothing to browse platform-wide.
 
     Unpriced rows are included. A branch registers its whole format list long
     before it prices it, so hiding them showed clients a fraction of the shelf —
@@ -714,73 +766,126 @@ async def _catalog_materials(
     authorizes the branch (public browsability vs workshop tenancy) first.
 
     `tape` picks the shape the editor is filling: the edge-band picker wants
-    kromka, every other picker wants panel-shaped dekorlar. `include_unpriced`
-    is the client/workshop split — staff must see the rows they still have to
-    price, clients must not.
+    kromka formats, every other picker wants panel-shaped ones.
+    `include_unpriced` is the client/workshop split — staff must see the rows
+    they still have to price, clients must not.
 
-    Customer-supplied boards are excluded unless `include_draft_id` names the
-    drawing that created them. They are one customer's property recorded as a
-    branch material; offering the next walk-in the board somebody else carried
-    in would be a data leak, and both editors pass `include_unpriced=True`, so
-    the price filter does not hide them.
+    Customer-supplied boards are a second, disjoint namespace appended at the
+    end, and only when `include_draft_id` names the drawing that created them:
+    they are one customer's property, and offering the next walk-in the board
+    somebody else carried in would be a data leak.
     """
-    shape = Dekor.tur == DekorType.KROMKA if tape else Dekor.tur != DekorType.KROMKA
+    shape = DecorFormat.type == DecorType.KROMKA if tape else DecorFormat.type != DecorType.KROMKA
     query = (
-        select(BranchMaterial, Dekor, Manufacturer)
-        .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-        .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+        select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+        .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+        .join(Decor, Decor.id == DecorFormat.decor_id)
+        .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
         .where(
             BranchMaterial.branch_id == branch_id,
             BranchMaterial.status == MaterialStatus.ACTIVE,
-            Dekor.holat == MaterialStatus.ACTIVE,
+            Decor.status == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
             shape,
-            BranchMaterial.customer_supplied.is_(False)
-            if include_draft_id is None
-            else or_(
-                BranchMaterial.customer_supplied.is_(False),
-                BranchMaterial.source_draft_id == include_draft_id,
-            ),
         )
-        # There is no stored material name to sort by any more; maker, then
-        # decor, then thickness is the order the formats read in on the shelf.
-        .order_by(Manufacturer.name, Dekor.nomi, BranchMaterial.qalinlik_mm)
+        # There is no stored material name to sort by; maker, then decor, then
+        # thickness is the order the formats read in on the shelf.
+        .order_by(Manufacturer.name, Decor.name, DecorFormat.thickness_mm)
     )
     if not include_unpriced:
         query = query.where(BranchMaterial.price_tiyin > 0)
     if manufacturer_id is not None:
-        query = query.where(Dekor.manufacturer_id == manufacturer_id)
+        query = query.where(Decor.manufacturer_id == manufacturer_id)
     # One folded key on both sides (see app/core/search_fold.py): `сонома`,
     # `Sonoma` and `sonoma` are the same query, no trigram index needed.
     folded = fold(search) if search else ""
     if folded:
-        query = query.where(Dekor.search_key.ilike(f"%{folded}%"))
+        query = query.where(Decor.search_key.ilike(f"%{folded}%"))
     # Cap the result set when asked (CB-40). A branch-scoped load stays unlimited
     # by default (CB-84 filters + CB-19/86 recovery need the full per-branch list
     # client-side). Deterministic with the ORDER BY above.
     if limit is not None:
         query = query.limit(limit)
     rows = (await db.execute(query)).all()
-    return [
+    options = [
         ClientCatalogMaterialOption(
             id=branch_material.id,
-            tur=dekor.tur,
-            manufacturer_id=dekor.manufacturer_id,
+            type=decor_format.type,
+            manufacturer_id=decor.manufacturer_id,
             manufacturer_name=manufacturer.name,
-            kod=dekor.kod,
-            nomi=branch_material.nomi or dekor.nomi,
-            tolali=(branch_material.tolali if branch_material.tolali is not None else dekor.tolali),
-            customer_supplied=branch_material.customer_supplied,
-            image_file_id=dekor.image_file_id,
-            qalinlik_mm=normalize_mm(branch_material.qalinlik_mm),
-            uzunlik_mm=branch_material.uzunlik_mm,
-            eni_mm=branch_material.eni_mm,
-            kromka_eni_mm=branch_material.kromka_eni_mm,
+            code=decor.code,
+            name=decor.name,
+            has_grain=decor.has_grain,
+            customer_supplied=False,
+            image_file_id=decor.image_file_id,
+            thickness_mm=normalize_mm(decor_format.thickness_mm),
+            length_mm=decor_format.length_mm,
+            width_mm=decor_format.width_mm,
+            tape_width_mm=decor_format.tape_width_mm,
+            finished_sides=decor_format.finished_sides,
+            discontinued=decor_format.status is MaterialStatus.INACTIVE,
             price_tiyin=branch_material.price_tiyin,
-            price_unset=branch_material.price_tiyin == 0 and not branch_material.customer_supplied,
-            display_unit=display_unit(dekor.tur),
+            price_unset=branch_material.price_tiyin == 0,
+            display_unit=display_unit(decor_format.type),
         )
-        for branch_material, dekor, manufacturer in rows
+        for branch_material, decor_format, decor, manufacturer in rows
+    ]
+    # Boards are panel-shaped by construction, carry no manufacturer to filter
+    # on, and are never priced as an offer — so they join only the panel picker,
+    # only for their own drawing, and only when no maker filter is active.
+    if include_draft_id is not None and not tape and manufacturer_id is None:
+        options.extend(
+            await _draft_customer_board_options(db, draft_id=include_draft_id, search=folded)
+        )
+        if limit is not None:
+            options = options[:limit]
+    return options
+
+
+async def _draft_customer_board_options(
+    db: AsyncSession,
+    *,
+    draft_id: uuid.UUID,
+    search: str,
+) -> list[ClientCatalogMaterialOption]:
+    """The walk-in's own sheets, as the panel picker sees them."""
+
+    boards = (
+        await db.scalars(
+            select(CustomerBoard)
+            .where(CustomerBoard.source_draft_id == draft_id)
+            .order_by(CustomerBoard.created_at, CustomerBoard.id)
+        )
+    ).all()
+    return [
+        ClientCatalogMaterialOption(
+            id=board.id,
+            type=board.type,
+            manufacturer_id=None,
+            manufacturer_name=CUSTOMER_BOARD_MANUFACTURER_NAME,
+            code=None,
+            name=board.name or CUSTOMER_BOARD_DEFAULT_NAME,
+            has_grain=board.has_grain,
+            customer_supplied=True,
+            image_file_id=None,
+            thickness_mm=normalize_mm(board.thickness_mm),
+            length_mm=board.length_mm,
+            width_mm=board.width_mm,
+            tape_width_mm=None,
+            finished_sides=None,
+            # The substitute's price when the branch carries the same size; 0
+            # when it does not. This one number is what makes the SHORTAGE price
+            # itself — the quote's demand is already `needed - brought`.
+            price_tiyin=_board_price_tiyin(board),
+            # A board priced at 0 is genuinely free to the customer, not an
+            # unfinished catalog row, so it never wears the unpriced flag.
+            price_unset=False,
+            display_unit=display_unit(board.type),
+        )
+        for board in boards
+        if not search
+        or search
+        in fold(f"{board.name or CUSTOMER_BOARD_DEFAULT_NAME} {CUSTOMER_BOARD_MANUFACTURER_NAME}")
     ]
 
 
@@ -872,14 +977,14 @@ async def _client_draft(
 
 @dataclass(frozen=True)
 class _PanelPick:
-    """One resolved MAP `material_key` → the branch material it was mapped to.
+    """One resolved MAP `material_key` → the material it was mapped to.
 
     The sheet size is copied out here rather than carried on the ORM row so the
     layout check works on plain ints: a tape-shaped or size-less pick is
     rejected while resolving, and never reaches the comparison below.
     """
 
-    branch_material_id: uuid.UUID
+    material_id: uuid.UUID
     length_mm: int
     width_mm: int
 
@@ -890,7 +995,7 @@ async def _map_panel_materials(
     branch_id: uuid.UUID | None,
     picks: dict[str, uuid.UUID],
 ) -> dict[str, _PanelPick]:
-    rows = await _branch_material_rows(db, branch_id, set(picks.values()))
+    rows = await _resolve_materials(db, branch_id, set(picks.values()))
     materials: dict[str, _PanelPick] = {}
     for key, branch_material_id in picks.items():
         row = rows.get(branch_material_id)
@@ -900,24 +1005,19 @@ async def _map_panel_materials(
                 "MAP layout material mismatch",
                 details={"material_key": key, "material_id": str(branch_material_id)},
             )
-        branch_material, dekor, _ = row
         # A kromka has no sheet to lay parts on, and a panel-shaped format
         # without a size cannot be matched against one — both are the same
         # "this pick is not a sheet" mismatch.
-        if (
-            not is_panel(dekor.tur)
-            or branch_material.uzunlik_mm is None
-            or branch_material.eni_mm is None
-        ):
+        if not is_panel(row.type) or row.length_mm is None or row.width_mm is None:
             raise APIError(
                 "map_layout_material_mismatch",
                 "MAP layout material mismatch",
                 details={"material_key": key, "material_id": str(branch_material_id)},
             )
         materials[key] = _PanelPick(
-            branch_material_id=branch_material.id,
-            length_mm=branch_material.uzunlik_mm,
-            width_mm=branch_material.eni_mm,
+            material_id=row.id,
+            length_mm=row.length_mm,
+            width_mm=row.width_mm,
         )
     return materials
 
@@ -971,7 +1071,7 @@ def _validate_map_layout(
                     "MAP layout does not match parts",
                     details={"sheet": sheet.name, "part_ref": part_ref},
                 )
-            if part.material_id != material.branch_material_id:
+            if part.material_id != material.material_id:
                 raise APIError(
                     "map_layout_material_mismatch",
                     "MAP placement material mismatch",
@@ -1027,7 +1127,7 @@ async def _create_imported_map_result(
     panel_index_by_material: dict[uuid.UUID, int] = {}
     for sheet in layout.sheets:
         material = panel_materials[sheet.material_key]
-        material_id = material.branch_material_id
+        material_id = material.material_id
         panel_index = panel_index_by_material.get(material_id, 0) + 1
         panel_index_by_material[material_id] = panel_index
         panels_used[str(material_id)] = panels_used.get(str(material_id), 0) + 1
@@ -1114,10 +1214,11 @@ async def _create_imported_map_result(
     )
     db.add(result)
     await db.flush()
+    board_ids = await customer_board_ids(db, {panel.material_id for panel in panel_results})
     for panel in panel_results:
         panel_row = CuttingPanel(
             cutting_result_id=result.id,
-            branch_material_id=panel.material_id,
+            **material_fk_columns(panel.material_id, board_ids),
             panel_index=panel.panel_index,
             waste_area_mm2=panel.waste_area_mm2,
             cut_count=panel.cut_count,
@@ -1200,7 +1301,7 @@ async def _validate_parts(
             edge = getattr(part, side)
             if edge is not None:
                 material_ids.add(edge.material_id)
-    material_rows = await _branch_material_rows(db, branch_id, material_ids)
+    material_rows = await _resolve_materials(db, branch_id, material_ids)
     panel_specs: dict[uuid.UUID, PanelSpec] = {}
     material_snapshots: dict[str, dict[str, Any]] = {}
     optimizer_parts: list[PartInput] = []
@@ -1210,19 +1311,19 @@ async def _validate_parts(
         if panel_row is None:
             errors.append(_row_error(part, row_index, "material_not_found", part.material_id))
             continue
-        panel, panel_dekor, panel_manufacturer = panel_row
-        if not is_panel(panel_dekor.tur):
+        panel = panel_row
+        if not is_panel(panel.type):
             errors.append(_row_error(part, row_index, "invalid_panel_material", panel.id))
             continue
         if part.quantity < 1:
             errors.append(_row_error(part, row_index, "invalid_quantity", panel.id))
         if part.length_mm < 10 or part.width_mm < 10:
             errors.append(_row_error(part, row_index, "part_too_small", panel.id))
-        if panel.uzunlik_mm is None or panel.eni_mm is None:
+        if panel.length_mm is None or panel.width_mm is None:
             errors.append(_row_error(part, row_index, "invalid_panel_material", panel.id))
             continue
-        usable_length = panel.uzunlik_mm - 2 * params.edge_trim_mm
-        usable_width = panel.eni_mm - 2 * params.edge_trim_mm
+        usable_length = panel.length_mm - 2 * params.edge_trim_mm
+        usable_width = panel.width_mm - 2 * params.edge_trim_mm
         fits_normal = part.length_mm <= usable_length and part.width_mm <= usable_width
         fits_rotated = part.width_mm <= usable_length and part.length_mm <= usable_width
         locked = part.follow_grain
@@ -1243,8 +1344,8 @@ async def _validate_parts(
                 )
                 edge_inputs[field_name] = None
                 continue
-            edge_material, edge_dekor, edge_manufacturer = edge_row
-            if not is_tape(edge_dekor.tur):
+            edge_material = edge_row
+            if not is_tape(edge_material.type):
                 errors.append(
                     _row_error(
                         part,
@@ -1256,21 +1357,17 @@ async def _validate_parts(
                 )
                 edge_inputs[field_name] = None
                 continue
-            material_snapshots[str(edge_material.id)] = _material_snapshot(
-                edge_material, edge_dekor, edge_manufacturer
-            )
+            material_snapshots[str(edge_material.id)] = edge_material.snapshot
             edge_inputs[field_name] = EdgeBandInput(
                 material_id=edge.material_id,
                 source=edge.source,
             )
-        material_snapshots[str(panel.id)] = _material_snapshot(
-            panel, panel_dekor, panel_manufacturer
-        )
+        material_snapshots[str(panel.id)] = panel.snapshot
         panel_specs[panel.id] = PanelSpec(
             material_id=panel.id,
-            length_mm=panel.uzunlik_mm,
-            width_mm=panel.eni_mm,
-            grain_direction=bool(panel_dekor.tolali),
+            length_mm=panel.length_mm,
+            width_mm=panel.width_mm,
+            grain_direction=bool(panel.has_grain),
         )
         optimizer_parts.append(
             PartInput(
@@ -1331,7 +1428,7 @@ async def _validate_draft_parts(
             if side is not None:
                 material_ids.add(side.material_id)
 
-    material_rows = await _branch_material_rows(db, branch_id, material_ids)
+    material_rows = await _resolve_materials(db, branch_id, material_ids)
     for row_index, part in enumerate(parts, start=1):
         if part.material_id is not None:
             panel_row = material_rows.get(part.material_id)
@@ -1344,7 +1441,7 @@ async def _validate_draft_parts(
                         "material_id": str(part.material_id),
                     }
                 )
-            elif not is_panel(panel_row[1].tur):
+            elif not is_panel(panel_row.type):
                 errors.append(
                     {
                         "row_index": row_index,
@@ -1364,7 +1461,7 @@ async def _validate_draft_parts(
             edge_row = material_rows.get(edge.material_id)
             if edge_row is None:
                 code = "material_not_found"
-            elif not is_tape(edge_row[1].tur):
+            elif not is_tape(edge_row.type):
                 code = "invalid_edge_material"
             else:
                 continue
@@ -1382,39 +1479,134 @@ async def _validate_draft_parts(
         raise APIError("invalid_cutting_parts", "Invalid cutting parts", details={"errors": errors})
 
 
-async def _branch_material_rows(
+@dataclass(frozen=True)
+class ResolvedMaterial:
+    """One material a drawing may point at — a carried format, or a customer board.
+
+    The two live in different tables with different owners, while every part,
+    panel, snapshot, own-material claim and order item keys on a plain UUID from
+    one of the two disjoint namespaces. This is the single place that difference
+    is resolved; from here down the cutting path reads the same facts either way
+    and only asks `customer_supplied` when the answer actually differs.
+    """
+
+    id: uuid.UUID
+    type: DecorType
+    length_mm: int | None
+    width_mm: int | None
+    has_grain: bool
+    customer_supplied: bool
+    snapshot: dict[str, Any]
+
+
+async def _resolve_materials(
     db: AsyncSession,
     branch_id: uuid.UUID | None,
-    branch_material_ids: set[uuid.UUID],
-) -> dict[uuid.UUID, tuple[BranchMaterial, Dekor, Manufacturer]]:
+    material_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, ResolvedMaterial]:
     """Resolve the ids a draft's parts reference, scoped to the draft's branch.
 
-    The `branch_id` filter is the tenancy check: a branch material id belongs to
-    exactly one branch, so a part carrying another branch's id must not resolve.
-    A branch-less draft therefore resolves nothing — every part reports
-    `material_not_found`, which is the truthful answer now that a material only
-    exists inside a branch.
+    The `branch_id` filter is the tenancy check on both namespaces: a branch
+    material and a customer board each belong to exactly one branch, so a part
+    carrying another branch's id must not resolve. A branch-less draft therefore
+    resolves nothing — every part reports `material_not_found`, which is the
+    truthful answer now that a material only exists inside a branch.
+
+    Boards are scoped by branch and NOT by draft on purpose: the draft is
+    deleted when the order is placed, so a draft-scoped lookup would stop
+    resolving the drawing's own boards halfway through placing it. Draft scoping
+    belongs to the *picker* (`_draft_customer_board_options`), which is where a
+    leak between customers would actually happen.
     """
-    if branch_id is None or not branch_material_ids:
+    if branch_id is None or not material_ids:
         return {}
     rows = (
         await db.execute(
-            select(BranchMaterial, Dekor, Manufacturer)
-            .join(Dekor, Dekor.id == BranchMaterial.dekor_id)
-            .join(Manufacturer, Manufacturer.id == Dekor.manufacturer_id)
+            select(BranchMaterial, DecorFormat, Decor, Manufacturer)
+            .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
+            .join(Decor, Decor.id == DecorFormat.decor_id)
+            .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
             .where(
-                BranchMaterial.id.in_(branch_material_ids),
+                BranchMaterial.id.in_(material_ids),
                 BranchMaterial.branch_id == branch_id,
                 BranchMaterial.status == MaterialStatus.ACTIVE,
-                Dekor.holat == MaterialStatus.ACTIVE,
+                Decor.status == MaterialStatus.ACTIVE,
                 Manufacturer.status == MaterialStatus.ACTIVE,
+                # Deliberately NOT gated on the format's status: a discontinued
+                # product still on the shelf is still cuttable — see the three
+                # levels of "off" in docs/ref/features/catalog-inventory.md.
             )
         )
     ).all()
-    return {
-        branch_material.id: (branch_material, dekor, manufacturer)
-        for branch_material, dekor, manufacturer in rows
+    resolved: dict[uuid.UUID, ResolvedMaterial] = {
+        branch_material.id: ResolvedMaterial(
+            id=branch_material.id,
+            type=decor_format.type,
+            length_mm=decor_format.length_mm,
+            width_mm=decor_format.width_mm,
+            has_grain=decor.has_grain,
+            customer_supplied=False,
+            snapshot={
+                "id": str(branch_material.id),
+                "decor_id": str(decor.id),
+                "manufacturer_id": str(decor.manufacturer_id),
+                "decor_format_id": str(decor_format.id),
+                "image_file_id": str(decor.image_file_id) if decor.image_file_id else None,
+                **branch_material_snapshot(decor_format, decor, manufacturer),
+                "customer_supplied": False,
+                "stock_material_id": None,
+            },
+        )
+        for branch_material, decor_format, decor, manufacturer in rows
     }
+    boards = (
+        await db.scalars(
+            select(CustomerBoard).where(
+                CustomerBoard.id.in_(material_ids),
+                CustomerBoard.branch_id == branch_id,
+            )
+        )
+    ).all()
+    for board in boards:
+        resolved[board.id] = ResolvedMaterial(
+            id=board.id,
+            type=board.type,
+            length_mm=board.length_mm,
+            width_mm=board.width_mm,
+            has_grain=board.has_grain,
+            customer_supplied=True,
+            snapshot={"id": str(board.id), **customer_board_snapshot(board)},
+        )
+    return resolved
+
+
+async def customer_board_ids(
+    db: AsyncSession,
+    material_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    """Which of these material ids are customer boards rather than branch rows.
+
+    What `cutting_panels` and `order_items` need to fill exactly one of their
+    two FKs. One query rather than threading the resolver through every writer:
+    the id sets are a handful of rows and the alternative is a parameter that
+    every call site can forget.
+    """
+
+    if not material_ids:
+        return set()
+    return set(
+        (await db.scalars(select(CustomerBoard.id).where(CustomerBoard.id.in_(material_ids)))).all()
+    )
+
+
+def material_fk_columns(
+    material_id: uuid.UUID, board_ids: set[uuid.UUID]
+) -> dict[str, uuid.UUID | None]:
+    """The exactly-one FK pair for a panel or an order item."""
+
+    if material_id in board_ids:
+        return {"branch_material_id": None, "customer_board_id": material_id}
+    return {"branch_material_id": material_id, "customer_board_id": None}
 
 
 def _row_error(
@@ -1444,47 +1636,6 @@ def _optimizer_error_details(exc: OptimizerError) -> dict[str, Any]:
     if exc.material_id is not None:
         details["material_id"] = str(exc.material_id)
     return details
-
-
-def _material_snapshot(
-    branch_material: BranchMaterial, dekor: Dekor, manufacturer: Manufacturer
-) -> dict[str, Any]:
-    """Freeze one branch material's identity + format onto a result.
-
-    This is a history boundary: what lands here is read back by
-    `app/core/material_label.py` for the lifetime of the order, long after the
-    branch may have re-priced, re-formatted or de-listed the row. The key names
-    are the post-reshape vocabulary; the label module also still reads the
-    pre-reshape one, which is what keeps old orders rendering.
-
-    `qalinlik_mm` is written as a string (Decimal is not JSON-serialisable and
-    the formatter expects text); the three size fields stay ints.
-
-    A customer-supplied board overrides `nomi` and `tolali` from the row: every
-    board points at the one seeded `Mijoz` dekor, so the dekor cannot carry
-    either. `customer_supplied` and `stock_material_id` are frozen here too —
-    the stock seam reads them at "Kesish tugadi", long after the branch may have
-    re-priced or de-listed the substitute, and it must consume what was billed.
-    """
-    return {
-        "id": str(branch_material.id),
-        "dekor_id": str(dekor.id),
-        "manufacturer_id": str(dekor.manufacturer_id),
-        "manufacturer_name": manufacturer.name,
-        "tur": dekor.tur.value,
-        "kod": dekor.kod,
-        "nomi": branch_material.nomi or dekor.nomi,
-        "qalinlik_mm": str(branch_material.qalinlik_mm),
-        "uzunlik_mm": branch_material.uzunlik_mm,
-        "eni_mm": branch_material.eni_mm,
-        "kromka_eni_mm": branch_material.kromka_eni_mm,
-        "tolali": branch_material.tolali if branch_material.tolali is not None else dekor.tolali,
-        "image_file_id": str(dekor.image_file_id) if dekor.image_file_id else None,
-        "customer_supplied": branch_material.customer_supplied,
-        "stock_material_id": (
-            str(branch_material.stock_material_id) if branch_material.stock_material_id else None
-        ),
-    }
 
 
 def clamp_own_claim(claim: dict[str, int], panels_used: dict[str, int]) -> dict[str, int]:
@@ -1632,7 +1783,11 @@ async def _result_response(
                 await db.execute(
                     select(CuttingPanel)
                     .where(CuttingPanel.cutting_result_id == result.id)
-                    .order_by(CuttingPanel.branch_material_id, CuttingPanel.panel_index)
+                    .order_by(
+                        CuttingPanel.branch_material_id,
+                        CuttingPanel.customer_board_id,
+                        CuttingPanel.panel_index,
+                    )
                 )
             )
             .scalars()
@@ -1659,7 +1814,7 @@ async def _result_response(
         panels = [
             CuttingPanelResponse(
                 id=panel.id,
-                branch_material_id=panel.branch_material_id,
+                material_id=_panel_material_id(panel),
                 panel_index=panel.panel_index,
                 waste_area_mm2=panel.waste_area_mm2,
                 cut_count=panel.cut_count,
@@ -1706,3 +1861,18 @@ def _parts_snapshot_response(parts_snapshot: list[dict[str, Any]]) -> list[dict[
     return [
         CuttingDraftPart.model_validate(part).model_dump(mode="json") for part in parts_snapshot
     ]
+
+
+def _panel_material_id(panel: CuttingPanel) -> uuid.UUID:
+    """The panel's material key — a branch material id or a customer board id.
+
+    Exactly one of the two FKs is set (a table CHECK guarantees it), and every
+    reader downstream — `material_snapshots`, `own_panel_counts`, the swatch
+    map, the pricing overrides — keys on that one UUID without caring which
+    namespace it came from.
+    """
+
+    material_id = panel.branch_material_id or panel.customer_board_id
+    if material_id is None:  # pragma: no cover - the CHECK constraint forbids it
+        raise APIError("cutting_panel_material_missing", "Cutting panel has no material")
+    return material_id

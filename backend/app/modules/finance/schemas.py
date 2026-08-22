@@ -98,6 +98,8 @@ class IncomeResponse(APIModel):
     status: LedgerStatus
     voided_reason: str | None
     recorded_by_user_id: uuid.UUID
+    # Who handled the money — resolved at read time, never stored twice.
+    recorded_by_name: str | None = None
     voided_by_user_id: uuid.UUID | None
     voided_at: datetime | None
     created_at: datetime
@@ -123,6 +125,8 @@ class ExpenseResponse(APIModel):
     status: LedgerStatus
     voided_reason: str | None
     recorded_by_user_id: uuid.UUID
+    # Who handled the money — resolved at read time, never stored twice.
+    recorded_by_name: str | None = None
     voided_by_user_id: uuid.UUID | None
     voided_at: datetime | None
     created_at: datetime

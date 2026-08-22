@@ -39,8 +39,8 @@ const activePanel = computed(
 
 function panelCaption(result: CuttingResult, panel: CuttingPanel) {
   const material = snapshotMaterialLabel(
-    result.material_snapshots[panel.branch_material_id],
-    panel.branch_material_id.slice(0, 8),
+    result.material_snapshots[panel.material_id],
+    panel.material_id.slice(0, 8),
   )
   return t('cutting.result.sheetCaption', {
     n: panelDisplayIndex(result, panel),

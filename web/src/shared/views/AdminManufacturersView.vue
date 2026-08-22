@@ -70,8 +70,8 @@ const filtered = computed(() => {
   })
 })
 
-function dekorCount(id: string) {
-  return admin.dekorlar.filter((dekor) => dekor.manufacturer_id === id).length
+function decorCount(id: string) {
+  return admin.decors.filter((decor) => decor.manufacturer_id === id).length
 }
 
 function openCreate() {
@@ -156,7 +156,7 @@ async function confirmStatus() {
 }
 
 onMounted(async () => {
-  await Promise.all([admin.loadManufacturers(), admin.loadDekorlar()])
+  await Promise.all([admin.loadManufacturers(), admin.loadDecors()])
 })
 </script>
 
@@ -229,7 +229,7 @@ onMounted(async () => {
                 <small>{{ manufacturer.id.slice(0, 8) }}</small>
               </td>
               <td>{{ manufacturer.country ?? '-' }}</td>
-              <td class="admin-right admin-mono">{{ dekorCount(manufacturer.id) }}</td>
+              <td class="admin-right admin-mono">{{ decorCount(manufacturer.id) }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(manufacturer.status)">
                   {{ materialStatusLabel(manufacturer.status) }}
@@ -355,8 +355,8 @@ onMounted(async () => {
       :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
       :message="
         statusTarget?.status === 'inactive'
-          ? `${statusTarget?.row.name} faol emas qilinadi — uning dekorlari yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
-          : `${statusTarget?.row.name} faollashtiriladi va yangi dekor tanlovida ko'rinadi.`
+          ? `${statusTarget?.row.name} faol emas qilinadi — uning decorsi yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va yangi decor tanlovida ko'rinadi.`
       "
       confirm-label="Tasdiqlash"
       cancel-label="Bekor qilish"

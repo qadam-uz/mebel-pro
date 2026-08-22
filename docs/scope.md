@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-08-15
+updated: 2026-08-22
 order: 20
 ---
 
@@ -21,9 +21,8 @@ that's a considered substitution.
   per-branch permissions; clients self-register with phone + Telegram OTP (walk-ins may be
   registered at the counter by workshop staff). Tenant-isolated, revocable,
   brute-force-protected.
-- **Workshops & branches** — multi-branch workshops; each branch picks decors from the
-  platform-curated catalog, carries them in its own formats, and sets its own prices, workers,
-  and settings.
+- **Workshops & branches** — multi-branch workshops; each branch picks the formats it carries
+  from the platform-curated product catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
   arrivals grouped under a supplier invoice carrying the document's discount, automatic
   consumption driven by orders, and low-stock surfacing. There is no reservation balance in v1.

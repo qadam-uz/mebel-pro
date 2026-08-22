@@ -45,6 +45,7 @@ export function branchPillClass(status: BranchStatus) {
 
 const STOCK_TRANSACTION_TYPES: ReadonlySet<string> = new Set<StockTransactionType>([
   'stock_in',
+  'stock_in_void',
   'consume',
   'restore',
   'adjust',
@@ -69,6 +70,7 @@ const PERMISSION_CODES: ReadonlySet<string> = new Set([
   'manage_inventory',
   'manage_finance',
   'view_finance_reports',
+  'record_order_payment',
 ])
 
 /** Operator name for a permission; an unknown code stays visible as itself. */

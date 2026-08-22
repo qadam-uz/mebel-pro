@@ -2,13 +2,17 @@
 
 The point of the grain change lives here: a skidka on the document has to reach
 the supplier balance, and a half-written arrival must not reach stock at all.
+The lifecycle half is here too: a voided document reverses its stock and drops
+out of every derived reader, and a header edit corrects the paper in place.
 """
 
 import uuid
 
 from app.models.enums import AuthenticatedPrincipalType
 from app.modules.access.api import create_session
+from app.modules.support.contracts import ActionLog, Notification
 from httpx import AsyncClient
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories import seed_platform_user, seed_workshop_with_owner
@@ -57,44 +61,51 @@ async def _carried_material(
     *,
     color: str = "Sonoma oak",
 ) -> str:
-    """Create a dekor and have the branch carry it in one format.
+    """Walk the whole chain: manufacturer → decor → platform format → branch row.
+
+    Three owners, three writes. The platform enters the pattern and the concrete
+    product; the branch only decides to carry that product at its own price.
 
     Returns the BRANCH material id — the id an invoice line, a stock row and an
-    order item all point at since the reshape.
+    order item all point at.
     """
     manufacturer = await client.post(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(platform_access),
         json={"name": f"Egger {uuid.uuid4().hex[:6]}", "country": "AT"},
     )
-    dekor = await client.post(
-        "/api/v1/platform/catalog/dekorlar",
+    decor = await client.post(
+        "/api/v1/platform/catalog/decors",
         headers=_auth(platform_access),
         json={
             "manufacturer_id": manufacturer.json()["id"],
-            "tur": "ldsp",
-            "kod": f"H{uuid.uuid4().hex[:4]}",
-            "nomi": color,
-            "tolali": True,
+            "code": f"H{uuid.uuid4().hex[:4]}",
+            "name": color,
+            "has_grain": True,
         },
     )
-    assert dekor.status_code == 201, dekor.text
+    assert decor.status_code == 201, decor.text
+    decor_format = await client.post(
+        f"/api/v1/platform/catalog/decors/{decor.json()['id']}/formats",
+        headers=_auth(platform_access),
+        json={
+            "type": "ldsp",
+            "thickness_mm": "18",
+            "length_mm": 2750,
+            "width_mm": 1830,
+            "finished_sides": 2,
+        },
+    )
+    assert decor_format.status_code == 201, decor_format.text
     added = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
         headers=_auth(owner_access),
         json={
             "items": [
                 {
-                    "dekor_id": dekor.json()["id"],
-                    "formats": [
-                        {
-                            "qalinlik_mm": "18",
-                            "uzunlik_mm": 2750,
-                            "eni_mm": 1830,
-                            "price_tiyin": 60_000_000,
-                            "min_stock": 0,
-                        }
-                    ],
+                    "decor_format_id": decor_format.json()["id"],
+                    "price_tiyin": 60_000_000,
+                    "min_stock": 0,
                 }
             ],
         },
@@ -556,3 +567,677 @@ async def test_invoices_are_invisible_to_another_workshop(
         },
     )
     assert stolen.status_code == 404
+
+
+async def _create_invoice(
+    client: AsyncClient,
+    owner_access: str,
+    branch_id: uuid.UUID,
+    supplier_id: str,
+    lines: list[dict[str, object]],
+    **header: object,
+) -> dict[str, object]:
+    created = await client.post(
+        "/api/v1/workshop/inventory/invoices",
+        headers=_auth(owner_access),
+        json={
+            "branch_id": str(branch_id),
+            "supplier_id": supplier_id,
+            "lines": lines,
+            **header,
+        },
+    )
+    assert created.status_code == 201, created.text
+    body: dict[str, object] = created.json()
+    return body
+
+
+async def _on_hand(client: AsyncClient, owner_access: str, branch_id: uuid.UUID) -> dict[str, int]:
+    stock = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock",
+        headers=_auth(owner_access),
+    )
+    assert stock.status_code == 200
+    return {row["branch_material_id"]: row["on_hand"] for row in stock.json()}
+
+
+async def test_voiding_an_invoice_reverses_stock_and_leaves_every_derived_reader(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    first = await _carried_material(client, platform_access, owner_access, branch_id, color="Oak")
+    second = await _carried_material(client, platform_access, owner_access, branch_id, color="Ash")
+    supplier_id = await _supplier(client, owner_access, branch_id)
+
+    # An earlier priced arrival for the same material — the price the prefill has
+    # to fall back to once the typo above it is voided.
+    await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": first, "quantity": 2, "unit_price_tiyin": 300_000}],
+    )
+    typo = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [
+            {"branch_material_id": first, "quantity": 10, "unit_price_tiyin": 3_000_000},
+            {"branch_material_id": second, "quantity": 4, "unit_price_tiyin": 500_000},
+        ],
+        discount_tiyin=200_000,
+    )
+    invoice_id = typo["id"]
+    assert typo["status"] == "recorded"
+    assert await _on_hand(client, owner_access, branch_id) == {first: 12, second: 4}
+
+    voided = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Narx xato kiritilgan"},
+    )
+    assert voided.status_code == 200, voided.text
+    assert voided.json()["status"] == "voided"
+    assert voided.json()["voided_reason"] == "Narx xato kiritilgan"
+    assert voided.json()["voided_by_name"] == "Workshop Owner"
+    assert voided.json()["voided_at"] is not None
+    # The document still reads as its own lines — the reversals are movements.
+    assert len(voided.json()["lines"]) == 2
+
+    # Stock is back where it was before the typo.
+    assert await _on_hand(client, owner_access, branch_id) == {first: 2, second: 0}
+
+    transactions = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions",
+        headers=_auth(owner_access),
+    )
+    reversals = {
+        row["branch_material_id"]: row
+        for row in transactions.json()
+        if row["type"] == "stock_in_void"
+    }
+    assert sorted(reversals) == sorted([first, second])
+    assert reversals[first]["quantity"] == -10
+    assert reversals[first]["balance_after"] == 2
+    assert reversals[second]["quantity"] == -4
+    assert reversals[second]["balance_after"] == 0
+    # A reversal is not price history: it carries no money at all.
+    assert reversals[first]["unit_price_tiyin"] is None
+    assert reversals[first]["total_price_tiyin"] is None
+
+    # Only the surviving 600 000 arrival is left in the fold.
+    assert await _supplier_balance(client, owner_access, supplier_id) == -600_000
+    statement = await client.get(
+        f"/api/v1/workshop/finance/debts/suppliers/{supplier_id}/statement",
+        headers=_auth(owner_access),
+    )
+    assert statement.status_code == 200, statement.text
+    assert [row["invoice_no"] for row in statement.json()["rows"]] == ["K-0001"]
+
+    payable = await client.get(
+        "/api/v1/workshop/finance/payable-invoices",
+        headers=_auth(owner_access),
+    )
+    assert invoice_id not in [row["id"] for row in payable.json()]
+
+    # The voided 3 000 000 typo must not come back as tomorrow's suggestion.
+    last_price = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials/{first}/last-price",
+        headers=_auth(owner_access),
+    )
+    assert last_price.json()["unit_price_tiyin"] == 300_000
+
+    # History is preserved: the row is in the unfiltered list, under no filter.
+    listed = await client.get(
+        f"/api/v1/workshop/inventory/invoices?branch_id={branch_id}",
+        headers=_auth(owner_access),
+    )
+    assert invoice_id in [row["id"] for row in listed.json()]
+    for wanted in ("unpaid", "partial", "paid"):
+        filtered = await client.get(
+            f"/api/v1/workshop/inventory/invoices?branch_id={branch_id}&payment_status={wanted}",
+            headers=_auth(owner_access),
+        )
+        assert invoice_id not in [row["id"] for row in filtered.json()]
+
+
+async def test_a_recorded_payment_blocks_the_void_until_it_is_itself_voided(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 4, "unit_price_tiyin": 500_000}],
+    )
+    invoice_id = invoice["id"]
+
+    expense = await client.post(
+        "/api/v1/workshop/finance/expenses",
+        headers=_auth(owner_access),
+        json={
+            "category": "raw_materials",
+            "amount_tiyin": 800_000,
+            "incurred_on": invoice["invoice_date"],
+            "description": "Qisman to'lov",
+            "invoice_id": invoice_id,
+        },
+    )
+    assert expense.status_code == 201
+
+    blocked = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Faktura xato"},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["code"] == "invoice_has_payments"
+
+    blank = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "   "},
+    )
+    assert blank.status_code == 400
+    assert blank.json()["code"] == "invoice_void_reason_required"
+
+    dropped = await client.post(
+        f"/api/v1/workshop/finance/expenses/{expense.json()['id']}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Noto'g'ri fakturaga yozilgan"},
+    )
+    assert dropped.status_code == 200, dropped.text
+
+    voided = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Faktura xato"},
+    )
+    assert voided.status_code == 200, voided.text
+    # The whole story stays readable — the voided payment is still listed.
+    detail = await client.get(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}",
+        headers=_auth(owner_access),
+    )
+    assert [row["status"] for row in detail.json()["payments"]] == ["voided"]
+
+    again = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Yana"},
+    )
+    assert again.status_code == 409
+    assert again.json()["code"] == "invoice_already_voided"
+
+
+async def test_a_void_that_takes_the_balance_negative_succeeds_and_notifies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The goods already left; refusing the reversal would leave stock too high."""
+
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 5, "unit_price_tiyin": 400_000}],
+    )
+    written_off = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-adjustments",
+        headers=_auth(owner_access),
+        json={"branch_material_id": material_id, "quantity": -3, "note": "Shikastlangan"},
+    )
+    assert written_off.status_code == 201, written_off.text
+
+    voided = await client.post(
+        f"/api/v1/workshop/inventory/invoices/{invoice['id']}/void",
+        headers=_auth(owner_access),
+        json={"reason": "Faktura bekor qilindi"},
+    )
+    assert voided.status_code == 200, voided.text
+    assert (await _on_hand(client, owner_access, branch_id))[material_id] == -3
+
+    notified = (
+        await db_session.scalars(
+            select(Notification.event_code).where(
+                Notification.event_code == "inventory.negative_stock"
+            )
+        )
+    ).all()
+    assert list(notified) == ["inventory.negative_stock"]
+
+
+async def test_header_edits_correct_the_document_in_place(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    other = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Kronospan Uz"},
+    )
+    other_id = other.json()["id"]
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 4, "unit_price_tiyin": 500_000}],
+        discount_tiyin=300_000,
+        surcharge_tiyin=50_000,
+    )
+    invoice_id = invoice["id"]
+    url = f"/api/v1/workshop/inventory/invoices/{invoice_id}"
+
+    # The three fields that left the UI are refused rather than ignored, so a
+    # stale client is told its request is wrong instead of half-saving.
+    for retired in (
+        {"note": "Yangi izoh"},
+        {"discount_tiyin": 0},
+        {"surcharge_tiyin": 0},
+        {"supplier_doc_no": "№ 17/A"},
+    ):
+        refused = await client.patch(url, headers=_auth(owner_access), json=retired)
+        assert refused.status_code == 422, refused.text
+
+    edited = await client.patch(
+        url,
+        headers=_auth(owner_access),
+        json={"supplier_id": other_id},
+    )
+    assert edited.status_code == 200, edited.text
+    # The untouched adjustments are carried through, so the stored total formula
+    # still holds after a header-only edit.
+    assert edited.json()["subtotal_tiyin"] == 2_000_000
+    assert edited.json()["total_tiyin"] == 1_750_000
+    assert edited.json()["supplier_id"] == other_id
+    # The debt moved with the header, no sync step anywhere.
+    assert await _supplier_balance(client, owner_access, supplier_id) == 0
+    assert await _supplier_balance(client, owner_access, other_id) == -1_750_000
+
+    # The lines' denormalized supplier followed the header.
+    transactions = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions",
+        headers=_auth(owner_access),
+    )
+    assert [row["supplier_id"] for row in transactions.json()] == [other_id]
+
+    audited = await db_session.scalar(
+        select(func.count())
+        .select_from(ActionLog)
+        .where(ActionLog.action == "inventory.invoice.update")
+    )
+    assert audited == 1
+
+    tomorrow = await client.patch(
+        url, headers=_auth(owner_access), json={"invoice_date": "2999-01-01"}
+    )
+    assert tomorrow.status_code == 400
+    assert tomorrow.json()["code"] == "future_date_not_allowed"
+
+    await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers/{supplier_id}/deactivate",
+        headers=_auth(owner_access),
+    )
+    inactive = await client.patch(
+        url, headers=_auth(owner_access), json={"supplier_id": supplier_id}
+    )
+    assert inactive.status_code == 400
+    assert inactive.json()["code"] == "supplier_inactive"
+
+    # A legacy discount the lines can no longer cover is refused, not written —
+    # the DB CHECK caps it at the subtotal.
+    shrunk = await client.patch(
+        url,
+        headers=_auth(owner_access),
+        json={
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 1, "unit_price_tiyin": 100_000}
+            ]
+        },
+    )
+    assert shrunk.status_code == 400
+    assert shrunk.json()["code"] == "invoice_discount_too_big"
+
+    await client.post(f"{url}/void", headers=_auth(owner_access), json={"reason": "Butunlay xato"})
+    frozen = await client.patch(
+        url, headers=_auth(owner_access), json={"invoice_date": "2026-08-01"}
+    )
+    assert frozen.status_code == 409
+    assert frozen.json()["code"] == "invoice_voided"
+
+
+async def test_editing_lines_rewrites_the_arrival_and_replays_the_balance_chain(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The replay's whole point: movements *behind* the edited one stay true.
+
+    Delta arithmetic can fix `on_hand`, but nothing can repair the
+    `balance_after` snapshot a later movement already took against the old
+    quantity — so the chain is recomputed instead.
+    """
+
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    other = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Kronospan Uz"},
+    )
+    other_id = other.json()["id"]
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 10, "unit_price_tiyin": 300_000}],
+    )
+    invoice_id = invoice["id"]
+    entered_at = (await _stock_ins(client, owner_access, branch_id))[0]["created_at"]
+
+    # Two movements land on top of the arrival before anyone notices the typo.
+    await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-adjustments",
+        headers=_auth(owner_access),
+        json={"branch_material_id": material_id, "quantity": -4, "note": "Shikastlangan"},
+    )
+    await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-adjustments",
+        headers=_auth(owner_access),
+        json={"branch_material_id": material_id, "quantity": 2, "note": "Topildi"},
+    )
+    assert (await _on_hand(client, owner_access, branch_id))[material_id] == 8
+
+    edited = await client.patch(
+        f"/api/v1/workshop/inventory/invoices/{invoice_id}",
+        headers=_auth(owner_access),
+        json={
+            "supplier_id": other_id,
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 6, "unit_price_tiyin": 250_000}
+            ],
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["subtotal_tiyin"] == 1_500_000
+    assert edited.json()["total_tiyin"] == 1_500_000
+    assert edited.json()["line_count"] == 1
+    assert [line["quantity"] for line in edited.json()["lines"]] == [6]
+    assert await _supplier_balance(client, owner_access, other_id) == -1_500_000
+
+    # 6 - 4 + 2, and every row on the chain says so.
+    assert (await _on_hand(client, owner_access, branch_id))[material_id] == 4
+    ledger = await _ledger(client, owner_access, branch_id, material_id)
+    assert [(row["quantity"], row["balance_after"]) for row in ledger] == [(6, 6), (-4, 2), (2, 4)]
+
+    # The corrected arrival keeps its place in the log — a typo fix must not
+    # push the delivery to the top of it — and the new supplier reached the row.
+    assert ledger[0]["created_at"] == entered_at
+    assert ledger[0]["supplier_id"] == other_id
+    assert ledger[0]["invoice_id"] == invoice_id
+
+
+async def test_editing_lines_below_what_was_consumed_goes_negative_and_notifies(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 5, "unit_price_tiyin": 400_000}],
+    )
+    await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-adjustments",
+        headers=_auth(owner_access),
+        json={"branch_material_id": material_id, "quantity": -3, "note": "Ishlab chiqarishga"},
+    )
+
+    edited = await client.patch(
+        f"/api/v1/workshop/inventory/invoices/{invoice['id']}",
+        headers=_auth(owner_access),
+        json={
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 1, "unit_price_tiyin": 400_000}
+            ]
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    # Only one panel ever arrived; three already left. The books say -2, which
+    # is the true statement, and the next real arrival heals it.
+    assert (await _on_hand(client, owner_access, branch_id))[material_id] == -2
+
+    notified = (
+        await db_session.scalars(
+            select(Notification.event_code).where(
+                Notification.event_code == "inventory.negative_stock"
+            )
+        )
+    ).all()
+    assert list(notified) == ["inventory.negative_stock"]
+
+
+async def test_one_edit_can_add_and_remove_materials_at_once(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    kept = await _carried_material(client, platform_access, owner_access, branch_id, color="Oak")
+    dropped = await _carried_material(client, platform_access, owner_access, branch_id, color="Ash")
+    added = await _carried_material(client, platform_access, owner_access, branch_id, color="Beech")
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [
+            {"branch_material_id": kept, "quantity": 4, "unit_price_tiyin": 300_000},
+            {"branch_material_id": dropped, "quantity": 3, "unit_price_tiyin": 200_000},
+        ],
+    )
+
+    edited = await client.patch(
+        f"/api/v1/workshop/inventory/invoices/{invoice['id']}",
+        headers=_auth(owner_access),
+        json={
+            "lines": [
+                {"branch_material_id": kept, "quantity": 6, "unit_price_tiyin": 300_000},
+                {"branch_material_id": added, "quantity": 2, "unit_price_tiyin": 150_000},
+            ]
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["subtotal_tiyin"] == 2_100_000
+
+    on_hand = await _on_hand(client, owner_access, branch_id)
+    # The removed material's quantity goes back out — its balance is the point
+    # of replaying the *union* of the old and the new material sets.
+    assert (on_hand[kept], on_hand[dropped], on_hand[added]) == (6, 0, 2)
+
+
+async def test_editing_a_paid_invoice_is_allowed_and_re_derives_the_outstanding(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Blocking here would trap a genuine correction; overpayment already warns."""
+
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 4, "unit_price_tiyin": 500_000}],
+    )
+    paid = await client.post(
+        "/api/v1/workshop/finance/expenses",
+        headers=_auth(owner_access),
+        json={
+            "category": "raw_materials",
+            "amount_tiyin": 800_000,
+            "incurred_on": invoice["invoice_date"],
+            "description": "Qisman to'lov",
+            "invoice_id": invoice["id"],
+        },
+    )
+    assert paid.status_code == 201, paid.text
+
+    edited = await client.patch(
+        f"/api/v1/workshop/inventory/invoices/{invoice['id']}",
+        headers=_auth(owner_access),
+        json={
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 2, "unit_price_tiyin": 500_000}
+            ]
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["total_tiyin"] == 1_000_000
+    assert edited.json()["paid_tiyin"] == 800_000
+    assert edited.json()["outstanding_tiyin"] == 200_000
+    assert edited.json()["payment_status"] == "partial"
+
+
+async def test_on_hand_always_equals_the_sum_of_the_item_s_transactions(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The invariant the replay promotes from "true by construction" to enforced."""
+
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 7, "unit_price_tiyin": 300_000}],
+    )
+    url = f"/api/v1/workshop/inventory/invoices/{invoice['id']}"
+    await _assert_chain_holds(client, owner_access, branch_id, material_id)
+
+    edited = await client.patch(
+        url,
+        headers=_auth(owner_access),
+        json={
+            "lines": [
+                {"branch_material_id": material_id, "quantity": 3, "unit_price_tiyin": 300_000}
+            ]
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    await _assert_chain_holds(client, owner_access, branch_id, material_id)
+
+    voided = await client.post(f"{url}/void", headers=_auth(owner_access), json={"reason": "Xato"})
+    assert voided.status_code == 200, voided.text
+    await _assert_chain_holds(client, owner_access, branch_id, material_id)
+    assert (await _on_hand(client, owner_access, branch_id))[material_id] == 0
+
+
+async def _ledger(
+    client: AsyncClient,
+    owner_access: str,
+    branch_id: uuid.UUID,
+    branch_material_id: str,
+) -> list[dict[str, object]]:
+    """One material's movements, oldest first — the order the chain runs in."""
+
+    listed = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions"
+        f"?branch_material_id={branch_material_id}",
+        headers=_auth(owner_access),
+    )
+    assert listed.status_code == 200, listed.text
+    rows: list[dict[str, object]] = listed.json()
+    return sorted(rows, key=lambda row: (str(row["created_at"]), str(row["id"])))
+
+
+async def _stock_ins(
+    client: AsyncClient,
+    owner_access: str,
+    branch_id: uuid.UUID,
+) -> list[dict[str, object]]:
+    listed = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions",
+        headers=_auth(owner_access),
+    )
+    assert listed.status_code == 200, listed.text
+    return [row for row in listed.json() if row["type"] == "stock_in"]
+
+
+async def _assert_chain_holds(
+    client: AsyncClient,
+    owner_access: str,
+    branch_id: uuid.UUID,
+    branch_material_id: str,
+) -> None:
+    rows = await _ledger(client, owner_access, branch_id, branch_material_id)
+    running = 0
+    for row in rows:
+        running += int(str(row["quantity"]))
+        assert row["balance_after"] == running, rows
+    assert (await _on_hand(client, owner_access, branch_id))[branch_material_id] == running
+
+
+async def test_search_finds_an_invoice_by_its_own_number(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id = await _owner_fixture(db_session)
+    material_id = await _carried_material(client, platform_access, owner_access, branch_id)
+    supplier_id = await _supplier(client, owner_access, branch_id)
+    invoice = await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 1, "unit_price_tiyin": 100_000}],
+    )
+    await _create_invoice(
+        client,
+        owner_access,
+        branch_id,
+        supplier_id,
+        [{"branch_material_id": material_id, "quantity": 1, "unit_price_tiyin": 100_000}],
+    )
+
+    found = await client.get(
+        f"/api/v1/workshop/inventory/invoices?branch_id={branch_id}&search={invoice['invoice_no']}",
+        headers=_auth(owner_access),
+    )
+    assert [row["id"] for row in found.json()] == [invoice["id"]]

@@ -210,9 +210,9 @@ async def client_catalog_materials_index(
     limit: int | None = Query(default=None, ge=1, le=200),
 ) -> list[ClientCatalogMaterialOption]:
     # `branch_id` is required and `carried_only` is gone: a material now *is* a
-    # branch's format of a dekor, so there is no platform-wide browse mode left.
+    # branch's format of a decor, so there is no platform-wide browse mode left.
     # `tape` replaces the old `kind` — the edge picker wants kromka, every other
-    # picker wants all panel-shaped dekorlar, which no single `tur` can express.
+    # picker wants all panel-shaped decors, which no single `type` can express.
     return await client_catalog_materials(
         db,
         principal=principal,

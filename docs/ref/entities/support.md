@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-22
 order: 60
 ---
 
@@ -14,7 +14,7 @@ the audit log (action log + status change log). Wired into every other module by
 ## File
 
 A stored blob in object storage with its metadata, optionally attached to another entity: a
-dekor's photo, a workshop's logo, a payment/refund/delivery receipt scan, a generated
+a decor's photo, a workshop's logo, a payment/refund/delivery receipt scan, a generated
 cutting-map PDF. The `files` module owns the blob + metadata; other modules attach/detach by id
 and never touch object storage directly.
 
@@ -26,7 +26,7 @@ and never touch object storage directly.
 | `content_type` | text | MIME type; validated against the allowed set for the attach context |
 | `size_bytes` | bigint | ≤ configured max (default 10 MB) |
 | `storage_status` | enum | `pending` / `stored` / `deleted` |
-| `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …). A catalog image still stores the literal `material` while `entity_id` points at a **dekor** — the reshape re-pointed the id and left the label, so no historical row had to be rewritten |
+| `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …). A catalog image still stores the literal `material` while `entity_id` points at a **decor** — the reshape re-pointed the id and left the label, so no historical row had to be rewritten |
 | `entity_id` | UUID? | the attached entity's id |
 | `sort_order` | int? | ordering when an entity has several files |
 | `uploaded_by_type` / `uploaded_by_id` | enum / UUID | the principal who uploaded it |
@@ -91,14 +91,14 @@ branches); a platform operator sees all.
 ## Status change log
 
 One row per state transition of any entity that has a status — primarily orders (mirroring each
-[order status event](sales.md#order-status-event)), but also branches, dekorlar, branch materials, workers,
+[order status event](sales.md#order-status-event)), but also branches, decors, decor formats, branch materials, workers,
 workshops, users, refunds going `active`/`blocked`/`inactive`/`completed`/etc. The "what changed
 state" half of the audit log. Append-only.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `entity_type` | text | `order` / `branch` / `dekor` / `branch_material` / `workshop` / `workshop_user` / `client` / `income` / `expense` / … |
+| `entity_type` | text | `order` / `branch` / `dekor` / `decor_format` / `branch_material` / `workshop` / `workshop_user` / `client` / `income` / `expense` / … — `dekor` and the `catalog.dekor.*` action codes are **frozen literals**: the table went from `dekorlar` to `decors`, but rewriting a log key would orphan every row already written under it |
 | `entity_id` | UUID | the entity's id |
 | `workshop_id` / `branch_id` | UUID? / UUID? | for scoping the viewer |
 | `from_status` | text? | null for the first |

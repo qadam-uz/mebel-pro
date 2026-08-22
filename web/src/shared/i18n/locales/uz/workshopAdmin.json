@@ -28,6 +28,7 @@
   },
   "stockType": {
     "stock_in": "Kirim",
+    "stock_in_void": "Kirim bekori",
     "consume": "Sarf",
     "restore": "Qaytarish",
     "adjust": "Tuzatish"
@@ -42,7 +43,8 @@
     "manage_catalog": "Material katalogi",
     "manage_inventory": "Ombor",
     "manage_finance": "Moliya yozuvlari",
-    "view_finance_reports": "Moliya hisobotlari"
+    "view_finance_reports": "Moliya hisobotlari",
+    "record_order_payment": "Buyurtmaga to'lov qabul qilish"
   },
   "assignment": {
     "cutter": "Kesuvchi",

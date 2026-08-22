@@ -6,13 +6,13 @@ import { authInit } from '@/shared/app/authInit'
 import { MATERIALS_PAGE_LIMIT } from '@/shared/app/constants'
 import { useAuthStore } from '@/shared/stores/auth'
 
-// The dekor's own column is `holat`, but the wire enum values and the `status=`
+// The decor's own column is `status`, but the wire enum values and the `status=`
 // query param both keep these names — catalog/routes.py pins the alias on purpose.
 export type MaterialStatus = 'active' | 'inactive'
 
-// What a dekor *is* — the single axis that replaced the old `kind` (panel/edge)
-// plus `type` (dsp/mdf/…) pair. Order matches backend/app/models/enums.py DekorType.
-export type DekorType = 'ldsp' | 'dsp' | 'mdf' | 'fanera' | 'yogoch' | 'kromka' | 'boshqa'
+// What a decor *is* — the single axis that replaced the old `kind` (panel/edge)
+// plus `type` (dsp/mdf/…) pair. Order matches backend/app/models/enums.py DecorType.
+export type DecorType = 'ldsp' | 'dsp' | 'mdf' | 'fanera' | 'yogoch' | 'kromka' | 'boshqa'
 
 export interface WorkshopSummary {
   id: string
@@ -116,34 +116,80 @@ export interface Manufacturer {
 // The platform half of the catalog: identity only. No thickness, no size, no
 // price — a platform operator cannot know what formats a workshop's supplier
 // sells. The format lives on the branch's own row (`BranchMaterial`).
-export interface Dekor {
+/**
+ * A decor is a PATTERN identity — who makes it, what it is called, what it looks
+ * like. It deliberately carries no substrate: Egger H1145 is one decor that
+ * exists as an LDSP board *and* as a matching kromka, and both are
+ * `DecorFormat`s of this row. Making the substrate part of the decor is what
+ * produced the duplicate twin rows the format reshape merged away.
+ */
+export interface Decor {
   id: string
   manufacturer_id: string
   manufacturer_name: string
-  tur: DekorType
-  kod: string | null
-  nomi: string
-  tolali: boolean
+  code: string | null
+  name: string
+  has_grain: boolean
   image_file_id: string | null
-  // The status column is named `holat` on a dekor — not `status`.
-  holat: MaterialStatus
+  status: MaterialStatus
   // Server-composed display string. There is no stored name any more; render
-  // this rather than rebuilding it (backend/app/core/material_label.py).
+  // this rather than rebuilding it (backend/app/core/material_label.py). It
+  // carries no substrate prefix and no dimensions — a decor has neither.
   label: string
-  // AB-22: how many distinct branches carry any format of this dekor (list
+  // AB-22: how many distinct branches carry any format of this decor (list
   // responses only — single-object responses return 0).
   branch_usage_count: number
+  // Active formats. A decor with none is a name nobody can attach anything of.
+  format_count: number
   created_at: string
   updated_at: string
 }
 
-// Server-side dekor filters for the paginated platform catalog list. Omitted
+/**
+ * One concrete product of a decor — the thing a supplier actually sells, and
+ * the thing a branch decides to carry.
+ *
+ * Platform-owned and **immutable**: there is no PATCH. A wrong format is
+ * deactivated and a correct one created, because branch rows, stock, cutting
+ * panels and order history all resolve through this id and a silent
+ * re-dimension would rewrite what those rows mean. `status` is the only mutable
+ * field.
+ */
+export interface DecorFormat {
+  id: string
+  decor_id: string
+  type: DecorType
+  thickness_mm: string
+  // Panel-shaped formats carry length/width; kromka carries tape_width.
+  length_mm: number | null
+  width_mm: number | null
+  tape_width_mm: number | null
+  // 1 or 2 for the board types (ldsp/dsp/mdf), null for everything else. A
+  // one-sided sheet is a different product at a different price.
+  finished_sides: number | null
+  status: MaterialStatus
+  label: string
+  created_at: string
+  updated_at: string
+}
+
+/** The body of `POST /platform/catalog/decors/{id}/formats`. */
+export interface DecorFormatWriteRequest {
+  type: DecorType
+  thickness_mm: string
+  length_mm?: number | null
+  width_mm?: number | null
+  tape_width_mm?: number | null
+  finished_sides?: number | null
+}
+
+// Server-side decor filters for the paginated platform catalog list. Omitted
 // fields mean "no filter"; multi-selects go over as repeated query params. The
-// status filter keeps the `status` wire name even though the column is `holat`.
-export interface DekorFilters {
+// status filter keeps the `status` wire name even though the column is `status`.
+export interface DecorFilters {
   search?: string
-  tur?: DekorType
-  turlar?: DekorType[]
+  type?: DecorType
+  types?: DecorType[]
   status?: MaterialStatus
   manufacturerIds?: string[]
   offset?: number
@@ -285,12 +331,11 @@ export interface ManufacturerWriteRequest {
 
 // One flat shape, no panel/edge union: the admin app owns identity only, so
 // there is nothing left for the two arms to differ about.
-export interface DekorWriteRequest {
+export interface DecorWriteRequest {
   manufacturer_id: string
-  tur: DekorType
-  kod: string | null
-  nomi: string
-  tolali: boolean
+  code: string | null
+  name: string
+  has_grain: boolean
   image_file_id: string | null
 }
 
@@ -350,7 +395,7 @@ export const useAdminStore = defineStore('admin', () => {
   const overview = ref<PlatformOverview | null>(null)
   const lastProvision = ref<ProvisionWorkshopResponse | null>(null)
   const manufacturers = ref<Manufacturer[]>([])
-  const dekorlar = ref<Dekor[]>([])
+  const decors = ref<Decor[]>([])
   const platformUsers = ref<PlatformUser[]>([])
   const lastPlatformUserSecret = ref<PlatformUserTempPasswordResponse | null>(null)
   const lastOwnerSecret = ref<WorkshopOwnerTempPasswordResponse | null>(null)
@@ -361,19 +406,19 @@ export const useAdminStore = defineStore('admin', () => {
   const auditStatusChanges = ref<StatusChangeLog[]>([])
   const loading = ref(false)
   const manufacturersLoading = ref(false)
-  const dekorlarLoading = ref(false)
-  const dekorlarHasMore = ref(false)
-  const catalogLoading = computed(() => manufacturersLoading.value || dekorlarLoading.value)
+  const decorsLoading = ref(false)
+  const decorsHasMore = ref(false)
+  const catalogLoading = computed(() => manufacturersLoading.value || decorsLoading.value)
   const opsLoading = ref(false)
   const error = ref<string | null>(null)
   const manufacturersError = ref<string | null>(null)
-  const dekorlarError = ref<string | null>(null)
-  const catalogError = computed(() => manufacturersError.value ?? dekorlarError.value)
+  const decorsError = ref<string | null>(null)
+  const catalogError = computed(() => manufacturersError.value ?? decorsError.value)
   const opsError = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   const manufacturersTraceId = ref<string | null>(null)
-  const dekorlarTraceId = ref<string | null>(null)
-  const catalogTraceId = computed(() => manufacturersTraceId.value ?? dekorlarTraceId.value)
+  const decorsTraceId = ref<string | null>(null)
+  const catalogTraceId = computed(() => manufacturersTraceId.value ?? decorsTraceId.value)
   const opsTraceId = ref<string | null>(null)
 
   // AB-03: the one-time provision / temp-password secrets must not outlive the
@@ -516,8 +561,8 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   // The manufacturer list stays small and operator-curated, so it loads in full
-  // for the filter dropdown. Dekorlar, by contrast, now number in the hundreds
-  // (real catalog import), so `loadDekorlar` filters and pages server-side —
+  // for the filter dropdown. Decors, by contrast, now number in the hundreds
+  // (real catalog import), so `loadDecors` filters and pages server-side —
   // see the note there.
   async function loadManufacturers() {
     manufacturersLoading.value = true
@@ -530,7 +575,7 @@ export const useAdminStore = defineStore('admin', () => {
       )
     } catch (errorValue) {
       // Preserve a 403 as permission_denied so AdminManufacturersView /
-      // AdminDekorlarView render the no-access AdminErrorState (AB-01/AB-08),
+      // AdminDecorsView render the no-access AdminErrorState (AB-01/AB-08),
       // instead of masking it as a generic load failure (CB-100).
       const captured = captureApiError(errorValue, 'manufacturers_load_failed')
       manufacturersError.value = captured.code
@@ -541,20 +586,20 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   // Paginated with append (matches the orders/notifications convention): offset 0
-  // replaces the list, a higher offset appends the next page, and dekorlarHasMore
+  // replaces the list, a higher offset appends the next page, and decorsHasMore
   // is inferred from a full page so the "load more" button hides on the last one.
   // Filtering is server-side — the caller passes the active filters on every call.
-  async function loadDekorlar(filters: DekorFilters = {}) {
+  async function loadDecors(filters: DecorFilters = {}) {
     const offset = filters.offset ?? 0
-    dekorlarLoading.value = true
-    dekorlarError.value = null
-    dekorlarTraceId.value = null
+    decorsLoading.value = true
+    decorsError.value = null
+    decorsTraceId.value = null
     try {
-      const page = await api.get<Dekor[]>(
-        withQuery('/platform/catalog/dekorlar', {
+      const page = await api.get<Decor[]>(
+        withQuery('/platform/catalog/decors', {
           search: filters.search,
-          tur: filters.tur,
-          turlar: filters.turlar,
+          type: filters.type,
+          types: filters.types,
           status: filters.status,
           manufacturer_ids: filters.manufacturerIds,
           limit: MATERIALS_PAGE_LIMIT,
@@ -562,14 +607,14 @@ export const useAdminStore = defineStore('admin', () => {
         }),
         authInit(),
       )
-      dekorlar.value = offset === 0 ? page : [...dekorlar.value, ...page]
-      dekorlarHasMore.value = page.length === MATERIALS_PAGE_LIMIT
+      decors.value = offset === 0 ? page : [...decors.value, ...page]
+      decorsHasMore.value = page.length === MATERIALS_PAGE_LIMIT
     } catch (errorValue) {
-      const captured = captureApiError(errorValue, 'dekorlar_load_failed')
-      dekorlarError.value = captured.code
-      dekorlarTraceId.value = captured.traceId
+      const captured = captureApiError(errorValue, 'decors_load_failed')
+      decorsError.value = captured.code
+      decorsTraceId.value = captured.traceId
     } finally {
-      dekorlarLoading.value = false
+      decorsLoading.value = false
     }
   }
 
@@ -603,52 +648,85 @@ export const useAdminStore = defineStore('admin', () => {
     return updated
   }
 
-  async function createDekor(payload: DekorWriteRequest) {
-    const created = await api.post<Dekor>('/platform/catalog/dekorlar', payload, authInit())
-    dekorlar.value = [created, ...dekorlar.value]
+  async function createDecor(payload: DecorWriteRequest) {
+    const created = await api.post<Decor>('/platform/catalog/decors', payload, authInit())
+    decors.value = [created, ...decors.value]
     return created
   }
 
-  // One dekor, for the detail route reached by URL with no list in memory. It
+  // One decor, for the detail route reached by URL with no list in memory. It
   // returns rather than storing: a detail page's own record is not shared state,
   // and parking it in the store would mean another ref to reset and a stale row
   // to trip over on the next visit.
-  async function fetchDekor(id: string) {
-    return api.get<Dekor>(`/platform/catalog/dekorlar/${id}`, authInit())
+  async function fetchDecor(id: string) {
+    return api.get<Decor>(`/platform/catalog/decors/${id}`, authInit())
   }
 
-  async function updateDekor(id: string, payload: Partial<DekorWriteRequest>) {
-    const updated = await api.patch<Dekor>(`/platform/catalog/dekorlar/${id}`, payload, authInit())
-    patchDekor(updated)
+  async function updateDecor(id: string, payload: Partial<DecorWriteRequest>) {
+    const updated = await api.patch<Decor>(`/platform/catalog/decors/${id}`, payload, authInit())
+    patchDecor(updated)
     return updated
   }
 
-  async function setDekorStatus(id: string, status: MaterialStatus) {
-    const updated = await api.post<Dekor>(
-      `/platform/catalog/dekorlar/${id}/${status === 'active' ? 'activate' : 'deactivate'}`,
+  /**
+   * A decor's formats, active first. Returned rather than stored: the detail
+   * page's own record is not shared state, and parking it in the store would
+   * mean another ref to reset and a stale list to trip over on the next visit.
+   */
+  async function fetchDecorFormats(decorId: string) {
+    return api.get<DecorFormat[]>(`/platform/catalog/decors/${decorId}/formats`, authInit())
+  }
+
+  async function createDecorFormat(decorId: string, payload: DecorFormatWriteRequest) {
+    return api.post<DecorFormat>(`/platform/catalog/decors/${decorId}/formats`, payload, authInit())
+  }
+
+  /**
+   * Status is the only thing a format can change. Deactivating one never
+   * cascades into branch rows — the branch keeps selling the remainder on its
+   * shelf and keeps receiving arrivals, because a supplier may still hold stock
+   * of a product the maker has stopped making.
+   */
+  async function setDecorFormatStatus(
+    decorId: string,
+    decorFormatId: string,
+    status: MaterialStatus,
+  ) {
+    return api.post<DecorFormat>(
+      `/platform/catalog/decors/${decorId}/formats/${decorFormatId}/${
+        status === 'active' ? 'activate' : 'deactivate'
+      }`,
       undefined,
       authInit(),
     )
-    patchDekor(updated)
+  }
+
+  async function setDecorStatus(id: string, status: MaterialStatus) {
+    const updated = await api.post<Decor>(
+      `/platform/catalog/decors/${id}/${status === 'active' ? 'activate' : 'deactivate'}`,
+      undefined,
+      authInit(),
+    )
+    patchDecor(updated)
     return updated
   }
 
   function patchManufacturer(updated: Manufacturer) {
     manufacturers.value = manufacturers.value.map((row) => (row.id === updated.id ? updated : row))
-    // AB-16: dekorlar carry a denormalized manufacturer_name; refresh it so a
+    // AB-16: decors carry a denormalized manufacturer_name; refresh it so a
     // rename doesn't leave stale labels on the cached list/filter. `label` is
     // server-composed and still carries the old manufacturer until the next
     // list load — accepted, the rename dialog reloads the page it came from.
-    dekorlar.value = dekorlar.value.map((row) =>
+    decors.value = decors.value.map((row) =>
       row.manufacturer_id === updated.id ? { ...row, manufacturer_name: updated.name } : row,
     )
   }
 
-  function patchDekor(updated: Dekor) {
-    // AB-22: single-dekor responses (edit / activate) don't compute the usage
+  function patchDecor(updated: Decor) {
+    // AB-22: single-decor responses (edit / activate) don't compute the usage
     // count and return 0 — preserve the existing list row's count on patch.
     // `updated` is spread FIRST so the fresh `label` wins; only the count is kept.
-    dekorlar.value = dekorlar.value.map((row) =>
+    decors.value = decors.value.map((row) =>
       row.id === updated.id ? { ...updated, branch_usage_count: row.branch_usage_count } : row,
     )
   }
@@ -854,7 +932,7 @@ export const useAdminStore = defineStore('admin', () => {
     overview.value = null
     lastProvision.value = null
     manufacturers.value = []
-    dekorlar.value = []
+    decors.value = []
     platformUsers.value = []
     lastPlatformUserSecret.value = null
     lastOwnerSecret.value = null
@@ -865,16 +943,16 @@ export const useAdminStore = defineStore('admin', () => {
     auditStatusChanges.value = []
     loading.value = false
     manufacturersLoading.value = false
-    dekorlarLoading.value = false
-    dekorlarHasMore.value = false
+    decorsLoading.value = false
+    decorsHasMore.value = false
     opsLoading.value = false
     error.value = null
     manufacturersError.value = null
-    dekorlarError.value = null
+    decorsError.value = null
     opsError.value = null
     traceId.value = null
     manufacturersTraceId.value = null
-    dekorlarTraceId.value = null
+    decorsTraceId.value = null
     opsTraceId.value = null
   }
 
@@ -885,7 +963,7 @@ export const useAdminStore = defineStore('admin', () => {
     clearSecrets,
     lastProvision,
     manufacturers,
-    dekorlar,
+    decors,
     platformUsers,
     lastPlatformUserSecret,
     lastOwnerSecret,
@@ -896,18 +974,18 @@ export const useAdminStore = defineStore('admin', () => {
     auditStatusChanges,
     loading,
     manufacturersLoading,
-    dekorlarLoading,
-    dekorlarHasMore,
+    decorsLoading,
+    decorsHasMore,
     catalogLoading,
     opsLoading,
     error,
     manufacturersError,
-    dekorlarError,
+    decorsError,
     catalogError,
     opsError,
     traceId,
     manufacturersTraceId,
-    dekorlarTraceId,
+    decorsTraceId,
     catalogTraceId,
     opsTraceId,
     loadWorkshops,
@@ -917,14 +995,17 @@ export const useAdminStore = defineStore('admin', () => {
     blockWorkshop,
     unblockWorkshop,
     loadManufacturers,
-    loadDekorlar,
+    loadDecors,
     createManufacturer,
     updateManufacturer,
     setManufacturerStatus,
-    createDekor,
-    fetchDekor,
-    updateDekor,
-    setDekorStatus,
+    createDecor,
+    fetchDecor,
+    updateDecor,
+    setDecorStatus,
+    fetchDecorFormats,
+    createDecorFormat,
+    setDecorFormatStatus,
     loadPlatformUsers,
     createPlatformUser,
     updatePlatformUser,

@@ -241,7 +241,7 @@ export function registryEntryForBand(
 
 export function shortMaterialName(material: ClientCatalogMaterialOption | null | undefined) {
   if (!material) return translate('cutting.material.fallback')
-  // Was decor_code → name → color; `name` is gone and `color` became `nomi`, so
+  // Was decor_code → name → color; `name` is gone and `color` became `name`, so
   // the four rungs collapse to three.
-  return material.kod || material.nomi || material.id.slice(0, 8)
+  return material.code || material.name || material.id.slice(0, 8)
 }
