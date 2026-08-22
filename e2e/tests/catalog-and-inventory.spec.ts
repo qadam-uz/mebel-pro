@@ -411,11 +411,25 @@ test('owner adds a branch material and records priced stock movement with prefil
   const materialSwitch = () => formatRow.getByRole('switch')
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
   await materialSwitch().click()
+  // The row does NOT vanish under the cursor: the toggle updates the loaded row
+  // in place rather than refetching, so the operator can still see (and undo)
+  // what they just did. The Holat filter only reapplies on the next load.
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+
+  // The page opens on «Faol», so after a reload a deactivated o'lcham is out of
+  // scope — that is the state the switch was just moved to, not a lost row.
   await page.reload()
+  await expect(formatRow).toHaveCount(0)
+
+  // «Faol emas» is the way back to it, and it is one visible click away — the
+  // reason the Holat filter is a segmented control rather than a dropdown.
+  await page.getByRole('radio', { name: 'Faol emas' }).click()
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+
   // Restore visibility so the client-facing flows keep seeing the material.
   await materialSwitch().click()
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('radio', { name: 'Faol', exact: true }).click()
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
 
   await page.goto('/workshop/inventory')
@@ -653,10 +667,10 @@ test('a first arrival puts a material on the shelf and its detail page carries t
 
   // The threshold is warehouse policy, decided in front of the shelf: 3 sheets
   // against a threshold of 5 is low the moment it is saved.
-  await page.getByRole('button', { name: "Eng kam qoldiqni o'zgartirish" }).click()
-  await page.getByRole('textbox', { name: /Eng kam qoldiq/ }).fill('5')
+  await page.getByRole('button', { name: "Kam qoldiq chegarasini o'zgartirish" }).click()
+  await page.getByRole('textbox', { name: /Kam qoldiq chegarasi/ }).fill('5')
   await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
-  await expect(page.getByText('Chegara yangilandi.')).toBeVisible()
+  await expect(page.getByText('Kam qoldiq chegarasi yangilandi.')).toBeVisible()
   await expect(page.getByText('Kam', { exact: true })).toBeVisible()
 
   // And the list the page was opened from re-derives the same way.

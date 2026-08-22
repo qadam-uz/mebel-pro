@@ -32,18 +32,15 @@
     "formatCount": "{n} o'lcham"
   },
   "table": {
-    "dekor": "Dekor",
     "format": "O'lcham",
     "tur": "Tur",
     "price": "Narx",
-    "threshold": "Chegara",
     "onHand": "Qoldiq",
     "status": "Holat",
-    "actions": "Amallar",
     "editRow": "{name} — tahrirlash",
     "statusToggle": "{name} holati",
-    "rowActions": "{name} amallari",
-    "expandDekor": "{name} o'lchamlari"
+    "expandDekor": "{name} o'lchamlari",
+    "groupSummary": "{name} — {n} ta o'lchamda narx yo'q"
   },
   "empty": {
     "title": "Bu filialga material qo'shilmagan",
@@ -57,7 +54,10 @@
     "saving": "Saqlanmoqda",
     "cancel": "Bekor",
     "loadMore": "Ko'proq yuklash",
-    "loadingMore": "Yuklanmoqda"
+    "loadingMore": "Yuklanmoqda",
+    "collapseAll": "Hammasini yig'ish",
+    "expandAll": "Hammasini yoyish",
+    "materialDetail": "Ombordagi harakatlar"
   },
   "form": {
     "title": "O'lchamni tahrirlash",
@@ -100,7 +100,8 @@
   },
   "price": {
     "unset": "Narx yo'q",
-    "unsetHint": "Bu o'lcham mijozlarga ko'rinmaydi — narx qo'ying."
+    "unsetHint": "Bu o'lcham mijozlarga ko'rinmaydi — narx qo'ying.",
+    "unsetGroup": "{n} ta narxsiz"
   },
   "finishedSides": {
     "1": "1 tomonlama",
@@ -135,5 +136,9 @@
     "created": "Format qo'shildi.",
     "statusChanged": "Format holati yangilandi.",
     "saveFailed": "Format saqlanmadi."
+  },
+  "stock": {
+    "thresholdInline": "kam qoldiq: {value}",
+    "thresholdOff": "kam qoldiq: kuzatilmaydi"
   }
 }

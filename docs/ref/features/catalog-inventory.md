@@ -467,16 +467,39 @@ workshop app) — there is no per-page branch filter, and the table drops the
 now-redundant branch column:
 
 - **Material katalogi** (`manage_catalog`) — the branch's own materials, **grouped by
-  decor**: one photo + identity line per decor, its formats as indented rows beneath
-  (o'lcham×qalinlik, narx, min qoldiq, qoldiq, holat, ⋯ menu). A group collapses. The
-  grouping mirrors how the shelf is actually organised — one decor, several thicknesses —
-  and stops the identity columns repeating on every row. A row whose price is unset carries
-  a **"Narx yo'q"** warning pill; the row is still there, still stockable, and still listed to
-  clients — the pill is the same one they see. Filters: search, substrate, status; the table
-  pages with a *load-more* control.
+  decor**: one photo + identity line per decor, its o'lchamlar as rows beneath, in the order
+  **tur · o'lcham · qoldiq · narx · holat**. The substrate pill leads because one decor group
+  routinely holds a kromka and two board o'lchamlar at once, so it is what splits a group
+  internally rather than a repeat of its heading. The grouping mirrors how the shelf is
+  actually organised — one decor, several thicknesses — and stops the identity columns
+  repeating on every row.
+  The low-stock threshold is **not a column of its own**: it is the muted second line of
+  Qoldiq (`kam qoldiq: 20 m`, or `kam qoldiq: kuzatilmaydi` at `0`), carrying its own name so
+  the number never needs a header to be readable, and sitting beside the only figure it is
+  ever read against. Without `manage_inventory` there is no stock to show and the threshold —
+  a setting the operator still owns — stands alone.
+  A row whose price is unset carries a **"Narx yo'q"** warning pill; the row is still there,
+  still stockable, and still listed to clients — the pill is the same one they see. The group
+  heading repeats the count (`1 ta narxsiz`), because a folded group would otherwise take its
+  unpriced rows out of sight on the one screen that can price them.
+  A group collapses from its heading — `chevron-down`, rotated while open — and a bar-level
+  **Hammasini yig'ish / yoyish** folds them all, which is what makes the decor list itself
+  scannable on a branch carrying dozens. The heading sits on the `track` fill rather than
+  `sunk`, because `sunk` is the row-hover fill and a hovered o'lcham row was
+  indistinguishable from the heading above it.
+  Filters: search, substrate, status. **Status defaults to `Faol`** — a deactivated o'lcham is
+  hidden from clients, so it is not what the operator opened the page to read — on a
+  segmented control, which is also why the default is safe: the `Faol emas` segment is the
+  visible way back to a material just switched off. The toggle itself updates the loaded row
+  in place rather than refetching, so nothing vanishes under the cursor; the filter reapplies
+  on the next load. Because `Faol` is the baseline, "is a filter on?" is measured against the
+  defaults — comparing to `Hammasi` would light the result-count line on every load and hide
+  the first-run empty state behind a no-results one. The table pages with a *load-more*
+  control.
   **+ Material** opens the two-step attach sheet (decor picker → the decor's platform formats,
   with price / threshold per checked row). Row: Edit (modal — price and threshold; the format
-  is not editable) · client visibility toggled by a status switch in the row itself. No
+  is not editable, and a link leads to the material's full detail page for anyone holding
+  `manage_inventory`) · client visibility toggled by a status switch in the row itself. No
   Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
   — the cutting rate (`cutting_rate_tiyin`, per panel) and the edge-banding labour rate
@@ -523,7 +546,7 @@ now-redundant branch column:
   material rather than reading off the topbar (`GET /workshop/inventory/materials/{id}/stock`).
 
   The page reads: the label, format line and status pill, then four figures — *Qoldiq*
-  (danger when negative) · *Min*, editable in place through a pencil control · *Oxirgi narx*
+  (danger when negative) · *Kam qoldiq*, editable in place through a pencil control · *Oxirgi narx*
   with its provenance (date · supplier, or "birinchi kirim" when the material was never
   priced) · *Qiymat*, on-hand valued at that last price and shown only when both halves are
   real.
@@ -549,8 +572,12 @@ now-redundant branch column:
   pre-picked) and **Tuzatish** (the correction dialog — one field and a reason, so it stays a
   dialog).
 
-  Editing *Min* here writes the same `branch_material.min_stock` the catalog form writes —
-  two doors, one fact, no copy anywhere. It is gated on `manage_inventory` rather than
+  Editing *Kam qoldiq* here writes the same `branch_material.min_stock` the catalog form
+  writes — two doors, one fact, no copy anywhere. The threshold wears **one word on every
+  screen** (`Kam qoldiq` as a column or figure, `Kam qoldiq chegarasi` as a form label): it
+  used to be *Min* here, *Chegara* in the catalog and *Eng kam qoldiq* on this page's own
+  edit control, three names for one number on three screens a click apart. It is gated on
+  `manage_inventory` rather than
   `manage_catalog` because the threshold is warehouse policy: the decision "5 emas, 10
   bo'lsin" is made standing in front of the shelf by the person who runs it.
 

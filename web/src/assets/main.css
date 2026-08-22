@@ -5908,6 +5908,7 @@
 
   :where(.mp-filter-input, .admin-filter-input) > span:not(.sr-only),
   :where(.admin-filter-select) > .form-select-label,
+  :where(.mp-filters, .admin-filters) > .mp-filter-segment > span:first-child,
   :where(.mp-filters, .admin-filters) > .relative > span:first-child {
     display: flex;
     flex: none;
@@ -5969,6 +5970,23 @@
   /* The date-range picker's trigger carries two full dates — more room. */
   .mp-filters > .mp-filter-date {
     max-width: 19rem;
+  }
+
+  /* A SegmentedControl standing in for a filter dropdown (the catalog's Holat).
+     It brings its own form-label type, so the rule above hands it the bar's
+     muted 12.5px instead, and the trough sizes to its segments rather than
+     stretching — same behaviour as the quiet workshop selects beside it. */
+  .mp-filters > .mp-filter-segment {
+    flex: 0 1 auto;
+  }
+
+  .mp-filters > .mp-filter-segment > span:first-child {
+    margin-bottom: 4px;
+  }
+
+  .mp-filters > .mp-filter-segment > [role='radiogroup'] {
+    min-height: 40px;
+    align-items: stretch;
   }
 
   .admin-filter-select > div > button,

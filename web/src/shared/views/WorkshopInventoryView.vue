@@ -7,6 +7,7 @@ import { apiTraceId } from '@/shared/api/client'
 import { INVENTORY_INVOICE_PAGE_LIMIT, INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine } from '@/shared/app/errorTrace'
+import { lowStockThresholdColumn } from '@/shared/app/lowStockThreshold'
 import { decorTypeFilterGroups, formatMm, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
@@ -83,6 +84,10 @@ const wholeCatalog = ref(false)
 // other members ride along (see `decorTypeFilterGroups`), which is why the query
 // is a list and the dropdown never prints «LDSP» twice.
 const stockTur = ref<DecorType | 'all'>('all')
+// The low-stock threshold's column word comes from the one module that owns this
+// number's copy — Ombor used to carry its own «Min», so the same value wore two
+// names across two screens that sit next to each other in the nav.
+const thresholdColumn = computed(() => lowStockThresholdColumn())
 const stockTurGroups = computed(() => decorTypeFilterGroups())
 const stockTurOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('inventory.stock.turAll') },
@@ -753,7 +758,7 @@ onBeforeUnmount(() => {
               <tr>
                 <th>{{ $t('inventory.stock.columnMaterial') }}</th>
                 <th class="right">{{ $t('inventory.stock.columnOnHand') }}</th>
-                <th class="right">{{ $t('inventory.stock.columnMin') }}</th>
+                <th class="right">{{ thresholdColumn }}</th>
                 <th>{{ $t('inventory.stock.columnStatus') }}</th>
               </tr>
             </thead>

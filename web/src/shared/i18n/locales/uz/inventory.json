@@ -33,7 +33,6 @@
     "adjustAction": "Tuzatish",
     "columnMaterial": "Material",
     "columnOnHand": "Mavjud",
-    "columnMin": "Min",
     "columnStatus": "Holat",
     "materialMetaPanel": "{length}×{width}×{thickness} mm",
     "optionShort": "{quantity} yetishmaydi",
@@ -48,7 +47,7 @@
     "emptyTitle": "Bu filialga material qo'shilmagan",
     "emptyBody": "Katalogdan material qo'shing.",
     "materialMetaTape": "{thickness}×{width} mm · kromka (metr)",
-    "turLabel": "Turi",
+    "turLabel": "Tur",
     "turAll": "Barcha turlar",
     "wholeCatalog": "Butun katalog",
     "wholeCatalogForced": "Qidiruv va «Kam qolgan materiallar» butun katalog bo'yicha ishlaydi",
@@ -61,11 +60,11 @@
   "material": {
     "minOff": "Kuzatilmaydi",
     "minHint": "0 — kuzatilmaydi",
-    "minAria": "Eng kam qoldiq ({unit})",
-    "minEditAria": "Eng kam qoldiqni o'zgartirish",
-    "minInvalid": "Chegara 0 yoki undan katta bo'lsin.",
-    "minSaved": "Chegara yangilandi.",
-    "minFailed": "Chegara saqlanmadi.",
+    "minAria": "Kam qoldiq chegarasi ({unit})",
+    "minEditAria": "Kam qoldiq chegarasini o'zgartirish",
+    "minInvalid": "Kam qoldiq chegarasi 0 yoki undan katta bo'lsin.",
+    "minSaved": "Kam qoldiq chegarasi yangilandi.",
+    "minFailed": "Kam qoldiq chegarasi saqlanmadi.",
     "lastPrice": "Oxirgi narx",
     "value": "Qiymat",
     "valueHint": "Qoldiq × oxirgi narx",
@@ -248,8 +247,8 @@
   },
   "threshold": {
     "label": "Kam qoldiq chegarasi",
-    "column": "Chegara",
-    "hint": "Zaxira shu miqdorga tushganda ogohlantiramiz. 0 = faqat butunlay tugaganda."
+    "column": "Kam qoldiq",
+    "hint": "Zaxira shu miqdorga tushganda ogohlantiramiz. 0 — kuzatilmaydi."
   },
   "attach": {
     "stepPickTitle": "Dekor tanlash",
