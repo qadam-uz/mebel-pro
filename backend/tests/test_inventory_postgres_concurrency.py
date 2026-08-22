@@ -16,7 +16,13 @@ from app.models.enums import (
     SupplierStatus,
 )
 from app.modules.access.contracts import WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Decor, Manufacturer
+from app.modules.catalog.contracts import (
+    BranchMaterial,
+    BranchPricing,
+    Decor,
+    DecorFormat,
+    Manufacturer,
+)
 from app.modules.inventory.api import create_invoice, record_adjustment
 from app.modules.inventory.contracts import (
     StockItem,
@@ -90,7 +96,6 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
             await setup.flush()
             decor = Decor(
                 manufacturer_id=manufacturer.id,
-                type=DecorType.LDSP,
                 code=None,
                 name="Oak",
                 has_grain=True,
@@ -99,12 +104,22 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
             )
             setup.add(decor)
             await setup.flush()
-            material = BranchMaterial(
-                branch_id=branch.id,
+            # The substrate and the sheet size are the platform's fact about the
+            # product; the branch row below only says it carries this one.
+            decor_format = DecorFormat(
                 decor_id=decor.id,
+                type=DecorType.LDSP,
                 thickness_mm=Decimal("18"),
                 length_mm=2800,
                 width_mm=2070,
+                finished_sides=2,
+                status=MaterialStatus.ACTIVE,
+            )
+            setup.add(decor_format)
+            await setup.flush()
+            material = BranchMaterial(
+                branch_id=branch.id,
+                decor_format_id=decor_format.id,
                 price_tiyin=100000,
                 min_stock=0,
                 status=MaterialStatus.ACTIVE,
@@ -216,7 +231,6 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
             await setup.flush()
             decor = Decor(
                 manufacturer_id=manufacturer.id,
-                type=DecorType.LDSP,
                 code=None,
                 name="Ash",
                 has_grain=True,
@@ -225,12 +239,22 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
             )
             setup.add(decor)
             await setup.flush()
-            material = BranchMaterial(
-                branch_id=branch.id,
+            # The substrate and the sheet size are the platform's fact about the
+            # product; the branch row below only says it carries this one.
+            decor_format = DecorFormat(
                 decor_id=decor.id,
+                type=DecorType.LDSP,
                 thickness_mm=Decimal("18"),
                 length_mm=2800,
                 width_mm=2070,
+                finished_sides=2,
+                status=MaterialStatus.ACTIVE,
+            )
+            setup.add(decor_format)
+            await setup.flush()
+            material = BranchMaterial(
+                branch_id=branch.id,
+                decor_format_id=decor_format.id,
                 price_tiyin=100000,
                 min_stock=0,
                 status=MaterialStatus.ACTIVE,
