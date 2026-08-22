@@ -85,6 +85,28 @@ export function decorTypeLabel(type: string | null | undefined): string {
 }
 
 /**
+ * The Tur pill's classes — the neutral chip plus the dot colour for this
+ * substrate's **family**.
+ *
+ * Grouped, not one hue per enum member: the word beside the dot is the identity,
+ * so the dot only has to answer "board, wood, or tape?" at a glance, and a hue
+ * per member would be six things to learn instead of four. `ldsp` and `dsp`
+ * share a dot because they are the same board with and without its laminate —
+ * their *labels* stay distinct, which is what tells them apart; `fanera` and
+ * `yog'och` share one because both are literally wood; `boshqa` takes the muted
+ * default, the honest colour for "unclassified".
+ *
+ * Deliberately off the status ramp — see the `--color-tur-*` note in main.css.
+ */
+export function decorTypePillClass(type: DecorType | null | undefined): string {
+  if (type === 'kromka') return 'pill p-tur tur-tape'
+  if (type === 'ldsp' || type === 'dsp') return 'pill p-tur tur-board'
+  if (type === 'mdf') return 'pill p-tur tur-mdf'
+  if (type === 'fanera' || type === 'yogoch') return 'pill p-tur tur-wood'
+  return 'pill p-tur'
+}
+
+/**
  * The `type` choices a **filter** offers, one per distinct label.
  *
  * `ldsp` and `dsp` are two enum members with one name — the workshop calls both

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decorTypeFilterGroups,
   decorTypeLabel,
+  decorTypePillClass,
   finishedSidesLabel,
   formatMm,
   isTape,
@@ -64,6 +65,24 @@ describe('decorTypeLabel / isTape', () => {
     expect(decorTypeLabel('yogoch')).toBe("Yog'och")
     expect(decorTypeLabel('kromka')).toBe('Kromka')
     expect(decorTypeLabel('boshqa')).toBe('List')
+  })
+
+  it('colours the Tur dot by substrate family, never by status', () => {
+    // The pill used to wear `p-cut` / `p-eb` — the app's production-stage
+    // colours — which gave six of the seven substrates one appearance and gave
+    // those two colours a second meaning. The chip is neutral now and the dot
+    // carries the family.
+    expect(decorTypePillClass('ldsp')).toBe('pill p-tur tur-board')
+    expect(decorTypePillClass('dsp')).toBe('pill p-tur tur-board')
+    expect(decorTypePillClass('mdf')).toBe('pill p-tur tur-mdf')
+    expect(decorTypePillClass('fanera')).toBe('pill p-tur tur-wood')
+    expect(decorTypePillClass('yogoch')).toBe('pill p-tur tur-wood')
+    expect(decorTypePillClass('kromka')).toBe('pill p-tur tur-tape')
+  })
+
+  it('falls back to the muted dot for an unclassified or missing type', () => {
+    expect(decorTypePillClass('boshqa')).toBe('pill p-tur')
+    expect(decorTypePillClass(null)).toBe('pill p-tur')
   })
 
   it('still labels the legacy snapshot-only panel types', () => {

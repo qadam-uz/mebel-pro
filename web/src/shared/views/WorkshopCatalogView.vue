@@ -24,7 +24,13 @@ import {
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
-import { DECOR_TYPES, decorTypeLabel, formatMm, isTape } from '@/shared/app/materialLabel'
+import {
+  DECOR_TYPES,
+  decorTypeLabel,
+  decorTypePillClass,
+  formatMm,
+  isTape,
+} from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -763,7 +769,7 @@ onBeforeUnmount(() => {
                        padding, so they still read as the group's children while
                        staying aligned as a column of their own. -->
                   <td class="nowrap pl-6">
-                    <span :class="isTape(row.decor_format.type) ? 'pill p-eb' : 'pill p-cut'">
+                    <span :class="decorTypePillClass(row.decor_format.type)">
                       <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
                     </span>
                   </td>

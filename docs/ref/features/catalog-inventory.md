@@ -470,7 +470,13 @@ now-redundant branch column:
   decor**: one photo + identity line per decor, its o'lchamlar as rows beneath, in the order
   **tur · o'lcham · qoldiq · narx · holat**. The substrate pill leads because one decor group
   routinely holds a kromka and two board o'lchamlar at once, so it is what splits a group
-  internally rather than a repeat of its heading. The grouping mirrors how the shelf is
+  internally rather than a repeat of its heading. The pill is a **neutral chip with a
+  coloured dot**, and the dot marks the substrate *family* — board, MDF, wood, tape, or
+  unclassified — not one hue per enum member: the word beside it is the identity, so the dot
+  only has to separate the families at a glance. Its colours sit deliberately off the status
+  ramp, because a green, amber or red dot would read as a state in a table that carries real
+  ones. (It previously wore the app's production-stage colours, two shades of one orange,
+  which left six of the seven substrates looking identical.) The grouping mirrors how the shelf is
   actually organised — one decor, several thicknesses — and stops the identity columns
   repeating on every row.
   The low-stock threshold is **not a column of its own**: it is the muted second line of
