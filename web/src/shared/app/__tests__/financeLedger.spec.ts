@@ -5,6 +5,7 @@ import {
   financeIncomeOrderLabel,
   financeLedgerTabFromPath,
   incomeSettlementView,
+  ledgerRecordedTotalTiyin,
   orderPaymentCeilingTiyin,
 } from '@/shared/app/financeLedger'
 
@@ -82,5 +83,29 @@ describe('order payment headroom', () => {
 
   it('leaves the settlement untouched while creating', () => {
     expect(incomeSettlementView(settlement, null)).toEqual(settlement)
+  })
+})
+
+describe('finance ledger period total', () => {
+  // The line under the filters is a money figure. With the status filter on
+  // «Hammasi» the rows include voided ones, and a voided row is a cancelled
+  // record, not a smaller one — summing it would overstate the day's take to
+  // whoever is reconciling a till.
+  it('sums the recorded rows and ignores the voided ones', () => {
+    expect(
+      ledgerRecordedTotalTiyin([
+        { amount_tiyin: 1_000_000, status: 'recorded' },
+        { amount_tiyin: 2_500_000, status: 'voided' },
+        { amount_tiyin: 400_000, status: 'recorded' },
+      ]),
+    ).toBe(1_400_000)
+  })
+
+  it('totals 0 for an all-voided period rather than special-casing it', () => {
+    expect(ledgerRecordedTotalTiyin([{ amount_tiyin: 2_500_000, status: 'voided' }])).toBe(0)
+  })
+
+  it('totals 0 when nothing is loaded', () => {
+    expect(ledgerRecordedTotalTiyin([])).toBe(0)
   })
 })

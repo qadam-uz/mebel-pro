@@ -65,12 +65,6 @@ class FinanceScope:
 
 READ_PERMISSIONS = frozenset({Permission.MANAGE_FINANCE, Permission.VIEW_FINANCE_REPORTS})
 WRITE_PERMISSIONS = frozenset({Permission.MANAGE_FINANCE})
-# Recording an order payment is the one ledger write a non-accountant may do:
-# the cashier at the counter takes the money and hands over a receipt. It is
-# **create-only and order-payment-only** — editing, voiding, expenses and every
-# other income type stay `WRITE_PERMISSIONS`, so the hand that books a payment
-# cannot also erase it.
-ORDER_PAYMENT_WRITE_PERMISSIONS = WRITE_PERMISSIONS | {Permission.RECORD_ORDER_PAYMENT}
 
 
 async def list_incomes(
@@ -238,7 +232,6 @@ async def create_income(
             db,
             principal=principal,
             order_id=order_id,
-            permissions=ORDER_PAYMENT_WRITE_PERMISSIONS,
         )
         if payload.branch_id is not None and payload.branch_id != target.branch_id:
             raise APIError("scope_mismatch", "Income branch does not match order branch")
@@ -307,9 +300,6 @@ async def update_income(
             db,
             principal=principal,
             order_id=_required_order_id(income),
-            # An edit is an accountant's act, not a cashier's — the narrow
-            # payment grant deliberately does not reach here.
-            permissions=WRITE_PERMISSIONS,
         )
         await _assert_order_payment_cap(
             db,

@@ -375,10 +375,6 @@ export const permissionCatalog = [
   'manage_inventory',
   'manage_finance',
   'view_finance_reports',
-  // Granted alongside an order permission in practice — it admits the counter
-  // payment, not the order itself. Separate so nobody who already manages
-  // orders silently gains the ability to write money rows.
-  'record_order_payment',
 ] as const
 
 export const useWorkshopStore = defineStore('workshop', () => {

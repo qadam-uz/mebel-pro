@@ -137,18 +137,15 @@ const canCompleteBanding = computed(() => {
   )
 })
 const canViewSettlement = computed(() =>
-  permissions.canAnyOnBranch(
-    // The cashier sees the settlement because they are about to change it —
-    // taking money without seeing the balance is how a double payment happens.
-    [p.manageFinance, p.viewFinanceReports, p.recordOrderPayment],
-    order.value?.branch_id,
-  ),
+  permissions.canAnyOnBranch([p.manageFinance, p.viewFinanceReports], order.value?.branch_id),
 )
-// Taking money at the counter: the accountant may, and so may whoever holds the
-// narrow counter grant. Neither can edit or void here — that stays in Moliya,
-// deliberately, so the hand that books a payment cannot erase it.
+// Taking money at the counter is `manage_finance`'s, like every other ledger
+// write. The action lives on the order page because the counter is one person:
+// sending them to Moliya to search for the order they already have open is four
+// steps for the commonest money event in the shop. Editing and voiding stay in
+// Moliya, where the reason and the audit trail live.
 const canRecordPayment = computed(() =>
-  permissions.canAnyOnBranch([p.manageFinance, p.recordOrderPayment], order.value?.branch_id),
+  permissions.canOnBranch(p.manageFinance, order.value?.branch_id),
 )
 const paymentBalanceTiyin = computed(() => order.value?.settlement?.balance_tiyin ?? 0)
 const paymentOpen = ref(false)

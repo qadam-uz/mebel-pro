@@ -43,8 +43,7 @@
     "manage_catalog": "Material katalogi",
     "manage_inventory": "Ombor",
     "manage_finance": "Moliya yozuvlari",
-    "view_finance_reports": "Moliya hisobotlari",
-    "record_order_payment": "Buyurtmaga to'lov qabul qilish"
+    "view_finance_reports": "Moliya hisobotlari"
   },
   "assignment": {
     "cutter": "Kesuvchi",

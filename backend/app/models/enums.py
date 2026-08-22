@@ -45,11 +45,6 @@ class Permission(StrEnum):
     MANAGE_INVENTORY = "manage_inventory"
     MANAGE_FINANCE = "manage_finance"
     VIEW_FINANCE_REPORTS = "view_finance_reports"
-    # Take money for an order at the counter — and nothing else. Deliberately
-    # NOT part of `manage_finance`: whoever records a payment must not be able
-    # to void it, or a till can be emptied and the receipt erased by one hand.
-    # Editing and voiding stay `manage_finance`; so does every other ledger row.
-    RECORD_ORDER_PAYMENT = "record_order_payment"
 
 
 class MaterialStatus(StrEnum):
