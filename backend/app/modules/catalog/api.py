@@ -8,6 +8,7 @@ from app.modules.catalog.schemas import (
 )
 from app.modules.catalog.service import (
     BranchCatalogFacets,
+    BranchCatalogFacetScope,
     BranchCatalogOption,
     BranchCatalogOptionsPage,
     BranchMaterialAttachResult,
@@ -125,6 +126,7 @@ def branch_material_response_from_models(
 
 
 __all__ = [
+    "BranchCatalogFacetScope",
     "BranchCatalogFacets",
     "BranchCatalogOption",
     "BranchCatalogOptionsPage",

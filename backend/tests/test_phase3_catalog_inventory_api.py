@@ -1557,3 +1557,148 @@ async def test_price_is_optional_on_attach_and_flags_the_gap(
     )
     assert negative.status_code == 400
     assert negative.json()["code"] == "invalid_price"
+
+
+async def test_manufacturer_facets_separate_what_is_offered_from_what_is_carried(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Two sets, and a filter over the branch's own table needs the second one.
+
+    `attachable` is the platform's offer — what the attach sheet may add.
+    `carried` is what this branch already holds. Handing the first to the
+    catalog table's Ishlab chiqaruvchi filter would offer manufacturers that
+    return no rows.
+    """
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    owner_headers = _auth(owner_access)
+    carried_manufacturer, carried_decor = await _create_catalog_decor(client, platform_access)
+    offered_only_manufacturer = await _create_manufacturer(
+        client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
+    )
+    offered_only_decor = await _create_decor(
+        client, platform_access, manufacturer_id=offered_only_manufacturer, code="U999"
+    )
+    await _create_format(client, platform_access, offered_only_decor)
+    await _attach_one(
+        client,
+        owner_access,
+        branch_id,
+        carried_decor,
+        price_tiyin=500_000,
+        min_stock=5,
+        platform_access=platform_access,
+    )
+
+    # The attach sheet's set is unchanged, and it is still the default: that
+    # surface asked first and must not move under a new query param.
+    default = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/filters", headers=owner_headers
+    )
+    explicit = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/filters?scope=attachable",
+        headers=owner_headers,
+    )
+    assert default.status_code == 200
+    assert default.json() == explicit.json()
+    assert {row["id"] for row in default.json()["manufacturers"]} == {
+        carried_manufacturer,
+        offered_only_manufacturer,
+    }
+
+    carried = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/filters?scope=carried",
+        headers=owner_headers,
+    )
+    assert carried.status_code == 200
+    assert [row["id"] for row in carried.json()["manufacturers"]] == [carried_manufacturer]
+
+    unknown = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/filters?scope=everything",
+        headers=owner_headers,
+    )
+    assert unknown.status_code == 422
+
+
+async def test_branch_material_search_reaches_the_olcham_numbers(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The operator types the number the row prints.
+
+    `search_key` is a decor fact — name, code, manufacturer — so on its own `18`
+    matches nothing whatever the branch carries. On the branch's own table the
+    format is joined, so the thickness and the panel dimensions are searchable
+    too. By value, not as a substring: `18` must not drag in the 1830 mm rows.
+    """
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    owner_headers = _auth(owner_access)
+    manufacturer_id, sonoma = await _create_catalog_decor(client, platform_access)
+    other = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="H3303", name="Yong'oq"
+    )
+    attached = await _attach(
+        client,
+        owner_access,
+        branch_id,
+        sonoma,
+        platform_access=platform_access,
+        formats=[
+            dict(PANEL_FORMAT, price_tiyin=500_000, min_stock=5),
+            dict(
+                PANEL_FORMAT,
+                thickness_mm="16",
+                length_mm=2750,
+                width_mm=1830,
+                price_tiyin=400_000,
+                min_stock=5,
+            ),
+            dict(KROMKA_FORMAT, price_tiyin=1_700, min_stock=20),
+        ],
+    )
+    assert attached.status_code == 201, attached.text
+    await _attach_one(
+        client,
+        owner_access,
+        branch_id,
+        other,
+        platform_access=platform_access,
+        formats=[dict(PANEL_FORMAT, price_tiyin=500_000, min_stock=5)],
+    )
+
+    async def search(term: str) -> list[str]:
+        response = await client.get(
+            f"/api/v1/workshop/branches/{branch_id}/materials",
+            headers=owner_headers,
+            params={"search": term},
+        )
+        assert response.status_code == 200, response.text
+        return [str(row["label"]) for row in response.json()]
+
+    thickness = await search("18")
+    assert len(thickness) == 2
+    assert all(label.endswith("18 mm") for label in thickness)
+
+    # A dimension is matched by value: 1830 is a width, and 18 is not part of it.
+    assert all("1830" not in label for label in thickness)
+    assert len(await search("1830")) == 1
+
+    assert len(await search("2800")) == 2
+    assert len(await search("2070")) == 2
+
+    # Fractional tokens can only ever have been a thickness; the tape width is
+    # reachable as a whole number.
+    assert len(await search("19")) == 1
+    assert await search("0.5") == []
+
+    # Tokens stay ANDed, so a decor word plus a number narrows to one row.
+    narrowed = await search("yong'oq 18")
+    assert len(narrowed) == 1
+    assert "Yong'oq" in narrowed[0]
+
+    # A token that is neither a decor word nor a dimension the branch carries
+    # narrows to nothing rather than being ignored.
+    assert await search("2440") == []
+    assert await search("sonoma 2440") == []

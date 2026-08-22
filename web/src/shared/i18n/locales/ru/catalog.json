@@ -9,7 +9,7 @@
   },
   "filter": {
     "searchLabel": "Поиск",
-    "searchPlaceholder": "Название или код декора",
+    "searchPlaceholder": "Декор, код или размер",
     "turLabel": "Тип",
     "turAll": "Все типы",
     "manufacturerLabel": "Производитель",

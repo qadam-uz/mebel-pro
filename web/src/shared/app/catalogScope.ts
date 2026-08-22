@@ -30,12 +30,14 @@ export interface CatalogScope {
   search: string
   /** The picked substrate, or `'all'`. */
   tur: DecorType | 'all'
+  /** The picked manufacturer's id, or `'all'`. */
+  manufacturerId: string | 'all'
   /** The picked status, or `'all'`. Starts at `CATALOG_DEFAULT_STATUS`. */
   status: MaterialStatus | 'all'
 }
 
 export function defaultCatalogScope(): CatalogScope {
-  return { search: '', tur: 'all', status: CATALOG_DEFAULT_STATUS }
+  return { search: '', tur: 'all', manufacturerId: 'all', status: CATALOG_DEFAULT_STATUS }
 }
 
 /** What the table sends. `null` means "don't narrow on this". */
@@ -43,6 +45,7 @@ export function catalogListFilters(scope: CatalogScope, offset = 0): BranchMater
   return {
     status: scope.status === 'all' ? null : scope.status,
     type: scope.tur === 'all' ? null : scope.tur,
+    manufacturer_id: scope.manufacturerId === 'all' ? null : scope.manufacturerId,
     search: scope.search.trim(),
     offset,
   }
@@ -66,6 +69,7 @@ export function activeCatalogFilterCount(scope: CatalogScope): number {
   return (
     (scope.search.trim() ? 1 : 0) +
     (scope.tur === defaults.tur ? 0 : 1) +
+    (scope.manufacturerId === defaults.manufacturerId ? 0 : 1) +
     (scope.status === defaults.status ? 0 : 1)
   )
 }

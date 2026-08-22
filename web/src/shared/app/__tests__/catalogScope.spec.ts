@@ -18,9 +18,17 @@ describe('catalog scope → query', () => {
     expect(catalogListFilters(scope())).toEqual({
       status: CATALOG_DEFAULT_STATUS,
       type: null,
+      manufacturer_id: null,
       search: '',
       offset: 0,
     })
+  })
+
+  it('sends the picked manufacturer, and nothing for «Barcha»', () => {
+    expect(catalogListFilters(scope({ manufacturerId: 'egger-id' })).manufacturer_id).toBe(
+      'egger-id',
+    )
+    expect(catalogListFilters(scope()).manufacturer_id).toBeNull()
   })
 
   it('sends no status at all once «Hammasi» is picked', () => {
@@ -53,11 +61,22 @@ describe('catalog scope → is anything narrowed', () => {
     expect(isCatalogFiltered(scope({ search: '   ' }))).toBe(false)
   })
 
+  it('a picked manufacturer is a filter', () => {
+    expect(isCatalogFiltered(scope({ manufacturerId: 'egger-id' }))).toBe(true)
+  })
+
   it('counts each narrowed axis once, so the reset-all knows when to appear', () => {
     expect(activeCatalogFilterCount(scope({ search: 'sonoma', tur: 'kromka' }))).toBe(2)
     expect(
-      activeCatalogFilterCount(scope({ search: 'sonoma', tur: 'kromka', status: 'all' })),
+      activeCatalogFilterCount(
+        scope({ search: 'sonoma', tur: 'kromka', manufacturerId: 'egger-id' }),
+      ),
     ).toBe(3)
+    expect(
+      activeCatalogFilterCount(
+        scope({ search: 'sonoma', tur: 'kromka', manufacturerId: 'egger-id', status: 'all' }),
+      ),
+    ).toBe(4)
   })
 
   it('a reset returns to the default status, not to «Hammasi»', () => {

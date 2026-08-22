@@ -822,6 +822,16 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
     page.getByRole('row').filter({ hasText: '2800×2070×18 mm' }).getByText("Narx yo'q"),
   ).toHaveCount(0)
 
+  // And it survives the fold. Collapsing a dekor takes its rows — and their
+  // pills — off screen, on the one surface that can price them, so the count
+  // rides on the heading instead.
+  const groupHeading = page.getByRole('button', { name: `${dekor.label} o'lchamlari` })
+  await page.getByRole('button', { name: "Hammasini yig'ish" }).click()
+  await expect(unpricedRow).toHaveCount(0)
+  await expect(groupHeading).toContainText('1 ta narxsiz')
+  await page.getByRole('button', { name: 'Hammasini yoyish' }).click()
+  await expect(unpricedRow).toHaveCount(1)
+
   // Client side: the same branch, the same dekor — BOTH formats. Hiding the
   // unpriced one showed clients a fraction of the shelf (one real branch carrying
   // 518 formats offered two); the money is guarded at order confirm instead.
@@ -845,6 +855,95 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   const rows = (await options.json()) as Array<{ id: string; price_unset: boolean }>
   expect(rows.find((row) => row.id === unpriced.id)?.price_unset).toBe(true)
   expect(rows.find((row) => row.id === priced.id)?.price_unset).toBe(false)
+})
+
+test('the catalog filters by carried manufacturer and searches the o\'lcham numbers', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p3-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const branchId = setup.branch.id as string
+
+  // Three manufacturers on the platform; the branch carries two of them. Two,
+  // not one, because a dropdown offering «Barcha» plus a single brand cannot
+  // narrow anything — the page hides it until there is a choice to make.
+  const firstMaker = await createManufacturer(request, adminAccess, `Carried Maker ${id}`)
+  const secondMaker = await createManufacturer(request, adminAccess, `Second Maker ${id}`)
+  const offeredMaker = await createManufacturer(request, adminAccess, `Offered Maker ${id}`)
+  const firstDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: firstMaker,
+    code: `MF-C-${id}`,
+    name: 'Kulrang',
+  })
+  const secondDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: secondMaker,
+    code: `MF-S-${id}`,
+    name: 'Oq',
+  })
+  const offeredDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: offeredMaker,
+    code: `MF-O-${id}`,
+    name: 'Qora',
+  })
+  await createDecorFormat(request, adminAccess, offeredDekor.id, catalogFormat())
+  const f18 = await createDecorFormat(request, adminAccess, firstDekor.id, catalogFormat())
+  const f16 = await createDecorFormat(
+    request,
+    adminAccess,
+    firstDekor.id,
+    catalogFormat({ thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
+  )
+  const fOther = await createDecorFormat(
+    request,
+    adminAccess,
+    secondDekor.id,
+    catalogFormat({ thickness_mm: '25', length_mm: 2620, width_mm: 2070 }),
+  )
+  await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: f18.id, price_tiyin: 250_000, min_stock: 1 },
+    { decor_format_id: f16.id, price_tiyin: 240_000, min_stock: 1 },
+    { decor_format_id: fOther.id, price_tiyin: 260_000, min_stock: 1 },
+  ])
+
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
+  await page.goto('/workshop/catalog')
+  const row18 = page.getByRole('row').filter({ hasText: '2800×2070×18 mm' })
+  const row16 = page.getByRole('row').filter({ hasText: '2750×1830×16 mm' })
+  await expect(row18).toHaveCount(1)
+  await expect(row16).toHaveCount(1)
+
+  // The dropdown offers what the branch CARRIES, not the platform's whole offer:
+  // «Offered Maker» matches no row here, so listing it would be a dead option.
+  const manufacturer = page.getByRole('button', { name: /Barcha ishlab chiqaruvchilar/ })
+  await manufacturer.click()
+  await expect(page.getByRole('option', { name: `Carried Maker ${id}` })).toBeVisible()
+  await expect(page.getByRole('option', { name: `Offered Maker ${id}` })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: `Second Maker ${id}` })).toBeVisible()
+  await page.getByRole('option', { name: `Carried Maker ${id}` }).click()
+  await expect(row18).toHaveCount(1)
+  await expect(page.getByRole('row').filter({ hasText: '2620×2070×25 mm' })).toHaveCount(0)
+
+  // The search box reaches the numbers the row prints — thickness and panel
+  // dimensions live on the format, which `search_key` (a dekor fact) cannot see.
+  const search = page.getByRole('textbox', { name: 'Qidirish' })
+  await search.fill('16')
+  await expect(row16).toHaveCount(1)
+  await expect(row18).toHaveCount(0)
+
+  // Matched by value, not as a substring: 1830 is a width of its own row and 18
+  // is not part of it.
+  await search.fill('1830')
+  await expect(row16).toHaveCount(1)
+  await expect(row18).toHaveCount(0)
+
+  await search.fill('2800')
+  await expect(row18).toHaveCount(1)
+  await expect(row16).toHaveCount(0)
 })
 
 test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({

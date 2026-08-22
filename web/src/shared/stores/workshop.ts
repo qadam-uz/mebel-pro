@@ -163,6 +163,16 @@ export interface BranchCatalogFilters {
   manufacturers: { id: string; name: string }[]
 }
 
+/**
+ * Which set a facet enumerates, and the two are not interchangeable.
+ *
+ * `attachable` is the platform's offer — the attach sheet's question. `carried`
+ * is what this branch already holds, which is the only honest set for a filter
+ * over the branch's own table: the platform list would offer manufacturers that
+ * match no row on screen.
+ */
+export type BranchCatalogFacetScope = 'attachable' | 'carried'
+
 /** One (thickness + size) combination of a decor a branch wants to carry. */
 /** One platform format the branch wants to carry, with its own numbers. */
 export interface BranchMaterialAttachItem {
@@ -391,6 +401,10 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const catalogOptions = ref<BranchCatalogOption[]>([])
   const catalogOptionsTotal = ref(0)
   const catalogFilters = ref<BranchCatalogFilters>({ manufacturers: [] })
+  // Held apart from `catalogFilters` on purpose: the attach sheet opens *over*
+  // the catalog page, and one shared ref would let the sheet's attachable set
+  // silently replace the page filter's carried one underneath it.
+  const carriedCatalogFilters = ref<BranchCatalogFilters>({ manufacturers: [] })
   const branchMaterials = ref<BranchMaterial[]>([])
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
@@ -630,12 +644,14 @@ export const useWorkshopStore = defineStore('workshop', () => {
     )
   }
 
-  async function loadCatalogFilters(id: string) {
-    catalogFilters.value = await api.get<BranchCatalogFilters>(
-      `/workshop/branches/${id}/catalog/filters`,
+  async function loadCatalogFilters(id: string, scope: BranchCatalogFacetScope = 'attachable') {
+    const page = await api.get<BranchCatalogFilters>(
+      withQuery(`/workshop/branches/${id}/catalog/filters`, { scope }),
       authInit(),
     )
-    return catalogFilters.value
+    if (scope === 'carried') carriedCatalogFilters.value = page
+    else catalogFilters.value = page
+    return page
   }
 
   // Paginated with append (offset 0 replaces, higher offset appends the next
@@ -1320,6 +1336,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     catalogOptions.value = []
     catalogOptionsTotal.value = 0
     catalogFilters.value = { manufacturers: [] }
+    carriedCatalogFilters.value = { manufacturers: [] }
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
@@ -1363,6 +1380,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     catalogOptions,
     catalogOptionsTotal,
     catalogFilters,
+    carriedCatalogFilters,
     branchMaterials,
     branchMaterialsHasMore,
     suppliers,

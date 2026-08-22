@@ -10,11 +10,12 @@ price.
 
 import uuid
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from enum import StrEnum
 from typing import Any
 
 from fastapi import status
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -133,6 +134,13 @@ class BranchCatalogOption:
 class BranchCatalogOptionsPage:
     items: list[BranchCatalogOption]
     total: int
+
+
+class BranchCatalogFacetScope(StrEnum):
+    """Which set a facet enumerates — see `list_branch_catalog_facets`."""
+
+    ATTACHABLE = "attachable"
+    CARRIED = "carried"
 
 
 @dataclass(frozen=True)
@@ -870,29 +878,40 @@ async def list_branch_catalog_facets(
     *,
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID,
+    scope: BranchCatalogFacetScope = BranchCatalogFacetScope.ATTACHABLE,
 ) -> BranchCatalogFacets:
-    """Manufacturer values present in the attachable set.
+    """Manufacturer values present in one of two sets, and they are not the same set.
 
-    Deliberately unfiltered by the picker's own filters: dropdown options that
-    reshuffle as you pick from them are worse than a couple of empty results.
+    `ATTACHABLE` is the platform's offer — what the attach sheet may add — and is
+    the default because that sheet asked first. `CARRIED` is what this branch
+    already holds, which is the only honest set for a filter over the branch's
+    own table: offering the platform's list there means dropdown options that
+    return nothing.
+
+    Either way the values are deliberately unfiltered by the surface's *other*
+    filters: dropdown options that reshuffle as you pick from them are worse than
+    a couple of empty results.
     """
 
     _require_workshop_user(principal)
-    await resolve_branch_scope(
+    resolved = await resolve_branch_scope(
         db,
         principal,
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    attachable = _attachable_decors_query()
+    if scope is BranchCatalogFacetScope.CARRIED:
+        query = (
+            select(Manufacturer)
+            .join(Decor, Decor.manufacturer_id == Manufacturer.id)
+            .join(DecorFormat, DecorFormat.decor_id == Decor.id)
+            .join(BranchMaterial, BranchMaterial.decor_format_id == DecorFormat.id)
+            .where(BranchMaterial.branch_id == resolved.branch_id)
+        )
+    else:
+        query = _attachable_decors_query().with_only_columns(Manufacturer)
     manufacturers = list(
-        (
-            await db.scalars(
-                attachable.with_only_columns(Manufacturer)
-                .distinct()
-                .order_by(Manufacturer.name, Manufacturer.id)
-            )
-        ).all()
+        (await db.scalars(query.distinct().order_by(Manufacturer.name, Manufacturer.id))).all()
     )
     return BranchCatalogFacets(manufacturers=manufacturers)
 
@@ -961,10 +980,14 @@ async def list_branch_materials(
         query = query.where(DecorFormat.type == type_)
     query = _decor_filters(
         query,
-        search=search,
+        search=None,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
+    # Search is the branch surface's own: the join already carries the format, so
+    # a token may be an o'lcham number here in a way it cannot be on the platform
+    # decor list.
+    query = _branch_material_search(query, search)
     query = _paginate(query, limit=limit, offset=offset)
     return [
         BranchMaterialRecord(
@@ -975,6 +998,54 @@ async def list_branch_materials(
         )
         for bm, decor_format, decor, manufacturer in (await db.execute(query)).all()
     ]
+
+
+def _branch_material_search(query: Any, search: str | None) -> Any:
+    """Each token matches the decor's key **or** the row's own o'lcham numbers.
+
+    `search_key` is a fact about a decor — name, code, manufacturer — so on the
+    platform decor list `18` can never match anything: thickness and dimensions
+    live on the format, one table down. On the branch's own table the format is
+    already joined, and the o'lcham line is most of what the operator reads, so
+    the number they can see is the number they type.
+
+    Matched by **value**, not as a substring: `18` finds the 18 mm rows and not
+    the 1830 mm ones, which a `LIKE '%18%'` could not tell apart. Tokens stay
+    ANDed, so «sonoma 18» narrows to one decor's 18 mm o'lchamlar.
+    """
+
+    for word in (search or "").split():
+        arms: list[Any] = []
+        folded = fold(word)
+        if folded:
+            arms.append(Decor.search_key.ilike(f"%{folded}%"))
+        number = _as_dimension(word)
+        if number is not None:
+            arms.append(DecorFormat.thickness_mm == number)
+            # The three length columns are integer millimetres; a fractional
+            # token can only ever have been a thickness (`0.4` kromka).
+            if number == number.to_integral_value():
+                whole = int(number)
+                arms.append(DecorFormat.length_mm == whole)
+                arms.append(DecorFormat.width_mm == whole)
+                arms.append(DecorFormat.tape_width_mm == whole)
+        if arms:
+            query = query.where(or_(*arms))
+    return query
+
+
+def _as_dimension(word: str) -> Decimal | None:
+    """A search token read as a millimetre value, or None if it is not one.
+
+    A comma is accepted for the decimal mark — the operator's keyboard and the
+    Russian locale both produce `0,4`.
+    """
+
+    try:
+        value = Decimal(word.replace(",", "."))
+    except InvalidOperation:
+        return None
+    return value if value > 0 and value.is_finite() else None
 
 
 def branch_material_join() -> Any:

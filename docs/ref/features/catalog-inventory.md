@@ -487,7 +487,18 @@ now-redundant branch column:
   scannable on a branch carrying dozens. The heading sits on the `track` fill rather than
   `sunk`, because `sunk` is the row-hover fill and a hovered o'lcham row was
   indistinguishable from the heading above it.
-  Filters: search, substrate, status. **Status defaults to `Faol`** — a deactivated o'lcham is
+  Filters: search, substrate, manufacturer, status. **Search reaches the o'lcham numbers**:
+  a token matches the decor's search key **or** the row's own thickness and panel
+  dimensions, by value rather than as a substring — `18` finds the 18 mm rows without
+  dragging in the 1830 mm ones, and `sonoma 18` narrows to one decor's 18 mm o'lchamlar.
+  That arm exists only here: `search_key` is a decor fact, so on the platform decor list a
+  bare number can match nothing, one table down from where the dimensions live.
+  The **manufacturer** filter offers what the branch **carries**, not what the platform
+  offers — the same endpoint serves both through a `scope`, because handing the attach
+  sheet's list to this table would name brands that match no row on screen. It is hidden
+  until the branch carries a second brand: «Barcha» plus one manufacturer cannot narrow
+  anything.
+  **Status defaults to `Faol`** — a deactivated o'lcham is
   hidden from clients, so it is not what the operator opened the page to read — on a
   segmented control, which is also why the default is safe: the `Faol emas` segment is the
   visible way back to a material just switched off. The toggle itself updates the loaded row

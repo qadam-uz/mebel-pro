@@ -71,10 +71,12 @@ const { notifyProgress } = useOnboardingContinuation()
 // renders, and lies about whether anything is filtered).
 const statusFilter = ref<'all' | MaterialStatus>(defaultCatalogScope().status)
 const turFilter = ref<'all' | DecorType>(defaultCatalogScope().tur)
+const manufacturerFilter = ref<string>(defaultCatalogScope().manufacturerId)
 const search = ref('')
 const scope = computed<CatalogScope>(() => ({
   search: search.value,
   tur: turFilter.value,
+  manufacturerId: manufacturerFilter.value,
   status: statusFilter.value,
 }))
 
@@ -90,6 +92,7 @@ function resetCatalogFilters() {
   const defaults = defaultCatalogScope()
   search.value = defaults.search
   turFilter.value = defaults.tur
+  manufacturerFilter.value = defaults.manufacturerId
   statusFilter.value = defaults.status
 }
 const rowActionId = ref<string | null>(null)
@@ -145,6 +148,15 @@ const statusOptions = computed<ChoiceOption[]>(() => [
 const turOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('catalog.filter.turAll') },
   ...DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
+])
+// The manufacturers this branch actually **carries**, not the platform's whole
+// offer — the attach sheet's list would name brands that match no row here.
+const manufacturerOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('catalog.filter.manufacturerAll') },
+  ...workshop.carriedCatalogFilters.manufacturers.map((row) => ({
+    value: row.id,
+    label: row.name,
+  })),
 ])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
@@ -313,6 +325,9 @@ function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
     loadBranchTable(0),
+    // The carried-manufacturer facet is a branch fact, so it rides with the
+    // branch's first load and again whenever the topbar switches branch.
+    workshop.loadCatalogFilters(selectedBranchId.value, 'carried').catch(() => undefined),
     // Stock is a *separate* entitlement: `manage_catalog` lets you read the
     // catalog but not the branch's stock, so asking anyway is a guaranteed 403
     // on page load. The Qoldiq column falls back to "—", which is the truth for
@@ -432,7 +447,7 @@ async function toggleVisibility(row: BranchMaterial) {
 }
 
 // Table filters reload just the table (offset 0); the picker is independent.
-watch([statusFilter, turFilter], () => {
+watch([statusFilter, turFilter, manufacturerFilter], () => {
   void loadBranchTable(0)
 })
 
@@ -464,6 +479,9 @@ watch(selectedBranchId, () => {
   materialModalOpen.value = false
   attachSheetOpen.value = false
   collapsedDecorIds.value = new Set()
+  // A manufacturer id picked in one branch is a filter for a list the next
+  // branch may not carry at all — it would read as an empty catalog.
+  manufacturerFilter.value = defaultCatalogScope().manufacturerId
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -515,6 +533,16 @@ onBeforeUnmount(() => {
           v-model="turFilter"
           :label="$t('catalog.filter.turLabel')"
           :options="turOptions"
+          top-label
+        />
+        <!-- Hidden until the branch carries a second brand: «Barcha» plus one
+             manufacturer is a control that cannot narrow anything, and the bar
+             already runs four controls wide. -->
+        <ProjectDropdown
+          v-if="manufacturerOptions.length > 2"
+          v-model="manufacturerFilter"
+          :label="$t('catalog.filter.manufacturerLabel')"
+          :options="manufacturerOptions"
           top-label
         />
         <SegmentedControl

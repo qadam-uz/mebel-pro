@@ -9,7 +9,7 @@
   },
   "filter": {
     "searchLabel": "Qidirish",
-    "searchPlaceholder": "Dekor nomi yoki kodi",
+    "searchPlaceholder": "Dekor, kod yoki o'lcham",
     "turLabel": "Tur",
     "turAll": "Barcha turlar",
     "manufacturerLabel": "Ishlab chiqaruvchi",

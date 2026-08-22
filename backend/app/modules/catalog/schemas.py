@@ -205,12 +205,17 @@ class BranchCatalogManufacturerOption(APIModel):
 
 
 class BranchCatalogFiltersResponse(APIModel):
-    """Facet values for the attach picker's dropdowns.
+    """Facet values for a branch catalog surface's dropdowns.
 
     Manufacturers only. Thickness is not a facet: it belongs to a format, and
-    step two of the sheet lists those in full. `type` is a fixed enum the client
-    renders without asking — on this surface it means "has an active format of
-    this substrate".
+    step two of the attach sheet lists those in full. `type` is a fixed enum the
+    client renders without asking — on this surface it means "has an active
+    format of this substrate".
+
+    Which manufacturers depends on `scope`: the attach sheet asks about what the
+    platform offers, the branch's own table about what the branch already
+    carries. Sending the first set to the second surface means options that
+    return nothing.
     """
 
     manufacturers: list[BranchCatalogManufacturerOption]
