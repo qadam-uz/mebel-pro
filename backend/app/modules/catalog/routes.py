@@ -437,6 +437,7 @@ async def workshop_branch_materials_index(
     manufacturer_id: uuid.UUID | None = None,
     decor_id: uuid.UUID | None = None,
     status_filter: MaterialStatus | None = STATUS_QUERY,
+    low_stock: bool = False,
     limit: int | None = LIMIT_QUERY,
     offset: int = OFFSET_QUERY,
 ) -> list[BranchMaterialResponse]:
@@ -449,6 +450,7 @@ async def workshop_branch_materials_index(
         manufacturer_id=manufacturer_id,
         decor_id=decor_id,
         status_filter=status_filter,
+        low_stock=low_stock,
         limit=limit,
         offset=offset,
     )

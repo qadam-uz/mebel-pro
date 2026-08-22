@@ -677,6 +677,15 @@ test('a first arrival puts a material on the shelf and its detail page carries t
   await page.getByRole('link', { name: 'Zaxiraga qaytish' }).click()
   await expect(materialRow).toContainText('3 list')
   await expect(materialRow).toContainText('Kam qolgan')
+
+  // The catalog asks the same question of the same predicate — it is the screen
+  // where the threshold behind it is set, so the work list belongs there too.
+  await page.goto('/workshop/catalog')
+  const catalogRow = page.getByRole('row').filter({ hasText: FORMAT_LABEL })
+  await expect(catalogRow).toHaveCount(1)
+  await page.getByRole('button', { name: 'Kam qolganlar' }).click()
+  await expect(catalogRow).toHaveCount(1)
+  await expect(page.getByRole('status')).toContainText('1')
 })
 
 test('one dekor attached in two formats in a single pass creates two branch materials', async ({
@@ -817,9 +826,18 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   const unpricedRow = page.getByRole('row').filter({ hasText: '2800×2070×16 mm' })
-  await expect(unpricedRow.getByText("Narx yo'q")).toBeVisible()
+  // The pill lives in the Narx column, and once more inside the o'lcham cell for
+  // the phone layout where that column is gone — so the row holds two copies of
+  // it in markup and exactly one of them is ever rendered. Filter to the visible
+  // one rather than asserting a count that depends on the viewport.
+  const unpricedPill = unpricedRow.getByText("Narx yo'q").filter({ visible: true })
+  await expect(unpricedPill).toHaveCount(1)
   await expect(
-    page.getByRole('row').filter({ hasText: '2800×2070×18 mm' }).getByText("Narx yo'q"),
+    page
+      .getByRole('row')
+      .filter({ hasText: '2800×2070×18 mm' })
+      .getByText("Narx yo'q")
+      .filter({ visible: true }),
   ).toHaveCount(0)
 
   // And it survives the fold. Collapsing a dekor takes its rows — and their

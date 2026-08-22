@@ -15,7 +15,8 @@
     "manufacturerLabel": "Ishlab chiqaruvchi",
     "manufacturerAll": "Barcha ishlab chiqaruvchilar",
     "statusLabel": "Holat",
-    "statusAll": "Hammasi"
+    "statusAll": "Hammasi",
+    "lowOnly": "Kam qolganlar"
   },
   "status": {
     "active": "Faol",

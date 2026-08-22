@@ -46,6 +46,7 @@ from app.modules.catalog.schemas import (
     ManufacturerCreateRequest,
     ManufacturerPatchRequest,
 )
+from app.modules.inventory.contracts import StockItem, low_stock_condition
 from app.modules.platform.api import require_platform_operator
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
@@ -950,6 +951,7 @@ async def list_branch_materials(
     manufacturer_id: uuid.UUID | None = None,
     decor_id: uuid.UUID | None = None,
     status_filter: MaterialStatus | None = None,
+    low_stock: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[BranchMaterialRecord]:
@@ -960,6 +962,18 @@ async def list_branch_materials(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
+    if low_stock:
+        # «Kam qolganlar» reads the branch's stock, and `manage_catalog` does not
+        # grant that — the catalog table already renders Qoldiq as "—" for a
+        # principal without it. Asking the same question through a filter would
+        # hand back the same fact one bit at a time, so it takes the same
+        # permission the number itself does.
+        await resolve_branch_scope(
+            db,
+            principal,
+            branch_id=branch_id,
+            permission=Permission.MANAGE_INVENTORY,
+        )
     query = (
         branch_material_join()
         .where(BranchMaterial.branch_id == scope.branch_id)
@@ -978,6 +992,15 @@ async def list_branch_materials(
         # Read straight off the format here: the join already has it, and
         # "carries a kromka" is a fact about the row, not about the decor.
         query = query.where(DecorFormat.type == type_)
+    if low_stock:
+        # An INNER join, deliberately: a material with no stock row at all has
+        # never been counted, so it is not "running out" — it is unknown, and
+        # the chip is a work list, not an inventory. The predicate itself is the
+        # one Ombor's own chip uses (`inventory.contracts`), so the two screens
+        # can never disagree about which materials are low.
+        query = query.join(StockItem, StockItem.branch_material_id == BranchMaterial.id).where(
+            low_stock_condition()
+        )
     query = _decor_filters(
         query,
         search=None,

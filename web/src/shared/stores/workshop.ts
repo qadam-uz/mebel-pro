@@ -371,6 +371,8 @@ export interface BranchMaterialFilters {
   type?: DecorType | null
   status?: MaterialStatus | null
   manufacturer_id?: string | null
+  /** «Kam qolganlar» — server-side, because the table pages. */
+  low_stock?: boolean
   // Narrows the grouped-by-decor table to one decor's formats.
   decor_id?: string | null
   offset?: number
@@ -671,6 +673,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
           manufacturer_id: filters.manufacturer_id,
           decor_id: filters.decor_id,
           status: filters.status,
+          low_stock: filters.low_stock ? true : undefined,
           limit: MATERIALS_PAGE_LIMIT,
           offset,
         }),

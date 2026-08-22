@@ -15,7 +15,8 @@
     "manufacturerLabel": "Производитель",
     "manufacturerAll": "Все производители",
     "statusLabel": "Статус",
-    "statusAll": "Все"
+    "statusAll": "Все",
+    "lowOnly": "Заканчиваются"
   },
   "status": {
     "active": "Активен",

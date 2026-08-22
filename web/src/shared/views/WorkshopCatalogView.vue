@@ -78,12 +78,14 @@ const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>(defaultCatalogScope().status)
 const turFilter = ref<'all' | DecorType>(defaultCatalogScope().tur)
 const manufacturerFilter = ref<string>(defaultCatalogScope().manufacturerId)
+const lowOnly = ref(defaultCatalogScope().lowOnly)
 const search = ref('')
 const scope = computed<CatalogScope>(() => ({
   search: search.value,
   tur: turFilter.value,
   manufacturerId: manufacturerFilter.value,
   status: statusFilter.value,
+  lowOnly: lowOnly.value,
 }))
 
 // Same defect as Ombor (QAD-182): with a search on, the branch reported it held
@@ -99,6 +101,7 @@ function resetCatalogFilters() {
   search.value = defaults.search
   turFilter.value = defaults.tur
   manufacturerFilter.value = defaults.manufacturerId
+  lowOnly.value = defaults.lowOnly
   statusFilter.value = defaults.status
 }
 const rowActionId = ref<string | null>(null)
@@ -453,7 +456,7 @@ async function toggleVisibility(row: BranchMaterial) {
 }
 
 // Table filters reload just the table (offset 0); the picker is independent.
-watch([statusFilter, turFilter, manufacturerFilter], () => {
+watch([statusFilter, turFilter, manufacturerFilter, lowOnly], () => {
   void loadBranchTable(0)
 })
 
@@ -488,6 +491,7 @@ watch(selectedBranchId, () => {
   // A manufacturer id picked in one branch is a filter for a list the next
   // branch may not carry at all — it would read as an empty catalog.
   manufacturerFilter.value = defaultCatalogScope().manufacturerId
+  lowOnly.value = defaultCatalogScope().lowOnly
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -557,6 +561,19 @@ onBeforeUnmount(() => {
           :label="$t('catalog.filter.statusLabel')"
           :options="statusOptions"
         />
+        <!-- A stock question on a catalog screen, so it is only offered to
+             someone who can already read the Qoldiq column — the server takes
+             `manage_inventory` for it either way. -->
+        <button
+          v-if="canReadStock"
+          type="button"
+          class="mp-filter-chip"
+          :aria-pressed="lowOnly"
+          @click="lowOnly = !lowOnly"
+        >
+          <span class="mp-filter-chip-dot" aria-hidden="true"></span>
+          {{ $t('catalog.filter.lowOnly') }}
+        </button>
         <button
           v-if="decorGroups.length > 0"
           type="button"
@@ -701,7 +718,7 @@ onBeforeUnmount(() => {
                 <th>{{ $t('catalog.table.format') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.onHand') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
-                <th class="nowrap">{{ $t('catalog.table.status') }}</th>
+                <th class="nowrap right">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
             <tbody v-for="group in decorGroups" :key="group.decor.id">
@@ -785,11 +802,6 @@ onBeforeUnmount(() => {
                       >
                         {{ formatLabel(row) }}
                       </button>
-                      <small v-if="row.price_unset" class="block">
-                        <span class="pill p-warn">
-                          <span class="pd"></span>{{ $t('catalog.price.unset') }}
-                        </span>
-                      </small>
                       <!-- Below `sm` the Qoldiq and Narx columns are gone — a phone
                            cannot hold five columns plus a wrapping format label
                            without scrolling sideways. The numbers move here rather
@@ -799,8 +811,14 @@ onBeforeUnmount(() => {
                         <template v-if="canReadStock">{{ onHandText(row) }} · </template>
                         {{ thresholdInline(row) }}
                       </small>
-                      <small class="block text-ink-muted sm:hidden">
-                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.decor_format.type) }}
+                      <small class="block sm:hidden">
+                        <span v-if="row.price_unset" class="pill p-warn">
+                          <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                        </span>
+                        <span v-else class="text-ink-muted">
+                          {{ formatTiyin(row.price_tiyin) }}
+                          {{ priceUnit(row.decor_format.type) }}
+                        </span>
                       </small>
                     </div>
                   </td>
@@ -822,15 +840,25 @@ onBeforeUnmount(() => {
                       {{ thresholdInline(row) }}
                     </span>
                   </td>
+                  <!-- The «Narx yo'q» flag belongs to the price, so it sits in
+                       the price column — and it replaces the figure rather than
+                       joining it: an unpriced row printed «0 so'm», a number
+                       nobody chose, which is exactly the gap the pill exists to
+                       report. -->
                   <td class="amt nowrap hidden sm:table-cell">
-                    {{ formatTiyin(row.price_tiyin) }}
-                    <small class="block font-normal text-ink-muted">
-                      {{ priceUnit(row.decor_format.type) }}
-                    </small>
+                    <span v-if="row.price_unset" class="pill p-warn">
+                      <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                    </span>
+                    <template v-else>
+                      {{ formatTiyin(row.price_tiyin) }}
+                      <small class="block font-normal text-ink-muted">
+                        {{ priceUnit(row.decor_format.type) }}
+                      </small>
+                    </template>
                   </td>
                   <!-- `row-above` lifts the switch over the row's stretched click
                        layer, so toggling Faol never opens the edit modal. -->
-                  <td class="nowrap row-above">
+                  <td class="nowrap right row-above">
                     <button
                       type="button"
                       role="switch"

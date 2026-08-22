@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import status
-from sqlalchemy import ColumnElement, Select, and_, or_, select
+from sqlalchemy import ColumnElement, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -28,7 +28,13 @@ from app.modules.access.contracts import PermissionGrant, WorkshopUser
 # key set that `app/core/material_label.py` reads.
 from app.modules.catalog.api import branch_material_label, set_branch_material_min_stock
 from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer, is_tape
-from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier, SupplierInvoice
+from app.modules.inventory.contracts import (
+    StockItem,
+    StockTransaction,
+    Supplier,
+    SupplierInvoice,
+    low_stock_condition,
+)
 from app.modules.inventory.schemas import (
     StockAdjustmentRequest,
     StockInRequest,
@@ -87,15 +93,6 @@ def is_low_stock(on_hand: int, min_stock: int) -> bool:
     """
 
     return on_hand < 0 or (min_stock > 0 and on_hand <= min_stock)
-
-
-def low_stock_condition() -> ColumnElement[bool]:
-    """The same predicate in SQL, over `StockItem` joined to `BranchMaterial`."""
-
-    return or_(
-        StockItem.on_hand < 0,
-        and_(BranchMaterial.min_stock > 0, StockItem.on_hand <= BranchMaterial.min_stock),
-    )
 
 
 @dataclass(frozen=True)

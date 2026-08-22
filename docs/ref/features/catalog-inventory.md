@@ -484,16 +484,25 @@ now-redundant branch column:
   the number never needs a header to be readable, and sitting beside the only figure it is
   ever read against. Without `manage_inventory` there is no stock to show and the threshold —
   a setting the operator still owns — stands alone.
-  A row whose price is unset carries a **"Narx yo'q"** warning pill; the row is still there,
-  still stockable, and still listed to clients — the pill is the same one they see. The group
-  heading repeats the count (`1 ta narxsiz`), because a folded group would otherwise take its
-  unpriced rows out of sight on the one screen that can price them.
+  A row whose price is unset carries a **"Narx yo'q"** warning pill **in the Narx column**,
+  where it replaces the figure rather than joining it — an unpriced row used to print
+  «0 so'm», a number nobody chose, which is precisely the gap the pill exists to report. The
+  row is still there, still stockable, and still listed to clients; the pill is the same one
+  they see. The group heading repeats the count (`1 ta narxsiz`), because a folded group
+  would otherwise take its unpriced rows out of sight on the one screen that can price them.
   A group collapses from its heading — `chevron-down`, rotated while open — and a bar-level
   **Hammasini yig'ish / yoyish** folds them all, which is what makes the decor list itself
   scannable on a branch carrying dozens. The heading sits on the `track` fill rather than
   `sunk`, because `sunk` is the row-hover fill and a hovered o'lcham row was
   indistinguishable from the heading above it.
-  Filters: search, substrate, manufacturer, status. **Search reaches the o'lcham numbers**:
+  Filters: search, substrate, manufacturer, status, and **«Kam qolganlar»**. The low-stock
+  chip reads the *same predicate* Ombor's does — it lives in `inventory.contracts` precisely
+  so the two screens cannot disagree — and it belongs here because this is where the
+  threshold behind it is set. It is a work list, not an inventory: a material with no stock
+  row at all has never been counted, so it is unknown rather than running out, and stays out.
+  Being a stock question it takes **`manage_inventory`**, the same grant the Qoldiq column
+  takes; the chip is not offered to a catalog-only principal, and the server refuses the
+  filter for one. **Search reaches the o'lcham numbers**:
   a token matches the decor's search key **or** the row's own thickness and panel
   dimensions, by value rather than as a substring — `18` finds the 18 mm rows without
   dragging in the 1830 mm ones, and `sonoma 18` narrows to one decor's 18 mm o'lchamlar.

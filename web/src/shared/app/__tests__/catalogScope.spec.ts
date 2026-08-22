@@ -19,6 +19,7 @@ describe('catalog scope → query', () => {
       status: CATALOG_DEFAULT_STATUS,
       type: null,
       manufacturer_id: null,
+      low_stock: false,
       search: '',
       offset: 0,
     })
@@ -65,6 +66,11 @@ describe('catalog scope → is anything narrowed', () => {
     expect(isCatalogFiltered(scope({ manufacturerId: 'egger-id' }))).toBe(true)
   })
 
+  it('«Kam qolganlar» is a filter, and it reaches the query', () => {
+    expect(isCatalogFiltered(scope({ lowOnly: true }))).toBe(true)
+    expect(catalogListFilters(scope({ lowOnly: true })).low_stock).toBe(true)
+  })
+
   it('counts each narrowed axis once, so the reset-all knows when to appear', () => {
     expect(activeCatalogFilterCount(scope({ search: 'sonoma', tur: 'kromka' }))).toBe(2)
     expect(
@@ -77,6 +83,17 @@ describe('catalog scope → is anything narrowed', () => {
         scope({ search: 'sonoma', tur: 'kromka', manufacturerId: 'egger-id', status: 'all' }),
       ),
     ).toBe(4)
+    expect(
+      activeCatalogFilterCount(
+        scope({
+          search: 'sonoma',
+          tur: 'kromka',
+          manufacturerId: 'egger-id',
+          status: 'all',
+          lowOnly: true,
+        }),
+      ),
+    ).toBe(5)
   })
 
   it('a reset returns to the default status, not to «Hammasi»', () => {
