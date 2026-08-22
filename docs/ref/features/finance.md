@@ -268,7 +268,9 @@ chart (visible with `manage_finance` or `view_finance_reports`). The group's own
     horizontal scroll. A **Kim yozgan** filter narrows either ledger to one person — the
     closing-time question is one cashier's rows, not the whole day's. Its options are the
     people the loaded period has actually shown (the staff list is behind a permission the
-    accountant may not hold), and it is offered only once more than one person appears.
+    accountant may not hold), and it appears as soon as one name has — closing a till is when
+    this filter is looked for, so holding it back until a second person records something
+    would hide it from the person hunting for it.
   - The status line under the filters states the period's **recorded** total for the active
     filters beside the row count — voided rows are listed when asked for but never summed, so
     «Hammasi» shows every row and totals only the money that still stands.

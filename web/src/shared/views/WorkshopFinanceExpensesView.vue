@@ -1368,10 +1368,13 @@ onMounted(async () => {
           :options="statusOptions"
           top-label
         />
-        <!-- Who handled the money. Offered only once the period has actually
-             shown more than one person — a filter with one option is furniture. -->
+        <!-- Who handled the money. Offered as soon as one name has appeared,
+             not held back until two do: closing a till is exactly when this
+             control is looked for, and a filter nobody can see reads as a
+             capability the product does not have. With a single cashier it
+             still answers the question — it names who took every row. -->
         <ProjectDropdown
-          v-if="actorOptions.length > 2"
+          v-if="actorOptions.length > 1"
           v-model="actorFilter"
           :label="$t('finance.filter.actor')"
           :options="actorOptions"
