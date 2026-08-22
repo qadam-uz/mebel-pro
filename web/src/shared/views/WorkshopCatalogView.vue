@@ -284,21 +284,6 @@ function toggleDecor(decorId: string) {
   collapsedDecorIds.value = next
 }
 
-// Sixteen decors open by default is three screens before the decor list itself
-// is legible, and the grouping exists precisely so the decors can be read as a
-// list. One control does both directions — its own state decides which.
-const allDecorsCollapsed = computed(
-  () =>
-    decorGroups.value.length > 0 &&
-    decorGroups.value.every((group) => collapsedDecorIds.value.has(group.decor.id)),
-)
-
-function toggleAllDecors() {
-  collapsedDecorIds.value = allDecorsCollapsed.value
-    ? new Set()
-    : new Set(decorGroups.value.map((group) => group.decor.id))
-}
-
 // Collapse a group today and its rows' «Narx yo'q» pills go with it — on the one
 // screen that can fix an unpriced o'lcham. The count rides on the header so the
 // gap survives the fold.
@@ -573,16 +558,6 @@ onBeforeUnmount(() => {
         >
           <span class="mp-filter-chip-dot" aria-hidden="true"></span>
           {{ $t('catalog.filter.lowOnly') }}
-        </button>
-        <button
-          v-if="decorGroups.length > 0"
-          type="button"
-          class="mp-button mp-button-outline"
-          @click="toggleAllDecors"
-        >
-          {{
-            allDecorsCollapsed ? $t('catalog.action.expandAll') : $t('catalog.action.collapseAll')
-          }}
         </button>
         <button
           type="button"

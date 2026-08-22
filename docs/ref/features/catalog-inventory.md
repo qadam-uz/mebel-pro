@@ -490,11 +490,9 @@ now-redundant branch column:
   row is still there, still stockable, and still listed to clients; the pill is the same one
   they see. The group heading repeats the count (`1 ta narxsiz`), because a folded group
   would otherwise take its unpriced rows out of sight on the one screen that can price them.
-  A group collapses from its heading — `chevron-down`, rotated while open — and a bar-level
-  **Hammasini yig'ish / yoyish** folds them all, which is what makes the decor list itself
-  scannable on a branch carrying dozens. The heading sits on the `track` fill rather than
-  `sunk`, because `sunk` is the row-hover fill and a hovered o'lcham row was
-  indistinguishable from the heading above it.
+  A group collapses from its heading — `chevron-down`, rotated while open. The heading sits
+  on the `track` fill rather than `sunk`, because `sunk` is the row-hover fill and a hovered
+  o'lcham row was indistinguishable from the heading above it.
   Filters: search, substrate, manufacturer, status, and **«Kam qolganlar»**. The low-stock
   chip reads the *same predicate* Ombor's does — it lives in `inventory.contracts` precisely
   so the two screens cannot disagree — and it belongs here because this is where the

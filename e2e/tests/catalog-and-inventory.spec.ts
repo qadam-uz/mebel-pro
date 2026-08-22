@@ -844,10 +844,10 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   // pills — off screen, on the one surface that can price them, so the count
   // rides on the heading instead.
   const groupHeading = page.getByRole('button', { name: `${dekor.label} o'lchamlari` })
-  await page.getByRole('button', { name: "Hammasini yig'ish" }).click()
+  await groupHeading.click()
   await expect(unpricedRow).toHaveCount(0)
   await expect(groupHeading).toContainText('1 ta narxsiz')
-  await page.getByRole('button', { name: 'Hammasini yoyish' }).click()
+  await groupHeading.click()
   await expect(unpricedRow).toHaveCount(1)
 
   // Client side: the same branch, the same dekor — BOTH formats. Hiding the

@@ -6069,14 +6069,6 @@
     margin-top: 0;
   }
 
-  /* A second button in the bar joins the first rather than claiming its own
-     `margin-left: auto` — two autos split the free space between them and the
-     pair drifts apart across the row. The first still carries the auto, so the
-     group as a whole stays pinned to the right end. */
-  .mp-filters > .mp-button ~ .mp-button {
-    margin-left: 0;
-  }
-
   /* Top-label ProjectDropdown caption when the dropdown stands alone (outside a
      `.mp-filters` bar the shared caption rule above already covers it). */
   .mp-filter-dd-label {
