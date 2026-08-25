@@ -1698,107 +1698,58 @@ async def test_branch_material_search_reaches_the_olcham_numbers(
     assert len(narrowed) == 1
     assert "Yong'oq" in narrowed[0]
 
+
+async def test_attach_picker_search_reaches_the_olcham_numbers(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The picker lists decors, but the operator reads a price list of o'lchamlar.
+
+    A number in the picker's search means "sold in an active format with this
+    thickness or panel dimension" — matched one table down through the decor's
+    formats, by value not substring, tokens ANDed. Nothing here is carried yet:
+    the picker searches the platform's shelf, not the branch's.
+    """
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    manufacturer_id, sonoma = await _create_catalog_decor(client, platform_access)
+    other = await _create_decor(
+        client, platform_access, manufacturer_id=manufacturer_id, code="H3303", name="Yong'oq"
+    )
+    await _create_format(client, platform_access, sonoma, PANEL_FORMAT)
+    await _create_format(
+        client,
+        platform_access,
+        sonoma,
+        {**PANEL_FORMAT, "thickness_mm": "16", "length_mm": 2750, "width_mm": 1830},
+    )
+    await _create_format(client, platform_access, sonoma, KROMKA_FORMAT)
+    await _create_format(client, platform_access, other, PANEL_FORMAT)
+
+    async def search(term: str) -> list[str]:
+        response = await client.get(
+            f"/api/v1/workshop/branches/{branch_id}/catalog/decors",
+            headers=_auth(owner_access),
+            params={"search": term},
+        )
+        assert response.status_code == 200, response.text
+        return [str(row["decor"]["id"]) for row in response.json()["items"]]
+
+    # Both decors sell an 18 mm board; only Sonoma has a 1830-wide one, and `18`
+    # does not reach it through `1830`.
+    assert sorted(await search("18")) == sorted([sonoma, other])
+    assert await search("1830") == [sonoma]
+    assert await search("16") == [sonoma]
+    assert sorted(await search("2800")) == sorted([sonoma, other])
+    # The tape width is reachable as a whole number; a fractional token is a
+    # thickness nobody entered.
+    assert await search("19") == [sonoma]
+    assert await search("0.5") == []
+    # A decor word plus a number narrows to the decor sold in that o'lcham.
+    assert await search("yong'oq 18") == [other]
+    assert await search("yong'oq 16") == []
+
     # A token that is neither a decor word nor a dimension the branch carries
     # narrows to nothing rather than being ignored.
     assert await search("2440") == []
     assert await search("sonoma 2440") == []
-
-
-async def test_catalog_low_stock_filter_is_a_work_list_and_takes_the_stock_permission(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    """«Kam qolganlar» on the catalog table, over the branch's own materials.
-
-    A work list, not an inventory: a material nobody has ever counted is not
-    "running out", it is unknown, so it stays out. And the filter answers a stock
-    question, so it takes the permission the Qoldiq column itself takes — a
-    catalog-only principal already sees "—" there, and must not be able to read
-    the same fact one bit at a time through a filter.
-    """
-    platform_access = await _platform_access(db_session)
-    owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
-    owner_headers = _auth(owner_access)
-    manufacturer_id, decor_id = await _create_catalog_decor(client, platform_access)
-    other_decor = await _create_decor(
-        client, platform_access, manufacturer_id=manufacturer_id, code="H3303", name="Yong'oq"
-    )
-
-    # Watched and below its threshold, watched and comfortably above it, and one
-    # nobody has counted at all.
-    low = await _attach_one(
-        client,
-        owner_access,
-        branch_id,
-        decor_id,
-        price_tiyin=250_000,
-        min_stock=5,
-        platform_access=platform_access,
-    )
-    healthy = await _attach_one(
-        client,
-        owner_access,
-        branch_id,
-        other_decor,
-        price_tiyin=250_000,
-        min_stock=1,
-        platform_access=platform_access,
-    )
-    for material_id, quantity in ((low["id"], 3), (healthy["id"], 40)):
-        arrival = await client.post(
-            f"/api/v1/workshop/branches/{branch_id}/stock-in",
-            headers=owner_headers,
-            json={
-                "branch_material_id": material_id,
-                "quantity": quantity,
-                "unit_price_tiyin": 100_000,
-                "supplier": {"name": "Wood Supplier"},
-            },
-        )
-        assert arrival.status_code == 201, arrival.text
-
-    unfiltered = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials", headers=owner_headers
-    )
-    assert {row["id"] for row in unfiltered.json()} == {low["id"], healthy["id"]}
-
-    filtered = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials?low_stock=true", headers=owner_headers
-    )
-    assert filtered.status_code == 200
-    assert [row["id"] for row in filtered.json()] == [low["id"]]
-
-    # A threshold of 0 is monitoring switched off, so the row leaves the list
-    # even at a balance of 0 — the QAD-159 resolution, read through this filter.
-    off = await client.patch(
-        f"/api/v1/workshop/branches/{branch_id}/materials/{low['id']}",
-        headers=owner_headers,
-        json={"price_tiyin": 250_000, "min_stock": 0},
-    )
-    assert off.status_code == 200
-    unwatched = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials?low_stock=true", headers=owner_headers
-    )
-    assert unwatched.json() == []
-
-    # The `on_hand < 0` arm is not re-asserted here: it belongs to the shared
-    # predicate in `inventory.contracts`, which the inventory suite already
-    # pins, and a correction cannot drive a balance below zero anyway — only
-    # production can.
-
-    # `manage_catalog` reads the table but not the shelf.
-    catalog_staff = await _staff_access(
-        db_session,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=Permission.MANAGE_CATALOG,
-    )
-    allowed = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials", headers=_auth(catalog_staff)
-    )
-    assert allowed.status_code == 200
-    refused = await client.get(
-        f"/api/v1/workshop/branches/{branch_id}/materials?low_stock=true",
-        headers=_auth(catalog_staff),
-    )
-    assert refused.status_code == 403

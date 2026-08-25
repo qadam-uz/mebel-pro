@@ -28,7 +28,7 @@ import {
   DECOR_TYPES,
   decorTypeLabel,
   decorTypePillClass,
-  formatMm,
+  formatDimensionsLabel,
   isTape,
 } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
@@ -78,14 +78,12 @@ const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>(defaultCatalogScope().status)
 const turFilter = ref<'all' | DecorType>(defaultCatalogScope().tur)
 const manufacturerFilter = ref<string>(defaultCatalogScope().manufacturerId)
-const lowOnly = ref(defaultCatalogScope().lowOnly)
 const search = ref('')
 const scope = computed<CatalogScope>(() => ({
   search: search.value,
   tur: turFilter.value,
   manufacturerId: manufacturerFilter.value,
   status: statusFilter.value,
-  lowOnly: lowOnly.value,
 }))
 
 // Same defect as Ombor (QAD-182): with a search on, the branch reported it held
@@ -101,7 +99,6 @@ function resetCatalogFilters() {
   search.value = defaults.search
   turFilter.value = defaults.tur
   manufacturerFilter.value = defaults.manufacturerId
-  lowOnly.value = defaults.lowOnly
   statusFilter.value = defaults.status
 }
 const rowActionId = ref<string | null>(null)
@@ -135,7 +132,9 @@ const selectedBranchId = computed(() => {
   if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
   return accessibleBranches.value[0]?.id ?? ''
 })
-// The Qoldiq column is stock, and `manage_catalog` alone does not grant it.
+// The material's full page is Ombor's, and `manage_catalog` alone does not open
+// it — so the link out of the edit modal is offered only to someone who can
+// follow it. The catalog itself no longer reads stock at all.
 const canReadStock = computed(() =>
   permissions.canOnBranch(p.manageInventory, selectedBranchId.value),
 )
@@ -200,18 +199,6 @@ const decorGroups = computed<DecorGroup[]>(() => {
   return [...groups.values()]
 })
 
-// On-hand comes from the branch's stock list, keyed by branch material. A stock
-// row can be missing (nothing ever arrived), which reads as "—", not as 0.
-const onHandByMaterialId = computed(
-  () =>
-    new Map(
-      workshop.stockItems.map((item) => [
-        item.branch_material_id,
-        { onHand: item.on_hand, unit: item.display_unit, low: item.is_low_stock },
-      ]),
-    ),
-)
-
 function routeSearchValue() {
   const value = route.query.search
   return typeof value === 'string' ? value : ''
@@ -224,49 +211,30 @@ function applyRouteSearch() {
 
 /** `2800×2070×18 mm` for a panel, `0.4×19 mm` for a tape. */
 function formatLabel(row: BranchMaterial) {
-  const format = row.decor_format
-  const thickness = formatMm(format.thickness_mm)
-  if (isTape(format.type)) {
-    return format.tape_width_mm !== null
-      ? t('catalog.meta.tapeFormat', { thickness, width: format.tape_width_mm })
-      : `${thickness} mm`
-  }
-  return format.length_mm !== null && format.width_mm !== null
-    ? t('catalog.meta.panelFormat', {
-        length: format.length_mm,
-        width: format.width_mm,
-        thickness,
-      })
-    : `${thickness} mm`
+  return formatDimensionsLabel(row.decor_format)
 }
 
 function priceUnit(type: DecorType) {
   return isTape(type) ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
 }
 
-// The threshold is no longer a column of its own — it is the second, muted line
-// of the Qoldiq cell, and it carries its own name so the number never depends on
-// a header to be readable. That is what retires «Chegara» from the screen: the
-// word was an abbreviation of «Kam qoldiq chegarasi» that meant nothing on its
-// own, and the operator had to map it back onto the figure two columns away.
-//
-// `0` is monitoring switched off, not a threshold somebody chose — the whole
-// point of the QAD-159 resolution — so it says so in words rather than printing
-// "kam qoldiq: 0 dona", which reads as a deliberate setting.
+// Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
+// digits stay aligned on the column's right edge.
+function thresholdParts(row: BranchMaterial) {
+  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type))
+  const splitAt = text.lastIndexOf(' ')
+  return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
+}
+
+// Below `sm` the threshold loses its column and therefore its header, so it
+// names itself there instead. `0` is monitoring switched off, not a level
+// somebody chose — the QAD-159 resolution — so it says so in words rather than
+// printing "kam qoldiq: 0 dona", which reads as a deliberate setting.
 function thresholdInline(row: BranchMaterial) {
   if (row.min_stock === 0) return t('catalog.stock.thresholdOff')
   return t('catalog.stock.thresholdInline', {
     value: formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type)),
   })
-}
-
-function onHandText(row: BranchMaterial) {
-  const stock = onHandByMaterialId.value.get(row.id)
-  return stock ? formatStockQuantity(stock.onHand, stock.unit) : '—'
-}
-
-function isLowStock(row: BranchMaterial) {
-  return onHandByMaterialId.value.get(row.id)?.low ?? false
 }
 
 function swatchSource(decor: Decor) {
@@ -313,8 +281,10 @@ async function loadBranchTable(offset = 0) {
 }
 
 // Full refresh (mount, branch switch, after save): reset the table to page one.
-// Stock rides along so the Qoldiq column has numbers; the attach sheet loads its
-// own decor options when it opens.
+// No stock read — the catalog shows the two numbers the branch *sets* (price and
+// the low-stock threshold); the balance those are judged against is Ombor's, and
+// duplicating it here made the two screens near-copies of each other. The attach
+// sheet loads its own decor options when it opens.
 function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
@@ -322,13 +292,6 @@ function refreshCatalog() {
     // The carried-manufacturer facet is a branch fact, so it rides with the
     // branch's first load and again whenever the topbar switches branch.
     workshop.loadCatalogFilters(selectedBranchId.value, 'carried').catch(() => undefined),
-    // Stock is a *separate* entitlement: `manage_catalog` lets you read the
-    // catalog but not the branch's stock, so asking anyway is a guaranteed 403
-    // on page load. The Qoldiq column falls back to "—", which is the truth for
-    // someone who may not see stock.
-    canReadStock.value
-      ? workshop.loadStock(selectedBranchId.value).catch(() => undefined)
-      : Promise.resolve(),
   ])
 }
 
@@ -441,7 +404,7 @@ async function toggleVisibility(row: BranchMaterial) {
 }
 
 // Table filters reload just the table (offset 0); the picker is independent.
-watch([statusFilter, turFilter, manufacturerFilter, lowOnly], () => {
+watch([statusFilter, turFilter, manufacturerFilter], () => {
   void loadBranchTable(0)
 })
 
@@ -476,7 +439,6 @@ watch(selectedBranchId, () => {
   // A manufacturer id picked in one branch is a filter for a list the next
   // branch may not carry at all — it would read as an empty catalog.
   manufacturerFilter.value = defaultCatalogScope().manufacturerId
-  lowOnly.value = defaultCatalogScope().lowOnly
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -546,19 +508,6 @@ onBeforeUnmount(() => {
           :label="$t('catalog.filter.statusLabel')"
           :options="statusOptions"
         />
-        <!-- A stock question on a catalog screen, so it is only offered to
-             someone who can already read the Qoldiq column — the server takes
-             `manage_inventory` for it either way. -->
-        <button
-          v-if="canReadStock"
-          type="button"
-          class="mp-filter-chip"
-          :aria-pressed="lowOnly"
-          @click="lowOnly = !lowOnly"
-        >
-          <span class="mp-filter-chip-dot" aria-hidden="true"></span>
-          {{ $t('catalog.filter.lowOnly') }}
-        </button>
         <button
           type="button"
           class="mp-button mp-button-primary"
@@ -691,8 +640,8 @@ onBeforeUnmount(() => {
                      mm` and left a corridor between the two halves of every row). -->
                 <th class="nowrap w-px">{{ $t('catalog.table.tur') }}</th>
                 <th>{{ $t('catalog.table.format') }}</th>
-                <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.onHand') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
+                <th class="nowrap right hidden sm:table-cell">{{ thresholdLabel }}</th>
                 <th class="nowrap right">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
@@ -777,13 +726,12 @@ onBeforeUnmount(() => {
                       >
                         {{ formatLabel(row) }}
                       </button>
-                      <!-- Below `sm` the Qoldiq and Narx columns are gone — a phone
-                           cannot hold five columns plus a wrapping format label
-                           without scrolling sideways. The numbers move here rather
-                           than being dropped, and the threshold keeps the same
-                           self-naming form it wears in the column. -->
+                      <!-- Below `sm` the Narx and threshold columns are gone — a
+                           phone cannot hold five columns plus a wrapping format
+                           label without scrolling sideways. The numbers move here
+                           rather than being dropped, and the threshold names
+                           itself, having lost its header on the way. -->
                       <small class="block text-ink-muted sm:hidden">
-                        <template v-if="canReadStock">{{ onHandText(row) }} · </template>
                         {{ thresholdInline(row) }}
                       </small>
                       <small class="block sm:hidden">
@@ -796,24 +744,6 @@ onBeforeUnmount(() => {
                         </span>
                       </small>
                     </div>
-                  </td>
-                  <!-- Qoldiq absorbed what used to be a bare «Chegara» column: the
-                       threshold is only ever read against this number, and on its
-                       own it needed a header to mean anything. Without
-                       `manage_inventory` there is no stock to show, so the setting
-                       the operator does own stands alone on the first line. -->
-                  <td class="amt nowrap hidden sm:table-cell">
-                    <template v-if="canReadStock">
-                      <span :class="isLowStock(row) ? 'text-warning' : ''">
-                        {{ onHandText(row) }}
-                      </span>
-                      <small class="block font-normal text-ink-muted">
-                        {{ thresholdInline(row) }}
-                      </small>
-                    </template>
-                    <span v-else class="font-normal text-ink-muted">
-                      {{ thresholdInline(row) }}
-                    </span>
                   </td>
                   <!-- The «Narx yo'q» flag belongs to the price, so it sits in
                        the price column — and it replaces the figure rather than
@@ -830,6 +760,17 @@ onBeforeUnmount(() => {
                         {{ priceUnit(row.decor_format.type) }}
                       </small>
                     </template>
+                  </td>
+                  <!-- The threshold is the branch's *other* typed-in number, so it
+                       sits beside the price rather than beside a balance this page
+                       no longer shows. `0` says «kuzatilmaydi» in words: a printed
+                       0 reads as a level somebody chose. -->
+                  <td class="amt muted nowrap hidden sm:table-cell">
+                    <template v-if="row.min_stock > 0">
+                      {{ thresholdParts(row).value }}
+                      <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
+                    </template>
+                    <span v-else class="font-normal">{{ $t('catalog.threshold.off') }}</span>
                   </td>
                   <!-- `row-above` lifts the switch over the row's stretched click
                        layer, so toggling Faol never opens the edit modal. -->

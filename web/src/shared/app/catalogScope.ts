@@ -34,24 +34,10 @@ export interface CatalogScope {
   manufacturerId: string | 'all'
   /** The picked status, or `'all'`. Starts at `CATALOG_DEFAULT_STATUS`. */
   status: MaterialStatus | 'all'
-  /**
-   * «Kam qolganlar» — only materials at or under their threshold.
-   *
-   * A stock question asked from the catalog, so the server takes
-   * `manage_inventory` for it, and the page only offers the chip to someone who
-   * already sees the Qoldiq column.
-   */
-  lowOnly: boolean
 }
 
 export function defaultCatalogScope(): CatalogScope {
-  return {
-    search: '',
-    tur: 'all',
-    manufacturerId: 'all',
-    status: CATALOG_DEFAULT_STATUS,
-    lowOnly: false,
-  }
+  return { search: '', tur: 'all', manufacturerId: 'all', status: CATALOG_DEFAULT_STATUS }
 }
 
 /** What the table sends. `null` means "don't narrow on this". */
@@ -60,7 +46,6 @@ export function catalogListFilters(scope: CatalogScope, offset = 0): BranchMater
     status: scope.status === 'all' ? null : scope.status,
     type: scope.tur === 'all' ? null : scope.tur,
     manufacturer_id: scope.manufacturerId === 'all' ? null : scope.manufacturerId,
-    low_stock: scope.lowOnly,
     search: scope.search.trim(),
     offset,
   }
@@ -85,7 +70,6 @@ export function activeCatalogFilterCount(scope: CatalogScope): number {
     (scope.search.trim() ? 1 : 0) +
     (scope.tur === defaults.tur ? 0 : 1) +
     (scope.manufacturerId === defaults.manufacturerId ? 0 : 1) +
-    (scope.lowOnly === defaults.lowOnly ? 0 : 1) +
     (scope.status === defaults.status ? 0 : 1)
   )
 }

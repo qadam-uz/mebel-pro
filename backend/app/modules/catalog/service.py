@@ -46,7 +46,6 @@ from app.modules.catalog.schemas import (
     ManufacturerCreateRequest,
     ManufacturerPatchRequest,
 )
-from app.modules.inventory.contracts import StockItem, low_stock_condition
 from app.modules.platform.api import require_platform_operator
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
@@ -775,11 +774,14 @@ async def list_branch_catalog_options(
     attachable = _attachable_decors_query()
     filtered = _decor_filters(
         attachable,
-        search=search,
+        search=None,
         type_=type_,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
+    # The picker is a branch surface too: the operator is looking for a product
+    # they can see on a price list, so `18` has to find the decors sold in 18 mm.
+    filtered = _catalog_option_search(filtered, search)
     total = await db.scalar(filtered.with_only_columns(func.count(Decor.id)))
     available = _active_format_count_subquery()
     carried = (
@@ -951,7 +953,6 @@ async def list_branch_materials(
     manufacturer_id: uuid.UUID | None = None,
     decor_id: uuid.UUID | None = None,
     status_filter: MaterialStatus | None = None,
-    low_stock: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[BranchMaterialRecord]:
@@ -962,18 +963,6 @@ async def list_branch_materials(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    if low_stock:
-        # «Kam qolganlar» reads the branch's stock, and `manage_catalog` does not
-        # grant that — the catalog table already renders Qoldiq as "—" for a
-        # principal without it. Asking the same question through a filter would
-        # hand back the same fact one bit at a time, so it takes the same
-        # permission the number itself does.
-        await resolve_branch_scope(
-            db,
-            principal,
-            branch_id=branch_id,
-            permission=Permission.MANAGE_INVENTORY,
-        )
     query = (
         branch_material_join()
         .where(BranchMaterial.branch_id == scope.branch_id)
@@ -992,15 +981,6 @@ async def list_branch_materials(
         # Read straight off the format here: the join already has it, and
         # "carries a kromka" is a fact about the row, not about the decor.
         query = query.where(DecorFormat.type == type_)
-    if low_stock:
-        # An INNER join, deliberately: a material with no stock row at all has
-        # never been counted, so it is not "running out" — it is unknown, and
-        # the chip is a work list, not an inventory. The predicate itself is the
-        # one Ombor's own chip uses (`inventory.contracts`), so the two screens
-        # can never disagree about which materials are low.
-        query = query.join(StockItem, StockItem.branch_material_id == BranchMaterial.id).where(
-            low_stock_condition()
-        )
     query = _decor_filters(
         query,
         search=None,
@@ -1042,19 +1022,64 @@ def _branch_material_search(query: Any, search: str | None) -> Any:
         folded = fold(word)
         if folded:
             arms.append(Decor.search_key.ilike(f"%{folded}%"))
-        number = _as_dimension(word)
-        if number is not None:
-            arms.append(DecorFormat.thickness_mm == number)
-            # The three length columns are integer millimetres; a fractional
-            # token can only ever have been a thickness (`0.4` kromka).
-            if number == number.to_integral_value():
-                whole = int(number)
-                arms.append(DecorFormat.length_mm == whole)
-                arms.append(DecorFormat.width_mm == whole)
-                arms.append(DecorFormat.tape_width_mm == whole)
+        arms.extend(_dimension_arms(word))
         if arms:
             query = query.where(or_(*arms))
     return query
+
+
+def _catalog_option_search(query: Any, search: str | None) -> Any:
+    """The attach picker's search: a decor token **or** an o'lcham its formats have.
+
+    The picker lists decors, one table up from the dimensions, so a number cannot
+    be matched on the row itself — it is matched as *"has an active format with
+    this thickness or panel dimension"*. Same value-not-substring rule and the
+    same AND across tokens as the branch table: «sonoma 18» finds the decors that
+    are both Sonoma and sold in 18 mm, and step two then lists every format so
+    the 18 mm one can be ticked.
+    """
+
+    for word in (search or "").split():
+        arms: list[Any] = []
+        folded = fold(word)
+        if folded:
+            arms.append(Decor.search_key.ilike(f"%{folded}%"))
+        dimension_arms = _dimension_arms(word)
+        if dimension_arms:
+            arms.append(
+                exists(
+                    select(DecorFormat.id)
+                    .where(
+                        DecorFormat.decor_id == Decor.id,
+                        DecorFormat.status == MaterialStatus.ACTIVE,
+                        or_(*dimension_arms),
+                    )
+                    .correlate(Decor)
+                )
+            )
+        if arms:
+            query = query.where(or_(*arms))
+    return query
+
+
+def _dimension_arms(word: str) -> list[Any]:
+    """The `DecorFormat` columns a search token can equal, read as millimetres.
+
+    Matched by value: `18` is a thickness or a tape width, never part of `1830`.
+    The three length columns are integer millimetres, so a fractional token can
+    only ever have been a thickness (`0.4` kromka).
+    """
+
+    number = _as_dimension(word)
+    if number is None:
+        return []
+    arms: list[Any] = [DecorFormat.thickness_mm == number]
+    if number == number.to_integral_value():
+        whole = int(number)
+        arms.append(DecorFormat.length_mm == whole)
+        arms.append(DecorFormat.width_mm == whole)
+        arms.append(DecorFormat.tape_width_mm == whole)
+    return arms
 
 
 def _as_dimension(word: str) -> Decimal | None:

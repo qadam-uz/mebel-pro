@@ -15,8 +15,7 @@
     "manufacturerLabel": "Ishlab chiqaruvchi",
     "manufacturerAll": "Barcha ishlab chiqaruvchilar",
     "statusLabel": "Holat",
-    "statusAll": "Hammasi",
-    "lowOnly": "Kam qolganlar"
+    "statusAll": "Hammasi"
   },
   "status": {
     "active": "Faol",
@@ -36,7 +35,6 @@
     "format": "O'lcham",
     "tur": "Tur",
     "price": "Narx",
-    "onHand": "Qoldiq",
     "status": "Holat",
     "editRow": "{name} — tahrirlash",
     "statusToggle": "{name} holati",
@@ -139,5 +137,8 @@
   "stock": {
     "thresholdInline": "kam qoldiq: {value}",
     "thresholdOff": "kam qoldiq: kuzatilmaydi"
+  },
+  "threshold": {
+    "off": "kuzatilmaydi"
   }
 }

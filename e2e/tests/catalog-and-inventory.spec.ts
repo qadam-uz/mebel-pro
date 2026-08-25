@@ -483,9 +483,13 @@ test('owner adds a branch material and records priced stock movement with prefil
   // A write-off starts at the material it was noticed on: the row links to the
   // material's page, and the correction is booked there with nothing to re-pick.
   await page.goto('/workshop/inventory')
+  // Two filters, not the composed label: Zaxira splits it across Tur / Dekor /
+  // O'lcham cells, so no single cell holds the whole string. The link keeps its
+  // accessible name, which is still the composed label.
   await stockTable
     .getByRole('row')
-    .filter({ hasText: material.label })
+    .filter({ hasText: dekor.label })
+    .filter({ hasText: FORMAT_LABEL })
     .getByRole('link', { name: new RegExp(`${escapeRegExp(material.label)}.*batafsil`) })
     .click()
   await expect(page).toHaveURL(new RegExp(`inventory/materials/${material.id}`))
@@ -580,7 +584,14 @@ test('a first arrival puts a material on the shelf and its detail page carries t
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
   })
-  const materialRow = stockTable.getByRole('row').filter({ hasText: material.label })
+  // The row no longer carries the composed `LDSP … · … · 2800×2070×18 mm` label
+  // in one cell — Zaxira splits it into Tur / Dekor / O'lcham columns — so the
+  // row is pinned by the two halves that identify it rather than by the string
+  // the API happens to compose.
+  const materialRow = stockTable
+    .getByRole('row')
+    .filter({ hasText: dekor.label })
+    .filter({ hasText: FORMAT_LABEL })
 
   // The tab shows the warehouse, not the catalog: a material nobody has moved
   // anything into is not a stock row yet, and the empty state says which
@@ -677,15 +688,6 @@ test('a first arrival puts a material on the shelf and its detail page carries t
   await page.getByRole('link', { name: 'Zaxiraga qaytish' }).click()
   await expect(materialRow).toContainText('3 list')
   await expect(materialRow).toContainText('Kam qolgan')
-
-  // The catalog asks the same question of the same predicate — it is the screen
-  // where the threshold behind it is set, so the work list belongs there too.
-  await page.goto('/workshop/catalog')
-  const catalogRow = page.getByRole('row').filter({ hasText: FORMAT_LABEL })
-  await expect(catalogRow).toHaveCount(1)
-  await page.getByRole('button', { name: 'Kam qolganlar' }).click()
-  await expect(catalogRow).toHaveCount(1)
-  await expect(page.getByRole('status')).toContainText('1')
 })
 
 test('one dekor attached in two formats in a single pass creates two branch materials', async ({
