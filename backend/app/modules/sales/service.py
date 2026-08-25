@@ -39,7 +39,6 @@ from app.models.enums import (
 )
 from app.modules.access.api import (
     can_access_branch,
-    can_access_branch_any,
     seed_preferred_branch_if_missing,
 )
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
@@ -976,22 +975,21 @@ async def get_order_finance_target(
     *,
     principal: AuthenticatedPrincipal,
     order_id: uuid.UUID,
-    permissions: frozenset[Permission],
 ) -> FinanceOrderTarget:
-    """The order a money row will name, checked against any of `permissions`.
+    """The order a money row will name, checked against `manage_finance`.
 
-    Plural because an order payment has two legitimate authors: the accountant
-    (`manage_finance`) and the cashier at the counter (`record_order_payment`).
+    Every ledger write is the same grant's — recording a payment at the counter
+    included — so the check is the plain per-branch one.
     """
 
     order = await db.get(Order, order_id)
     if order is None:
         raise APIError("order_not_found", "Order not found", status_code=status.HTTP_404_NOT_FOUND)
-    if not can_access_branch_any(
+    if not can_access_branch(
         principal,
         workshop_id=order.workshop_id,
         branch_id=order.branch_id,
-        permissions=permissions,
+        permission=Permission.MANAGE_FINANCE,
     ):
         raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     return FinanceOrderTarget(

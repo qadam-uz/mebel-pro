@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-08-18
+updated: 2026-08-22
 order: 30
 ---
 
@@ -333,20 +333,19 @@ counter. No in-system payment, no gateway, no payment-driven status.
     on collection and the receipt afterwards. There is no in-app payment action; a
     discrepancy ("I paid, it's not marked") is resolved out-of-system by calling the
     workshop.
-  - **Workshop side.** Staff with `view_finance_reports`, `manage_finance` or
-    `record_order_payment` see a read-only settlement summary (total / recorded / balance) on
-    the order detail at **any** status, sourced from the finance module — distinct from the
-    client's ready/completed gate.
+  - **Workshop side.** Staff with `view_finance_reports` or `manage_finance` see a read-only
+    settlement summary (total / recorded / balance) on the order detail at **any** status,
+    sourced from the finance module — distinct from the client's ready/completed gate.
   - **Taking the money is the one write this page offers.** While a balance is outstanding,
-    `manage_finance` or `record_order_payment` gets a **To'lov qabul qilish** action beside
-    the settlement: amount (prefilled with the balance, capped by it), method, date, note. It
-    writes an ordinary `order_payment` income — the order still holds no money — and the
-    settlement re-reads. The counter is one person, and sending them to Moliya to search for
-    the order they already have open is four steps and a second search. Everything else about
-    that money — editing, voiding, any other row — stays in the finance module with
-    `manage_finance` ([`finance.md`](finance.md)): whoever books a payment must not be able to
-    erase it. Several payments may be recorded for one order, at any status, so an advance at
-    the counter and the balance at pickup are the same flow twice.
+    `manage_finance` gets a **To'lov qabul qilish** action beside the settlement: amount
+    (prefilled with the balance, capped by it), method, date, note. It writes an ordinary
+    `order_payment` income — the order still holds no money — and the settlement re-reads.
+    The counter is one person, and sending them to Moliya to search for the order they
+    already have open is four steps and a second search. Everything else about that money —
+    editing, voiding, any other row — happens in the finance module
+    ([`finance.md`](finance.md)), where a correction carries a reason and an audit trail.
+    Several payments may be recorded for one order, at any status, so an advance at the
+    counter and the balance at pickup are the same flow twice.
 - **Cancellation never creates a refund record.** If money must go back, the accountant
   books an *expense* in the finance module. A cancelled order carries only its reason.
 

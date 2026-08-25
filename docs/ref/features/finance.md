@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-08-20
+updated: 2026-08-22
 order: 55
 ---
 
@@ -39,15 +39,19 @@ one aggregate, not per row.
 
 ### Who may record a payment
 
-Every ledger write is `manage_finance`'s, with **one exception**: creating an `order_payment`
-income also accepts **`record_order_payment`** — the counter grant. It is create-only and
-order-payment-only, because taking money and correcting the books are different jobs: a hand
-that can both book a payment and void it can empty a till and leave no trace. Editing,
-voiding, expenses and every other income type stay `manage_finance`; so does the ledger screen
-itself. The cashier's entry point is the **To'lov qabul qilish** action on the order's own page
-([`orders.md`](orders.md) → *The money seam*), prefilled with the outstanding balance and
-capped by it server-side. Full rationale and the grant's edges live in
-[`access-management.md`](access-management.md).
+Every ledger write is `manage_finance`'s, order payments included. The counter's entry point
+is the **To'lov qabul qilish** action on the order's own page ([`orders.md`](orders.md) →
+*The money seam*), prefilled with the outstanding balance and capped by it server-side.
+
+The cashier role **is** `manage_finance`, deliberately: the shop is small, the person at the
+till is the person who keeps the books, and a narrower create-only grant was tried and
+retired (2026-08-22) because it bought a checkbox and a second authz branch for a separation
+of duties that has nobody to separate. The control is the audit trail instead — who recorded,
+who edited, who voided, each with a reason. Revisit if a workshop ever runs a counter shift
+that is not also its bookkeeper.
+
+End of day is read off the ledger: set the date, pick the person in **Kim yozgan**, read the
+*jami* line under the filters, and the rows beneath are the detail.
 
 ### Operations (`manage_finance`)
 
@@ -264,7 +268,12 @@ chart (visible with `manage_finance` or `view_finance_reports`). The group's own
     horizontal scroll. A **Kim yozgan** filter narrows either ledger to one person — the
     closing-time question is one cashier's rows, not the whole day's. Its options are the
     people the loaded period has actually shown (the staff list is behind a permission the
-    accountant may not hold), and it is offered only once more than one person appears.
+    accountant may not hold), and it appears as soon as one name has — closing a till is when
+    this filter is looked for, so holding it back until a second person records something
+    would hide it from the person hunting for it.
+  - The status line under the filters states the period's **recorded** total for the active
+    filters beside the row count — voided rows are listed when asked for but never summed, so
+    «Hammasi» shows every row and totals only the money that still stands.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, status, min / max
     amount. **+ Income** → modal form. Type and method are two- and three-way segmented

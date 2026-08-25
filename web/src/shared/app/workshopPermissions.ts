@@ -10,10 +10,6 @@ export const workshopPermissions = {
   manageInventory: 'manage_inventory',
   manageFinance: 'manage_finance',
   viewFinanceReports: 'view_finance_reports',
-  // Take money for an order at the counter — create-only, order-payments only.
-  // Editing and voiding stay `manageFinance`: the hand that books a payment
-  // must not be able to erase it.
-  recordOrderPayment: 'record_order_payment',
 } as const
 
 export type WorkshopPermission = (typeof workshopPermissions)[keyof typeof workshopPermissions]

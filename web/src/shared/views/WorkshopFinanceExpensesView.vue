@@ -10,6 +10,7 @@ import {
   financeIncomeOrderLabel,
   financeLedgerTabFromPath,
   incomeSettlementView,
+  ledgerRecordedTotalTiyin,
 } from '@/shared/app/financeLedger'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -151,13 +152,12 @@ const narrowingFilters = computed(() => {
   return applied
 })
 
-// The sum of exactly the rows on screen. A ledger that lists eight expenses and
-// never states what they add up to is asking the accountant to do arithmetic
-// the page already did (QAD-182).
-const periodTotalTiyin = computed(() => {
-  const rows = activeTab.value === 'expense' ? finance.expenses : finance.incomes
-  return rows.reduce((sum, row) => sum + row.amount_tiyin, 0)
-})
+// What the rows on screen add up to — a ledger that lists eight expenses and
+// never states their sum asks the accountant to do arithmetic the page already
+// did (QAD-182). Voided rows are listed when asked for but never summed.
+const periodTotalTiyin = computed(() =>
+  ledgerRecordedTotalTiyin(activeTab.value === 'expense' ? finance.expenses : finance.incomes),
+)
 
 function resetLedgerFilters() {
   const range = presetRange('month', new Date())
@@ -1368,10 +1368,13 @@ onMounted(async () => {
           :options="statusOptions"
           top-label
         />
-        <!-- Who handled the money. Offered only once the period has actually
-             shown more than one person — a filter with one option is furniture. -->
+        <!-- Who handled the money. Offered as soon as one name has appeared,
+             not held back until two do: closing a till is exactly when this
+             control is looked for, and a filter nobody can see reads as a
+             capability the product does not have. With a single cashier it
+             still answers the question — it names who took every row. -->
         <ProjectDropdown
-          v-if="actorOptions.length > 2"
+          v-if="actorOptions.length > 1"
           v-model="actorFilter"
           :label="$t('finance.filter.actor')"
           :options="actorOptions"

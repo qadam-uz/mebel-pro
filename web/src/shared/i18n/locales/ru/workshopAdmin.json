@@ -43,8 +43,7 @@
     "manage_catalog": "Каталог материалов",
     "manage_inventory": "Склад",
     "manage_finance": "Финансовые записи",
-    "view_finance_reports": "Финансовые отчёты",
-    "record_order_payment": "Приём оплаты по заказу"
+    "view_finance_reports": "Финансовые отчёты"
   },
   "assignment": {
     "cutter": "Распильщик",
