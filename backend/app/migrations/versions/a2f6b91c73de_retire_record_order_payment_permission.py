@@ -38,7 +38,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute("DELETE FROM permission_grants WHERE permission = 'record_order_payment'")
+    # `permission::text`, not a bare enum literal: on a database built from
+    # scratch, `b3c9f7d21a48` adds the value inside the *same* transaction this
+    # runs in, and Postgres refuses to use an enum value added but not yet
+    # committed ("unsafe use of new value"). Comparing the column as text names
+    # no enum value at all, so the delete works on a fresh database and on a
+    # production one alike.
+    op.execute("DELETE FROM permission_grants WHERE permission::text = 'record_order_payment'")
 
 
 def downgrade() -> None:
