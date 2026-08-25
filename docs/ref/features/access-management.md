@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-08-13
+updated: 2026-08-22
 order: 20
 ---
 
@@ -279,9 +279,8 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog`       | the branch's own materials — attach the platform formats the branch carries, set each one's price and min-stock, activate / deactivate. (Decors and their formats are platform-side.)                                                                                                                                                                                                                                     |
 | `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
-| `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`), and **read** the supplier list an expense is attributed to. See [`finance.md`](finance.md).                                                                                                                                                                                                |
+| `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`), and **read** the supplier list an expense is attributed to. It also carries the **To'lov qabul qilish** action on an order page the holder can already open (i.e. alongside `view_orders` or `manage_orders`), so the counter takes money where the order is. See [`finance.md`](finance.md). |
 | `view_finance_reports` | read-only access to the home finance summary tiles (income · expenses · net) and the worker-production report. The income / expense ledgers themselves require `manage_finance`. See [`finance.md`](finance.md).                                                                                                                                                                                          |
-| `record_order_payment` | **take money for an order at the counter, and nothing else** — create an `order_payment` income for an order of the branch, and see that order's settlement (total / paid / balance) so the amount can be checked before it is taken. It cannot edit or void a payment, cannot record any other income type, cannot touch expenses, and opens no Moliya screen: the ledger itself stays `manage_finance`. Deliberately **separate from `manage_finance`**, and deliberately **not folded into `manage_orders`** — a hand that can both book a payment and erase it can empty a till and leave no trace, and widening an existing grant would have handed money-writing to every order manager without anyone deciding to. It also grants no order access of its own; it is given alongside `view_orders` or `manage_orders` to whoever stands at the counter. See [`finance.md`](finance.md). |
 
 `process_delivery` is **gated out of v1** — v1 is pickup-only
 ([`scope.md`](../../scope.md)), so there is no driver workspace and the grant is not in the
@@ -390,7 +389,6 @@ is a floor. Every place they diverge is listed below.
 | `manage_catalog`       | Material katalogi (Resurslar)                                             |
 | `manage_finance`       | Tushum va xarajat · Qarzdorlik · Xodimlar mehnati (Moliya)                |
 | `view_finance_reports` | Xodimlar mehnati (Moliya)                                                 |
-| `record_order_payment` | none — it adds the **To'lov qabul qilish** action to an order page       |
 | `is_owner`             | all of the above, plus Filiallar · Xodimlar · Sozlamalar (Tizim)          |
 
 **Asosiy** (Boshqaruv) is shown to every signed-in workshop user, zero-grant staff included. It

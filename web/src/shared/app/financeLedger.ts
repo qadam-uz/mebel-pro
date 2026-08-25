@@ -4,6 +4,21 @@ export function financeLedgerTabFromPath(path: string): FinanceLedgerTab {
   return path.endsWith('/income') ? 'income' : 'expense'
 }
 
+/**
+ * The period total under the ledger filters: recorded rows only.
+ *
+ * The count beside it stays the number of rows on screen, so «Hammasi» shows
+ * all fourteen rows and the sum of the eleven that are still money. A voided
+ * row is a cancelled record, not a smaller one — adding it to a total is the
+ * one way this line could lie to whoever is reconciling a till. With the filter
+ * on «Bekor qilingan» the total is therefore 0, which is the truth.
+ */
+export function ledgerRecordedTotalTiyin(
+  rows: readonly { amount_tiyin: number; status: 'recorded' | 'voided' }[],
+): number {
+  return rows.reduce((sum, row) => (row.status === 'recorded' ? sum + row.amount_tiyin : sum), 0)
+}
+
 export interface OrderSettlementView {
   total_tiyin: number
   recorded_tiyin: number

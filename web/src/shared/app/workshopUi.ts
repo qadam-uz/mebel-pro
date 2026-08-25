@@ -70,7 +70,6 @@ const PERMISSION_CODES: ReadonlySet<string> = new Set([
   'manage_inventory',
   'manage_finance',
   'view_finance_reports',
-  'record_order_payment',
 ])
 
 /** Operator name for a permission; an unknown code stays visible as itself. */
