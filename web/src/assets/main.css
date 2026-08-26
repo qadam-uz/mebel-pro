@@ -99,6 +99,18 @@
   --color-info-soft: #e8f2f7;
   --color-info-border: #c9e2eb;
 
+  /* Substrate dots — what a format is *made of*, on the catalog's Tur pill.
+     A scanning aid, never a state, so they sit deliberately OFF the status ramp
+     above and off `accent`: a 5px dot in green, amber, red or orange would read
+     as a status in a table that also carries real ones. Grouped by family
+     rather than one hue per enum member — the word is the identity, the dot
+     only has to separate boards from wood from tape at a glance. */
+  --color-tur-board: #3b6fb5;
+  --color-tur-mdf: #7c4dbd;
+  --color-tur-wood: #8b5a2b;
+  --color-tur-tape: #b8336a;
+  --color-tur-other: #666d79;
+
   /* The two order-stage chips the status ramp does not already cover: `Yangi` /
      `Tugatilgan` sit on a cool grey, `Tasdiqlangan` on a warm taupe. The rest
      of the ramp reuses accent-soft / accent-tint / success / danger, so the
@@ -4107,6 +4119,37 @@
     color: var(--color-accent-strong);
   }
 
+  /* The catalog's Tur pill. A substrate is not a status, so it does not borrow
+     one: the chip itself is the neutral trough (still distinct from the row's
+     `sunk` hover) and the colour lives in the 5px dot the pill already draws.
+     It used to wear `p-cut` / `p-eb` — the app's *production-stage* colours,
+     two shades of one orange, which made six of the seven substrates identical
+     and gave the same two colours two meanings. */
+  .p-tur {
+    background: var(--color-track);
+    color: var(--color-ink-soft);
+  }
+
+  .p-tur .pd {
+    background: var(--color-tur-other);
+  }
+
+  .p-tur.tur-board .pd {
+    background: var(--color-tur-board);
+  }
+
+  .p-tur.tur-mdf .pd {
+    background: var(--color-tur-mdf);
+  }
+
+  .p-tur.tur-wood .pd {
+    background: var(--color-tur-wood);
+  }
+
+  .p-tur.tur-tape .pd {
+    background: var(--color-tur-tape);
+  }
+
   .p-rdy,
   .p-ok {
     background: var(--color-success-soft);
@@ -5908,6 +5951,7 @@
 
   :where(.mp-filter-input, .admin-filter-input) > span:not(.sr-only),
   :where(.admin-filter-select) > .form-select-label,
+  :where(.mp-filters, .admin-filters) > .mp-filter-segment > span:first-child,
   :where(.mp-filters, .admin-filters) > .relative > span:first-child {
     display: flex;
     flex: none;
@@ -5969,6 +6013,23 @@
   /* The date-range picker's trigger carries two full dates — more room. */
   .mp-filters > .mp-filter-date {
     max-width: 19rem;
+  }
+
+  /* A SegmentedControl standing in for a filter dropdown (the catalog's Holat).
+     It brings its own form-label type, so the rule above hands it the bar's
+     muted 12.5px instead, and the trough sizes to its segments rather than
+     stretching — same behaviour as the quiet workshop selects beside it. */
+  .mp-filters > .mp-filter-segment {
+    flex: 0 1 auto;
+  }
+
+  .mp-filters > .mp-filter-segment > span:first-child {
+    margin-bottom: 4px;
+  }
+
+  .mp-filters > .mp-filter-segment > [role='radiogroup'] {
+    min-height: 40px;
+    align-items: stretch;
   }
 
   .admin-filter-select > div > button,

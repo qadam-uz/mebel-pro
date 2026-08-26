@@ -3,8 +3,11 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "web", "dev", "--port", "5199", "--strictPort"],
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd web && exec node_modules/.bin/vite --port 5199 --strictPort"
+      ],
       "port": 5199,
       "autoPort": false
     }

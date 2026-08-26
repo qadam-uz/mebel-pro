@@ -411,11 +411,25 @@ test('owner adds a branch material and records priced stock movement with prefil
   const materialSwitch = () => formatRow.getByRole('switch')
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
   await materialSwitch().click()
+  // The row does NOT vanish under the cursor: the toggle updates the loaded row
+  // in place rather than refetching, so the operator can still see (and undo)
+  // what they just did. The Holat filter only reapplies on the next load.
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+
+  // The page opens on «Faol», so after a reload a deactivated o'lcham is out of
+  // scope — that is the state the switch was just moved to, not a lost row.
   await page.reload()
+  await expect(formatRow).toHaveCount(0)
+
+  // «Faol emas» is the way back to it, and it is one visible click away — the
+  // reason the Holat filter is a segmented control rather than a dropdown.
+  await page.getByRole('radio', { name: 'Faol emas' }).click()
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+
   // Restore visibility so the client-facing flows keep seeing the material.
   await materialSwitch().click()
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('radio', { name: 'Faol', exact: true }).click()
   await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
 
   await page.goto('/workshop/inventory')
@@ -469,9 +483,13 @@ test('owner adds a branch material and records priced stock movement with prefil
   // A write-off starts at the material it was noticed on: the row links to the
   // material's page, and the correction is booked there with nothing to re-pick.
   await page.goto('/workshop/inventory')
+  // Two filters, not the composed label: Zaxira splits it across Tur / Dekor /
+  // O'lcham cells, so no single cell holds the whole string. The link keeps its
+  // accessible name, which is still the composed label.
   await stockTable
     .getByRole('row')
-    .filter({ hasText: material.label })
+    .filter({ hasText: dekor.label })
+    .filter({ hasText: FORMAT_LABEL })
     .getByRole('link', { name: new RegExp(`${escapeRegExp(material.label)}.*batafsil`) })
     .click()
   await expect(page).toHaveURL(new RegExp(`inventory/materials/${material.id}`))
@@ -566,7 +584,14 @@ test('a first arrival puts a material on the shelf and its detail page carries t
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
   })
-  const materialRow = stockTable.getByRole('row').filter({ hasText: material.label })
+  // The row no longer carries the composed `LDSP … · … · 2800×2070×18 mm` label
+  // in one cell — Zaxira splits it into Tur / Dekor / O'lcham columns — so the
+  // row is pinned by the two halves that identify it rather than by the string
+  // the API happens to compose.
+  const materialRow = stockTable
+    .getByRole('row')
+    .filter({ hasText: dekor.label })
+    .filter({ hasText: FORMAT_LABEL })
 
   // The tab shows the warehouse, not the catalog: a material nobody has moved
   // anything into is not a stock row yet, and the empty state says which
@@ -653,10 +678,10 @@ test('a first arrival puts a material on the shelf and its detail page carries t
 
   // The threshold is warehouse policy, decided in front of the shelf: 3 sheets
   // against a threshold of 5 is low the moment it is saved.
-  await page.getByRole('button', { name: "Eng kam qoldiqni o'zgartirish" }).click()
-  await page.getByRole('textbox', { name: /Eng kam qoldiq/ }).fill('5')
+  await page.getByRole('button', { name: "Kam qoldiq chegarasini o'zgartirish" }).click()
+  await page.getByRole('textbox', { name: /Kam qoldiq chegarasi/ }).fill('5')
   await page.getByRole('button', { name: 'Saqlash', exact: true }).click()
-  await expect(page.getByText('Chegara yangilandi.')).toBeVisible()
+  await expect(page.getByText('Kam qoldiq chegarasi yangilandi.')).toBeVisible()
   await expect(page.getByText('Kam', { exact: true })).toBeVisible()
 
   // And the list the page was opened from re-derives the same way.
@@ -803,10 +828,29 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   const unpricedRow = page.getByRole('row').filter({ hasText: '2800×2070×16 mm' })
-  await expect(unpricedRow.getByText("Narx yo'q")).toBeVisible()
+  // The pill lives in the Narx column, and once more inside the o'lcham cell for
+  // the phone layout where that column is gone — so the row holds two copies of
+  // it in markup and exactly one of them is ever rendered. Filter to the visible
+  // one rather than asserting a count that depends on the viewport.
+  const unpricedPill = unpricedRow.getByText("Narx yo'q").filter({ visible: true })
+  await expect(unpricedPill).toHaveCount(1)
   await expect(
-    page.getByRole('row').filter({ hasText: '2800×2070×18 mm' }).getByText("Narx yo'q"),
+    page
+      .getByRole('row')
+      .filter({ hasText: '2800×2070×18 mm' })
+      .getByText("Narx yo'q")
+      .filter({ visible: true }),
   ).toHaveCount(0)
+
+  // And it survives the fold. Collapsing a dekor takes its rows — and their
+  // pills — off screen, on the one surface that can price them, so the count
+  // rides on the heading instead.
+  const groupHeading = page.getByRole('button', { name: `${dekor.label} o'lchamlari` })
+  await groupHeading.click()
+  await expect(unpricedRow).toHaveCount(0)
+  await expect(groupHeading).toContainText('1 ta narxsiz')
+  await groupHeading.click()
+  await expect(unpricedRow).toHaveCount(1)
 
   // Client side: the same branch, the same dekor — BOTH formats. Hiding the
   // unpriced one showed clients a fraction of the shelf (one real branch carrying
@@ -831,6 +875,95 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   const rows = (await options.json()) as Array<{ id: string; price_unset: boolean }>
   expect(rows.find((row) => row.id === unpriced.id)?.price_unset).toBe(true)
   expect(rows.find((row) => row.id === priced.id)?.price_unset).toBe(false)
+})
+
+test('the catalog filters by carried manufacturer and searches the o\'lcham numbers', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p3-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const branchId = setup.branch.id as string
+
+  // Three manufacturers on the platform; the branch carries two of them. Two,
+  // not one, because a dropdown offering «Barcha» plus a single brand cannot
+  // narrow anything — the page hides it until there is a choice to make.
+  const firstMaker = await createManufacturer(request, adminAccess, `Carried Maker ${id}`)
+  const secondMaker = await createManufacturer(request, adminAccess, `Second Maker ${id}`)
+  const offeredMaker = await createManufacturer(request, adminAccess, `Offered Maker ${id}`)
+  const firstDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: firstMaker,
+    code: `MF-C-${id}`,
+    name: 'Kulrang',
+  })
+  const secondDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: secondMaker,
+    code: `MF-S-${id}`,
+    name: 'Oq',
+  })
+  const offeredDekor = await createDecor(request, adminAccess, {
+    manufacturer_id: offeredMaker,
+    code: `MF-O-${id}`,
+    name: 'Qora',
+  })
+  await createDecorFormat(request, adminAccess, offeredDekor.id, catalogFormat())
+  const f18 = await createDecorFormat(request, adminAccess, firstDekor.id, catalogFormat())
+  const f16 = await createDecorFormat(
+    request,
+    adminAccess,
+    firstDekor.id,
+    catalogFormat({ thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
+  )
+  const fOther = await createDecorFormat(
+    request,
+    adminAccess,
+    secondDekor.id,
+    catalogFormat({ thickness_mm: '25', length_mm: 2620, width_mm: 2070 }),
+  )
+  await carryFormats(request, ownerAccess, branchId, [
+    { decor_format_id: f18.id, price_tiyin: 250_000, min_stock: 1 },
+    { decor_format_id: f16.id, price_tiyin: 240_000, min_stock: 1 },
+    { decor_format_id: fOther.id, price_tiyin: 260_000, min_stock: 1 },
+  ])
+
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
+  await page.goto('/workshop/catalog')
+  const row18 = page.getByRole('row').filter({ hasText: '2800×2070×18 mm' })
+  const row16 = page.getByRole('row').filter({ hasText: '2750×1830×16 mm' })
+  await expect(row18).toHaveCount(1)
+  await expect(row16).toHaveCount(1)
+
+  // The dropdown offers what the branch CARRIES, not the platform's whole offer:
+  // «Offered Maker» matches no row here, so listing it would be a dead option.
+  const manufacturer = page.getByRole('button', { name: /Barcha ishlab chiqaruvchilar/ })
+  await manufacturer.click()
+  await expect(page.getByRole('option', { name: `Carried Maker ${id}` })).toBeVisible()
+  await expect(page.getByRole('option', { name: `Offered Maker ${id}` })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: `Second Maker ${id}` })).toBeVisible()
+  await page.getByRole('option', { name: `Carried Maker ${id}` }).click()
+  await expect(row18).toHaveCount(1)
+  await expect(page.getByRole('row').filter({ hasText: '2620×2070×25 mm' })).toHaveCount(0)
+
+  // The search box reaches the numbers the row prints — thickness and panel
+  // dimensions live on the format, which `search_key` (a dekor fact) cannot see.
+  const search = page.getByRole('textbox', { name: 'Qidirish' })
+  await search.fill('16')
+  await expect(row16).toHaveCount(1)
+  await expect(row18).toHaveCount(0)
+
+  // Matched by value, not as a substring: 1830 is a width of its own row and 18
+  // is not part of it.
+  await search.fill('1830')
+  await expect(row16).toHaveCount(1)
+  await expect(row18).toHaveCount(0)
+
+  await search.fill('2800')
+  await expect(row18).toHaveCount(1)
+  await expect(row16).toHaveCount(0)
 })
 
 test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({

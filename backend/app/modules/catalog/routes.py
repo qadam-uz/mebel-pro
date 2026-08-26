@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, status
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import DecorType, MaterialStatus
 from app.modules.catalog.api import (
+    BranchCatalogFacetScope,
     BranchCatalogOption,
     BranchMaterialRecord,
     DecorFormatRecord,
@@ -407,8 +408,14 @@ async def workshop_catalog_filters_show(
     branch_id: uuid.UUID,
     principal: AccountReadyPrincipal,
     db: Session,
+    scope: BranchCatalogFacetScope = BranchCatalogFacetScope.ATTACHABLE,
 ) -> BranchCatalogFiltersResponse:
-    facets = await list_branch_catalog_facets(db, principal=principal, branch_id=branch_id)
+    facets = await list_branch_catalog_facets(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        scope=scope,
+    )
     return BranchCatalogFiltersResponse(
         manufacturers=[
             BranchCatalogManufacturerOption(id=row.id, name=row.name)

@@ -6,6 +6,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { traceLine } from '@/shared/app/errorTrace'
 import { sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
+import { lowStockThresholdColumn } from '@/shared/app/lowStockThreshold'
 import { formatMm, isTape } from '@/shared/app/materialLabel'
 import { groupMaterialMovements, movementTotal } from '@/shared/app/materialMovements'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
@@ -47,6 +48,9 @@ import {
 const MOVEMENT_WINDOW = 100
 
 const { t } = useI18n()
+// One module owns this number's copy — the figure tile, Ombor's column and the
+// catalog form all read it from there rather than each naming it themselves.
+const thresholdColumn = computed(() => lowStockThresholdColumn())
 const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
@@ -400,7 +404,7 @@ watch(branchMaterialId, load, { immediate: true })
           </small>
         </div>
         <div class="fig">
-          <span class="fig-l">{{ $t('inventory.stock.columnMin') }}</span>
+          <span class="fig-l">{{ thresholdColumn }}</span>
           <!-- The threshold is warehouse policy, and the decision "5 emas, 10
                bo'lsin" is made standing in front of the shelf — so it is edited
                here as well as on the catalog form. -->

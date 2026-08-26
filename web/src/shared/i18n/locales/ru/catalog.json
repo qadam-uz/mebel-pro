@@ -9,7 +9,7 @@
   },
   "filter": {
     "searchLabel": "Поиск",
-    "searchPlaceholder": "Название или код декора",
+    "searchPlaceholder": "Декор, код или размер",
     "turLabel": "Тип",
     "turAll": "Все типы",
     "manufacturerLabel": "Производитель",
@@ -32,18 +32,14 @@
     "formatCount": "Размеров: {n}"
   },
   "table": {
-    "dekor": "Декор",
     "format": "Размер",
     "tur": "Тип",
     "price": "Цена",
-    "threshold": "Порог",
-    "onHand": "Остаток",
     "status": "Статус",
-    "actions": "Действия",
     "editRow": "{name} — изменить",
     "statusToggle": "{name} — статус",
-    "rowActions": "{name} — действия",
-    "expandDekor": "Размеры {name}"
+    "expandDekor": "Размеры {name}",
+    "groupSummary": "{name} — размеров без цены: {n}"
   },
   "empty": {
     "title": "В этот филиал материалы не добавлены",
@@ -57,7 +53,8 @@
     "saving": "Сохранение",
     "cancel": "Отмена",
     "loadMore": "Показать ещё",
-    "loadingMore": "Загрузка"
+    "loadingMore": "Загрузка",
+    "materialDetail": "Движения на складе"
   },
   "form": {
     "title": "Изменить размер",
@@ -100,7 +97,8 @@
   },
   "price": {
     "unset": "Нет цены",
-    "unsetHint": "Этот размер не виден клиентам — укажите цену."
+    "unsetHint": "Этот размер не виден клиентам — укажите цену.",
+    "unsetGroup": "{n} размер без цены | {n} размера без цены | {n} размеров без цены"
   },
   "finishedSides": {
     "1": "1 сторона",
@@ -135,5 +133,12 @@
     "created": "Формат добавлен.",
     "statusChanged": "Статус формата обновлён.",
     "saveFailed": "Формат не сохранён."
+  },
+  "stock": {
+    "thresholdInline": "низкий остаток: {value}",
+    "thresholdOff": "низкий остаток: не отслеживается"
+  },
+  "threshold": {
+    "off": "не отслеживается"
   }
 }

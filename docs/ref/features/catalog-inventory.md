@@ -126,6 +126,13 @@ finished. `LDSP · 18 mm · 2800×2070 · 2 tomonlama` is a format; so is
 `Kromka · 0.8 mm · 22 mm`. Field-level detail is in
 [`catalog.md`](../entities/catalog.md#decor-format).
 
+**A finished-faces note is printed only when a board is one-sided.** Two finished faces is
+what a board is unless someone says otherwise, so printing it costs width on every line to say
+nothing and buries the exception it exists to mark; `1 tomonlama` is the note, and two is
+silence. The rule holds wherever a format is *displayed* — the composed label, the branch
+table, both steps of the attach sheet — and the platform's own decor-format screen is the one
+exception, because there the field is being entered rather than read.
+
 **Only the platform creates formats**, from the manufacturer's own catalog. A branch picks
 from what exists.
 
@@ -242,14 +249,36 @@ answers, so they are different steps.
 
 - **Step one — decor picker.** The platform-`active` catalog, searched and filtered
   server-side by substrate and manufacturer (substrate here means "has an active format of
-  this substrate"). A decor the branch **already carries stays in the list**, labelled with
-  how many of its formats the branch carries against how many the platform offers: carrying
-  18 mm is no reason to hide the row from someone adding 16 mm.
-- **Step two — the decor's active formats**, as checkable rows — `LDSP · 18 mm · 2800×2070 ·
-  2 tomonlama`, `Kromka · 0.8 mm · 22 mm` — with a price and a min-stock input per checked
+  this substrate"). **Search reaches the o'lcham numbers here too**: a numeric token means
+  "sold in an active format with this thickness or panel dimension", matched by value through
+  the decor's formats, so `18` and `sonoma 18` find what a price list names (the platform's own
+  decor table is the one list where a bare number matches nothing). Every row carries a count
+  chip that is **also its disclosure**: `3 o'lcham` when the branch carries none, `2/3 o'lcham
+  bor` while it carries some, `Hammasi bor` when nothing is left to add — press it and the
+  decor's platform formats list underneath, each named by o'lcham alone and the carried ones
+  marked. A decor with **nothing left to add has no checkbox at all** — the row and its
+  o'lcham list stay, because that is how the operator confirms it *is* carried, but ticking
+  it led to a step two of disabled rows and a submit that refused, with neither screen saying
+  why. When the whole filter is in that state, «Filtrdagi hammasi» is disabled and says so. A decor the branch **already carries stays in the list** (carrying 18 mm is no reason
+  to hide the row from someone adding 16 mm), and the two depths answer the two questions in
+  place: *is it already in?* off the chip, *which sizes, then?* off the panel — neither costing
+  a trip into step two and back. The panel is a **preview, not a second place to tick**: what is
+  carried is read here, what to add is chosen and priced one step on, so a tick never means two
+  different things on two screens. Formats are fetched per decor on first open — a hundred
+  decors' formats is a payload nobody reads — and what step one fetched, step two reuses.
+- **Step two — the decor's active formats**, as checkable rows — `LDSP · 18 mm · 2800×2070`,
+  `Kromka · 0.8 mm · 22 mm` — with a price and a min-stock input per checked
   row. Formats the branch already carries **stay in the list, disabled and labelled**: hiding
   them would leave the operator wondering whether the size exists at all, which is the exact
-  question the sheet is there to answer.
+  question the sheet is there to answer. Two shortcuts, for the two shapes the job takes:
+  - **One decor with one addable format arrives ticked.** There is nothing to choose, only a
+    price to type. The pre-tick stops at one decor on purpose: a wrongly attached row can be
+    deactivated but never deleted, so a batch is confirmed row by row, never guessed.
+  - **Quick-pick chips** above the rows gather the o'lchamlar the selection shares — `LDSP ·
+    2800×2070×18 mm (30)`, most shared first — and `Hammasi (N)`. Registering a
+    supplier's list is many decors in one size; a chip ticks that size under every selected
+    decor in one press and a second press unticks exactly those. The chips appear once there
+    are at least two addable rows — with one, they would only restate it.
 
 **The branch creates nothing here.** There are no thickness/size chips, no "Nostandart ·
 faqat sizda" group and no inline **+ qo'shish** — all three are gone with the move of formats
@@ -467,16 +496,65 @@ workshop app) — there is no per-page branch filter, and the table drops the
 now-redundant branch column:
 
 - **Material katalogi** (`manage_catalog`) — the branch's own materials, **grouped by
-  decor**: one photo + identity line per decor, its formats as indented rows beneath
-  (o'lcham×qalinlik, narx, min qoldiq, qoldiq, holat, ⋯ menu). A group collapses. The
-  grouping mirrors how the shelf is actually organised — one decor, several thicknesses —
-  and stops the identity columns repeating on every row. A row whose price is unset carries
-  a **"Narx yo'q"** warning pill; the row is still there, still stockable, and still listed to
-  clients — the pill is the same one they see. Filters: search, substrate, status; the table
-  pages with a *load-more* control.
+  decor**: one photo + identity line per decor, its o'lchamlar as rows beneath, in the order
+  **tur · o'lcham · narx · kam qoldiq chegarasi · holat**. It shows the two numbers the branch
+  **sets** — the price and the threshold — and deliberately **not the balance they are judged
+  against**: that is Ombor's, and carrying it here made the two screens near-copies of each
+  other while leaving the catalog with a column it could not act on (no arrival, no
+  correction) and could not even show to half its audience, since reading stock takes
+  `manage_inventory` and the catalog takes `manage_catalog`. The row's edit modal links out
+  to the material's full page for anyone holding the other grant. The substrate pill leads because one decor group
+  routinely holds a kromka and two board o'lchamlar at once, so it is what splits a group
+  internally rather than a repeat of its heading. The pill is a **neutral chip with a
+  coloured dot**, and the dot marks the substrate *family* — board, MDF, wood, tape, or
+  unclassified — not one hue per enum member: the word beside it is the identity, so the dot
+  only has to separate the families at a glance. Its colours sit deliberately off the status
+  ramp, because a green, amber or red dot would read as a state in a table that carries real
+  ones. (It previously wore the app's production-stage colours, two shades of one orange,
+  which left six of the seven substrates looking identical.) The grouping mirrors how the shelf is
+  actually organised — one decor, several thicknesses — and stops the identity columns
+  repeating on every row.
+  The threshold sits beside the price, because both are numbers the operator types rather
+  than reads. `0` prints «kuzatilmaydi» in words: a printed `0` reads as a level somebody
+  chose, and it means the opposite — monitoring off. Below `sm` it loses its column and
+  therefore its header, so it names itself there (`kam qoldiq: 20 m`).
+  A row whose price is unset carries a **"Narx yo'q"** warning pill **in the Narx column**,
+  where it replaces the figure rather than joining it — an unpriced row used to print
+  «0 so'm», a number nobody chose, which is precisely the gap the pill exists to report. The
+  row is still there, still stockable, and still listed to clients; the pill is the same one
+  they see. The group heading repeats the count (`1 ta narxsiz`), because a folded group
+  would otherwise take its unpriced rows out of sight on the one screen that can price them.
+  A group collapses from its heading — `chevron-down`, rotated while open. The heading sits
+  on the `track` fill rather than `sunk`, because `sunk` is the row-hover fill and a hovered
+  o'lcham row was indistinguishable from the heading above it.
+  Filters: search, substrate, manufacturer, status. A low-stock filter belongs to Ombor and
+  stays there — the same reasoning that keeps the balance off this table: a filter over a
+  number the page does not show is one nobody can verify.
+  **Search reaches the o'lcham numbers**:
+  a token matches the decor's search key **or** the row's own thickness and panel
+  dimensions, by value rather than as a substring — `18` finds the 18 mm rows without
+  dragging in the 1830 mm ones, and `sonoma 18` narrows to one decor's 18 mm o'lchamlar.
+  The attach sheet's picker has the same arm, one join further out (an active format of the
+  decor with that value); only the platform decor list lacks it — `search_key` is a decor
+  fact, and that table has no format in reach.
+  The **manufacturer** filter offers what the branch **carries**, not what the platform
+  offers — the same endpoint serves both through a `scope`, because handing the attach
+  sheet's list to this table would name brands that match no row on screen. It is hidden
+  until the branch carries a second brand: «Barcha» plus one manufacturer cannot narrow
+  anything.
+  **Status defaults to `Faol`** — a deactivated o'lcham is
+  hidden from clients, so it is not what the operator opened the page to read — on a
+  segmented control, which is also why the default is safe: the `Faol emas` segment is the
+  visible way back to a material just switched off. The toggle itself updates the loaded row
+  in place rather than refetching, so nothing vanishes under the cursor; the filter reapplies
+  on the next load. Because `Faol` is the baseline, "is a filter on?" is measured against the
+  defaults — comparing to `Hammasi` would light the result-count line on every load and hide
+  the first-run empty state behind a no-results one. The table pages with a *load-more*
+  control.
   **+ Material** opens the two-step attach sheet (decor picker → the decor's platform formats,
   with price / threshold per checked row). Row: Edit (modal — price and threshold; the format
-  is not editable) · client visibility toggled by a status switch in the row itself. No
+  is not editable, and a link leads to the material's full detail page for anyone holding
+  `manage_inventory`) · client visibility toggled by a status switch in the row itself. No
   Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
   — the cutting rate (`cutting_rate_tiyin`, per panel) and the edge-banding labour rate
@@ -487,7 +565,21 @@ now-redundant branch column:
   The edge **glue-and-trim overhang** is a branch setting too, but it sits with the branch's
   other shop-floor millimetres on the branch form ([`workshop.md`](workshop.md)), not with
   the rates.
-- **Stock** (`manage_inventory`) — the **warehouse, not the catalog**: by default the table
+- **Stock** (`manage_inventory`) — the **warehouse, not the catalog**. Its columns are
+  **tur · dekor · o'lcham · mavjud · yetarlilik**: the identity is three columns rather than
+  one composed `LDSP Egger H1137 · Kulrang eman · 2800×2070×18 mm` string, because a shelf is
+  read *down* a column («qaysi kromkalar?», «shu dekorning qaysi o'lchamlari bor?») and one
+  ragged line forces that reading sideways. The dekor cell draws the decor's **own uploaded
+  photo**, with the hashed swatch only as a fallback for a decor the platform never gave one
+  — this row used to draw the swatch unconditionally, so a real image never reached the
+  shelf. The threshold is **not** a column here: it is the branch's setting and lives in the
+  catalog (and on the material's own page, where a storekeeper standing at the shelf can
+  change it); Zaxira shows what reality holds, the catalog shows what the branch decided.
+  The last column is **«Yetarlilik»** (`Yetarli` / `Kam` / `Manfiy`), not «Holat»: the
+  catalog's own last column is also a status, and there it means *client visibility*
+  (`Faol` / `Faol emas`). One word on two adjacent screens for the health of a balance and
+  for whether clients can see the material at all is the «Chegara / Min / Eng kam qoldiq»
+  defect again — each column now names the question it answers. By default the table
   lists only materials that have actually moved (at least one stock transaction), because
   attaching a format mints a zero-balance row and a branch that registered 518 formats got a
   tab of 518 zeroes. A «Butun katalog» toggle chip opens it to every attached material.
@@ -523,7 +615,7 @@ now-redundant branch column:
   material rather than reading off the topbar (`GET /workshop/inventory/materials/{id}/stock`).
 
   The page reads: the label, format line and status pill, then four figures — *Qoldiq*
-  (danger when negative) · *Min*, editable in place through a pencil control · *Oxirgi narx*
+  (danger when negative) · *Kam qoldiq*, editable in place through a pencil control · *Oxirgi narx*
   with its provenance (date · supplier, or "birinchi kirim" when the material was never
   priced) · *Qiymat*, on-hand valued at that last price and shown only when both halves are
   real.
@@ -549,8 +641,12 @@ now-redundant branch column:
   pre-picked) and **Tuzatish** (the correction dialog — one field and a reason, so it stays a
   dialog).
 
-  Editing *Min* here writes the same `branch_material.min_stock` the catalog form writes —
-  two doors, one fact, no copy anywhere. It is gated on `manage_inventory` rather than
+  Editing *Kam qoldiq* here writes the same `branch_material.min_stock` the catalog form
+  writes — two doors, one fact, no copy anywhere. The threshold wears **one word on every
+  screen** (`Kam qoldiq` as a column or figure, `Kam qoldiq chegarasi` as a form label): it
+  used to be *Min* here, *Chegara* in the catalog and *Eng kam qoldiq* on this page's own
+  edit control, three names for one number on three screens a click apart. It is gated on
+  `manage_inventory` rather than
   `manage_catalog` because the threshold is warehouse policy: the decision "5 emas, 10
   bo'lsin" is made standing in front of the shelf by the person who runs it.
 

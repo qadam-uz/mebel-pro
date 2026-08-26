@@ -7,7 +7,12 @@ import { apiTraceId } from '@/shared/api/client'
 import { INVENTORY_INVOICE_PAGE_LIMIT, INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine } from '@/shared/app/errorTrace'
-import { decorTypeFilterGroups, formatMm, isTape } from '@/shared/app/materialLabel'
+import {
+  decorTypeFilterGroups,
+  decorTypeLabel,
+  decorTypePillClass,
+  formatDimensionsLabel,
+} from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -21,6 +26,7 @@ import {
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import FilterStatus from '@/shared/components/FilterStatus.vue'
@@ -257,21 +263,6 @@ function isNegative(item: StockItem) {
 // The format line under the material's label: `2800×2070×18 mm` for a panel,
 // `0.4×19 mm · kromka (metr)` for a tape. Reads the branch material's own format
 // fields — there is no stored name, and `material.label` already carries identity.
-function materialMeta(item: (typeof workshop.stockItems)[number]) {
-  const thickness = formatMm(item.material.decor_format.thickness_mm)
-  if (isTape(item.type)) {
-    return t('inventory.stock.materialMetaTape', {
-      thickness,
-      width: item.material.decor_format.tape_width_mm ?? 0,
-    })
-  }
-  return t('inventory.stock.materialMetaPanel', {
-    thickness,
-    length: item.material.decor_format.length_mm ?? 0,
-    width: item.material.decor_format.width_mm ?? 0,
-  })
-}
-
 // A movement's pill reads its direction: arrivals green, everything that takes
 // stock away red, corrections amber, restores neutral. A void reversal is a
 // stock-out of an arrival that should not have been booked, so it sits with the
@@ -751,17 +742,41 @@ onBeforeUnmount(() => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>{{ $t('inventory.stock.columnMaterial') }}</th>
+                <th class="nowrap w-px">{{ $t('inventory.stock.columnTur') }}</th>
+                <th>{{ $t('inventory.stock.columnDekor') }}</th>
                 <th class="right">{{ $t('inventory.stock.columnOnHand') }}</th>
-                <th class="right">{{ $t('inventory.stock.columnMin') }}</th>
                 <th>{{ $t('inventory.stock.columnStatus') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in workshop.stockItems" :key="item.id" class="row-clickable">
+                <!-- Substrate, decor and o'lcham as three columns rather than one
+                     composed label: the shelf is read down a column («qaysi
+                     kromkalar?», «shu dekorning qaysi o'lchamlari?»), and a single
+                     `LDSP Egger H1137 · Kulrang eman · 2800×2070×18 mm` string
+                     forced that reading onto one ragged line. -->
+                <td class="nowrap">
+                  <span :class="decorTypePillClass(item.type)">
+                    <span class="pd"></span>{{ decorTypeLabel(item.type) }}
+                  </span>
+                </td>
                 <td>
                   <div class="flex min-w-0 items-center gap-3">
-                    <span class="sw" :class="materialSwatchClass(item.material.decor)"></span>
+                    <!-- The decor's own photo, with the hashed swatch only as a
+                         fallback for a decor the platform never gave one. This row
+                         used to draw the swatch unconditionally, so a real
+                         uploaded image never reached the shelf. -->
+                    <AuthFileImage
+                      v-if="item.material.decor.image_file_id"
+                      :file-id="item.material.decor.image_file_id"
+                      :alt="item.material.decor.label"
+                      class="size-9 shrink-0 rounded-md object-cover"
+                    />
+                    <span
+                      v-else
+                      class="sw size-9"
+                      :class="materialSwatchClass(item.material.decor)"
+                    ></span>
                     <span class="min-w-0">
                       <!-- The name is the row's control: the one thing anyone
                            comes to a stock row to do is read the material's
@@ -773,10 +788,14 @@ onBeforeUnmount(() => {
                           $t('inventory.stock.openAria', { material: item.material.label })
                         "
                       >
-                        {{ item.material.label }}
+                        {{ item.material.decor.label }}
                       </RouterLink>
+                      <!-- The o'lcham sits under the decor rather than in a column
+                           of its own: one shelf row is "this decor, in this size",
+                           and stacking the two keeps the pair together while the
+                           decor names stay a readable column. -->
                       <small class="block truncate text-ink-muted">
-                        {{ materialMeta(item) }}
+                        {{ formatDimensionsLabel(item.material.decor_format) }}
                         <!-- The platform retired the format: the shelf is still
                              real, but nobody will reorder it — said here so a low
                              balance does not read as "buy more". -->
@@ -804,9 +823,6 @@ onBeforeUnmount(() => {
                         : $t('inventory.stock.noteLow')
                     }}
                   </small>
-                </td>
-                <td class="amt muted">
-                  {{ formatStockQuantity(item.min_stock, item.display_unit) }}
                 </td>
                 <td>
                   <span

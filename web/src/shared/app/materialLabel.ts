@@ -85,6 +85,28 @@ export function decorTypeLabel(type: string | null | undefined): string {
 }
 
 /**
+ * The Tur pill's classes — the neutral chip plus the dot colour for this
+ * substrate's **family**.
+ *
+ * Grouped, not one hue per enum member: the word beside the dot is the identity,
+ * so the dot only has to answer "board, wood, or tape?" at a glance, and a hue
+ * per member would be six things to learn instead of four. `ldsp` and `dsp`
+ * share a dot because they are the same board with and without its laminate —
+ * their *labels* stay distinct, which is what tells them apart; `fanera` and
+ * `yog'och` share one because both are literally wood; `boshqa` takes the muted
+ * default, the honest colour for "unclassified".
+ *
+ * Deliberately off the status ramp — see the `--color-tur-*` note in main.css.
+ */
+export function decorTypePillClass(type: DecorType | null | undefined): string {
+  if (type === 'kromka') return 'pill p-tur tur-tape'
+  if (type === 'ldsp' || type === 'dsp') return 'pill p-tur tur-board'
+  if (type === 'mdf') return 'pill p-tur tur-mdf'
+  if (type === 'fanera' || type === 'yogoch') return 'pill p-tur tur-wood'
+  return 'pill p-tur'
+}
+
+/**
  * The `type` choices a **filter** offers, one per distinct label.
  *
  * `ldsp` and `dsp` are two enum members with one name — the workshop calls both
@@ -118,6 +140,37 @@ export function formatMm(value: unknown): string {
   if (!Number.isFinite(parsed)) return text
   if (Number.isInteger(parsed)) return String(parsed)
   return text.replace(/0+$/, '').replace(/\.$/, '')
+}
+
+/** The o'lcham fields of a platform format — what `formatDimensionsLabel` reads. */
+export interface FormatDimensions {
+  type: DecorType
+  thickness_mm: string
+  length_mm: number | null
+  width_mm: number | null
+  tape_width_mm: number | null
+}
+
+/**
+ * `2800×2070×18 mm` for a panel, `0.4×19 mm` for a tape — the o'lcham alone, with
+ * no identity in front of it. For the rows that sit under a decor heading
+ * (the branch catalog table, the attach sheet's step two) repeating the decor
+ * on every line would bury the one thing that differs between them.
+ */
+export function formatDimensionsLabel(format: FormatDimensions): string {
+  const thickness = formatMm(format.thickness_mm)
+  if (isTape(format.type)) {
+    return format.tape_width_mm !== null
+      ? translate('catalog.meta.tapeFormat', { thickness, width: format.tape_width_mm })
+      : `${thickness} mm`
+  }
+  return format.length_mm !== null && format.width_mm !== null
+    ? translate('catalog.meta.panelFormat', {
+        length: format.length_mm,
+        width: format.width_mm,
+        thickness,
+      })
+    : `${thickness} mm`
 }
 
 export type MaterialSnapshot = Record<string, unknown> | undefined
@@ -176,6 +229,22 @@ export function finishedSidesLabel(value: unknown): string {
   return sides === 1 || sides === 2 ? translate(`catalog.finishedSides.${sides}`) : ''
 }
 
+/**
+ * The finished-faces note as a *display label* carries it: `1 tomonlama`, and
+ * nothing at all for two.
+ *
+ * Two finished faces is what a board is unless someone says otherwise — it is on
+ * the overwhelming majority of rows, so printing it everywhere costs width on
+ * every line to say nothing, and buries the one-sided rows that are the actual
+ * exception. This is the rule the canonical label has always followed (mirroring
+ * `material_label.py`); it lives here so every screen composing its own string
+ * follows it too. The platform's own decor-format table is the deliberate
+ * exception — there the field is being *entered*, so it prints both values.
+ */
+export function finishedSidesNote(value: unknown): string {
+  return snapshotInt(value, 0) === 1 ? finishedSidesLabel(1) : ''
+}
+
 /** Short chip text: decor code, then colour/name, then a clipped legacy name. */
 export function snapshotShortLabel(snapshot: MaterialSnapshot): string {
   const code = snapshotText(snapshot, 'code', 'kod', 'decor_code')
@@ -206,8 +275,7 @@ export function snapshotMaterialLabel(
     0,
   )
   const width = snapshotInt(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
-  const oneSided =
-    snapshotInt(snapshotValue(snapshot, 'finished_sides'), 0) === 1 ? finishedSidesLabel(1) : ''
+  const oneSided = finishedSidesNote(snapshotValue(snapshot, 'finished_sides'))
 
   const base = [type, manufacturer, identity(snapshot, name)].filter(Boolean).join(' ') || fallback
   const dimensions =

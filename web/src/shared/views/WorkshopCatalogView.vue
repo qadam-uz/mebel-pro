@@ -11,27 +11,43 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
+import {
+  activeCatalogFilterCount,
+  catalogListFilters,
+  defaultCatalogScope,
+  isCatalogFiltered,
+  type CatalogScope,
+} from '@/shared/app/catalogScope'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
-import { DECOR_TYPES, decorTypeLabel, formatMm, isTape } from '@/shared/app/materialLabel'
+import {
+  DECOR_TYPES,
+  decorTypeLabel,
+  decorTypePillClass,
+  formatDimensionsLabel,
+  isTape,
+} from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
+import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   thresholdUnit,
-  lowStockThresholdColumn,
   lowStockThresholdHint,
   lowStockThresholdLabel,
 } from '@/shared/app/lowStockThreshold'
+import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
 import FilterStatus from '@/shared/components/FilterStatus.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import SegmentedControl from '@/shared/components/SegmentedControl.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -52,31 +68,38 @@ const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
 const toast = useToast()
 const route = useRoute()
+const rolePath = useRolePath()
 const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
-const statusFilter = ref<'all' | MaterialStatus>('all')
-const turFilter = ref<'all' | DecorType>('all')
+// The page opens on «Faol», so every "is a filter on?" question is asked against
+// the defaults rather than against 'all'. Those rules live in `catalogScope.ts`
+// with their own tests — the whole failure mode here is silent (it compiles,
+// renders, and lies about whether anything is filtered).
+const statusFilter = ref<'all' | MaterialStatus>(defaultCatalogScope().status)
+const turFilter = ref<'all' | DecorType>(defaultCatalogScope().tur)
+const manufacturerFilter = ref<string>(defaultCatalogScope().manufacturerId)
 const search = ref('')
+const scope = computed<CatalogScope>(() => ({
+  search: search.value,
+  tur: turFilter.value,
+  manufacturerId: manufacturerFilter.value,
+  status: statusFilter.value,
+}))
 
 // Same defect as Ombor (QAD-182): with a search on, the branch reported it held
 // no materials at all — and offered an add button that would not have helped.
-const catalogFiltered = computed(
-  () => search.value.trim().length > 0 || turFilter.value !== 'all' || statusFilter.value !== 'all',
-)
+const catalogFiltered = computed(() => isCatalogFiltered(scope.value))
 
 // The bar-level reset appears from the second active filter on: with one, it
 // would sit next to that filter's own clear and do the same thing.
-const activeCatalogFilterCount = computed(
-  () =>
-    (search.value.trim() ? 1 : 0) +
-    (turFilter.value === 'all' ? 0 : 1) +
-    (statusFilter.value === 'all' ? 0 : 1),
-)
+const activeFilterCount = computed(() => activeCatalogFilterCount(scope.value))
 
 function resetCatalogFilters() {
-  search.value = ''
-  turFilter.value = 'all'
-  statusFilter.value = 'all'
+  const defaults = defaultCatalogScope()
+  search.value = defaults.search
+  turFilter.value = defaults.tur
+  manufacturerFilter.value = defaults.manufacturerId
+  statusFilter.value = defaults.status
 }
 const rowActionId = ref<string | null>(null)
 const rowActionError = ref<string | null>(null)
@@ -109,16 +132,24 @@ const selectedBranchId = computed(() => {
   if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
   return accessibleBranches.value[0]?.id ?? ''
 })
-// The Qoldiq column is stock, and `manage_catalog` alone does not grant it.
+// The material's full page is Ombor's, and `manage_catalog` alone does not open
+// it — so the link out of the edit modal is offered only to someone who can
+// follow it. The catalog itself no longer reads stock at all.
 const canReadStock = computed(() =>
   permissions.canOnBranch(p.manageInventory, selectedBranchId.value),
 )
 // Computed, not a plain array: a `const` built at setup would keep the labels of
 // whatever locale was active when the page mounted.
-const statusOptions = computed<DropdownOption[]>(() => [
+//
+// A segmented control rather than a dropdown: three closed options is exactly
+// what DESIGN.md reserves the primitive for, and it is the reason the default
+// can be «Faol» at all — the segment holding what was just hidden stays on
+// screen, so a deactivated o'lcham is never somewhere the operator has to go
+// looking for.
+const statusOptions = computed<ChoiceOption[]>(() => [
   { value: 'all', label: t('catalog.filter.statusAll') },
-  { value: 'active', label: t('catalog.status.active'), dot: 'success' },
-  { value: 'inactive', label: t('catalog.status.inactive'), dot: 'muted' },
+  { value: 'active', label: t('catalog.status.active') },
+  { value: 'inactive', label: t('catalog.status.inactive') },
 ])
 // All seven wire values, including `dsp` — it shares the `LDSP` label but is a
 // distinct enum member, and omitting it would leave those decors unfilterable.
@@ -126,13 +157,21 @@ const turOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('catalog.filter.turAll') },
   ...DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
 ])
+// The manufacturers this branch actually **carries**, not the platform's whole
+// offer — the attach sheet's list would name brands that match no row here.
+const manufacturerOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: t('catalog.filter.manufacturerAll') },
+  ...workshop.carriedCatalogFilters.manufacturers.map((row) => ({
+    value: row.id,
+    label: row.name,
+  })),
+])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
 )
 // The threshold's own copy lives in `lowStockThreshold.ts` so the attach sheet,
 // this form and the table can never name it differently.
 const thresholdLabel = computed(() => lowStockThresholdLabel())
-const thresholdColumn = computed(() => lowStockThresholdColumn())
 const thresholdHint = computed(() => lowStockThresholdHint())
 const materialThresholdUnit = computed(() => {
   const row = editingBranchMaterial.value
@@ -160,18 +199,6 @@ const decorGroups = computed<DecorGroup[]>(() => {
   return [...groups.values()]
 })
 
-// On-hand comes from the branch's stock list, keyed by branch material. A stock
-// row can be missing (nothing ever arrived), which reads as "—", not as 0.
-const onHandByMaterialId = computed(
-  () =>
-    new Map(
-      workshop.stockItems.map((item) => [
-        item.branch_material_id,
-        { onHand: item.on_hand, unit: item.display_unit, low: item.is_low_stock },
-      ]),
-    ),
-)
-
 function routeSearchValue() {
   const value = route.query.search
   return typeof value === 'string' ? value : ''
@@ -184,20 +211,7 @@ function applyRouteSearch() {
 
 /** `2800×2070×18 mm` for a panel, `0.4×19 mm` for a tape. */
 function formatLabel(row: BranchMaterial) {
-  const format = row.decor_format
-  const thickness = formatMm(format.thickness_mm)
-  if (isTape(format.type)) {
-    return format.tape_width_mm !== null
-      ? t('catalog.meta.tapeFormat', { thickness, width: format.tape_width_mm })
-      : `${thickness} mm`
-  }
-  return format.length_mm !== null && format.width_mm !== null
-    ? t('catalog.meta.panelFormat', {
-        length: format.length_mm,
-        width: format.width_mm,
-        thickness,
-      })
-    : `${thickness} mm`
+  return formatDimensionsLabel(row.decor_format)
 }
 
 function priceUnit(type: DecorType) {
@@ -212,13 +226,15 @@ function thresholdParts(row: BranchMaterial) {
   return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
 }
 
-function onHandText(row: BranchMaterial) {
-  const stock = onHandByMaterialId.value.get(row.id)
-  return stock ? formatStockQuantity(stock.onHand, stock.unit) : '—'
-}
-
-function isLowStock(row: BranchMaterial) {
-  return onHandByMaterialId.value.get(row.id)?.low ?? false
+// Below `sm` the threshold loses its column and therefore its header, so it
+// names itself there instead. `0` is monitoring switched off, not a level
+// somebody chose — the QAD-159 resolution — so it says so in words rather than
+// printing "kam qoldiq: 0 dona", which reads as a deliberate setting.
+function thresholdInline(row: BranchMaterial) {
+  if (row.min_stock === 0) return t('catalog.stock.thresholdOff')
+  return t('catalog.stock.thresholdInline', {
+    value: formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type)),
+  })
 }
 
 function swatchSource(decor: Decor) {
@@ -236,13 +252,23 @@ function toggleDecor(decorId: string) {
   collapsedDecorIds.value = next
 }
 
+// Collapse a group today and its rows' «Narx yo'q» pills go with it — on the one
+// screen that can fix an unpriced o'lcham. The count rides on the header so the
+// gap survives the fold.
+function unpricedCount(group: DecorGroup) {
+  return group.rows.filter((row) => row.price_unset).length
+}
+
+// The same branch material has a full detail page (movements, arrivals, value)
+// reached from Ombor, and a three-field modal reached from here. The link is the
+// bridge; it is not offered without `manage_inventory`, which is what that route
+// requires.
+function materialDetailPath(row: BranchMaterial) {
+  return rolePath(`/workshop/inventory/materials/${row.id}`)
+}
+
 function tableFilters(offset = 0): BranchMaterialFilters {
-  return {
-    status: statusFilter.value === 'all' ? null : statusFilter.value,
-    type: turFilter.value === 'all' ? null : turFilter.value,
-    search: search.value,
-    offset,
-  }
+  return catalogListFilters(scope.value, offset)
 }
 
 async function loadBranchTable(offset = 0) {
@@ -255,19 +281,17 @@ async function loadBranchTable(offset = 0) {
 }
 
 // Full refresh (mount, branch switch, after save): reset the table to page one.
-// Stock rides along so the Qoldiq column has numbers; the attach sheet loads its
-// own decor options when it opens.
+// No stock read — the catalog shows the two numbers the branch *sets* (price and
+// the low-stock threshold); the balance those are judged against is Ombor's, and
+// duplicating it here made the two screens near-copies of each other. The attach
+// sheet loads its own decor options when it opens.
 function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
     loadBranchTable(0),
-    // Stock is a *separate* entitlement: `manage_catalog` lets you read the
-    // catalog but not the branch's stock, so asking anyway is a guaranteed 403
-    // on page load. The Qoldiq column falls back to "—", which is the truth for
-    // someone who may not see stock.
-    canReadStock.value
-      ? workshop.loadStock(selectedBranchId.value).catch(() => undefined)
-      : Promise.resolve(),
+    // The carried-manufacturer facet is a branch fact, so it rides with the
+    // branch's first load and again whenever the topbar switches branch.
+    workshop.loadCatalogFilters(selectedBranchId.value, 'carried').catch(() => undefined),
   ])
 }
 
@@ -380,7 +404,7 @@ async function toggleVisibility(row: BranchMaterial) {
 }
 
 // Table filters reload just the table (offset 0); the picker is independent.
-watch([statusFilter, turFilter], () => {
+watch([statusFilter, turFilter, manufacturerFilter], () => {
   void loadBranchTable(0)
 })
 
@@ -412,6 +436,9 @@ watch(selectedBranchId, () => {
   materialModalOpen.value = false
   attachSheetOpen.value = false
   collapsedDecorIds.value = new Set()
+  // A manufacturer id picked in one branch is a filter for a list the next
+  // branch may not carry at all — it would read as an empty catalog.
+  manufacturerFilter.value = defaultCatalogScope().manufacturerId
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -465,11 +492,21 @@ onBeforeUnmount(() => {
           :options="turOptions"
           top-label
         />
+        <!-- Hidden until the branch carries a second brand: «Barcha» plus one
+             manufacturer is a control that cannot narrow anything, and the bar
+             already runs four controls wide. -->
         <ProjectDropdown
+          v-if="manufacturerOptions.length > 2"
+          v-model="manufacturerFilter"
+          :label="$t('catalog.filter.manufacturerLabel')"
+          :options="manufacturerOptions"
+          top-label
+        />
+        <SegmentedControl
           v-model="statusFilter"
+          class="mp-filter-segment"
           :label="$t('catalog.filter.statusLabel')"
           :options="statusOptions"
-          top-label
         />
         <button
           type="button"
@@ -486,7 +523,7 @@ onBeforeUnmount(() => {
         :loading="workshop.loading"
         :count="workshop.branchMaterials.length"
         noun="material"
-        :on-reset="activeCatalogFilterCount > 1 ? resetCatalogFilters : null"
+        :on-reset="activeFilterCount > 1 ? resetCatalogFilters : null"
       />
 
       <div v-if="rowActionError" class="banner danger mb-4">
@@ -512,6 +549,18 @@ onBeforeUnmount(() => {
           <label class="field">
             <span>{{ $t('catalog.form.material') }}</span>
             <input class="mp-input" :value="editingBranchMaterial?.label ?? ''" disabled />
+            <!-- The same branch material has a full page — movements, arrivals,
+                 value — reachable only from Ombor, while this modal edits two
+                 numbers. The link is the bridge between the two doors; the route
+                 itself requires `manage_inventory`, so it is not offered without. -->
+            <small v-if="canReadStock && editingBranchMaterial" class="block">
+              <RouterLink
+                class="font-bold text-accent-deep no-underline hover:underline"
+                :to="materialDetailPath(editingBranchMaterial)"
+              >
+                {{ $t('catalog.action.materialDetail') }}
+              </RouterLink>
+            </small>
           </label>
           <label class="field">
             <span>{{ $t('catalog.form.price') }}</span>
@@ -583,22 +632,27 @@ onBeforeUnmount(() => {
           <table class="tbl tbl-fluid">
             <thead>
               <tr>
-                <!-- Let the format column absorb the table's slack so the narrow
-                     price/threshold/stock columns hug their content on the right. -->
-                <th class="w-full">{{ $t('catalog.table.format') }}</th>
-                <th class="nowrap hidden lg:table-cell">{{ $t('catalog.table.tur') }}</th>
+                <!-- Tur leads, and is no longer `lg`-only: one dekor group holds a
+                     kromka and two board o'lchamlar at once, so the pill is what
+                     splits a group internally, not a repeat of its heading. The
+                     format column takes the table's slack (it used to be `w-full`,
+                     which handed it two thirds of the width to hold `2800×2070×18
+                     mm` and left a corridor between the two halves of every row). -->
+                <th class="nowrap w-px">{{ $t('catalog.table.tur') }}</th>
+                <th>{{ $t('catalog.table.format') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
-                <th class="nowrap right hidden sm:table-cell">{{ thresholdColumn }}</th>
-                <th class="nowrap right hidden md:table-cell">
-                  {{ $t('catalog.table.onHand') }}
-                </th>
-                <th class="nowrap">{{ $t('catalog.table.status') }}</th>
+                <th class="nowrap right hidden sm:table-cell">{{ thresholdLabel }}</th>
+                <th class="nowrap right">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
             <tbody v-for="group in decorGroups" :key="group.decor.id">
-              <!-- Group header: the decor's identity once, then its formats. -->
-              <tr class="bg-sunk">
-                <td colspan="6">
+              <!-- Group header: the decor's identity once, then its o'lchamlar.
+                   `track`, not `sunk`: the row hover is a `sunk` fill by
+                   design-system rule, so a `sunk` heading made a hovered o'lcham
+                   row indistinguishable from the heading above it. The heading is
+                   what moves off the shared value. -->
+              <tr class="bg-track">
+                <td colspan="5">
                   <button
                     type="button"
                     class="flex w-full min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -606,15 +660,25 @@ onBeforeUnmount(() => {
                     :aria-label="$t('catalog.table.expandDekor', { name: group.decor.label })"
                     @click="toggleDecor(group.decor.id)"
                   >
+                    <!-- Resting glyph is `chevron-down`, rotated when the group is
+                         open (CuttingKromkaPanel's disclosure, and the one glyph
+                         DESIGN.md names for expand/collapse). Until now the header
+                         carried no indicator at all — sixteen groups folded and
+                         nothing on screen said they could. -->
+                    <AppIcon
+                      name="chevron-down"
+                      class="size-4 shrink-0 text-ink-soft transition-transform"
+                      :class="isCollapsed(group.decor.id) ? '' : 'rotate-180'"
+                    />
                     <AuthFileImage
                       v-if="group.decor.image_file_id"
                       :file-id="group.decor.image_file_id"
                       :alt="group.decor.label"
-                      class="size-[34px] shrink-0 rounded-md object-cover"
+                      class="size-10 shrink-0 rounded-md object-cover"
                     />
                     <span
                       v-else
-                      class="sw"
+                      class="sw size-10"
                       :class="materialSwatchClass(swatchSource(group.decor))"
                     ></span>
                     <span class="grid min-w-0 flex-1 gap-0.5">
@@ -624,13 +688,34 @@ onBeforeUnmount(() => {
                         {{ $t('catalog.meta.formatCount', { n: group.rows.length }) }}
                       </small>
                     </span>
+                    <!-- The group's unpriced count, on the heading rather than only
+                         on the rows: folded away, a «Narx yo'q» pill takes with it
+                         the one screen that can fix it. -->
+                    <span v-if="unpricedCount(group) > 0" class="pill p-warn shrink-0">
+                      <span class="pd"></span>
+                      {{
+                        $t(
+                          'catalog.price.unsetGroup',
+                          { n: unpricedCount(group) },
+                          unpricedCount(group),
+                        )
+                      }}
+                    </span>
                   </button>
                 </td>
               </tr>
               <template v-if="!isCollapsed(group.decor.id)">
                 <tr v-for="row in group.rows" :key="row.id" class="row-clickable">
+                  <!-- The pills are inset from the heading's chevron by a shared
+                       padding, so they still read as the group's children while
+                       staying aligned as a column of their own. -->
+                  <td class="nowrap pl-6">
+                    <span :class="decorTypePillClass(row.decor_format.type)">
+                      <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
+                    </span>
+                  </td>
                   <td>
-                    <div class="grid min-w-0 gap-0.5 pl-[46px]">
+                    <div class="grid min-w-0 gap-0.5">
                       <!-- The format is the edit control, stretched over the row
                            (QAD-184) — the row no longer ends in a button column. -->
                       <button
@@ -641,49 +726,55 @@ onBeforeUnmount(() => {
                       >
                         {{ formatLabel(row) }}
                       </button>
-                      <small v-if="row.price_unset" class="block">
-                        <span class="pill p-warn">
+                      <!-- Below `sm` the Narx and threshold columns are gone — a
+                           phone cannot hold five columns plus a wrapping format
+                           label without scrolling sideways. The numbers move here
+                           rather than being dropped, and the threshold names
+                           itself, having lost its header on the way. -->
+                      <small class="block text-ink-muted sm:hidden">
+                        {{ thresholdInline(row) }}
+                      </small>
+                      <small class="block sm:hidden">
+                        <span v-if="row.price_unset" class="pill p-warn">
                           <span class="pd"></span>{{ $t('catalog.price.unset') }}
                         </span>
-                      </small>
-                      <!-- Below `sm` the Narx and Chegara columns are gone — a phone
-                           cannot hold six columns plus a wrapping decor name without
-                           scrolling sideways. The numbers move here instead of being
-                           dropped. -->
-                      <small class="block text-ink-muted sm:hidden">
-                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.decor_format.type) }} ·
-                        {{ thresholdColumn }}: {{ thresholdParts(row).value }}
-                        {{ thresholdParts(row).unit }}
-                      </small>
-                      <small class="block text-ink-muted md:hidden">
-                        {{ $t('catalog.table.onHand') }}: {{ onHandText(row) }}
+                        <span v-else class="text-ink-muted">
+                          {{ formatTiyin(row.price_tiyin) }}
+                          {{ priceUnit(row.decor_format.type) }}
+                        </span>
                       </small>
                     </div>
                   </td>
-                  <td class="nowrap hidden lg:table-cell">
-                    <span :class="isTape(row.decor_format.type) ? 'pill p-eb' : 'pill p-cut'">
-                      <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
-                    </span>
-                  </td>
+                  <!-- The «Narx yo'q» flag belongs to the price, so it sits in
+                       the price column — and it replaces the figure rather than
+                       joining it: an unpriced row printed «0 so'm», a number
+                       nobody chose, which is exactly the gap the pill exists to
+                       report. -->
                   <td class="amt nowrap hidden sm:table-cell">
-                    {{ formatTiyin(row.price_tiyin) }}
-                    <small class="block font-normal text-ink-muted">
-                      {{ priceUnit(row.decor_format.type) }}
-                    </small>
+                    <span v-if="row.price_unset" class="pill p-warn">
+                      <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                    </span>
+                    <template v-else>
+                      {{ formatTiyin(row.price_tiyin) }}
+                      <small class="block font-normal text-ink-muted">
+                        {{ priceUnit(row.decor_format.type) }}
+                      </small>
+                    </template>
                   </td>
+                  <!-- The threshold is the branch's *other* typed-in number, so it
+                       sits beside the price rather than beside a balance this page
+                       no longer shows. `0` says «kuzatilmaydi» in words: a printed
+                       0 reads as a level somebody chose. -->
                   <td class="amt muted nowrap hidden sm:table-cell">
-                    {{ thresholdParts(row).value }}
-                    <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
-                  </td>
-                  <td
-                    class="amt nowrap hidden md:table-cell"
-                    :class="isLowStock(row) ? 'text-warning' : 'muted'"
-                  >
-                    {{ onHandText(row) }}
+                    <template v-if="row.min_stock > 0">
+                      {{ thresholdParts(row).value }}
+                      <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
+                    </template>
+                    <span v-else class="font-normal">{{ $t('catalog.threshold.off') }}</span>
                   </td>
                   <!-- `row-above` lifts the switch over the row's stretched click
                        layer, so toggling Faol never opens the edit modal. -->
-                  <td class="nowrap row-above">
+                  <td class="nowrap right row-above">
                     <button
                       type="button"
                       role="switch"
@@ -723,7 +814,7 @@ onBeforeUnmount(() => {
             </tbody>
             <tbody v-if="decorGroups.length === 0">
               <tr>
-                <td colspan="6">
+                <td colspan="5">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="catalogFiltered">
                       <h3>{{ $t('catalog.empty.filteredTitle') }}</h3>
