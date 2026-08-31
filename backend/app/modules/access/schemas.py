@@ -6,7 +6,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AuthenticatedPrincipalType, Permission, UserStatus
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    Permission,
+    TelegramLoginTokenStatus,
+    UserStatus,
+)
 from app.schemas.common import APIModel
 
 
@@ -25,24 +30,40 @@ class PasswordChangeRequest(BaseModel):
     new_password: str
 
 
-class ClientOtpRequest(BaseModel):
-    phone: str
+class TelegramLoginTokenResponse(APIModel):
+    """The two halves of a handshake.
 
+    `token` is public — it rides in the QR. `poll_secret` is the browser's alone
+    and is the only credential a session is released against.
+    """
 
-class ClientOtpRequestResponse(APIModel):
-    phone: str
+    token: str
+    poll_secret: str
+    deep_link: str
     expires_at: datetime
-    resend_after_seconds: int
 
 
-class ClientOtpVerifyRequest(BaseModel):
-    phone: str
+class TelegramLoginPollRequest(BaseModel):
+    poll_secret: str
+
+
+class TelegramLoginPollResponse(APIModel):
+    """The non-terminal answer: the page renders progress, then polls again."""
+
+    status: TelegramLoginTokenStatus
+    expired: bool = False
+
+
+class TelegramLoginCodeRequest(BaseModel):
     code: str
-    name: str | None = None
 
 
-class ClientOtpRegistrationRequiredResponse(APIModel):
-    is_new: Literal[True] = True
+class TelegramLoginDevConfirmRequest(BaseModel):
+    """Dev-only: confirm a token as `phone`, skipping Telegram (E2E drives this)."""
+
+    phone: str
+    name: str | None = Field(default=None, max_length=80)
+    token: str | None = None
 
 
 class WorkshopClientResolveRequest(BaseModel):

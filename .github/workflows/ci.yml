@@ -99,7 +99,7 @@ jobs:
           POSTGRES_CONCURRENCY: "1"
           MINIO_CONTRACT: "1"
           DATABASE_URL: postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_ci
-        run: uv run pytest tests/test_inventory_postgres_concurrency.py tests/test_otp_postgres_concurrency.py tests/test_sales_postgres_concurrency.py tests/test_files_minio_contract.py -q --no-cov
+        run: uv run pytest tests/test_inventory_postgres_concurrency.py tests/test_telegram_login_postgres_concurrency.py tests/test_sales_postgres_concurrency.py tests/test_files_minio_contract.py -q --no-cov
 
       - name: Stop data services
         if: always()

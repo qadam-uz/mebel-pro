@@ -18,7 +18,7 @@ that's a considered substitution.
 ## In scope
 
 - **Identity & access** — platform operators provision workshops; owners manage staff with
-  per-branch permissions; clients self-register with phone + Telegram OTP (walk-ins may be
+  per-branch permissions; clients sign in through the platform's Telegram bot (walk-ins may be
   registered at the counter by workshop staff). Tenant-isolated, revocable,
   brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks the formats it carries

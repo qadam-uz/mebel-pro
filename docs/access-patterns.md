@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 50
 ---
 
@@ -56,7 +56,7 @@ Three principal types — three auth surfaces, one per front-end app. They don't
 | **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | platform-ops scope                                                             | superadmin app |
 | **Workshop user — owner** (`is_owner`) | login + password                      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
 | **Workshop user — staff**              | login + password                      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
-| **Client**                             | phone + Telegram OTP; no password     | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
+| **Client**                             | Telegram bot handshake; no password   | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
 
 ## The model
 
@@ -66,13 +66,14 @@ Three principal types — three auth surfaces, one per front-end app. They don't
   provisioning.
 - **Platform users** sign in with login + password and are seeded via a backend CLI (they're at
   the top of the hierarchy, so no higher principal exists to create them in-app).
-- **Clients** sign in with a **phone number verified by a one-time code sent over Telegram** —
-  no password, no fallback path. The phone is the identity; they self-register (name only) the
-  first time a new number is verified. A walk-in's client row may also be created by workshop
-  staff resolving them by phone at the counter
-  ([`ref/features/access-management.md`](ref/features/access-management.md)); OTP verification
+- **Clients** sign in **through the platform's Telegram bot** — the browser shows a one-time
+  link into the bot, the client confirms there, and on first contact shares their
+  Telegram-verified phone. No password. The **phone is the identity**; the Telegram account is
+  the credential linked to it, and they self-register on the first confirmed contact. A
+  walk-in's client row may also be created by workshop staff resolving them by phone at the
+  counter ([`ref/features/access-management.md`](ref/features/access-management.md)); the bot
   remains the **only** client login path — a staff-created row is claimed the first time its
-  number is verified.
+  number's contact is shared there.
 - **Sessions are opaque DB-backed tokens**, not JWTs — the system needs _instant revocation_
   (block, "log out everywhere", password change) and _fresh authorization_ (a new grant must
   apply on the next request). A user cannot reset their own password — a higher principal

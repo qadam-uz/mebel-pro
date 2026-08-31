@@ -1,14 +1,20 @@
-"""In-memory per-IP throttle for password login endpoints.
+"""In-memory per-IP sliding-window throttles for the sign-in surfaces.
 
-The per-account lockout in `app.core.security` stops targeted guessing, but it
-can't cover every shape: workshop logins shared across workshops record no
-failures at all, and an attacker rotating across many accounts stays under
-each account's lockout. This throttle caps *failed* login attempts per client
-IP in a sliding window, which also keeps Argon2 verification cost off the hot
-path once an IP is tripped.
+Two budgets share one primitive:
 
-Process-local by design — the app runs as a single instance, and the
-account lockout remains the durable backstop across restarts.
+* **Password login** — the per-account lockout in `app.core.security` stops
+  targeted guessing, but it can't cover every shape: workshop logins shared
+  across workshops record no failures at all, and an attacker rotating across
+  many accounts stays under each account's lockout. Only *failures* count here,
+  and a success never resets the window — otherwise one valid credential could
+  launder unlimited brute-force budget from its IP.
+* **Telegram fallback-code redeem** — every *attempt* counts. A 6-digit code
+  has 10⁶ of entropy and lives 5 minutes; the throttle is what turns that into
+  lottery odds. There is no per-row counter to lean on: no code row is
+  addressable before a correct guess.
+
+Process-local by design — the app runs as a single instance, and the account
+lockout remains the durable backstop across restarts.
 """
 
 from collections import deque
@@ -122,3 +128,13 @@ def _now(now: datetime | None) -> datetime:
 
 
 login_throttle = LoginIpThrottle()
+
+# Fallback-code redeem attempts per IP. Shares the Telegram-login master switch
+# so an E2E run can turn every per-IP budget off in one place.
+telegram_code_throttle = SlidingWindowIpThrottle(
+    error_code="login_code_rate_limited",
+    message="Too many code attempts",
+    enabled=lambda: settings.TELEGRAM_LOGIN_RATE_LIMITS_ENABLED,
+    budget=lambda: settings.TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP,
+    window_seconds=lambda: settings.TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS,
+)

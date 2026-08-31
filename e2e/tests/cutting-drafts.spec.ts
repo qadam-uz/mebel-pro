@@ -9,8 +9,10 @@ import {
   databaseUrl,
   edgeNumbers,
   escapeRegExp,
+  devConfirmLogin,
   expectOk,
   expectPdfOpensInTab,
+  loginClient,
   panelNumbers,
   type BranchMaterialResponse,
 } from './helpers'
@@ -76,7 +78,6 @@ async function seedPlatform(login: string) {
         ...process.env,
         ENV: 'test',
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   )
@@ -156,14 +157,17 @@ async function carriedMaterials(
   return { panelDecor, edgeDecor, panel, edge }
 }
 
+// The three calls the login card makes, with dev-confirm standing in for the bot.
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
-  const requested = await request.post('/api/v1/auth/client/otp/request', { data: { phone } })
-  await expectOk(requested)
-  const verified = await request.post('/api/v1/auth/client/otp/verify', {
-    data: { phone, code: '000000', name },
+  const issued = await request.post('/api/v1/auth/client/telegram/token')
+  await expectOk(issued)
+  const handshake = (await issued.json()) as { token: string; poll_secret: string }
+  await devConfirmLogin(request, handshake.token, phone, name)
+  const polled = await request.post('/api/v1/auth/client/telegram/poll', {
+    data: { poll_secret: handshake.poll_secret },
   })
-  await expectOk(verified)
-  return (await verified.json()) as TokenResponse
+  await expectOk(polled)
+  return (await polled.json()) as TokenResponse
 }
 
 async function optimizedClientDraft(
@@ -294,7 +298,6 @@ asyncio.run(main())
         ...process.env,
         ENV: 'test',
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
         RESULT_ID: args.resultId,
         CLIENT_ID: args.clientId,
         WORKSHOP_ID: args.workshopId,
@@ -342,7 +345,7 @@ async function chooseEdgeBanding(page: Page, edgeLabel: string) {
   await dialog.getByRole('button', { name: 'Kromka oynasini yopish' }).click()
 }
 
-test('client signs in with Telegram OTP, optimizes a cutting draft, and opens the PDF', async ({
+test('client signs in through the Telegram bot, optimizes a cutting draft, and opens the PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -361,14 +364,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and opens th
     id,
   )
 
-  await page.goto('/client/auth/login')
-  await page.getByLabel('Telefon raqami').fill(phoneFor(id, 40))
-  await page.getByRole('button', { name: 'Kod yuborish' }).click()
-  await page.getByLabel('Tasdiqlash kodi').fill('000000')
-  await page.getByRole('button', { name: 'Tasdiqlash' }).click()
-  await page.getByLabel('Ismingiz').fill('Cutting Client')
-  await page.getByRole('button', { name: 'Davom etish' }).click()
-  await expect(page).toHaveURL(/\/client\/c$/)
+  await loginClient(page, phoneFor(id, 40), 'Cutting Client')
 
   const branchesLoaded = page.waitForResponse(
     (response) =>
@@ -436,14 +432,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   const branchId = setup.branch.id as string
   const { panelDecor } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
 
-  await page.goto('/client/auth/login')
-  await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))
-  await page.getByRole('button', { name: 'Kod yuborish' }).click()
-  await page.getByLabel('Tasdiqlash kodi').fill('000000')
-  await page.getByRole('button', { name: 'Tasdiqlash' }).click()
-  await page.getByLabel('Ismingiz').fill('Resume Client')
-  await page.getByRole('button', { name: 'Davom etish' }).click()
-  await expect(page).toHaveURL(/\/client\/c$/)
+  await loginClient(page, phoneFor(id, 60), 'Resume Client')
 
   const branchesLoaded = page.waitForResponse(
     (response) =>

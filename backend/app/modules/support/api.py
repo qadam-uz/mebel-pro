@@ -20,6 +20,12 @@ from app.modules.support.notifications import (
     mark_notification_read,
     unread_count,
 )
+from app.modules.support.telegram_delivery import (
+    PendingTelegramMessage,
+    deliver_client_telegram_message,
+    queue_client_order_message,
+    render_order_message,
+)
 
 if TYPE_CHECKING:
     from app.modules.support.files import (
@@ -67,11 +73,13 @@ __all__ = [
     "FileStorage",
     "ImageVariant",
     "InMemoryFileStorage",
+    "PendingTelegramMessage",
     "S3FileStorage",
     "StoredObject",
     "attach_file",
     "build_image_variants",
     "create_uploaded_file",
+    "deliver_client_telegram_message",
     "file_storage",
     "get_file_for_read",
     "list_action_logs",
@@ -79,8 +87,10 @@ __all__ = [
     "list_status_change_logs",
     "mark_all_notifications_read",
     "mark_notification_read",
+    "queue_client_order_message",
     "record_action",
     "record_status_change",
+    "render_order_message",
     "replace_attached_file",
     "resolve_variant",
     "scrub_sensitive",

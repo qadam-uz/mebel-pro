@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import { sanitizeWholeNumberInput } from '@/shared/app/inputSanitizers'
 import { safeRedirectPath } from '@/shared/app/redirect'
-import BrandMark from '@/shared/components/BrandMark.vue'
-import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
-import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useRoleConfig } from '@/shared/app/roleConfig'
-import { useResendCooldown } from '@/shared/composables/useResendCooldown'
-import { useAuthStore } from '@/shared/stores/auth'
+import BrandMark from '@/shared/components/BrandMark.vue'
+import Icon from '@/shared/components/AppIcon.vue'
+import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
+import QrCode from '@/shared/components/QrCode.vue'
+import { useCountdown } from '@/shared/composables/useCountdown'
+import { useAuthStore, type ClientLoginPoll } from '@/shared/stores/auth'
 import { useClientEntryStore } from '@/shared/stores/clientEntry'
 
 const { t } = useI18n()
@@ -19,56 +20,97 @@ const auth = useAuthStore()
 const entry = useClientEntryStore()
 const route = useRoute()
 const router = useRouter()
-const isDev = import.meta.env.DEV
 
-const phone = ref('')
-const otpCode = ref('')
-const clientName = ref('')
-const clientStep = ref<'phone' | 'code' | 'name'>('phone')
-const resendAfter = ref<number | null>(null)
-const isSubmitting = ref(false)
-const error = ref<string | null>(null)
-const { left: resendLeft, start: startCooldown, stop: stopCooldown } = useResendCooldown()
+// Two seconds: the handshake lives five minutes, so this costs ~150 requests at
+// the very worst and still reads as instant when the client presses Tasdiqlash.
+const POLL_INTERVAL_MS = 2_000
+// The primary affordance follows the device, not the window: a phone gets the
+// button that opens Telegram, everything else gets the QR another device scans.
+const MOBILE_QUERY = '(max-width: 768px), (pointer: coarse)'
+const CODE_LENGTH = 6
+
+/** What the card is showing. `loading` covers minting the first token. */
+type Phase = 'loading' | 'waiting' | 'started' | 'expired' | 'error'
+
+const phase = ref<Phase>('loading')
+const deepLink = ref('')
+const tokenError = ref<string | null>(null)
+const declined = ref(false)
+const isMobile = ref(false)
+const qrShown = ref(false)
+const codeOpen = ref(false)
+const code = ref('')
+const codeError = ref<string | null>(null)
+const isRedeeming = ref(false)
+const { left: retryLeft, start: startRetry, stop: stopRetry } = useCountdown()
+const { left: codeRetryLeft, start: startCodeRetry, stop: stopCodeRetry } = useCountdown()
+
+// The poll secret is the credential a session is released against, so it stays
+// out of reactive state — nothing renders it and nothing can leak it into a
+// devtools snapshot or a template.
+let pollSecret: string | null = null
+let pollTimer: number | undefined
+let pollInFlight = false
+let unmounted = false
+let viewportQuery: MediaQueryList | undefined
 
 const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.homePath))
 // Set by the API client's 401 interceptor when a silent refresh fails (CB-08).
 const sessionExpired = computed(() => route.query.reason === 'session_expired')
 
-// The sign-in failure codes that carry their own message under `client.error`;
-// anything else is a genuinely unexpected failure and gets the generic line.
-const LOGIN_ERROR_CODES: ReadonlySet<string> = new Set([
-  'account_blocked',
-  'invalid_phone',
-  'phone_unreachable_on_telegram',
-  'code_send_rate_limited',
-  'invalid_code',
-  'code_expired',
-  'too_many_attempts',
-  'name_required',
-  'network_error',
-])
+// The QR is on screen whenever it is the primary affordance (desktop) or the
+// client asked for it (mobile, Telegram on another device).
+const showQr = computed(() => !isMobile.value || qrShown.value)
+const isLive = computed(() => phase.value === 'waiting' || phase.value === 'started')
 
-const clientErrorText = computed(() => {
-  const code = error.value
-  if (!code) return null
-  if (code === 'invalid_code') {
-    const remaining = Number(auth.lastErrorDetails?.attempts_remaining)
-    return Number.isFinite(remaining) && remaining > 0
-      ? t('client.error.invalidCodeAttempts', { count: remaining })
-      : t('client.error.invalid_code')
+// The token budget is measured in hours, so its `retry_after_seconds` arrives as
+// a four-digit number — "3061 soniyadan keyin" is a figure nobody converts. Under
+// a minute the seconds are the useful unit; above it, minutes are.
+const MINUTE_SECONDS = 60
+
+const tokenErrorText = computed(() => {
+  const errorCode = tokenError.value
+  if (!errorCode) return null
+  if (errorCode === 'login_token_rate_limited') {
+    return retryLeft.value >= MINUTE_SECONDS
+      ? t('client.error.login_token_rate_limited_minutes', {
+          minutes: Math.ceil(retryLeft.value / MINUTE_SECONDS),
+        })
+      : t('client.error.login_token_rate_limited', { seconds: retryLeft.value })
   }
-  return LOGIN_ERROR_CODES.has(code) ? t(`client.error.${code}`) : t('client.error.loginFallback')
+  return errorCode === 'network_error'
+    ? t('client.error.network_error')
+    : t('client.error.loginFallback')
 })
-const maskedPhone = computed(() =>
-  normalizeUzPhone(phone.value).replace(/^(\+998)(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 ••• •• $5'),
+// A throttle or a dropped connection is not the client's mistake — amber, not red.
+const tokenErrorTone = computed(() =>
+  tokenError.value === 'login_token_rate_limited' || tokenError.value === 'network_error'
+    ? 'warn'
+    : 'danger',
 )
-// Connection / rate-limit problems are not the user's fault → calmer amber tone;
-// validation mistakes stay red.
-const errorTone = computed(() =>
-  error.value === 'network_error' || error.value === 'code_send_rate_limited' ? 'warn' : 'danger',
-)
+const canRetryToken = computed(() => retryLeft.value === 0)
+
+const codeErrorText = computed(() => {
+  const errorCode = codeError.value
+  if (!errorCode) return null
+  if (errorCode === 'login_code_rate_limited') {
+    return codeRetryLeft.value >= MINUTE_SECONDS
+      ? t('client.error.login_code_rate_limited_minutes', {
+          minutes: Math.ceil(codeRetryLeft.value / MINUTE_SECONDS),
+        })
+      : t('client.error.login_code_rate_limited', { seconds: codeRetryLeft.value })
+  }
+  if (errorCode === 'invalid_code') return t('client.error.invalid_code')
+  if (errorCode === 'account_blocked') return t('client.error.account_blocked')
+  return errorCode === 'network_error'
+    ? t('client.error.network_error')
+    : t('client.error.loginFallback')
+})
+const codeBlocked = computed(() => codeRetryLeft.value > 0)
 
 async function finish() {
+  stopPolling()
+  pollSecret = null
   // A workshop link scanned before signing in parked its entry in
   // `localStorage`; this is the moment there is a session to apply it to. A
   // missing or refused entry is a normal un-pinned login (spec §3.1) — the store
@@ -77,82 +119,161 @@ async function finish() {
   await router.replace(redirectTo.value)
 }
 
-function sanitizeOtp() {
-  otpCode.value = otpCode.value.replace(/\D/g, '')
-}
-
-async function sendOtp() {
-  error.value = null
-  const normalized = normalizeUzPhone(phone.value)
-  if (!isUzPhone(normalized)) {
-    error.value = 'invalid_phone'
-    return
-  }
-  phone.value = normalized
-  isSubmitting.value = true
+/** Ask for a fresh handshake and start polling it. */
+async function mintToken() {
+  stopPolling()
+  pollSecret = null
+  stopRetry()
+  tokenError.value = null
+  phase.value = 'loading'
   try {
-    const response = await auth.requestClientOtp(normalized)
-    resendAfter.value = response.resend_after_seconds
-    clientStep.value = 'code'
-    startCooldown(response.resend_after_seconds)
+    const issued = await auth.createClientLoginToken()
+    if (unmounted) return
+    pollSecret = issued.poll_secret
+    deepLink.value = issued.deep_link
+    phase.value = 'waiting'
+    startPolling()
   } catch {
-    error.value = auth.lastError
-    if (error.value === 'code_send_rate_limited') {
-      const retry = Number(auth.lastErrorDetails?.retry_after_seconds)
-      if (Number.isFinite(retry) && retry > 0) startCooldown(retry)
+    if (unmounted) return
+    phase.value = 'error'
+    tokenError.value = auth.lastError
+    const retryAfter = Number(auth.lastErrorDetails?.retry_after_seconds)
+    if (tokenError.value === 'login_token_rate_limited' && Number.isFinite(retryAfter)) {
+      startRetry(retryAfter)
     }
-  } finally {
-    isSubmitting.value = false
   }
 }
 
-async function verifyOtp() {
-  error.value = null
-  if (clientStep.value === 'code' && otpCode.value.length !== 6) {
-    error.value = 'invalid_code'
-    return
-  }
-  if (clientStep.value === 'name' && clientName.value.trim().length === 0) {
-    error.value = 'name_required'
-    return
-  }
-  isSubmitting.value = true
+function startPolling() {
+  stopPolling()
+  // A hidden tab is not waiting for anything a client can see; the
+  // visibilitychange handler polls once and re-arms the moment it comes back.
+  if (typeof document !== 'undefined' && document.hidden) return
+  pollTimer = window.setInterval(() => void runPoll(), POLL_INTERVAL_MS)
+}
+
+function stopPolling() {
+  if (pollTimer !== undefined) window.clearInterval(pollTimer)
+  pollTimer = undefined
+}
+
+async function runPoll() {
+  const secret = pollSecret
+  // One request at a time: two in flight could both read `confirmed`, and only
+  // one can win the session — the loser would then paint an error over a card
+  // that is already signing in.
+  if (!secret || pollInFlight) return
+  pollInFlight = true
   try {
-    const response = await auth.verifyClientOtp(
-      phone.value,
-      otpCode.value,
-      clientStep.value === 'name' ? clientName.value.trim() : undefined,
-    )
-    if ('is_new' in response) {
-      clientStep.value = 'name'
+    const response = await auth.pollClientLogin(secret)
+    if (unmounted || secret !== pollSecret) return
+    if ('access_token' in response) {
+      await finish()
       return
     }
-    await finish()
+    applyPollState(response)
   } catch {
-    error.value = auth.lastError
-    if (error.value === 'code_expired' || error.value === 'too_many_attempts') {
-      // The code is dead — return to the phone step so the user can request a fresh one
-      // instead of being stranded on an error with no way forward.
-      clientStep.value = 'phone'
-      otpCode.value = ''
-      stopCooldown()
-    }
+    if (unmounted || secret !== pollSecret) return
+    // The handshake row is gone (pruned, or burned by another tab): a fresh one
+    // is the only way forward. Anything else is a transport hiccup — keep
+    // polling, the next tick usually lands.
+    if (auth.lastError === 'invalid_poll_secret') await mintToken()
   } finally {
-    isSubmitting.value = false
+    pollInFlight = false
   }
 }
 
-function editPhone() {
-  clientStep.value = 'phone'
-  otpCode.value = ''
-  error.value = null
-  stopCooldown()
+function applyPollState(poll: ClientLoginPoll) {
+  if (poll.expired || poll.status === 'used') {
+    expire()
+    return
+  }
+  if (poll.status === 'declined') {
+    // Back to waiting on a fresh QR, with a line saying why — a silently
+    // swapped QR reads as "my Bekor qilish did nothing".
+    declined.value = true
+    void mintToken()
+    return
+  }
+  // `pending` means the chat has not opened yet. Everything past it — the bot
+  // asked, or is waiting on a contact — is the client's turn on their phone.
+  const next = poll.status === 'pending' ? 'waiting' : 'started'
+  // The cancelled-login line stays up for the whole wait on the fresh QR and
+  // clears when the client opens the chat again. Clearing it on every `pending`
+  // poll would flash it for one two-second tick and take it away unread.
+  if (next === 'started') declined.value = false
+  phase.value = next
 }
 
-async function resendOtp() {
-  if (resendLeft.value > 0) return
-  await sendOtp()
+function expire() {
+  stopPolling()
+  pollSecret = null
+  declined.value = false
+  phase.value = 'expired'
 }
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    stopPolling()
+    return
+  }
+  if (!isLive.value) return
+  // Coming back from Telegram is exactly when the answer is ready — ask now
+  // rather than up to two seconds from now.
+  void runPoll()
+  startPolling()
+}
+
+function onViewportChange(event: MediaQueryList | MediaQueryListEvent) {
+  isMobile.value = event.matches
+}
+
+function sanitizeCode() {
+  code.value = sanitizeWholeNumberInput(code.value).slice(0, CODE_LENGTH)
+}
+
+async function submitCode() {
+  if (codeBlocked.value || isRedeeming.value) return
+  codeError.value = null
+  if (code.value.length !== CODE_LENGTH) {
+    codeError.value = 'invalid_code'
+    return
+  }
+  isRedeeming.value = true
+  try {
+    await auth.redeemClientLoginCode(code.value)
+    await finish()
+  } catch {
+    if (unmounted) return
+    codeError.value = auth.lastError
+    const retryAfter = Number(auth.lastErrorDetails?.retry_after_seconds)
+    if (codeError.value === 'login_code_rate_limited' && Number.isFinite(retryAfter)) {
+      startCodeRetry(retryAfter)
+    }
+  } finally {
+    isRedeeming.value = false
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    viewportQuery = window.matchMedia(MOBILE_QUERY)
+    onViewportChange(viewportQuery)
+    viewportQuery.addEventListener('change', onViewportChange)
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void mintToken()
+})
+
+onBeforeUnmount(() => {
+  unmounted = true
+  stopPolling()
+  stopRetry()
+  stopCodeRetry()
+  pollSecret = null
+  viewportQuery?.removeEventListener('change', onViewportChange)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <template>
@@ -165,200 +286,173 @@ async function resendOtp() {
         <span class="client-brand-name">Mebel Pro</span>
       </RouterLink>
 
-      <div v-if="sessionExpired" class="client-banner warn mb-4" role="status">
+      <div v-if="sessionExpired" class="client-banner warn" role="status">
         <span aria-hidden="true">!</span>
         <span>{{ $t('client.login.expired') }}</span>
       </div>
 
-      <form v-if="clientStep === 'phone'" class="space-y-4" novalidate @submit.prevent="sendOtp">
-        <div>
-          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
-            {{ $t('client.login.title') }}
-          </h1>
-          <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.subtitle') }}</p>
+      <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
+        {{ $t('client.login.title') }}
+      </h1>
+      <!-- The subtitle explains the affordance below it, so it goes away in the
+           states that have none — "scan the QR" over a dead handshake with no QR
+           on screen is an instruction the reader cannot carry out. -->
+      <p v-if="isLive || phase === 'loading'" class="mt-2 text-sm text-ink-muted">
+        {{ isMobile ? $t('client.login.subtitleMobile') : $t('client.login.subtitleDesktop') }}
+      </p>
+
+      <!-- Expired: the one thing to do is mint a new handshake. -->
+      <div v-if="phase === 'expired'" class="mt-5">
+        <div class="client-banner warn">
+          <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
+          <span>{{
+            isMobile ? $t('client.login.expiredLink') : $t('client.login.expiredQr')
+          }}</span>
         </div>
-
-        <label class="block" for="client-phone">
-          <span class="mb-1 block text-sm font-bold text-ink">
-            {{ $t('client.login.phoneLabel') }}
-          </span>
-          <PhoneInput id="client-phone" v-model="phone" required />
-        </label>
-
-        <div v-if="clientErrorText" class="client-banner" :class="errorTone">
-          <svg
-            class="mt-0.5 size-4 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4M12 16h.01" />
-          </svg>
-          <span>{{ clientErrorText }}</span>
-        </div>
-
         <button
-          type="submit"
+          type="button"
           class="mp-button mp-button-primary min-h-[46px] w-full"
-          :disabled="isSubmitting"
+          @click="mintToken"
         >
-          {{ isSubmitting ? $t('client.login.sending') : $t('client.login.sendCode') }}
+          {{ $t('client.login.refresh') }}
         </button>
-      </form>
+      </div>
 
-      <form
-        v-else-if="clientStep === 'code'"
-        class="space-y-4"
-        novalidate
-        @submit.prevent="verifyOtp"
-      >
-        <div>
-          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
-            {{ $t('client.login.codeTitle') }}
-          </h1>
-          <i18n-t
-            keypath="client.login.codeSentTo"
-            tag="p"
-            class="mt-2 text-sm text-ink-muted"
-            scope="global"
-          >
-            <template #phone>
-              <b>{{ maskedPhone }}</b>
-            </template>
-          </i18n-t>
+      <!-- The handshake could not be minted at all: named cause + retry. -->
+      <div v-else-if="phase === 'error'" class="mt-5">
+        <div class="client-banner" :class="tokenErrorTone">
+          <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
+          <span>{{ tokenErrorText }}</span>
         </div>
-
-        <label class="block">
-          <span class="sr-only">{{ $t('client.login.codeLabel') }}</span>
-          <input
-            v-model="otpCode"
-            class="mp-input tracking-[0.5em]"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            maxlength="6"
-            pattern="\d{6}"
-            placeholder="••••••"
-            required
-            @input="sanitizeOtp"
-          />
-          <i18n-t
-            v-if="isDev && resendAfter"
-            keypath="client.login.devCode"
-            tag="span"
-            class="mt-1 block text-xs text-ink-muted"
-            scope="global"
-          >
-            <template #code>
-              <b>000000</b>
-            </template>
-          </i18n-t>
-        </label>
-
-        <div v-if="clientErrorText" class="client-banner" :class="errorTone">
-          <svg
-            class="mt-0.5 size-4 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4M12 16h.01" />
-          </svg>
-          <span>{{ clientErrorText }}</span>
-        </div>
-
         <button
-          type="submit"
+          type="button"
           class="mp-button mp-button-primary min-h-[46px] w-full"
-          :disabled="isSubmitting"
+          :disabled="!canRetryToken"
+          @click="mintToken"
         >
-          {{ isSubmitting ? $t('client.login.verifying') : $t('client.login.verify') }}
+          {{ $t('client.login.refresh') }}
         </button>
+      </div>
 
-        <div class="flex justify-between gap-3 border-t border-hairline pt-4 text-sm font-bold">
-          <button type="button" class="text-accent-deep" @click="editPhone">
-            ← {{ $t('client.login.editPhone') }}
-          </button>
+      <div v-else class="mt-5">
+        <div v-if="declined" class="client-banner info" role="status">
+          <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
+          <span>{{ $t('client.login.declined') }}</span>
+        </div>
+
+        <!-- Mobile: Telegram is on this device, so the deep link is the action. -->
+        <a
+          v-if="isMobile"
+          class="mp-button mp-button-primary min-h-[46px] w-full"
+          :class="phase === 'loading' ? 'pointer-events-none opacity-50' : ''"
+          :href="deepLink || undefined"
+          :aria-disabled="phase === 'loading' ? 'true' : undefined"
+          rel="noopener"
+        >
+          {{ $t('client.login.telegramButton') }}
+        </a>
+
+        <!-- The QR frame keeps its size while the token is minting, so the card
+             does not jump when it arrives. -->
+        <div
+          v-if="showQr"
+          class="mx-auto w-[210px] rounded-xl border border-hairline p-3"
+          :class="isMobile ? 'mt-4' : ''"
+        >
+          <div v-if="phase === 'loading'" class="client-skeleton aspect-square w-full"></div>
+          <QrCode v-else :value="deepLink" :label="$t('client.login.qrLabel')" />
+        </div>
+
+        <div class="mt-4 text-center">
           <button
+            v-if="isMobile"
             type="button"
-            class="text-accent-deep disabled:opacity-50"
-            :disabled="resendLeft > 0 || isSubmitting"
-            @click="resendOtp"
+            class="text-sm font-bold text-accent-deep"
+            :aria-expanded="qrShown"
+            @click="qrShown = !qrShown"
           >
-            {{
-              resendLeft > 0
-                ? $t('client.login.resendIn', { seconds: resendLeft })
-                : $t('client.login.resend')
-            }}
+            {{ qrShown ? $t('client.login.hideQr') : $t('client.login.showQr') }}
           </button>
-        </div>
-      </form>
-
-      <form v-else class="space-y-4" novalidate @submit.prevent="verifyOtp">
-        <div>
-          <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
-            {{ $t('client.login.nameTitle') }}
-          </h1>
-          <p class="mt-2 text-sm text-ink-muted">{{ $t('client.login.nameSubtitle') }}</p>
-        </div>
-
-        <label class="block">
-          <span class="mb-1 block text-sm font-bold text-ink">
-            {{ $t('client.login.nameLabel') }}
-          </span>
-          <input
-            v-model="clientName"
-            class="mp-input"
-            type="text"
-            autocomplete="name"
-            maxlength="80"
-            required
-          />
-        </label>
-
-        <div v-if="clientErrorText" class="client-banner" :class="errorTone">
-          <svg
-            class="mt-0.5 size-4 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+          <a
+            v-else-if="deepLink"
+            class="text-sm font-bold text-accent-deep"
+            :href="deepLink"
+            rel="noopener"
           >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4M12 16h.01" />
-          </svg>
-          <span>{{ clientErrorText }}</span>
+            {{ $t('client.login.openInTelegram') }}
+          </a>
         </div>
 
+        <p class="mt-4 text-center text-sm text-ink-soft" role="status">
+          {{ phase === 'started' ? $t('client.login.confirmOnPhone') : $t('client.login.waiting') }}
+        </p>
+      </div>
+
+      <!-- Fallback: the client who reached the bot without the deep link and got
+           a 6-digit code there. Collapsed — it is the exception, not the path. -->
+      <div class="mt-6 border-t border-hairline pt-5">
         <button
-          type="submit"
-          class="mp-button mp-button-primary min-h-[46px] w-full"
-          :disabled="isSubmitting"
+          type="button"
+          class="flex w-full items-center justify-between text-sm font-bold text-accent-deep"
+          :aria-expanded="codeOpen"
+          aria-controls="client-code-form"
+          @click="codeOpen = !codeOpen"
         >
-          {{ isSubmitting ? $t('client.login.saving') : $t('client.common.continue') }}
+          <span>{{ $t('client.login.codeToggle') }}</span>
+          <Icon
+            name="chevron-down"
+            class="size-4 transition-transform"
+            :class="codeOpen ? 'rotate-180' : ''"
+          />
         </button>
 
-        <div class="flex border-t border-hairline pt-4 text-sm font-bold">
-          <button type="button" class="text-accent-deep" @click="editPhone">
-            ← {{ $t('client.login.editPhone') }}
-          </button>
-        </div>
-      </form>
+        <form
+          v-if="codeOpen"
+          id="client-code-form"
+          class="mt-4 space-y-3"
+          novalidate
+          @submit.prevent="submitCode"
+        >
+          <p class="text-sm text-ink-muted">{{ $t('client.login.codeHint') }}</p>
+          <label class="block" for="client-login-code">
+            <span class="mb-1 block text-sm font-bold text-ink">
+              {{ $t('client.login.codeLabel') }}
+            </span>
+            <input
+              id="client-login-code"
+              v-model="code"
+              class="mp-input tracking-[0.5em]"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              :maxlength="CODE_LENGTH"
+              placeholder="123456"
+              :aria-invalid="codeError ? 'true' : undefined"
+              :aria-describedby="codeError ? 'client-login-code-error' : undefined"
+              @input="sanitizeCode"
+            />
+          </label>
 
-      <!-- Below the form, not above it: the card has one primary action and a
+          <p
+            v-if="codeErrorText"
+            id="client-login-code-error"
+            class="text-sm font-bold"
+            :class="codeError === 'login_code_rate_limited' ? 'text-warning' : 'text-danger'"
+          >
+            {{ codeErrorText }}
+          </p>
+
+          <button
+            type="submit"
+            class="mp-button mp-button-outline w-full"
+            :disabled="isRedeeming || codeBlocked"
+          >
+            {{ isRedeeming ? $t('client.login.codeSubmitting') : $t('client.login.codeSubmit') }}
+          </button>
+        </form>
+      </div>
+
+      <!-- Below the actions, not above them: the card has one primary action and a
            three-way radiogroup over the heading would compete with it. Still on
            the first screen, spelled out in each language's own script, because
            the one person who needs it cannot read the rest of this card. -->

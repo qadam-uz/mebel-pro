@@ -43,8 +43,8 @@ uv run python -m app.cli                  # maintenance CLI: seed-platform-user 
 ```
 
 Run from `backend/` — `Settings` reads `.env` relative to the **CWD**, so a server started
-from the repo root silently loads no env file (`OTP_DEV_CODES` reverts to empty — the
-`000000` dev login stops working — and `DEBUG` to `false`). With `DEBUG=true`, `app.cli` shares stdout with SQLAlchemy echo
+from the repo root silently loads no env file (`TELEGRAM_LOGIN_DEV_MODE` reverts to `false` —
+client sign-in then needs a real bot — and `DEBUG` to `false`). With `DEBUG=true`, `app.cli` shares stdout with SQLAlchemy echo
 logs — when piping to `jq`, grep for the line starting with `{` first.
 
 Pre-push gate (canonical copy in the root `AGENTS.md`): `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`.
@@ -63,7 +63,8 @@ backend/
     docs_assets/          # docs-site theme + scroll-spy JS
     core/                 # config.py (Settings) · db.py · errors.py (APIError + handlers) · logging.py (structlog)
                           #   trace.py (trace-ID middleware) · principal.py (AuthenticatedPrincipal, grants)
-                          #   security.py (argon2) · pdf.py + fonts/ (reportlab, DejaVu) · search_fold.py · material_label.py
+                          #   security.py (argon2) · telegram.py (Bot API client) · pdf.py + fonts/ (reportlab, DejaVu)
+                          #   search_fold.py · material_label.py
     api/
       deps.py             # DI aliases: `Session` (function-scoped — commit completes before the response) + the auth
                           #   surface (get_current_principal, Principal, AccountReadyPrincipal, has_permission)
@@ -89,10 +90,16 @@ File inventories drift — `ls` a directory before trusting any list here.
 
 Subsystem pointers (all born module-first; each lives where the roster says):
 
-- **Auth/authz** — bearer-token sessions, OTP login via Telegram Gateway (rate limits in
-  `Settings.OTP_*`), login IP throttle, argon2 hashing; the `access` module owns it
-  (auth.py, authz.py, otp.py, sessions.py, login_throttle.py) with the principal/permission
-  types in `core/principal.py` and the DI surface in `api/deps.py`.
+- **Auth/authz** — bearer-token sessions, client sign-in through the Telegram bot
+  (deep-link handshake + fallback code; budgets in `Settings.TELEGRAM_LOGIN_*`), login IP
+  throttle, argon2 hashing; the `access` module owns it (auth.py, authz.py, sessions.py,
+  login_throttle.py, client_ip.py, telegram_login.py, telegram_bot.py, telegram_routes.py)
+  with the principal/permission types in `core/principal.py` and the DI surface in
+  `api/deps.py`.
+- **Telegram Bot API** — one thin httpx client in `core/telegram.py`, shared by the two
+  modules that talk to the bot: `access` drives the sign-in conversation (webhook in,
+  replies out), `support` delivers client order notifications (`telegram_delivery.py`,
+  best-effort after the request transaction commits).
 - **Files & images** — the `support` module owns object storage (files.py, files_routes.py)
   and sm/md image renditions (image_variants.py, Pillow); notifications live here too.
 - **Cutting** — `cutting-engine` (pinned wheel; the dev compose stack can override it from

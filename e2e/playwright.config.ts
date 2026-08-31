@@ -5,9 +5,11 @@ import { baseUrl, databaseName, databaseUrl, databaseUser, usesLocalServers } fr
 const composeCommand = 'docker compose --env-file ../deploy/.env.dev.example -f ../deploy/compose.yaml'
 // The contract the backend under test must satisfy. Playwright can only apply
 // it to the server it boots itself — an external stack (`E2E_BASE_URL`) owns its
-// own process, so the same settings have to be set there. Chief among them is
-// `OTP_RATE_LIMITS_ENABLED=false`: with the production budget in force the
-// suite's client logins exhaust the per-IP send allowance and fail. See
+// own process, so the same settings have to be set there. There is no bot and no
+// public webhook here, so `TELEGRAM_LOGIN_DEV_MODE=true` opens the dev-confirm
+// route the suite uses in the bot's place; and with the production per-IP budget
+// in force the suite's parallel client sign-ins from one localhost IP exhaust the
+// token allowance, so `TELEGRAM_LOGIN_RATE_LIMITS_ENABLED=false`. See
 // `e2e/AGENTS.md`.
 const backendEnv = [
   'ENV=test',
@@ -18,8 +20,8 @@ const backendEnv = [
   'MINIO_SECRET_ACCESS_KEY=mebel-secret',
   'MINIO_BUCKET=mebel',
   'MINIO_USE_SSL=false',
-  `OTP_DEV_CODES='["000000"]'`,
-  'OTP_RATE_LIMITS_ENABLED=false',
+  'TELEGRAM_LOGIN_DEV_MODE=true',
+  'TELEGRAM_LOGIN_RATE_LIMITS_ENABLED=false',
 ].join(' ')
 
 export default defineConfig({

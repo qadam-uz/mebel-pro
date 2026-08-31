@@ -8,7 +8,9 @@ order: 60
 
 # Notifications inbox
 
-v1's only notification channel is an **in-app inbox per principal**. Producing modules
+v1's primary notification channel is an **in-app inbox per principal**; clients with a linked
+Telegram account additionally receive their order events as **bot messages**
+([Telegram delivery](#telegram-delivery-to-clients)). Producing modules
 (`orders`, `inventory`, `identity`, `workshop`, `platform`) call the `notifications` module on
 a notifiable event and ask it to fan out one row per recipient, applying the producer's scope
 rules. The notifications module does not broadcast and does not decide recipients.
@@ -36,6 +38,26 @@ rules. The notifications module does not broadcast and does not decide recipient
 The principal's own inbox supports: pulling the list (paginated, newest first, optional unread
 filter and "since timestamp"), pulling the unread count for the bell, marking one read,
 marking all read.
+
+## Telegram delivery to clients
+
+A client signs in through the platform's Telegram bot
+([`access-management.md`](access-management.md#client-sign-in-telegram-bot)), so every
+signed-in client has a bot chat — and that chat is where their order events also land. After
+the inbox fan-out commits, each **client** recipient with a linked, reachable Telegram account
+(`telegram_user_id` set, `telegram_unreachable_at` unset —
+[`identity.md`](../entities/identity.md#client)) is sent one bot message: the same one-line
+sentence the inbox row renders, plus a link into the client app's order page.
+
+- **Best-effort, after the commit.** The send happens after the transaction; a failure is
+  logged and never blocks the order transition or the inbox row. **The inbox is the source of
+  truth** — the bot message is a pointer to it, so a lost message loses nothing durable.
+- **A 403 (client blocked the bot)** sets `telegram_unreachable_at`; delivery is skipped until
+  their next `/start` (or a successful send) clears it. No retry queue in v1 — the next event
+  after re-linking simply delivers.
+- **Clients only.** Workshop staff and platform operators stay inbox-only in v1 — they sign in
+  with passwords, so no Telegram link exists to deliver to.
+- **Uzbek-only in v1**, like the bot's sign-in copy — the bot has no reliable locale channel.
 
 ## UX
 

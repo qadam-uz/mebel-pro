@@ -13,8 +13,10 @@ import {
   createCatalogDecors,
   databaseUrl,
   edgeNumbers,
+  devConfirmLogin,
   escapeRegExp,
   expectOk,
+  loginClient,
   panelNumbers,
   setBranchProductionMode,
   type BranchMaterialResponse,
@@ -82,7 +84,6 @@ async function seedPlatform(login: string) {
         ...process.env,
         ENV: "test",
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   );
@@ -219,16 +220,20 @@ async function stockIn(
   await expectOk(response);
 }
 
+// The three calls the login card makes, with dev-confirm standing in for the bot.
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
-  const requested = await request.post("/api/v1/auth/client/otp/request", {
-    data: { phone },
+  const issued = await request.post("/api/v1/auth/client/telegram/token");
+  await expectOk(issued);
+  const handshake = (await issued.json()) as {
+    token: string;
+    poll_secret: string;
+  };
+  await devConfirmLogin(request, handshake.token, phone, name);
+  const polled = await request.post("/api/v1/auth/client/telegram/poll", {
+    data: { poll_secret: handshake.poll_secret },
   });
-  await expectOk(requested);
-  const verified = await request.post("/api/v1/auth/client/otp/verify", {
-    data: { phone, code: "000000", name },
-  });
-  await expectOk(verified);
-  return (await verified.json()) as TokenResponse;
+  await expectOk(polled);
+  return (await polled.json()) as TokenResponse;
 }
 
 async function optimizedDraftWithoutPricing(
@@ -276,25 +281,6 @@ async function optimizedDraftWithoutPricing(
   const result = (await optimized.json()) as CuttingDraftResponse;
   expect(result.chosen_result_id).not.toBeNull();
   return result;
-}
-
-async function loginClient(page: Page, phone: string, name?: string) {
-  await page.goto("/client/auth/login");
-  await page.getByLabel("Telefon raqami").fill(phone);
-  await page.getByRole("button", { name: "Kod yuborish" }).click();
-  await page.getByLabel("Tasdiqlash kodi").fill("000000");
-  await page.getByRole("button", { name: "Tasdiqlash" }).click();
-  const nameField = page.getByLabel("Ismingiz");
-  if (
-    await nameField
-      .waitFor({ state: "visible", timeout: 2_000 })
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    await nameField.fill(name ?? "Order Client");
-    await page.getByRole("button", { name: "Davom etish" }).click();
-  }
-  await expect(page).toHaveURL(/\/client\/c$/);
 }
 
 async function loginWorkshop(

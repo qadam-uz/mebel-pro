@@ -8,7 +8,12 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { databaseUrl, expectOk } from "./helpers";
+import {
+  databaseUrl,
+  devConfirmLogin,
+  expectOk,
+  telegramDeepLink,
+} from "./helpers";
 
 const execFileAsync = promisify(execFile);
 const adminPassword = "AdminPass123";
@@ -59,7 +64,6 @@ async function seedPlatform(login: string) {
         ...process.env,
         ENV: "test",
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   );
@@ -414,21 +418,51 @@ test("workshop staff direct URLs respect branch-scoped grants", async ({
   await expect(page.getByRole("heading", { name: "Asosiy" })).toBeVisible();
 });
 
-test("client signs in with dev OTP and registers a name", async ({
+test("client signs in through the Telegram bot handshake", async ({
   page,
 }, testInfo) => {
   const id = runId(testInfo);
   await page.goto("/client/auth/login");
-  await page.getByLabel("Telefon raqami").fill(phoneFor(id, 40));
-  await page.getByRole("button", { name: "Kod yuborish" }).click();
-  await page.getByLabel("Tasdiqlash kodi").fill("000000");
-  await page.getByRole("button", { name: "Tasdiqlash" }).click();
-  await page.getByLabel("Ismingiz").fill("E2E Client");
-  await page.getByRole("button", { name: "Davom etish" }).click();
+
+  // Desktop card: a QR of the deep link, the link itself beside it, and a poll
+  // running in the background — no phone field, no code, no name step.
+  await expect(
+    page.getByRole("img", { name: "Telegram botiga kirish QR kodi" }),
+  ).toBeVisible();
+  await expect(page.getByText("Telegramdan javob kutilmoqda")).toBeVisible();
+  const href = await page
+    .getByRole("link", { name: telegramDeepLink })
+    .getAttribute("href");
+  const token = new URL(href ?? "").searchParams.get("start");
+  expect(token).toBeTruthy();
+
+  // The bot's side of the handshake, driven by the dev-confirm route: a new
+  // phone registers the client with the name the chat would have carried.
+  await devConfirmLogin(
+    page.request,
+    token as string,
+    phoneFor(id, 40),
+    "E2E Client",
+  );
 
   await expect(page).toHaveURL(/\/client\/c$/);
-  // The home greets the client by the name they just registered (first given name).
+  // The home greets the client by the name registered in the bot (first given name).
   await expect(
     page.getByRole("heading", { name: "Salom, E2E", exact: true }),
   ).toBeVisible();
+});
+
+test("client sign-in refuses an unknown fallback code without saying why", async ({
+  page,
+}) => {
+  await page.goto("/client/auth/login");
+  await page.getByRole("button", { name: "Kod bilan kirish" }).click();
+  await page.getByLabel("Kirish kodi").fill("000000");
+  await page.getByRole("button", { name: "Kirish", exact: true }).click();
+
+  // One generic refusal for unknown / expired / used — no oracle on which.
+  await expect(
+    page.getByText("Kod noto'g'ri yoki muddati tugagan."),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/client\/auth\/login/);
 });

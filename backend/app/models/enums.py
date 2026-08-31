@@ -23,6 +23,25 @@ class UserStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class TelegramLoginTokenStatus(StrEnum):
+    """One browser↔bot sign-in handshake, start to finish.
+
+    `pending` → `started` (the deep link opened the chat) → `awaiting_contact`
+    (an unknown Telegram account must share its number first) → `confirmed`
+    (bound to a client) → `used` (a session was released against the poll
+    secret). `declined` is terminal: the client cancelled, the account is
+    blocked, or the token died mid-conversation. Status only ever moves
+    forward.
+    """
+
+    PENDING = "pending"
+    STARTED = "started"
+    AWAITING_CONTACT = "awaiting_contact"
+    CONFIRMED = "confirmed"
+    USED = "used"
+    DECLINED = "declined"
+
+
 class WorkshopStatus(StrEnum):
     ACTIVE = "active"
     BLOCKED = "blocked"

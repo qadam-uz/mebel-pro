@@ -4,7 +4,7 @@ Staff with ``manage_orders`` on at least one branch may resolve a walk-in
 client by phone (find-or-create) to place an order on their behalf. Resolve
 discloses an existing client's stored name to staff — a deliberate, recorded
 decision — so every call is audited and rate limited per staff user following
-the OTP-limits convention.
+the Telegram-login budget convention.
 """
 
 import uuid
@@ -26,7 +26,7 @@ from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
 from app.modules.support.contracts import ActionLog
 
-# Per-staff-user resolve budget (OTP-limits convention: constant + windowed
+# Per-staff-user resolve budget (login-budget convention: constant + windowed
 # count). Generous for a busy counter, tight enough to blunt phone probing.
 CLIENT_RESOLVES_PER_STAFF_PER_HOUR = 30
 CLIENT_RESOLVE_ACTION = "workshop_client.resolve"
@@ -197,7 +197,7 @@ async def _enforce_call_limit(
     The window is derived from the audit log rather than a counter column, so a
     call that was recorded is a call that was spent — the two cannot drift.
     """
-    if not settings.OTP_RATE_LIMITS_ENABLED:
+    if not settings.TELEGRAM_LOGIN_RATE_LIMITS_ENABLED:
         return
     window_start = now - timedelta(hours=1)
     count = await db.scalar(

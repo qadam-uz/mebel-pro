@@ -21,7 +21,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 from app.api.deps import get_session
 from app.main import app
 from app.models import Base, import_all_models
-from app.modules.access.login_throttle import login_throttle
+from app.modules.access.login_throttle import login_throttle, telegram_code_throttle
 from app.modules.client_portal.api import workshop_link_throttle
 
 import_all_models()
@@ -31,6 +31,7 @@ import_all_models()
 def _reset_ip_throttles() -> None:
     # Every IP throttle is process-global in-memory state — isolate tests.
     login_throttle.reset()
+    telegram_code_throttle.reset()
     workshop_link_throttle.reset()
 
 

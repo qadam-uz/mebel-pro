@@ -45,6 +45,30 @@ export interface TokenResponse {
   me: MeResponse
 }
 
+/** The two halves of one bot handshake, as minted for this browser.
+ *  `token` is public (it rides in the QR); `poll_secret` never leaves the tab. */
+export interface ClientLoginToken {
+  token: string
+  poll_secret: string
+  deep_link: string
+  expires_at: string
+}
+
+/** The handshake's server-side states (backend `TelegramLoginTokenStatus`). */
+export type ClientLoginStatus =
+  | 'pending'
+  | 'started'
+  | 'awaiting_contact'
+  | 'confirmed'
+  | 'used'
+  | 'declined'
+
+/** The non-terminal poll answer; a confirmed handshake answers with a session. */
+export interface ClientLoginPoll {
+  status: ClientLoginStatus
+  expired: boolean
+}
+
 export interface SessionResponse {
   id: string
   created_at: string
@@ -187,44 +211,57 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function requestClientOtp(phone: string) {
+  function captureError(error: unknown) {
+    lastError.value = errorCode(error)
+    lastErrorDetails.value =
+      error instanceof ApiError && typeof error.body === 'object' && error.body
+        ? ((error.body as { details?: Record<string, unknown> }).details ?? null)
+        : null
+  }
+
+  /** Mint one bot-handshake token for this browser (the QR / deep-link half). */
+  async function createClientLoginToken() {
     lastError.value = null
+    lastErrorDetails.value = null
     try {
-      return await api.post<{ phone: string; expires_at: string; resend_after_seconds: number }>(
-        '/auth/client/otp/request',
-        { phone },
-      )
+      return await api.post<ClientLoginToken>('/auth/client/telegram/token')
     } catch (error) {
-      lastError.value = errorCode(error)
-      lastErrorDetails.value =
-        error instanceof ApiError && typeof error.body === 'object' && error.body
-          ? ((error.body as { details?: Record<string, unknown> }).details ?? null)
-          : null
+      captureError(error)
       throw error
     }
   }
 
-  async function verifyClientOtp(phone: string, code: string, name?: string) {
+  /**
+   * Ask where the handshake stands. A confirmed one answers with a session — the
+   * poll secret is the only credential that releases it, and the backend burns
+   * the token on the way out, so exactly one poll can ever win it.
+   */
+  async function pollClientLogin(pollSecret: string) {
+    try {
+      const response = await api.post<TokenResponse | ClientLoginPoll>(
+        '/auth/client/telegram/poll',
+        { poll_secret: pollSecret },
+      )
+      if ('access_token' in response) {
+        applyToken(response)
+      }
+      return response
+    } catch (error) {
+      captureError(error)
+      throw error
+    }
+  }
+
+  /** Redeem the 6-digit fallback code the bot showed in the chat. */
+  async function redeemClientLoginCode(code: string) {
     status.value = 'loading'
     try {
-      const response = await api.post<TokenResponse | { is_new: true }>('/auth/client/otp/verify', {
-        phone,
-        code,
-        name,
-      })
-      if ('is_new' in response) {
-        status.value = 'anonymous'
-        return response
-      }
+      const response = await api.post<TokenResponse>('/auth/client/telegram/code', { code })
       applyToken(response)
       return response
     } catch (error) {
       status.value = accessToken.value ? 'authenticated' : 'anonymous'
-      lastError.value = errorCode(error)
-      lastErrorDetails.value =
-        error instanceof ApiError && typeof error.body === 'object' && error.body
-          ? ((error.body as { details?: Record<string, unknown> }).details ?? null)
-          : null
+      captureError(error)
       throw error
     }
   }
@@ -290,8 +327,9 @@ export const useAuthStore = defineStore('auth', () => {
     isAllowedFor,
     platformLogin,
     workshopLogin,
-    requestClientOtp,
-    verifyClientOtp,
+    createClientLoginToken,
+    pollClientLogin,
+    redeemClientLoginCode,
     changePassword,
     fetchSessions,
     logoutCurrent,

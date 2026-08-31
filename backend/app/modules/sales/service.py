@@ -109,7 +109,11 @@ from app.modules.sales.schemas import (
     WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
-from app.modules.support.api import record_action, record_status_change
+from app.modules.support.api import (
+    queue_client_order_message,
+    record_action,
+    record_status_change,
+)
 from app.modules.support.contracts import Notification
 from app.modules.workshop.contracts import Branch, Workshop
 
@@ -762,6 +766,13 @@ async def apply_order_edit(
             },
             created_at=now,
         )
+    )
+    await queue_client_order_message(
+        db,
+        client_id=order.client_id,
+        event_code="order.updated",
+        order_id=order.id,
+        order_number=order.order_number,
     )
     await db.flush()
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
@@ -2657,12 +2668,12 @@ async def _transition(
         reason=reason,
         action_log_id=action.id,
     )
-    _notify_client_of_status(
+    await _notify_client_of_status(
         db, principal=principal, order=order, from_status=from_status, to_status=to_status
     )
 
 
-def _notify_client_of_status(
+async def _notify_client_of_status(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
@@ -2676,6 +2687,9 @@ def _notify_client_of_status(
     don't need to be told about their own action — and for transitions with no
     client-facing event code. Recipient/payload follow the generic Notification
     model; the client SPA already maps these event codes to localized titles.
+
+    A client with a linked Telegram account also gets the same sentence as a bot
+    message — queued here, sent after this transaction commits (notifications.md).
     """
     event_code = _CLIENT_ORDER_EVENT_CODE.get(to_status)
     if event_code is None:
@@ -2700,6 +2714,13 @@ def _notify_client_of_status(
             },
             created_at=datetime.now(UTC),
         )
+    )
+    await queue_client_order_message(
+        db,
+        client_id=order.client_id,
+        event_code=event_code,
+        order_id=order.id,
+        order_number=order.order_number,
     )
 
 

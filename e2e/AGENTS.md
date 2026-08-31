@@ -35,13 +35,13 @@ declared — both the config and the specs read them from there):
      `deploy/.env` is deliberately **not** read) starts Postgres + MinIO, creates the MinIO
      bucket, recreates the database named in the DSN (`mebel_e2e` by default), migrates it,
      then runs `uv --directory ../backend run fastapi dev app/main.py --port 8000` with
-     `OTP_DEV_CODES` + `OTP_RATE_LIMITS_ENABLED=false` set.
+     `TELEGRAM_LOGIN_DEV_MODE=true` + `TELEGRAM_LOGIN_RATE_LIMITS_ENABLED=false` set.
   2. `pnpm --dir ../web dev` runs Vite on :5173, which proxies `/api` → :8000.
 - ⚠️ **Stop the docker dev stack's `backend` and `web` containers before `pnpm test`.**
   `reuseExistingServer` health-checks :8000/:5173 and adopts *anything* answering there —
-  skipping the `mebel_e2e` recreate/migration and the OTP env entirely. An adopted docker
-  backend reads the demo DB `mebel` with rate limits on, so seeding lands in a database the
-  API never opens and every spec fails on its first login (401s) — it reads like a sweeping
+  skipping the `mebel_e2e` recreate/migration and the Telegram-login env entirely. An adopted
+  docker backend reads the demo DB `mebel` with rate limits on, so seeding lands in a database
+  the API never opens and every spec fails on its first login (401s) — it reads like a sweeping
   regression but is stack adoption. The docker `postgres`/`minio` may stay up: the run
   shares them (same compose project `mebel-pro`) and only owns its own database.
 - A host Postgres already listening on :5432 also breaks the run silently: the DB recreate
@@ -67,16 +67,17 @@ pnpm test
    host. Point it anywhere else and the seeded platform user lands in a database the API under
    test never opens: seeding "succeeds", every login 401s, and most specs fail instantly.
 3. **The backend's own settings**, which only that stack can set —
-   `OTP_DEV_CODES=["000000"]` (the suite verifies with the fixed dev code) and
-   `OTP_RATE_LIMITS_ENABLED=false`. With the production OTP budget in force the suite's client
-   logins exhaust the per-IP send allowance partway through and fail on rate limiting.
-   Playwright applies both to the server it boots itself; it has no way to apply them to a
-   server it did not start.
+   `TELEGRAM_LOGIN_DEV_MODE=true` and `TELEGRAM_LOGIN_RATE_LIMITS_ENABLED=false`. There is no
+   real bot and no public webhook here, so client sign-in runs through the dev-confirm route
+   that the first setting opens (it 404s when off, and every client login fails); with the
+   production per-IP token budget in force the suite's parallel sign-ins from one localhost IP
+   exhaust the allowance partway through and fail on rate limiting. Playwright applies both to
+   the server it boots itself; it has no way to apply them to a server it did not start.
 
 A second local stack on offset ports is the usual way to exercise this — a
 `COMPOSE_PROJECT_NAME` plus a ports override on `deploy/compose.yaml`, with
-`OTP_RATE_LIMITS_ENABLED=false` in its environment. Nothing in the repo is needed to make it
-work.
+`TELEGRAM_LOGIN_DEV_MODE=true` and `TELEGRAM_LOGIN_RATE_LIMITS_ENABLED=false` in its
+environment. Nothing in the repo is needed to make it work.
 
 ## Layout
 
@@ -89,10 +90,11 @@ e2e/
                          # helpers.ts is the shared seeding/login module
 ```
 
-`tests/helpers.ts` carries the shared credentials and **bilingual UI-copy locator regexes**
-(e.g. `/^(Password|Parol)$/`). Web copy changes must keep these in sync — and since the web
-pre-push gate does not run Playwright, that drift ships silently unless you grep
-`e2e/tests/` and run the touched spec.
+`tests/helpers.ts` carries the shared credentials, the client sign-in helpers
+(`clientTokenViaApi` / `loginClient` / `devConfirmLogin` — the bot handshake driven through
+the dev-confirm route), and **bilingual UI-copy locator regexes** (e.g. `/^(Password|Parol)$/`).
+Web copy changes must keep these in sync — and since the web pre-push gate does not run
+Playwright, that drift ships silently unless you grep `e2e/tests/` and run the touched spec.
 
 ## Conventions
 

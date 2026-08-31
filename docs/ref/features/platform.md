@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 70
 ---
 
@@ -88,7 +88,7 @@ jobs:
 
 | Job                        | When   | What                       |
 | -------------------------- | ------ | -------------------------- |
-| `cleanup-expired-sessions` | hourly | prune expired session rows and expired OTP challenges |
+| `cleanup-expired-sessions` | hourly | prune expired session rows and expired Telegram login tokens / codes |
 
 Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
 the 50-draft cap ([`cutting.md`](cutting.md)). There is no auto-cleanup of drafts anywhere.

@@ -384,6 +384,16 @@
      the bar asks of a UI mark — so it needs no ring beside it. The orange ring
      that used to sit here was ours, not the handoff's; the handoff rings exactly
      one field, the edge-picker search, and rings it in the accent at 12%. */
+  /* The third signal a rejected field owes the reader (DESIGN.md): the message
+     and `aria-invalid` were already there, the border was not. Declared before
+     `:focus` — same specificity, so focus still wins while the field is being
+     corrected and the accent border stays the focus affordance. Keyed on the
+     attribute the fields already set, so it needs no per-form class; `='true'`
+     because several forms render `aria-invalid="false"` on a clean field. */
+  .mp-input[aria-invalid='true'] {
+    border-color: var(--color-danger);
+  }
+
   .mp-input:focus {
     border-color: var(--color-accent);
   }

@@ -99,7 +99,7 @@ identically. So is what the client sees ([UX — client app](#ux-client-app)).
 
 ## Staff-created orders (walk-in clients)
 
-A walk-in customer at the counter has no app and no OTP session. Staff holding
+A walk-in customer at the counter has no app session. Staff holding
 `manage_orders` on the branch place the order **for** them, through the **same cutting
 editor the client app uses** ([`cutting.md`](cutting.md#workshop-side)) — the walk-in flow
 parameterizes the client flow, it doesn't fork it. The flow:
@@ -131,8 +131,8 @@ parameterizes the client flow, it doesn't fork it. The flow:
 two append-only status events are written (`∅ → new`, `new → confirmed`), both with
 `actor_type = workshop_user` and the acting staffer's id, and **`confirmed_at` is set to
 creation time**. The standard `order.confirmed` client notification fires as usual — the
-walk-in sees it, along with the order in their history, after they first log in via OTP
-with the same phone.
+walk-in sees it, along with the order in their history, after they first sign in through
+the Telegram bot with the same phone.
 
 **Why auto-confirm.** The `new → confirmed` gate exists so staff verify a *client's*
 self-serve order; a staff-placed order is verified by construction — the same staffer just

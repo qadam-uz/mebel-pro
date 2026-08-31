@@ -9,10 +9,12 @@ import {
   createDecor,
   createDecorFormat,
   createManufacturer,
+  clientTokenViaApi,
   databaseUrl,
   escapeRegExp,
   tickDecor,
   expectOk,
+  loginClient,
   type BranchMaterialResponse,
   type DecorResponse,
   type DecorFormatResponse,
@@ -73,7 +75,6 @@ async function seedPlatform(login: string) {
         ...process.env,
         ENV: 'test',
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   )
@@ -855,15 +856,7 @@ test('an unpriced format is flagged for the workshop and still offered to the cl
   // Client side: the same branch, the same dekor — BOTH formats. Hiding the
   // unpriced one showed clients a fraction of the shelf (one real branch carrying
   // 518 formats offered two); the money is guarded at order confirm instead.
-  const clientLogin = await request.post('/api/v1/auth/client/otp/request', {
-    data: { phone: phoneFor(id, 70) },
-  })
-  await expectOk(clientLogin)
-  const verified = await request.post('/api/v1/auth/client/otp/verify', {
-    data: { phone: phoneFor(id, 70), code: '000000', name: 'Price Client' },
-  })
-  await expectOk(verified)
-  const clientAccess = (await verified.json()).access_token as string
+  const clientAccess = await clientTokenViaApi(request, phoneFor(id, 70), 'Price Client')
   const options = await request.get(`/api/v1/client/catalog/materials?branch_id=${branchId}`, {
     headers: { Authorization: `Bearer ${clientAccess}` },
   })
@@ -1080,13 +1073,7 @@ test('client browses the workshop directory without catalog or stock details', a
     { decor_format_id: format.id, price_tiyin: 250_000, min_stock: 1 },
   ])
 
-  await page.goto('/client/auth/login')
-  await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))
-  await page.getByRole('button', { name: 'Kod yuborish' }).click()
-  await page.getByLabel('Tasdiqlash kodi').fill('000000')
-  await page.getByRole('button', { name: 'Tasdiqlash' }).click()
-  await page.getByLabel('Ismingiz').fill('Catalog Client')
-  await page.getByRole('button', { name: 'Davom etish' }).click()
+  await loginClient(page, phoneFor(id, 60), 'Catalog Client')
   await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
   await page.getByLabel('Ustaxona yoki shahar nomi').fill(`Catalog Workshop ${id}`)
 

@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 20
 ---
 
@@ -35,7 +35,7 @@ covers what the per-account lockout can't: guessing rotated across many accounts
 each account's lockout threshold. The
 counter is in-memory and process-local (the app runs as a single instance; the account lockout
 remains the durable backstop across restarts) and is env-tunable via `LOGIN_IP_THROTTLE_*`
-settings. Like the OTP per-IP budgets, it needs the deploy's trusted-proxy config
+settings. Like the Telegram-login per-IP budgets, it needs the deploy's trusted-proxy config
 (`TRUSTED_PROXY_CIDRS`) — without it all traffic shares one bucket.
 
 `password_reset_required` (set on creation, on a higher-principal password reset, and after
@@ -91,42 +91,113 @@ revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant 
   Change password (strength meter), Sessions list (current marker, "revoke" per row, "log out
   everywhere").
 
-## Client sign-in (phone + Telegram OTP)
+## Client sign-in (Telegram bot)
 
-The client signs in with a **phone number verified by a one-time code sent over Telegram** — no
-password, no widget, no app-switch. The phone is the identity; the flow is one continuous path
-that branches to registration only when the number is new. Three steps:
+The client signs in **through the platform's Telegram bot** — no password, no typed phone, no
+code sent to a phone. The browser shows a one-time deep link into the bot; the client confirms
+inside Telegram (and, on first contact, shares their Telegram-verified phone); the browser
+session logs in the moment the bot confirms. The **phone is still the identity**
+([client](../entities/identity.md#client)) — the Telegram account is the credential that proves
+it, and the bot chat it opens doubles as the delivery channel for order notifications
+([`notifications.md`](notifications.md#telegram-delivery-to-clients)).
 
-1. **Request a code.** Client submits a `+998XXXXXXXXX` phone. The system issues a
-   [verification challenge](../entities/identity.md#phone-verification-challenge) and sends a
-   6-digit code to that number **over Telegram** (via the Telegram Gateway). A malformed number
-   is `invalid_phone`; a number not reachable on Telegram is `phone_unreachable_on_telegram`
-   (there is **no SMS fallback** in v1 — the client must have Telegram on that number).
-   Exceeding any send budget is `code_send_rate_limited` with a `retry_after_seconds`. Every
-   Gateway message costs money, so sends are budgeted at three scopes — per phone, per client
-   IP, and platform-wide — each with an hourly and a daily cap (defaults: 60 s resend cooldown;
-   phone 5 / hour, 10 / day; IP 30 / hour, 50 / day; global 150 / hour, 1000 / day — the global
-   daily cap is the hard ceiling on the worst-case Telegram bill). The caps are env-tunable
-   (`OTP_*` settings) so an abuse incident can be throttled without a deploy. **Failed
-   deliveries count toward every budget and start the cooldown** — an unreachable number can't
-   be probed for free. Per-IP budgets require the deploy's trusted-proxy config
-   (`TRUSTED_PROXY_CIDRS` matching the edge network) — without it all traffic shares one bucket.
-2. **Verify the code.** Client submits the phone + code. A wrong code is `invalid_code` (the
-   challenge survives, attempt counter bumped); the 5th wrong attempt burns the challenge
-   (`too_many_attempts`, must request a new code); a code past its 5-minute TTL is `code_expired`.
-   The attempt counter and burns are committed even though the request itself fails — a rejected
-   guess must consume an attempt (CB-133) — and concurrent guesses serialize on the challenge
-   row, so a brute-forcer gets at most 5 guesses per challenge.
-3. **Log in or register.** On a correct code:
-   - **Phone found, `active`** → log in.
-   - **Phone found, `blocked`** → `account_blocked`.
-   - **Phone not found** → the response carries `is_new = true`; the client supplies a `name`
-     (1–80 chars; `name_required` if blank) and the system creates the client
-     (`status = active`) and logs them in.
+This replaced the Telegram **Gateway** OTP flow (typed phone, code sent via the paid Gateway) in
+2026-08. Forces: every Gateway send cost real money — half the old spec was send-budget
+machinery capping the worst-case bill, and the Gateway account was never funded, so production
+only ever ran on the dev-code bypass; meanwhile v1 wanted Telegram order notifications anyway,
+which need exactly the bot chat this flow creates as a side effect. The Telegram Login Widget
+was rejected: it solves login but opens no chat (so no notification channel) and puts a
+third-party script on the login page. Consequence accepted: sign-in requires a Telegram account
+— the same dependency the Gateway flow had, minus the bill. Revisit: if clients who cannot use
+Telegram show up at the counter in real numbers, add an SMS OTP fallback rather than
+resurrecting the Gateway.
 
-There is no account-existence oracle _before_ verification — the login-vs-register branch is
-only revealed after a correct code. On success a session is created; self-service session
-management is the same as workshop / platform users.
+### The handshake
+
+```mermaid
+sequenceDiagram
+    participant B as Browser (login page)
+    participant S as Backend
+    participant T as Telegram (bot chat)
+    B->>S: new login token
+    S-->>B: deep link (token) + poll secret
+    Note over B: renders QR / button,<br/>polls with the secret every ~2 s
+    T->>S: /start token
+    S->>T: confirm? (+ share contact, first time)
+    T->>S: confirmed (+ contact)
+    S-->>B: poll answers with a session
+```
+
+1. **The login page asks for a login link.** The system mints a
+   [login token](../entities/identity.md#telegram-login-token): a random deep-link token
+   (public — it rides in the QR) plus a **poll secret** returned only to the requesting
+   browser and never shown. Both are single-use with a 5-minute TTL. Creation is
+   rate-limited per client IP (`TELEGRAM_LOGIN_*` settings, env-tunable; exceeding it is
+   `login_token_rate_limited` with `retry_after_seconds`); like every per-IP budget it needs
+   the deploy's trusted-proxy config (`TRUSTED_PROXY_CIDRS`) or all traffic shares one bucket.
+2. **The client opens the bot.** The page renders
+   `https://t.me/<bot>?start=<token>` — as a QR on desktop, as a button on mobile. Scanning
+   or tapping opens the bot chat with the token attached.
+3. **The bot identifies and confirms** (the conversation below). On success the token is
+   `confirmed` and bound to the client.
+4. **The browser polls with the poll secret.** The poll reports the token's state (so the
+   page can say "confirm in Telegram" the moment the chat opens); on `confirmed` it answers
+   with a normal [session](../entities/identity.md#session) and the token is `used`. Session
+   mechanics and self-service session management are identical to every other principal.
+
+**Two secrets, deliberately.** The deep-link token is displayed on screen — anyone who can
+photograph the QR holds it. If polling redeemed the *token*, that photographer could poll it
+and win the victim's session the moment the victim confirms. The session is therefore released
+only against the poll secret, which never leaves the browser that requested it. The remaining
+inversion — an attacker luring the victim into scanning the *attacker's* QR — is mitigated by
+the confirm message naming the requesting device and time; the residual risk is accepted (it
+is the same one Telegram's own QR login carries).
+
+### The bot conversation
+
+On `/start` with a valid pending token:
+
+- **Known Telegram account** (its id is already linked to a client) — one inline confirm:
+  "MebelPro saytiga kirish — *device, time*. Tasdiqlaysizmi?" **Tasdiqlash** → the token is
+  `confirmed`. **Bekor qilish** → `declined`; the login page offers a fresh start.
+- **Unknown account** — the same confirm first, then a `request_contact` keyboard asking the
+  client to share their number. The contact is accepted **only when it is the sender's own**
+  (`contact.user_id` equals the sender's id) — a forwarded or hand-picked contact is refused
+  with a retry prompt. Then, by the verified phone:
+  - **Client exists, `active`** → link the Telegram account to it and confirm. This is also
+    how a staff-created walk-in row is claimed — and if the client row was linked to a
+    *different* Telegram account (a replaced account on the same number), the fresh
+    Telegram-verified contact wins and the row is relinked: possession of the number is the
+    identity, exactly the trust the OTP code used to carry.
+  - **Client exists, `blocked`** → the bot answers `account_blocked` copy; the token is
+    `declined`.
+  - **Phone not found** → register: create the client (`status = active`, `phone` from the
+    contact, `name` prefilled from the Telegram profile name, trimmed to 80 chars) and
+    confirm. There is no separate name step — the name is editable in the profile.
+
+`/start` without a token, or with an expired / used one, gets a short help message pointing at
+the login page, plus a **Kirish kodi** button for the fallback below. Bot copy is Uzbek-only in
+v1 — the bot has no reliable locale channel, matching the server-rendered documents rule in
+[`architecture.md`](../../architecture.md).
+
+There is no account-existence oracle: the exists / new branch is revealed only after a verified
+contact, which itself proves possession of the number.
+
+### Fallback: a code from the bot
+
+For the client who reached the bot without a deep link (opened it by hand, camera unavailable):
+the **Kirish kodi** button runs the same identification as above (confirm; contact share if the
+account is unknown), then issues a [login code](../entities/identity.md#telegram-login-code) —
+6 digits shown in the chat, single-use, 5-minute TTL, bound to the now-identified client. The
+login page's "Kod bilan kirish" input redeems it and receives the session directly.
+
+Note the inversion against the old OTP: the code travels **from Telegram to the site**, so
+nothing is ever sent to a typed phone number — there is nothing to deliver, budget, or probe.
+Redeeming is throttled per client IP (default 10 attempts / minute; exceeding it is
+`login_code_rate_limited` with `retry_after_seconds`), and an unknown, expired,
+or already-used code is one generic `invalid_code` — no oracle on which. With a 10⁶ space, a
+5-minute lifetime, and the throttle, guessing a live code is lottery odds; the code is burned
+on first success regardless.
 
 ### Staff-resolved walk-ins (find-or-create)
 
@@ -144,18 +215,18 @@ from the workshop app's order-creation flow
   rather than behind a second confirm card.
 - **Asking does not write.** The read is its own endpoint, separate from find-or-create:
   resolving on every typed phone would mint a client per typo. The write happens once, on
-  continue, and creates the row (`status = active`) exactly as OTP registration would.
-- **A blocked client is rejected** (`account_blocked`) on the write path — mirrors OTP
-  verification. On the read path a blocked account reads as a **miss**: the answer to "may
+  continue, and creates the row (`status = active`) exactly as bot registration would.
+- **A blocked client is rejected** (`account_blocked`) on the write path — mirrors bot
+  sign-in. On the read path a blocked account reads as a **miss**: the answer to "may
   I write an order for this number" is no either way, and raising there would make the
   lookup an oracle for account status.
 - **Never a login.** The staff path finds or creates the row; it creates **no client
-  session**. OTP remains the only way a client signs in — the first time the walk-in
-  verifies that number they claim the row and see their order history.
+  session**. The bot remains the only way a client signs in — the first time the walk-in
+  shares that number's contact in the bot they claim the row and see their order history.
 - **Guardrails.** Both paths deliberately disclose an existing client's stored name to
   `manage_orders` staff — the trade for the anti-typo confirmation, and the name is already
   what the counter conversation runs on. In exchange each is **rate-limited per staff user**
-  (the same convention as the OTP send limits) and **every call writes an audit row** (the
+  (the same convention as the login-token budgets) and **every call writes an audit row** (the
   phone, the outcome, the acting staffer) — a staffer scanning phone numbers is throttled
   and visible. The read carries the larger hourly budget of the two: looking a number up
   and not writing an order is the normal case at a counter, not a suspicious one. Revisit
@@ -163,52 +234,60 @@ from the workshop app's order-creation flow
   cost of a weaker confirmation.
 
 **Why find-or-create, not a guest entity.** `phone` is unique on the client and the account
-is passwordless — OTP verification is itself already a find-or-create on the phone. Reusing
+is passwordless — the bot's contact step is itself already a find-or-create on the phone. Reusing
 that identity makes a staff-created client automatically claimable (no merge tooling, no
 orphaned guest rows, order history intact) and needs no order schema change. A separate
 guest/walk-in entity, or staff-typed contact fields with no client link, were rejected:
 both split the customer's history and require a claim/merge path v1 doesn't have.
 
+### Bot infrastructure
+
+The bot is configured by `TELEGRAM_BOT_TOKEN` (secret), `TELEGRAM_BOT_USERNAME` (builds the
+deep links), and `TELEGRAM_WEBHOOK_SECRET`. Updates arrive by **webhook** through the prod
+edge, authenticated by Telegram's `secret_token` header — no polling process, no queue;
+outbound messages go straight to the Bot API. Topology and the module split are
+[`architecture.md`](../../architecture.md)'s.
+
 ### Dev & local sign-in
 
-Local, CI, and E2E runs have no Telegram Gateway and no real phone, so a code can't actually be
-sent. A single setting — **`otp_dev_codes`**, a list of fixed codes — covers this: when it is
-**non-empty**, the send step is a no-op (no Gateway call) and verification accepts **any** code
-in the list for **any** phone, so a developer signs in as any number with, say, `000000`. When
-it is **empty** — the default, and **mandatory in production** — the real flow runs: one random
-per-challenge code delivered over Telegram.
+Local, CI, and E2E runs have no public webhook and no real Telegram. A single setting —
+**`TELEGRAM_LOGIN_DEV_MODE`** — covers this: when `true`, a dev-only confirm operation marks
+any pending login token `confirmed` as a given phone (with a name, when the phone is new),
+skipping the bot entirely; the login page needs no change — its poll succeeds the same way,
+and E2E drives the confirm directly. When `false` — the default, and **mandatory in
+production** — only the real bot can confirm a token.
 
-Production rejects non-empty `otp_dev_codes` unless
-**`ALLOW_PROD_OTP_DEV_CODES=true`** is also set. That flag exists only for pre-production public
-testing before the Telegram Gateway account is funded and configured; remove it, set
-`OTP_DEV_CODES=[]`, and configure `TELEGRAM_GATEWAY_ACCESS_TOKEN` before onboarding real users or
-real workshop data.
+Production rejects `TELEGRAM_LOGIN_DEV_MODE=true` unless
+**`ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE=true`** is also set. That flag exists only for
+pre-production public testing before the bot is registered and configured; remove it, set dev
+mode off, and configure the bot settings above before onboarding real users or real workshop
+data.
 
-Send-rate enforcement is controlled separately by **`OTP_RATE_LIMITS_ENABLED`** — the master
-switch for the cooldown and all six send budgets (per-phone, per-IP, and global; hourly and
-daily). It defaults to `true` and must stay enabled outside automated test runs; local E2E sets
-it to `false` so repeated parallel browser tests from one localhost IP do not exhaust the
-per-IP OTP bucket.
+Rate enforcement is controlled separately by **`TELEGRAM_LOGIN_RATE_LIMITS_ENABLED`** — the
+master switch for the per-IP token-creation budget and the code-redeem throttle. It defaults to
+`true` and must stay enabled outside automated test runs; local E2E sets it to `false` so
+repeated parallel browser tests from one localhost IP do not exhaust the per-IP bucket.
 
 ### UX
 
-One sign-in card (client app `/auth/login`) that advances through steps in place — never lose
-the phone the client already typed when stepping forward or back:
+One sign-in card (client app `/auth/login`) whose primary affordance follows the device:
 
-- **Phone step** — a single phone field prefilled with `+998`, primary **Send code**. Errors
-  inline: `invalid_phone`, `phone_unreachable_on_telegram` ("We couldn't reach this number on
-  Telegram — sign-in needs Telegram on this number"), `code_send_rate_limited` ("Try again in
-  N s").
-- **Code step** — a 6-digit code input, the masked target phone, an **Edit** affordance back to
-  the phone step, and a **Resend** that's disabled with a live countdown until the cooldown
-  elapses. Errors: `invalid_code` (with attempts remaining), `code_expired` and
-  `too_many_attempts` (both route the client back to resend / request a new code).
-- **Name step** — shown **only** when verification returned `is_new = true`: one `name` field,
-  primary **Continue**; returning clients skip straight into the app.
-- **Client profile** (`/c/profile`) — `name` editable (it's client-entered, not synced); `phone`
-  read-only (changing it would mean re-verification — out of scope in v1); order count; sessions
-  list with a current marker; "log out" / "log out everywhere". The model still has
-  `preferred_branch_id`, but the profile UI to set it is not currently surfaced.
+- **Desktop** — a QR of the deep link with "Telegram orqali kirish" copy and the link itself
+  as a secondary anchor (for Telegram Desktop users). The page polls in the background:
+  *waiting* (QR shown) → *started* ("Telefoningizda tasdiqlang" the moment `/start` lands) →
+  redirect into the app on `confirmed`. A `declined` token returns to *waiting* with a fresh
+  QR; an expired one shows "QR eskirdi" with a **Yangilash** action that mints a new token.
+- **Mobile** — a primary **Telegram orqali kirish** button opening the deep link (the poll
+  picks the session up when the client returns to the browser), plus a secondary "QR
+  ko'rsatish" for the client whose Telegram lives on a different device.
+- **Code fallback** — a collapsed "Kod bilan kirish" affordance on both layouts: a 6-digit
+  input, generic `invalid_code` inline, `retry_after_seconds` countdown when throttled.
+- **No name step** — registration happens entirely inside the bot.
+- **Client profile** (`/c/profile`) — `name` editable (prefilled from Telegram at
+  registration, never re-synced); `phone` read-only (changing it would mean re-sharing a
+  contact — out of scope in v1); order count; sessions list with a current marker; "log out" /
+  "log out everywhere". The model still has `preferred_branch_id`, but the profile UI to set
+  it is not currently surfaced.
 
 ## Workshop provisioning (superadmin app)
 
@@ -622,20 +701,32 @@ grants at least one active branch permission.
 - **Grant on a branch that later goes `inactive`** — inert; the branch disappears from the
   picker; reactivating makes the grant live again.
 - **Owner blocks themselves** — disallowed (a workshop must have an active owner).
-- **Client's number isn't on Telegram** — `phone_unreachable_on_telegram`; the sign-in card
-  explains sign-in needs Telegram on that number (no SMS fallback in v1). The failed delivery
-  still consumes a challenge: it counts toward every send budget and starts the 60 s cooldown,
-  so reachability can't be probed for free.
-- **Client mistypes the code** — `invalid_code` with attempts remaining; the 5th wrong attempt
-  burns the challenge (`too_many_attempts`) and a code past its 5-minute TTL is `code_expired` —
-  both send the client back to request a fresh code.
-- **Code requested too often** — `code_send_rate_limited`; the resend control stays disabled
-  with a countdown until the 60 s cooldown elapses.
-- **Platform-wide send budget exhausted** — the same `code_send_rate_limited`, with a longer
-  `retry_after_seconds`; sign-in is unavailable until the window rolls over. Deliberate
-  trade-off: the global cap is the ceiling on the worst-case Telegram bill, so a distributed
-  attack can exhaust it and deny OTP sign-in platform-wide — the caps are generous (~10×
-  expected legit traffic), the trip is logged loudly, and raising a cap is an env edit away.
+- **Client has no Telegram** — cannot sign in; there is no SMS fallback in v1, and counter
+  staff can still place walk-in orders for them. Revisit per the decision in
+  [Client sign-in](#client-sign-in-telegram-bot).
+- **Client declines in the bot** — the token is `declined`; the login page returns to a fresh
+  QR / button.
+- **Token expires mid-conversation** — the bot answers "muddat tugadi, saytdagi QR ni
+  yangilang"; the page's poll reports expiry and offers **Yangilash**.
+- **Client shares someone else's contact** — refused (`contact.user_id` must equal the
+  sender's id); the bot re-prompts for the client's own contact.
+- **Client's Telegram number is not `+998`** — refused with copy saying only `+998` numbers
+  are supported; the client identity's phone invariant is `+998XXXXXXXXX`-shaped
+  ([`identity.md`](../entities/identity.md#client)).
+- **Same number, new Telegram account** — the verified contact relinks the client row to the
+  new account; the old account can no longer confirm logins. Existing sessions are untouched —
+  the relink proves the same identity, it doesn't revoke it.
+- **Client's Telegram number changes after registration** — login keeps working through the
+  linked account (the known-account branch never re-asks for the contact), so the stored
+  `phone` goes stale. Accepted in v1; revisit with a "re-verify phone" profile action if a
+  stale number ever misroutes a staff walk-in resolve.
+- **QR photographed / scanned by someone else** — inert: the session is released only against
+  the poll secret, which never appears on screen (see [The handshake](#the-handshake)).
+- **Fallback code guessed** — one generic `invalid_code` whether unknown, expired, or used;
+  redeem attempts are throttled per IP; a live code dies on first successful redeem.
+- **Client blocked the bot earlier** — pressing Start un-blocks it by definition; sign-in is
+  unaffected. Notification delivery to a blocked bot is
+  [`notifications.md`](notifications.md#telegram-delivery-to-clients)'s concern.
 
 ## Next
 

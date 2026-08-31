@@ -70,7 +70,8 @@ local convenience.
 
 One-time and already done: repo cloned at `/opt/mebel-pro`; `deploy/.env` created from
 `.env.prod.example` with **every** `{{change-me}}` filled (the backend refuses to boot in
-prod with `OTP_CODE_PEPPER` or `TELEGRAM_GATEWAY_ACCESS_TOKEN` left empty — a missed one
+prod with `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, or `TELEGRAM_LOGIN_CODE_PEPPER`
+left empty — a missed one
 crash-loops the first deploy, fail-safe); shared Postgres DB/user and MinIO key/bucket
 provisioned by hand on `infra-net` (prod never auto-creates the bucket); DNS for the apex +
 three subdomains pointed at the box, ports 80/443 open. The first `up` provisions five
@@ -124,6 +125,7 @@ to run without `deploy/.env` and `infra-net`, and prints the fix for each.
 - Pin image tags (`postgres:17-alpine`, `minio/minio:RELEASE.…`, `caddy:2.8-alpine`,
   `nginx:1.27-alpine`, `node:22-slim`); never `latest`.
 - The prod `default` subnet (`172.29.0.0/24`) and `TRUSTED_PROXY_CIDRS` move **together** —
-  the backend trusts `X-Forwarded-For` only from that subnet, and the per-IP OTP limits are
+  the backend trusts `X-Forwarded-For` only from that subnet, and the per-IP
+  Telegram-login limits are
   inert without it. If the subnet collides on the VPS, change both in one commit. `infra-net`
   must never be listed as trusted (shared with other projects).

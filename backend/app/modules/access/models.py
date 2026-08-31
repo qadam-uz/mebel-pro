@@ -1,10 +1,18 @@
-"""Identity, permission, OTP challenge, and session models."""
+"""Identity, permission, Telegram sign-in, and session models."""
 
 import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -13,6 +21,7 @@ from app.models.base import Base, Timestamped, UUIDPrimaryKey
 from app.models.enums import (
     AuthenticatedPrincipalType,
     Permission,
+    TelegramLoginTokenStatus,
     UserStatus,
     enum_type,
 )
@@ -108,9 +117,25 @@ class Client(UUIDPrimaryKey, Timestamped, Base):
         Index("ix_clients_created_at", "created_at"),
         UniqueConstraint("phone", name="uq_clients_phone"),
         CheckConstraint("length(name) >= 1 AND length(name) <= 80", name="ck_clients_name_len"),
+        # Partial: one Telegram account signs in as at most one client, but the
+        # many staff-created rows that have never signed in stay unconstrained.
+        Index(
+            "uq_clients_telegram_user_id",
+            "telegram_user_id",
+            unique=True,
+            postgresql_where=text("telegram_user_id IS NOT NULL"),
+            sqlite_where=text("telegram_user_id IS NOT NULL"),
+        ),
     )
 
     phone: Mapped[str] = mapped_column(nullable=False)
+    # The Telegram account that signs in as this client. Private-chat id equals
+    # user id, so bot messages go straight to it.
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    # Set when a bot send bounces with 403 (the client blocked the bot); cleared
+    # on their next `/start`. While set, Telegram delivery is skipped — the
+    # inbox is unaffected.
+    telegram_unreachable_at: Mapped[datetime | None]
     name: Mapped[str] = mapped_column(nullable=False)
     preferred_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
     status: Mapped[UserStatus] = mapped_column(
@@ -121,19 +146,61 @@ class Client(UUIDPrimaryKey, Timestamped, Base):
     last_login_at: Mapped[datetime | None]
 
 
-class PhoneVerificationChallenge(UUIDPrimaryKey, Base):
-    __tablename__ = "phone_verification_challenges"
+class TelegramLoginToken(UUIDPrimaryKey, Base):
+    """One browser↔bot sign-in handshake.
+
+    Two secrets, deliberately: the deep-link token rides in the QR and is
+    therefore public to anyone who can photograph the screen, while the poll
+    secret never leaves the browser that requested it. A session is released
+    only against the poll secret — see
+    `docs/ref/features/access-management.md#the-handshake`.
+    """
+
+    __tablename__ = "telegram_login_tokens"
     __table_args__ = (
-        CheckConstraint(
-            "attempt_count >= 0 AND attempt_count <= 5", name="ck_phone_challenges_attempts"
-        ),
+        UniqueConstraint("token_hash", name="uq_telegram_login_tokens_token_hash"),
+        UniqueConstraint("poll_secret_hash", name="uq_telegram_login_tokens_poll_secret_hash"),
+        # The per-IP creation budget counts rows in a window.
+        Index("ix_telegram_login_tokens_ip_created", "request_ip", "created_at"),
+        Index("ix_telegram_login_tokens_telegram_user_id", "telegram_user_id"),
     )
 
-    phone: Mapped[str] = mapped_column(nullable=False, index=True)
-    code_hash: Mapped[str] = mapped_column(nullable=False)
-    request_ip: Mapped[str] = mapped_column(nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(nullable=False)
+    poll_secret_hash: Mapped[str] = mapped_column(nullable=False)
+    status: Mapped[TelegramLoginTokenStatus] = mapped_column(
+        enum_type(TelegramLoginTokenStatus, "telegram_login_token_status"),
+        default=TelegramLoginTokenStatus.PENDING,
+        nullable=False,
+    )
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clients.id"))
+    request_ip: Mapped[str] = mapped_column(nullable=False)
+    device_info: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
     expires_at: Mapped[datetime] = mapped_column(nullable=False)
-    attempt_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    confirmed_at: Mapped[datetime | None]
+    used_at: Mapped[datetime | None]
+
+
+class TelegramLoginCode(UUIDPrimaryKey, Base):
+    """The fallback path: a short code the bot shows an identified client.
+
+    The code travels *from* Telegram to the site, so nothing is ever sent to a
+    typed number. Its low entropy is covered by the redeem throttle, the
+    5-minute TTL, and burn-on-redeem — not by per-row attempt counters, since no
+    row is addressable before a correct guess.
+    """
+
+    __tablename__ = "telegram_login_codes"
+    __table_args__ = (Index("ix_telegram_login_codes_code_hash", "code_hash"),)
+
+    code_hash: Mapped[str] = mapped_column(nullable=False)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
     consumed_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 

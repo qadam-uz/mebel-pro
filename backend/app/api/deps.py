@@ -27,7 +27,7 @@ from app.modules.access.api import (
 # scope="function": commit must complete BEFORE the response is sent. FastAPI's
 # default "request" scope tears yield-dependencies down after the response, so a
 # 200 could reach the client while its write is still uncommitted — the caller's
-# immediate next request (verify after OTP send, authed call after login) then
+# immediate next request (poll after a bot confirm, authed call after login) then
 # misses the row, and a failed commit would silently discard a write already
 # acknowledged with a 2xx.
 Session = Annotated[AsyncSession, Depends(get_session, scope="function")]
