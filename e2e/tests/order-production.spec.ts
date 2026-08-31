@@ -16,6 +16,7 @@ import {
   escapeRegExp,
   expectOk,
   panelNumbers,
+  setBranchProductionMode,
   type BranchMaterialResponse,
 } from "./helpers";
 
@@ -369,6 +370,11 @@ test("client places an order and workshop completes it through production queues
   const ownerAccess = await readyOwnerToken(request, setup);
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
+  // This spec walks the full per-stage choreography — assignment, the two
+  // starts, both station terminals. A branch is born `simple` (orders.md), where
+  // those endpoints answer `409 simple_mode_active` and the Kesish/Krom sidebar
+  // entries are hidden, so the surface under test has to be asked for.
+  await setBranchProductionMode(request, ownerAccess, branchId, "full");
   const { panelDecor, panel, edge } = await carriedMaterials(
     request,
     adminAccess,
@@ -566,16 +572,19 @@ test("client places an order and workshop completes it through production queues
     .click();
   await collected;
   await expect(
-    workshopPage.getByText("Tugatilgan", { exact: true }).first(),
+    workshopPage.getByText("Olib ketildi", { exact: true }).first(),
   ).toBeVisible();
   await workshopContext.close();
 
   await page.goto("/client/c/orders");
   await expect(page.getByText(orderNumber as string).first()).toBeVisible();
-  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+  // The client track is four phases, mode-independent (orders.md): the final
+  // one reads «Olib ketildi» whichever way the workshop ran the floor — the
+  // completed status always means the client took the order.
+  await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "Tafsilot" }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
-  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
 });
 
 test("client sees branch pricing setup errors while placing an order", async ({

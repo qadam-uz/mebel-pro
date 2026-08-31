@@ -1,8 +1,12 @@
 import type { NavGroupId, NavItem } from '@/shared/app/roleConfig'
+import type { ProductionMode } from '@/shared/stores/workshop'
 
 export interface WorkshopNavBranch {
   id: string
   permissions: string[]
+  /** Absent on callers that predate the mode (tests, older payloads); only an
+   *  explicit `simple` hides the stations, so an unknown mode stays full. */
+  production_mode?: ProductionMode
 }
 
 export interface WorkshopNavInput {
@@ -25,10 +29,20 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     item('nav.item.dashboard', input.path('/workshop'), 'management', 'dashboard'),
   ]
 
+  const selectedBranch =
+    input.branches.find((branch) => branch.id === input.selectedBranchId) ?? input.branches[0]
+  // The station pages are fed by assignments, and a simple-mode branch never
+  // writes one — so on such a branch Kesish and Krom are permanently empty
+  // screens. Hiding them takes their sidebar counters with them: the shell
+  // derives those from this very list (orders.md, workshop UX).
+  const showStations = selectedBranch?.production_mode !== 'simple'
+
   if (input.isOwner) {
     nav.push(item('nav.item.orders', input.path('/workshop/orders'), 'management', 'orders'))
-    nav.push(item('nav.item.cutting', input.path('/workshop/cutting'), 'production', 'scissors'))
-    nav.push(item('nav.item.banding', input.path('/workshop/banding'), 'production', 'layers'))
+    if (showStations) {
+      nav.push(item('nav.item.cutting', input.path('/workshop/cutting'), 'production', 'scissors'))
+      nav.push(item('nav.item.banding', input.path('/workshop/banding'), 'production', 'layers'))
+    }
     nav.push(item('nav.item.inventory', input.path('/workshop/inventory'), 'resources', 'box'))
     nav.push(item('nav.item.catalog', input.path('/workshop/catalog'), 'resources', 'grid'))
     nav.push(
@@ -60,8 +74,6 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     return nav
   }
 
-  const selectedBranch =
-    input.branches.find((branch) => branch.id === input.selectedBranchId) ?? input.branches[0]
   if (!selectedBranch) {
     return nav
   }
@@ -69,7 +81,7 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
   if (hasAny(selectedBranch, ['manage_orders'])) {
     nav.push(item('nav.item.orders', input.path('/workshop/orders'), 'management', 'orders'))
   }
-  if (hasAny(selectedBranch, ['process_production'])) {
+  if (showStations && hasAny(selectedBranch, ['process_production'])) {
     nav.push(item('nav.item.cutting', input.path('/workshop/cutting'), 'production', 'scissors'))
     nav.push(item('nav.item.banding', input.path('/workshop/banding'), 'production', 'layers'))
   }

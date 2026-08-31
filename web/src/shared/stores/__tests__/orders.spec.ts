@@ -182,6 +182,25 @@ describe('orders store', () => {
     expect(store.workshopOrders[0]).toMatchObject({ id: 'order-1' })
   })
 
+  // A failed place must land in actionError (not `error`): the review page reads
+  // actionError for its inline banner, and `error` gating would collapse the
+  // whole page to its load-error state over a submit refusal.
+  it('captures a client order placement failure to actionError', async () => {
+    vi.mocked(api.post).mockRejectedValueOnce(
+      new ApiError(409, { code: 'branch_does_not_carry_panel', trace_id: 'trace-place' }),
+    )
+    const store = useOrdersStore()
+
+    await expect(
+      store.createClientOrder({ draft_id: 'draft-1', branch_id: 'branch-1' }),
+    ).rejects.toBeInstanceOf(ApiError)
+
+    expect(store.actionError).toBe('order_place_failed')
+    expect(store.error).toBeNull()
+    expect(store.actionLoading).toBe(false)
+    expect(store.clientOrders).toHaveLength(0)
+  })
+
   // QAD-156: the sidebar badge is ambient decoration. A failing count must leave
   // no error state and no stale number behind — the badge simply stops rendering.
   it('keeps the new-order count silent when it fails to load', async () => {

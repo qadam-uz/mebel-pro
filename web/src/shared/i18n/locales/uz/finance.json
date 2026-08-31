@@ -267,7 +267,8 @@
     "noEdgeMetres": "Kromka metri yo'q",
     "noThickness": "Jamlanma yo'q",
     "materialFallback": "Material {id}",
-    "unknownThickness": "Noma'lum"
+    "unknownThickness": "Noma'lum",
+    "unassigned": "Belgilanmagan"
   },
   "queue": {
     "loadFailed": "Ish navbatini yuklab bo'lmadi",

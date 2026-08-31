@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import ActorType, Currency, MaterialSource, OrderStatus
+from app.models.enums import ActorType, Currency, MaterialSource, OrderStatus, ProductionMode
 from app.modules.cutting.schemas import CuttingResultResponse
 from app.schemas.common import APIModel
 
@@ -125,6 +125,19 @@ class WorkshopOrderAssignRequest(VersionedRequest):
 
 class WorkshopOrderCompleteRequest(VersionedRequest):
     completed_by_user_id: uuid.UUID | None = None
+
+
+class WorkshopOrderCompleteProductionRequest(VersionedRequest):
+    """The simple-mode composite **Tayyor** action's body (orders.md).
+
+    Both worker picks are optional and may stay `None`: on a simple-mode branch
+    worker accounts are a reporting dimension, not a gate — the shop that wants
+    per-worker numbers creates accounts, the shop that does not still closes its
+    orders. The edger is only meaningful when a side is banded.
+    """
+
+    cutter_user_id: uuid.UUID | None = None
+    edger_user_id: uuid.UUID | None = None
 
 
 class WorkshopOrderAdjustmentRequest(VersionedRequest):
@@ -403,6 +416,10 @@ class OrderSummaryResponse(APIModel):
 
 
 class OrderDetailResponse(OrderSummaryResponse):
+    # The production mode of the order's OWN branch, so the detail screen picks
+    # its actions from the payload instead of inferring them from whichever
+    # branch the sidebar happens to have selected.
+    branch_production_mode: ProductionMode
     items: list[OrderItemResponse] = Field(default_factory=list)
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
     price_lines: list[OrderPriceLine] = Field(default_factory=list)

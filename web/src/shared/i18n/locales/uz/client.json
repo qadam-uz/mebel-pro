@@ -1,11 +1,15 @@
 {
   "status": {
-    "new": "Yuborildi",
-    "confirmed": "Tasdiqlandi",
-    "production": "Ishlab chiqarishda",
+    "new": "Yangi",
+    "confirmed": "Tayyorlanmoqda",
     "ready": "Tayyor",
-    "completed": "Topshirildi",
+    "completed": "Olib ketildi",
     "cancelled": "Bekor qilingan"
+  },
+  "statusSub": {
+    "new": "Ustaxona tasdiqlashi kutilmoqda",
+    "confirmed": "Ishlab chiqarish jarayonida",
+    "ready": "Olib ketishingiz mumkin"
   },
   "unit": {
     "part": "detal",
@@ -61,7 +65,7 @@
     "readyMore": "yana {n} ta tayyor",
     "totalPrice": "Jami narx",
     "statActiveOrders": "Faol buyurtma",
-    "statProduction": "Ishlab chiqarishda",
+    "statProduction": "Tayyorlanmoqda",
     "statDrafts": "Saqlangan chizma",
     "activeOrders": "Faol buyurtmalar",
     "emptyOrdersTitle": "Faol buyurtma yo'q",
@@ -80,7 +84,7 @@
     "statusAllMeta": "barcha buyurtmalar",
     "statusActive": "Faol",
     "statusActiveMeta": "ish jarayonida",
-    "statusCompleted": "Tugatilgan",
+    "statusCompleted": "Olib ketilgan",
     "statusCompletedMeta": "topshirilgan",
     "statusCancelled": "Bekor qilingan",
     "statusCancelledMeta": "to'xtatilgan",
@@ -122,10 +126,6 @@
     "workshopMaterial": "ustaxona materiali",
     "edge": "Kromka",
     "edgeMaterialAndService": "material + xizmat",
-    "edgeMaterial": "Kromka materiali",
-    "edgeTapePrice": "lenta narxi",
-    "edgeService": "Kromka yopishtirish xizmati",
-    "edgeServiceDetail": "ish haqi · metr bo'yicha",
     "surcharge": "Ustama",
     "discount": "Chegirma",
     "price": "Narx",
@@ -137,9 +137,6 @@
     "noteClient": "Sizning izohingiz",
     "statusCard": "Holat",
     "workshopContact": "Ustaxonaga aloqa",
-    "statusCutting": "Kesilmoqda",
-    "statusEdgeBanding": "Kromka yopishtirilmoqda",
-    "statusReady": "Olib ketishga tayyor",
     "partsEmpty": "Bu buyurtmada detal yo'q.",
     "openPdfShort": "PDF ochish",
     "resultMissing": "Chizma natijasi topilmadi.",
@@ -181,16 +178,6 @@
     "billEdge": "Kromka: {material}"
   },
   "branches": {
-    "title": "Ustaxonalar",
-    "subtitle": "Faol ustaxonalar — manzil va aloqa ma'lumotlari.",
-    "note": "Bu ro'yxat shunchaki ma'lumot uchun. Buyurtma uchun chizmadan boshlang.",
-    "searchPlaceholder": "Ustaxona yoki shahar nomi",
-    "loadFailed": "Ustaxonalarni yuklab bo'lmadi",
-    "emptyTitle": "Ustaxona topilmadi",
-    "emptyBody": "Qidiruv bo'yicha faol yoki vaqtincha yopiq ustaxona yo'q.",
-    "primaryPhone": "(asosiy)",
-    "active": "Faol",
-    "closed": "Vaqtincha yopiq",
     "openMap": "Xaritada ochish"
   },
   "profile": {
@@ -251,7 +238,7 @@
     "fallback": "Bildirishnoma",
     "inventoryNegativeStock": "Ombor qoldig'i manfiy",
     "orderPlaced": "Buyurtma joylandi",
-    "orderConfirmed": "Buyurtma tasdiqlandi",
+    "orderConfirmed": "Buyurtma tayyorlanmoqda",
     "orderStatusChanged": "Buyurtma holati o'zgardi",
     "orderUpdated": "Buyurtma yangilandi",
     "orderReady": "Buyurtma tayyor",
@@ -294,5 +281,31 @@
     "too_many_attempts": "Juda ko'p noto'g'ri urinish. Yangi kod oling.",
     "name_required": "Ismingizni kiriting.",
     "network_error": "Serverga ulanib bo'lmadi — qayta urinib ko'ring."
+  },
+  "entry": {
+    "greeting": "{workshop} sizni taklif qilmoqda",
+    "sub": "Chizmangizni chizing, narxini darhol ko'ring va buyurtma bering.",
+    "chooseTitle": "Qaysi filialdan olib ketasiz?",
+    "enter": "Kirish",
+    "connected": "Siz {workshop} ustaxonasiga ulandingiz",
+    "deadTitle": "Havola topilmadi",
+    "deadBody": "Havola eskirgan yoki noto'g'ri. QR kodni qaytadan skanerlang yoki ustaxonadan yangi havola so'rang.",
+    "busyTitle": "Havola hozir ochilmadi",
+    "busyBody": "So'rovlar ko'payib ketdi. Bir necha soniyadan keyin qayta urinib ko'ring.",
+    "openApp": "Ilovani ochish",
+    "applyFailed": "Ustaxonaga ulanib bo'lmadi. QR kodni qaytadan skanerlang."
+  },
+  "workshops": {
+    "title": "Ustaxonalarim",
+    "subtitle": "Siz ulangan ustaxonalar — manzil, telefon va holati.",
+    "pinned": "Asosiy",
+    "makePrimary": "Asosiy qilish",
+    "pinFailed": "Asosiy qilib bo'lmadi. Qayta urinib ko'ring.",
+    "active": "Faol",
+    "closed": "Vaqtincha yopiq",
+    "noBranches": "Ochiq filial yo'q.",
+    "loadFailed": "Ustaxonalarni yuklab bo'lmadi",
+    "emptyTitle": "Hali ustaxona ulanmagan",
+    "emptyBody": "Ustaxonangiz bergan havola yoki QR kod orqali kiring — katalog va narxlar o'sha ustaxonaniki bo'ladi."
   }
 }

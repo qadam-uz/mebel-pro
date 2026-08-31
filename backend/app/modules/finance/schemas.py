@@ -306,7 +306,10 @@ class WorkerProductionThicknessLine(APIModel):
 
 
 class WorkerProductionRow(APIModel):
-    user_id: uuid.UUID
+    # Null on the unassigned bucket — the volume a simple-mode order recorded
+    # with nobody credited (orders.md). It is a bucket, not a worker: it carries
+    # no user to pay, and the client labels it from the null id.
+    user_id: uuid.UUID | None
     full_name: str
     panels_cut: int
     cut_count: int

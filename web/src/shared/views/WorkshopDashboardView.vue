@@ -67,7 +67,12 @@ const CHART_NARROW_MAX_PX = 619
 // Who sees what, and which of those cards may link anywhere — the whole rule
 // lives in one pure function so it can be reasoned about and tested away from
 // the markup (`workshopDashboard.ts`).
-const access = computed(() => workshopDashboardAccess(auth.me, workshop.branches))
+const access = computed(() =>
+  // The selected branch is passed in because one section — Stansiyalar — is
+  // mode-dependent: it is hidden on a simple-mode branch, whose station queues
+  // are assignment-fed and therefore always empty (orders.md).
+  workshopDashboardAccess(auth.me, workshop.branches, workshop.selectedBranchContext),
+)
 
 const hasAnyGrant = permissions.hasAnyGrant
 const financeBranches = computed(() => access.value.financeBranches)
@@ -80,7 +85,6 @@ const canInventory = computed(() => access.value.canInventory)
 const canCatalog = computed(() => access.value.canCatalog)
 const canOrders = computed(() => access.value.canOrders)
 const canManageOrders = computed(() => access.value.canManageOrders)
-const canProduction = computed(() => access.value.canProduction)
 const hasKpis = computed(() => access.value.hasKpis)
 // A grant that lights up no section (manage_catalog, say) used to fall past the
 // "no grants" empty state into a heading and a refresh button — the empty state
@@ -331,7 +335,11 @@ const worklistPrimaryKey = computed(
 // is at the saw right now" (`workshopStationLoad`).
 const stationLoad = computed(() => workshopStationLoad(orders.workshopOrders))
 const stationWorkersByBranch = ref<Record<string, WorkshopWorkerOption[]>>({})
-const showStations = computed(() => canProduction.value || canManageOrders.value)
+// Permission *and* mode — `workshopDashboard.ts` owns the rule, because
+// `hasVisibleSection` has to agree with it: a `process_production`-only staffer
+// on a simple branch loses their only section and must land in the existing
+// "nothing here for you" empty state, not on a blank page.
+const showStations = computed(() => access.value.showStations)
 const stationsHref = computed(() => rolePath('/workshop/cutting'))
 
 function resolveWorkerName(userId: string): string | null {
@@ -556,7 +564,9 @@ async function loadStationWorkers() {
 // loads in parallel would race those flags and clear a skeleton (or an error)
 // that still belongs to the other.
 async function loadOrderSection() {
-  if (!canOrders.value && !canProduction.value) return
+  // `showStations`, not `canProduction`: on a simple branch the panel is gone,
+  // so a production-only viewer has nothing left for these rows to feed.
+  if (!canOrders.value && !showStations.value) return
   const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
   const orderBranchId = contextBranchFor(visibleOrderBranches)
   await orders.loadWorkshopOrders({

@@ -3,7 +3,7 @@ version: alpha
 name: Mebel Pro
 description: >-
   Design system for the three Vue SPAs (client, workshop, superadmin) — a dense,
-  utilitarian back-office language on a cool neutral canvas: graphite carries every
+  utilitarian back-office language on a cool neutral canvas: indigo carries every
   action, one orange signal marks what needs attention. Realized as @theme tokens in
   src/assets/main.css and shared primitives under src/shared/components/.
 colors:
@@ -21,8 +21,8 @@ colors:
   hairline-soft: "#e9ebef"
   hairline: "#e4e6ea"
   hairline-strong: "#c3c8d0"
-  accent: "#22252a"
-  accent-hover: "#34383f"
+  accent: "#2b4a80"
+  accent-hover: "#35599a"
   on-accent: "#f4f2ee"
   signal: "#ff5a1f"
   accent-soft: "#ffe9e0"
@@ -48,6 +48,9 @@ colors:
   neutral-soft: "#eef0f3"
   taupe: "#6b5647"
   taupe-soft: "#f3f0ec"
+  brand-tile: "#4341c6"
+  brand-panel: "#f6e6cd"
+  brand-wood: "#d9a968"
 typography:
   page-title:
     fontFamily: "{fonts.display}"
@@ -161,11 +164,13 @@ semantic `--color-*` tokens.
   inside a card, `hairline-soft` for a panel edge (the sidebar's right edge), `hairline` for
   input and button borders. `hairline-strong` is the line that must survive on `sunk`, and it
   doubles as the chart's period-max bar.
-- **Action — graphite.** `accent` is the single action colour: primary buttons, the focus ring,
+- **Action — indigo.** `accent` is the single action colour: primary buttons, the focus ring,
   icon tiles, a selected state, `::selection`. `accent-hover` on hover. Text on it is
-  `on-accent` — **bone, not white**; pure white on graphite reads as a screen glare.
+  `on-accent` — **bone, not white** (7.85:1 on the indigo); pure white on it reads as a screen
+  glare. The **brand mark does not follow `accent`** — it has its own `brand-*` tokens (see
+  Brand): rethemeing the action colour never recolours the mark.
 - **Signal — orange.** `signal` (`#ff5a1f`) is an **accent, not a fill**: the notification dot,
-  today's column in a chart, the banding ticks on a job sheet, the cut mark in the logo, a 2px
+  today's column in a chart, the banding ticks on a job sheet, the cut in the wordmark, a 2px
   rule, a spotlight ring. It gives only **3.1:1 under white text**, so it is never a button
   background and never sits under text. When orange has to carry words it steps down — to
   `accent-deep` on a neutral surface (a text link, a text button), and to `accent-strong` on
@@ -182,7 +187,7 @@ semantic `--color-*` tokens.
 - **Order stages** warm as the work advances — `Yangi` (`neutral-soft` / `ink-nav`) →
   `Tasdiqlangan` (`taupe-soft` / `taupe`) → `Kesilmoqda` (`accent-soft` / `accent-strong`) →
   `Kromkada` (`accent-tint` / `accent-strong`) → `Tayyor` (`success-soft` / `success`), with
-  `Tugatilgan` (`neutral-soft` / `ink-soft`) and `Bekor qilingan` (`danger-soft` / `danger`) off
+  `Olib ketildi` (`neutral-soft` / `ink-soft`) and `Bekor qilingan` (`danger-soft` / `danger`) off
   to the side. The chip always carries the stage's word.
 - **Derived values** — shadows/scrims tint from `ink`, focus rings from `accent`, via
   `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a retheme must
@@ -307,7 +312,7 @@ off-scale values.
 ## Components
 
 - **Buttons** (`.mp-button`) — 40px min-height, 600 weight, `{rounded.lg}`, 10×16px padding.
-  Primary = graphite fill with `on-accent` text; secondary = `sunk` fill with `ink`; tertiary =
+  Primary = indigo fill with `on-accent` text; secondary = `sunk` fill with `ink`; tertiary =
   white with a `hairline` border; disabled = 50% opacity, no elevation, `not-allowed` cursor.
   A **text button** is `accent-deep` on nothing — that is the only place orange carries words.
   Submit buttons disable + show progress during async work and end in explicit success or a
@@ -377,8 +382,9 @@ off-scale values.
   `stroke-width: 2`; the shells inline the same paths at 18px and thin them to `1.8` per host in
   CSS (nav item, chrome button, station tile). Icon-only buttons always carry an accessible name
   that says the action *and* the row it acts on (`Beton bo'yoq — tahrirlash`). An icon tile has two
-  treatments and they mean different things: a **graphite** tile with a bone glyph belongs to
-  the chrome and the brand, an **`accent-soft`** tile with an `accent-strong` glyph marks a
+  treatments and they mean different things: an **`accent`** tile (indigo) with a bone glyph
+  belongs to the chrome, and the **brand** tile is the same shape in **`deep`** graphite — it
+  does not follow `accent`; an **`accent-soft`** tile with an `accent-strong` glyph marks a
   production station. An empty state gets neither — it is a `sunk` tile with an `ink-muted`
   glyph, so it cannot be mistaken for a control. One glyph per concept: expand/collapse is
   `chevron-down` rotated 180°, and voiding a row is `ban` — a circle with a diagonal, never
@@ -407,7 +413,7 @@ off-scale values.
   whose colour carries meaning also states it in words.
 - **Work lists** — a dashboard panel whose rows are *jobs*, not data: each row is a title, a
   detail line, and one action button on the right, separated by `divider` lines. Exactly **one**
-  row in the panel carries the graphite primary button — the first row that has an action, which
+  row in the panel carries the indigo primary button — the first row that has an action, which
   is also the most urgent — and every other action is the neutral **`bg`** button, so the eye
   lands on the one thing to do first. `bg` and not `sunk`: one step darker is what gives the
   button an edge against the white panel it sits on. A row appears whenever its condition holds
@@ -565,43 +571,51 @@ much of this board did we use". Rejected in review: `KIM` (engineer's abbreviati
 
 ## Brand
 
-There is no pictorial logo. The name **is** the mark, with a single cut running through it.
+The mark is the **cutting map** — the 2026-07 mark, revived by owner decision 2026-08-31: a
+cream sheet cut into three parts on an ultramarine tile, one part in wood amber. It says what
+the product does; the name beside it says who.
 
-- **Wordmark** — `MEBEL | PRO` in Display 800, uppercase, `−0.02em`. The cut sits between the
-  words: width 7% of the cap height, 15% taller than the caps, in `signal` orange. Minimum size
-  13px on screen / 6mm in print — below that the cut disappears and the icon takes over. This is
-  the standard for print and partner material; no app screen renders it today.
-- **Icon** — the name abbreviated: `M`, the cut, `P`, bone on a graphite tile. Proportions come
-  from the tile's edge, so they hold at every size: radius 22%, letters at 44% of the edge in
-  Display 800, the cut 6% wide and 53% tall, gaps of 4.7%. **Below 16px the `P` is dropped** and
-  only `M` and the cut survive — two letters at that size smear into one shape. The 16px frame of
-  the `.ico` is the only place that reduction ships.
-- **The icon exists twice, and both have to say the same thing.** *In the app* it is markup —
-  `BrandMark.vue` renders the letters as type, so every shell and every login screen draws one
-  component and none of them reaches for the icon file. *As an asset*
-  (`web/public/favicon.svg`, the 180 / 192 / 512 rasters, the maskable variant, the three-size
-  `.ico`) the letters are **Wix Madefor Display 800 outlines**, because an SVG used as an icon
-  renders in a restricted mode with no webfont and a `<text>` element would fall back to whatever
-  the OS has. Regenerate the assets from the font, never by tracing.
-- **One-colour** — for a stamp, a fax or an engraving the cut goes graphite with the letters.
-- **Clear space** — one cap height on every side, and nothing inside it.
-- **Orange is never the mark's background** and never fills a button: the cut would vanish and
-  text on it would fail contrast.
+- **One source.** The mark's colours are three `@theme` tokens and nothing else —
+  `brand-tile` (`#4341c6`), `brand-panel` (`#f6e6cd`), `brand-wood` (`#d9a968`). In the app
+  the mark is drawn ONLY by `BrandMark.vue`, live from the tokens; the static assets
+  (`web/public/favicon.svg`, the 180 / 192 / 512 rasters, the maskable variant, the
+  three-size `.ico`) are **generated** from the same tokens by
+  `web/scripts/generate-brand-assets.mjs`. Change a token → rerun the script. Hand-editing an
+  asset, or drawing the mark inline anywhere (a shell, the landing, an email), is a bug — the
+  landing consumes `/favicon.svg` via `<img>` for exactly this reason.
+- **`brand-tile` is deliberately not `accent`.** Retheming the logo with the action colour
+  was considered and rejected (the graphite/indigo tile read too dark), so the mark and the
+  action colour move independently. The ultramarine also lives ONLY here: no UI surface may
+  reuse it, and the cutting editor's tape registry keeps a test asserting no chip ever wears
+  it.
+- **Geometry** — on the 32-unit grid: tile radius 7 (22%), left part 9×22 at (5,5), right
+  top 10.5×10 at (16.5,5), right bottom (the wood part) 10.5×10 at (16.5,17), all radius 2.
+  Rects only, so it holds from 512px down to the 16px `.ico` frame with **no reduction
+  rule** — the letterform-era "drop the P below 16px" rule is retired.
+- **Wordmark** — `MEBEL | PRO` in Display 800, uppercase, `−0.02em`, with the `signal` cut
+  between the words (width 7% of the cap height, 15% taller than the caps), stays the type
+  lockup for print and partner material; below 13px on screen / 6mm in print the mark takes
+  over. The cut belongs to the wordmark only — the mark itself carries no orange.
+- **One-colour** — for a stamp, a fax or an engraving: drop the tile and print the three
+  parts alone in the single colour; the layout reads from the gaps.
+- **Clear space** — a quarter of the tile's edge on every side, and nothing inside it.
+- **Orange is never the mark's background** and never fills a button: text on it would fail
+  contrast, and the wordmark's cut would vanish into it.
 
 ## Do's and Don'ts
 
 **Do**
 
 - Use semantic tokens for every colour, radius, and spacing value.
-- Keep one primary (graphite) action per screen, visually dominant — the shell's own
+- Keep one primary (indigo) action per screen, visually dominant — the shell's own
   `+ Yangi buyurtma` is the workshop's single exception, and a screen that has it does not add
   a second copy.
 - Pair every status colour with a word or icon.
 - Reach for `signal` orange only in small areas — a dot, a rule, one bar, a ring, a tick.
 - Open create/edit in `AppModal`; seed inline-listbox selects inside it.
 - Right-align money/quantities with tabular figures and the unit beneath.
-- Focus ring on everything interactive: 3px graphite outline, 2px offset, and keep the 5px
-  light halo — it is the only thing that makes the ring visible on a graphite fill. **Text
+- Focus ring on everything interactive: 3px accent outline, 2px offset, and keep the 5px
+  light halo — it is the only thing that makes the ring visible on an accent fill. **Text
   fields are the one exception** (per the handoff): `input`/`textarea`/`select` focus is the
   border turning `accent`, no ring — the global rule in `main.css` carves them out.
 

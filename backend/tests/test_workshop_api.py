@@ -106,6 +106,9 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "edge_trim_mm": 5,
             "edge_overhang_mm": 30,
             "own_material_allowed": False,
+            # The shell picks its production surface off the selected branch, so
+            # the context carries the mode alongside the other floor settings.
+            "production_mode": "full",
             "permissions": ["manage_orders"],
         }
     ]

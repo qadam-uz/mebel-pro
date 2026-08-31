@@ -251,7 +251,7 @@ async def provision_workshop(
 ) -> ProvisionedWorkshop:
     # Imported inside the function: `workshop.api` reaches back into
     # `platform.api` at import time, so a module-level import would cycle.
-    from app.modules.workshop.api import next_branch_no
+    from app.modules.workshop.api import allocate_public_code, next_branch_no
 
     require_platform_operator(principal)
     temp_password = payload.temp_password or generate_temp_password()
@@ -271,6 +271,8 @@ async def provision_workshop(
     workshop = Workshop(
         id=workshop_id,
         name=_required_text(payload.workshop.name, "workshop_name_required"),
+        # The client link/QR the shop will print, drawn once and never rewritten.
+        public_code=await allocate_public_code(db),
         owner_user_id=owner_id,
         status=WorkshopStatus.ACTIVE,
         currency=payload.workshop.currency,

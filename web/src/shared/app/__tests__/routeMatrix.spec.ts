@@ -216,12 +216,35 @@ describe('role route matrix', () => {
     expect(normalizeRoleConfig(workshopConfig, '/workshop', '/workshop/').homePath).toBe('/')
   })
 
+  it('leaves the workshop-link landing public, so a QR opens signed in or out', () => {
+    const entryRoutes = clientRoutes.filter((route) => route.path.startsWith('/w/'))
+
+    expect(entryRoutes).toHaveLength(2)
+    for (const route of entryRoutes) {
+      // `public` is what the guard checks; `layout: 'auth'` alone would bounce
+      // an already-signed-in client to home and kill the fast path (spec §3.1).
+      expect(route.meta?.public).toBe(true)
+      expect(route.meta?.layout).toBe('auth')
+    }
+  })
+
+  it('renders the client-link sheets without the shell', () => {
+    const printRoutes = workshopRoutes.filter((route) => route.path.endsWith('/client-link'))
+
+    expect(printRoutes).toHaveLength(2)
+    for (const route of printRoutes) {
+      expect(route.meta?.layout).toBe('print')
+      // Owner surfaces, no new grant (spec §1.4).
+      expect(route.meta?.workshopAccess).toEqual({ ownerOnly: true })
+    }
+  })
+
   it('keeps the client header nav to four items (Profil lives in the user pill, CB-37)', () => {
     expect(
       normalizeRoleConfig(clientConfig, '/client', '/client/').nav.map((item) =>
         i18n.global.t(item.labelKey),
       ),
-    ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxonalar'])
+    ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxonalarim'])
     // Profile stays reachable via the user pill (config.profilePath), not the nav.
     expect(clientConfig.profilePath).toBe('/c/profile')
   })
@@ -230,6 +253,8 @@ describe('role route matrix', () => {
     expect(routePaths(clientRoutes)).toEqual([
       '/',
       '/auth/login',
+      '/w/:code',
+      '/w/:code/:branchNo',
       '/c',
       '/c/profile',
       '/c/orders',
@@ -271,6 +296,8 @@ describe('role route matrix', () => {
       '/workshop/settings',
       '/workshop/branches',
       '/workshop/branches/:branch_id',
+      '/workshop/branches/:branch_id/client-link',
+      '/workshop/settings/client-link',
       '/workshop/finance/income',
       '/workshop/finance/expenses',
       '/workshop/finance/debts',

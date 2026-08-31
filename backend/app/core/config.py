@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     LOGIN_IP_MAX_FAILURES: int = 20
     LOGIN_IP_WINDOW_SECONDS: int = 900
 
+    # Public workshop-link resolve budget per client IP. The 8-character code is
+    # unguessable (32^8) but the endpoint is unauthenticated, so a budget is what
+    # keeps it from being walked or used as a scraping surface. One landing page
+    # costs one lookup, so a shared office IP stays far under this.
+    PUBLIC_LINK_THROTTLE_ENABLED: bool = True
+    PUBLIC_LINK_LOOKUPS_PER_IP: int = 60
+    PUBLIC_LINK_WINDOW_SECONDS: int = 60
+
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432

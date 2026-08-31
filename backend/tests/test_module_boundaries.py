@@ -34,7 +34,7 @@ PUBLIC_MODULE_FILES = {"api", "contracts", "schemas"}
 MODULE_ROUTE_FILES = {
     "access": {"routes.py"},
     "catalog": {"routes.py"},
-    "client_portal": {"routes.py"},
+    "client_portal": {"public_routes.py", "routes.py"},
     "cutting": {"routes.py"},
     "finance": {"routes.py"},
     "inventory": {"invoice_routes.py", "routes.py"},

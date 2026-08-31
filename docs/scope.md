@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 20
 ---
 
@@ -32,7 +32,8 @@ that's a considered substitution.
   print-ready cutting map.
 - **Orders** — orders from a finalized cutting result — placed by the client, or by workshop
   staff on behalf of a walk-in client — with **frozen pricing** and a small production workflow
-  (verify → cut → band → ready → collected, pickup-only), one-step operator revert, and
+  (verify → cut → band → ready → collected, pickup-only) that each branch either taps stage by
+  stage or collapses into one **Tayyor** action, operator revert, and
   reasoned cancellation. The order tracks production only — it moves no money and holds no
   stock.
 - **Finance & accounting** — a workshop money ledger: income (incl. order payments) and

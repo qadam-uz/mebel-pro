@@ -7,9 +7,12 @@ import { ref, type Ref } from 'vue'
 import { ApiError } from '@/shared/api/client'
 import type { CuttingEditorAdapter } from '@/shared/app/cuttingEditorAdapter'
 import { clientConfig, roleConfigKey, workshopConfig } from '@/shared/app/roleConfig'
+import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEditorView from '@/shared/views/CuttingEditorView.vue'
+import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 import {
   useCuttingStore,
+  type ClientBranchOption,
   type ClientCatalogMaterialOption,
   type CuttingDraft,
   type CuttingPart,
@@ -80,6 +83,9 @@ function importedResult(parts: CuttingPart[]) {
 async function mountEditor(
   path = '/c/cutting/draft-1',
   currentDraft: CuttingDraft | null = draft(),
+  // Per-test stub overrides. `AppModal: true` renders no slot, so a test that
+  // needs to reach a component *inside* a modal replaces that one stub.
+  stubOverrides: Record<string, unknown> = {},
 ) {
   const router = createRouter({ history: createMemoryHistory(), routes: editorRoutes })
   await router.push(path)
@@ -153,6 +159,7 @@ async function mountEditor(
             </section>
           `,
         },
+        ...stubOverrides,
       },
     },
   })
@@ -538,5 +545,147 @@ describe('CuttingEditorView material picker', () => {
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
+  })
+})
+
+describe('CuttingEditorView branch picker scoping (spec §4)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  function branchOption(overrides: Partial<ClientBranchOption> = {}): ClientBranchOption {
+    return {
+      branch_id: 'branch-1',
+      workshop_id: 'workshop-1',
+      workshop_name: 'Mebel Master',
+      branch_name: 'Chilonzor',
+      address: 'Chilonzor 12',
+      status: 'active',
+      closed_reason: null,
+      kerf_mm: 4,
+      edge_trim_mm: 5,
+      ...overrides,
+    }
+  }
+
+  const crossWorkshopOptions = [
+    branchOption(),
+    branchOption({ branch_id: 'branch-2', branch_name: 'Yunusobod' }),
+    branchOption({
+      branch_id: 'branch-9',
+      workshop_id: 'workshop-2',
+      workshop_name: 'Yog’och Pro',
+      branch_name: 'Sergeli',
+    }),
+  ]
+
+  function signIn(overrides: Partial<MeResponse> = {}) {
+    const auth = useAuthStore()
+    auth.accessToken = 'access-1'
+    auth.me = {
+      principal_type: 'client',
+      principal_id: 'client-1',
+      session_id: 'session-1',
+      password_reset_required: false,
+      workshop_id: null,
+      workshop_name: null,
+      is_owner: false,
+      grants: [],
+      login: null,
+      full_name: null,
+      phone: '+998901112233',
+      name: 'Dilshod',
+      preferred_branch_id: null,
+      pinned_workshop_name: null,
+      pinned_branch_name: null,
+      status: 'active',
+      ...overrides,
+    }
+    auth.status = 'authenticated'
+  }
+
+  /** `AppModal: true` renders no slot, and the picker lives inside one. */
+  const modalStub = {
+    AppModal: {
+      props: ['open'],
+      template: `<section v-if="open"><slot /></section>`,
+    },
+    CuttingBranchPicker: true,
+  }
+
+  async function mountWithPicker(currentDraft: CuttingDraft | null = draft()) {
+    const mounted = await mountEditor('/c/cutting/draft-1', currentDraft, modalStub)
+    mounted.cutting.branchOptions = crossWorkshopOptions
+    await flushPromises()
+    return mounted
+  }
+
+  /** The props the editor hands the picker — what "the list changes" means. */
+  async function pickerProps(currentDraft: CuttingDraft | null = draft()) {
+    const { wrapper } = await mountWithPicker(currentDraft)
+    return wrapper.findComponent(CuttingBranchPicker).props() as {
+      options: ClientBranchOption[]
+      pinnedWorkshopName: string | null
+    }
+  }
+
+  it('offers a pinned client only their workshop, under its own header', async () => {
+    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+
+    const props = await pickerProps()
+
+    expect(props.pinnedWorkshopName).toBe('Mebel Master')
+    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
+    // No affordance carrying another workshop reaches the picker at all.
+    expect(props.options.some((row) => row.workshop_id === 'workshop-2')).toBe(false)
+  })
+
+  it('keeps the cross-workshop picker for an un-pinned client', async () => {
+    signIn()
+
+    const props = await pickerProps()
+
+    expect(props.pinnedWorkshopName).toBeNull()
+    expect(props.options).toHaveLength(3)
+  })
+
+  it('scopes by the pinned workshop even when the pinned branch went invisible', async () => {
+    signIn({ preferred_branch_id: 'retired-branch', pinned_workshop_name: 'Mebel Master' })
+
+    const props = await pickerProps()
+
+    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
+  })
+
+  it('never rebranches a draft that lives on a foreign branch', async () => {
+    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+
+    const { wrapper, cutting } = await mountWithPicker(
+      // The draft was drawn at another workshop's branch before the pin moved.
+      draft({ preferred_branch_id: 'branch-9' }),
+    )
+
+    // The draft keeps its own branch — the pin scopes new choices, never data.
+    expect(cutting.currentDraft?.preferred_branch_id).toBe('branch-9')
+    // And the editor still names it, because the full option list stays loaded:
+    // scoping narrows the picker, not the data the draft is bound to.
+    expect(wrapper.text()).toContain('Sergeli')
+    expect(wrapper.text()).toContain('Yog’och Pro')
+
+    // The draft's own branch-switch control, though, follows the pin at the
+    // moment it renders — it offers the pinned workshop, not the draft's.
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === "O'zgartirish")!
+      .trigger('click')
+    await flushPromises()
+
+    expect(
+      (
+        wrapper.findComponent(CuttingBranchPicker).props() as {
+          options: ClientBranchOption[]
+        }
+      ).options.map((row) => row.branch_id),
+    ).toEqual(['branch-1', 'branch-2'])
   })
 })

@@ -12,6 +12,7 @@ account lockout remains the durable backstop across restarts.
 """
 
 from collections import deque
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi import status
@@ -24,34 +25,48 @@ from app.core.errors import APIError
 MAX_TRACKED_IPS = 10_000
 
 
-class LoginIpThrottle:
-    """Sliding-window counter of failed password logins per client IP.
+class SlidingWindowIpThrottle:
+    """Counts recorded events per client IP inside a sliding window.
 
-    Only failures count and a success never resets the window — otherwise one
-    valid credential could launder unlimited brute-force budget from its IP.
+    The budget, window, and enabled flag are read through callables so a
+    settings change (or a test's monkeypatch) takes effect without rebuilding
+    the throttle.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        error_code: str,
+        message: str,
+        enabled: Callable[[], bool],
+        budget: Callable[[], int],
+        window_seconds: Callable[[], int],
+    ) -> None:
+        self._error_code = error_code
+        self._message = message
+        self._enabled = enabled
+        self._budget = budget
+        self._window_seconds = window_seconds
         self._failures: dict[str, deque[datetime]] = {}
 
     def check(self, ip: str, *, now: datetime | None = None) -> None:
-        """Raise 429 when the IP is over the failure budget for the window."""
-        if not settings.LOGIN_IP_THROTTLE_ENABLED:
+        """Raise 429 when the IP is over its budget for the window."""
+        if not self._enabled():
             return
         current = _now(now)
         attempts = self._pruned(ip, current)
-        if len(attempts) < settings.LOGIN_IP_MAX_FAILURES:
+        if len(attempts) < self._budget():
             return
-        retry_at = attempts[0] + timedelta(seconds=settings.LOGIN_IP_WINDOW_SECONDS)
+        retry_at = attempts[0] + timedelta(seconds=self._window_seconds())
         raise APIError(
-            "login_rate_limited",
-            "Too many login attempts",
+            self._error_code,
+            self._message,
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             details={"retry_after_seconds": max(1, int((retry_at - current).total_seconds()))},
         )
 
-    def record_failure(self, ip: str, *, now: datetime | None = None) -> None:
-        if not settings.LOGIN_IP_THROTTLE_ENABLED:
+    def record(self, ip: str, *, now: datetime | None = None) -> None:
+        if not self._enabled():
             return
         current = _now(now)
         attempts = self._pruned(ip, current)
@@ -65,7 +80,7 @@ class LoginIpThrottle:
 
     def _pruned(self, ip: str, now: datetime) -> deque[datetime]:
         attempts = self._failures.get(ip, deque())
-        cutoff = now - timedelta(seconds=settings.LOGIN_IP_WINDOW_SECONDS)
+        cutoff = now - timedelta(seconds=self._window_seconds())
         while attempts and attempts[0] <= cutoff:
             attempts.popleft()
         return attempts
@@ -73,7 +88,7 @@ class LoginIpThrottle:
     def _evict_if_full(self) -> None:
         if len(self._failures) <= MAX_TRACKED_IPS:
             return
-        cutoff = datetime.now(UTC) - timedelta(seconds=settings.LOGIN_IP_WINDOW_SECONDS)
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._window_seconds())
         for ip, attempts in list(self._failures.items()):
             if attempts[-1] <= cutoff:
                 del self._failures[ip]
@@ -82,6 +97,22 @@ class LoginIpThrottle:
             by_recency = sorted(self._failures, key=lambda key: self._failures[key][-1])
             for ip in by_recency[: len(self._failures) - MAX_TRACKED_IPS]:
                 del self._failures[ip]
+
+
+class LoginIpThrottle(SlidingWindowIpThrottle):
+    """Sliding-window counter of failed password logins per client IP."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            error_code="login_rate_limited",
+            message="Too many login attempts",
+            enabled=lambda: settings.LOGIN_IP_THROTTLE_ENABLED,
+            budget=lambda: settings.LOGIN_IP_MAX_FAILURES,
+            window_seconds=lambda: settings.LOGIN_IP_WINDOW_SECONDS,
+        )
+
+    def record_failure(self, ip: str, *, now: datetime | None = None) -> None:
+        self.record(ip, now=now)
 
 
 def _now(now: datetime | None) -> datetime:

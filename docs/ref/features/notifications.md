@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-08-09
+updated: 2026-08-31
 order: 60
 ---
 
@@ -25,6 +25,13 @@ rules. The notifications module does not broadcast and does not decide recipient
   but there is no daily low-stock summary job in v1.
 - **Rows persist on block.** A blocked principal's rows stay (history); they reappear on
   unblock.
+- **A client's order notifications are four status events** — `order.confirmed`,
+  `order.ready`, `order.completed`, `order.cancelled` — plus `order.updated` when staff
+  revise a placed order. One per phase of the client's four-phase order track, which is why
+  the intermediate `cutting` / `edge_banding` transitions notify nobody, in either
+  production mode ([`orders.md`](orders.md#ux-client-app)). Older inbox rows written under
+  the previous rule (`order.status_changed`) still render as sentences — the code stays
+  mapped — but no new ones are produced.
 
 The principal's own inbox supports: pulling the list (paginated, newest first, optional unread
 filter and "since timestamp"), pulling the unread count for the bell, marking one read,

@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 55
 ---
 
@@ -129,6 +129,14 @@ Credit is dated by the completion stamp, so it falls in the period the work was 
 regardless of when the order was collected. A job reverted ([`orders.md`](orders.md))
 clears its stamp, so reverted work doesn't appear. Read-only; `view_finance_reports` (or
 `manage_finance`).
+
+**Uncredited production has its own row.** A branch running
+[simple production mode](orders.md#production-mode) picks the worker at completion, and the
+pick is optional — so a completed order may carry no `cutter_user_id` or `edger_user_id` at
+all. That volume is grouped under a **Belgilanmagan** row rather than dropped: the
+accountant has to see the panels and metres that went through the shop even when nobody was
+credited for them. The row carries no user, so it never reaches a per-worker pay
+calculation — it is a reminder to name the worker, not a person to pay.
 
 ## Finance summary
 

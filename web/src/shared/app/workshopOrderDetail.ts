@@ -1,6 +1,13 @@
 import { parseSomToTiyin } from '@/shared/formatters'
 import { translate, translatePlural } from '@/shared/i18n'
-import type { OrderStatus } from '@/shared/stores/orders'
+import { workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  activeWorkshopStatuses,
+  type OrderPriceLine,
+  type OrderStatus,
+} from '@/shared/stores/orders'
+import { metres } from '@/shared/stores/cutting'
+import type { ProductionMode } from '@/shared/stores/workshop'
 
 // A manual price adjustment — a discount (chegirma) or a surcharge (ustama).
 // Both share the same input shape: a fixed sum entered in so'm, or a whole
@@ -162,6 +169,200 @@ export function workshopOrderListActions(
   return actions
 }
 
+// --- The board's columns -----------------------------------------------------
+//
+// Full mode draws one column per active status. Simple mode draws three, and
+// they are named as the three statuses that branch has — Yangi /
+// Tayyorlanmoqda / Tayyor — not with a separate board vocabulary: the middle
+// one groups `confirmed`, `cutting` and `edge_banding` (the same grouping the
+// client track uses, so a full→simple leftover lands there naturally) and reads
+// exactly as those cards' own pills do. Every label therefore comes from
+// `workshopStatusUz` in the column's own mode; there is no `orders.board.*`
+// copy any more. Cards in a grouped column still carry their own status pill,
+// which the header can no longer supply on its own.
+
+export interface WorkshopBoardColumn<T> {
+  /** Stable key; in full mode it is the column's own status. */
+  key: string
+  label: string
+  statuses: OrderStatus[]
+  orders: T[]
+}
+
+const SIMPLE_BOARD_GROUPS: ReadonlyArray<{ key: string; statuses: OrderStatus[] }> = [
+  { key: 'new', statuses: ['new'] },
+  { key: 'inProduction', statuses: ['confirmed', 'cutting', 'edge_banding'] },
+  { key: 'ready', statuses: ['ready'] },
+]
+
+export function workshopBoardColumns<T extends { status: OrderStatus }>(
+  orders: T[],
+  mode: ProductionMode,
+): WorkshopBoardColumn<T>[] {
+  const groups =
+    mode === 'simple'
+      ? SIMPLE_BOARD_GROUPS
+      : activeWorkshopStatuses.map((status) => ({ key: status, statuses: [status] }))
+  return groups.map((group) => ({
+    key: group.key,
+    // The group's first status stands for the whole column; in simple mode
+    // `confirmed` resolves to «Tayyorlanmoqda», which is what its cards say too.
+    label: workshopStatusUz(group.statuses[0], mode),
+    statuses: [...group.statuses],
+    orders: orders.filter((order) => group.statuses.includes(order.status)),
+  }))
+}
+
+// --- The order detail's action matrix ----------------------------------------
+
+export type WorkshopOrderPrimaryKey =
+  | 'approve'
+  | 'startCutting'
+  | 'completeCutting'
+  | 'startBanding'
+  | 'completeBanding'
+  /** Simple mode's composite **Tayyor** — the remaining spine in one tap. */
+  | 'completeProduction'
+  | 'markCollected'
+
+export type WorkshopOrderMenuKey =
+  | 'edit'
+  | 'discount'
+  | 'surcharge'
+  | 'revert'
+  /** Simple mode's composite **Orqaga** — the whole undo, one reason. */
+  | 'undoProduction'
+  | 'cancel'
+
+export interface WorkshopOrderModeOrder {
+  status: OrderStatus
+  /** The ORDER's branch mode, off the payload — never the sidebar's selection. */
+  mode: ProductionMode
+  banding_started_at: string | null
+  revision_draft_id?: string | null
+}
+
+export interface WorkshopOrderModeAccess {
+  canManageOrders: boolean
+  canCompleteCutting: boolean
+  canCompleteBanding: boolean
+}
+
+/**
+ * The single status-appropriate primary action, or `null` for a read-only state.
+ *
+ * Simple mode is `manage_orders` throughout: there is no assignment, so no
+ * worker ever holds a forward action, and the two composite endpoints are gated
+ * on that permission alone.
+ */
+export function workshopOrderPrimaryKey(
+  order: WorkshopOrderModeOrder,
+  access: WorkshopOrderModeAccess,
+): WorkshopOrderPrimaryKey | null {
+  if (order.mode === 'simple') {
+    if (!access.canManageOrders) return null
+    if (order.status === 'new') return 'approve'
+    if (
+      order.status === 'confirmed' ||
+      order.status === 'cutting' ||
+      order.status === 'edge_banding'
+    )
+      return 'completeProduction'
+    if (order.status === 'ready') return 'markCollected'
+    return null
+  }
+  if (order.status === 'new' && access.canManageOrders) return 'approve'
+  if (order.status === 'confirmed' && (access.canManageOrders || access.canCompleteCutting))
+    return 'startCutting'
+  if (order.status === 'cutting' && access.canCompleteCutting) return 'completeCutting'
+  if (order.status === 'edge_banding' && access.canCompleteBanding)
+    return order.banding_started_at ? 'completeBanding' : 'startBanding'
+  if (order.status === 'ready' && access.canManageOrders) return 'markCollected'
+  return null
+}
+
+/** The overflow menu, in render order. Mode only moves one entry: the
+ *  single-step `revert` is replaced by the whole-action `undoProduction`, which
+ *  simple mode offers from `ready` only (there is no partial undo). */
+export function workshopOrderMenuKeys(
+  order: WorkshopOrderModeOrder,
+  access: WorkshopOrderModeAccess,
+): WorkshopOrderMenuKey[] {
+  const keys: WorkshopOrderMenuKey[] = []
+  const preProduction = order.status === 'new' || order.status === 'confirmed'
+  if (access.canManageOrders && preProduction) {
+    if (!order.revision_draft_id) keys.push('edit')
+    keys.push('discount')
+    keys.push('surcharge')
+  }
+  if (access.canManageOrders) {
+    if (order.mode === 'simple') {
+      if (order.status === 'ready') keys.push('undoProduction')
+    } else if (['cutting', 'edge_banding', 'ready'].includes(order.status)) {
+      keys.push('revert')
+    }
+  }
+  if (access.canManageOrders && !['completed', 'cancelled'].includes(order.status)) {
+    keys.push('cancel')
+  }
+  return keys
+}
+
+// --- The Tayyor dialog -------------------------------------------------------
+
+export interface ProductionStockLine {
+  materialId: string
+  kind: 'panel' | 'edge'
+  name: string
+  /** Already formatted for display — sheets for a panel, metres for an edge. */
+  amount: string
+}
+
+/**
+ * What the composite Tayyor will take out of the warehouse, named before the
+ * button. Straight off the order's own `price_lines`, which already carry the
+ * SHOP share only (`own_panels` / `own_mm` are the client's and are not
+ * decremented) — the same figures the money card prints, so the dialog can
+ * never disagree with the receipt beside it.
+ */
+export function productionStockLines(priceLines: OrderPriceLine[]): ProductionStockLine[] {
+  const lines: ProductionStockLine[] = []
+  for (const line of priceLines) {
+    if (line.kind === 'panel') {
+      const sheets = line.panels_used ?? 0
+      if (sheets > 0) {
+        lines.push({
+          materialId: line.material_id,
+          kind: 'panel',
+          name: line.material_name,
+          amount: translatePlural('orders.unit.sheets', sheets),
+        })
+      }
+      continue
+    }
+    const consumedMm = line.consumed_mm ?? 0
+    if (consumedMm > 0) {
+      lines.push({
+        materialId: line.material_id,
+        kind: 'edge',
+        name: line.material_name,
+        // `metres`, not the inventory formatter: the money card next to this
+        // dialog prints the same figure through `metres`, and the two rounding
+        // rules disagree at the third decimal (6.08 m vs 6.084 m). One screen,
+        // one number.
+        amount: metres(consumedMm),
+      })
+    }
+  }
+  return lines
+}
+
+/** Where a branch's last worker pick is remembered. A convenience preselect
+ *  only — per branch, because the people at the saw are a branch's people. */
+export function lastProductionWorkerKey(branchId: string, role: 'cutter' | 'edger') {
+  return `mp:last-production-worker:${role}:${branchId}`
+}
+
 function summedRecordValue(value: unknown): number | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const total = Object.values(value).reduce((sum, item) => {
@@ -247,6 +448,14 @@ const PHASE_ORDER: OrderStatus[] = [
   'completed',
 ]
 
+// What the stepper draws on a SIMPLE-mode branch: Yangi → Tayyorlanmoqda →
+// Tayyor → Olib ketildi. The spine underneath is unchanged — the composite
+// Tayyor still writes every event — but a strip listing four steps nobody on
+// that branch can move separately describes a machine, not the order. The
+// middle step stands in for `confirmed`/`cutting`/`edge_banding`, and
+// `workshopStatusUz(_, 'simple')` gives it the grouped word.
+const SIMPLE_PHASE_ORDER: OrderStatus[] = ['new', 'confirmed', 'ready', 'completed']
+
 export type OrderPhaseState = 'done' | 'current' | 'upcoming'
 
 export interface OrderPhaseStep {
@@ -257,12 +466,26 @@ export interface OrderPhaseStep {
 // The phases to draw for an order (skips edge_banding when it has no banding),
 // each tagged done/current/upcoming. 'cancelled' is off-path — callers render a
 // dedicated badge instead of a stepper. A completed order shows every step done.
-export function orderPhaseSteps(order: {
-  status: OrderStatus
-  has_banding: boolean
-}): OrderPhaseStep[] {
-  const path = PHASE_ORDER.filter((status) => status !== 'edge_banding' || order.has_banding)
-  const currentIndex = path.indexOf(order.status)
+//
+// On a simple-mode branch the six collapse to four and the three production
+// statuses all mark the middle step current, so a full→simple leftover in
+// `cutting` reads as «Tayyorlanmoqda» rather than falling off the strip.
+export function orderPhaseSteps(
+  order: {
+    status: OrderStatus
+    has_banding: boolean
+  },
+  mode: ProductionMode = 'full',
+): OrderPhaseStep[] {
+  const simple = mode === 'simple'
+  const path = simple
+    ? SIMPLE_PHASE_ORDER
+    : PHASE_ORDER.filter((status) => status !== 'edge_banding' || order.has_banding)
+  const current =
+    simple && (order.status === 'cutting' || order.status === 'edge_banding')
+      ? 'confirmed'
+      : order.status
+  const currentIndex = path.indexOf(current)
   return path.map((status, index) => {
     let state: OrderPhaseState
     if (order.status === 'completed' || (currentIndex >= 0 && index < currentIndex)) {

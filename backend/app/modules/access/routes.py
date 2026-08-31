@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.trace import get_trace_id
-from app.models.enums import AuthenticatedPrincipalType
+from app.models.enums import AuthenticatedPrincipalType, WorkshopStatus
 from app.modules.access.api import (
     INVALID_CREDENTIALS_CODE,
     OtpSender,
@@ -45,7 +45,7 @@ from app.modules.access.schemas import (
     TokenResponse,
     WorkshopLoginRequest,
 )
-from app.modules.workshop.contracts import Workshop
+from app.modules.workshop.contracts import Branch, Workshop
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -321,6 +321,9 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
                 "Authentication required",
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
+        pinned_workshop_name, pinned_branch_name = await _pinned_names(
+            db, client.preferred_branch_id
+        )
         return MeResponse(
             principal_type=principal.principal_type,
             principal_id=principal.principal_id,
@@ -328,6 +331,8 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
             name=client.name,
             phone=client.phone,
             preferred_branch_id=client.preferred_branch_id,
+            pinned_workshop_name=pinned_workshop_name,
+            pinned_branch_name=pinned_branch_name,
             status=client.status,
         )
     workshop_user = await db.get(WorkshopUser, principal.principal_id)
@@ -360,6 +365,34 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
         phone=workshop_user.phone,
         status=workshop_user.status,
     )
+
+
+async def _pinned_names(
+    db: AsyncSession,
+    preferred_branch_id: uuid.UUID | None,
+) -> tuple[str | None, str | None]:
+    """Workshop and branch names behind the client's pin — one join, no gates.
+
+    The pin is not scope-enforced (identity.md): an `inactive` or
+    `temporarily_closed` branch still names itself in the header, and nothing
+    here ever clears the column. A blocked workshop is the one exception — it is
+    off the platform, absent from Ustaxonalarim, and must not be named either.
+    """
+    if preferred_branch_id is None:
+        return None, None
+    row = (
+        await db.execute(
+            select(Workshop.name, Branch.name)
+            .join(Branch, Branch.workshop_id == Workshop.id)
+            .where(
+                Branch.id == preferred_branch_id,
+                Workshop.status == WorkshopStatus.ACTIVE,
+            )
+        )
+    ).first()
+    if row is None:
+        return None, None
+    return row[0], row[1]
 
 
 def _session_response(row: AuthSession, *, current_session_id: uuid.UUID) -> SessionResponse:

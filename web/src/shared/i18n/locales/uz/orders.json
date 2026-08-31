@@ -5,11 +5,11 @@
     "drafts": "Chizmalar",
     "viewGroup": "Ko'rinish",
     "boardView": "Doska ko'rinishi",
-    "boardLocked": "Yakunlangan buyurtmalar faqat jadval rejimida",
+    "boardLocked": "Olib ketilgan buyurtmalar faqat jadval rejimida",
     "tableView": "Jadval ko'rinishi",
     "statusFilter": "Holat",
     "statusActive": "Faol",
-    "statusCompleted": "Tugatilgan",
+    "statusCompleted": "Olib ketilgan",
     "statusCancelled": "Bekor qilingan",
     "statusAll": "Hammasi",
     "phoneFilter": "Telefon",
@@ -114,7 +114,9 @@
     "edit": "Tahrirlash",
     "revertTo": "{target} qaytarish",
     "revertFallback": "Bir qadam orqaga",
-    "backToDrawing": "Chizmaga qaytish"
+    "backToDrawing": "Chizmaga qaytish",
+    "ready": "Tayyor",
+    "undoProduction": "Orqaga qaytarish"
   },
   "revertTarget": {
     "confirmed": "tasdiqlangan holatiga",
@@ -125,7 +127,8 @@
     "approving": "Tasdiqlanmoqda…",
     "starting": "Boshlanmoqda…",
     "running": "Bajarilmoqda…",
-    "saving": "Saqlanmoqda…"
+    "saving": "Saqlanmoqda…",
+    "completing": "Yopilmoqda…"
   },
   "confirm": {
     "defaultAction": "Tasdiqlash",
@@ -146,8 +149,8 @@
     "completeBandingTitle": "Kromka tugadimi?",
     "completeBandingMessage": "{order} kromka bosqichi yakunlanadi va buyurtma tayyor holatga o'tadi.",
     "collectedTitle": "Mijoz olib ketdimi?",
-    "collectedMessage": "{order} yakuniy «topshirildi» holatiga o'tadi.",
-    "collectedDetailMessage": "Buyurtma yakuniy «topshirildi» holatiga o'tadi va ortga qaytarib bo'lmaydi.",
+    "collectedMessage": "{order} yakuniy «Olib ketildi» holatiga o'tadi.",
+    "collectedDetailMessage": "Buyurtma yakuniy «Olib ketildi» holatiga o'tadi va ortga qaytarib bo'lmaydi.",
     "collectedAction": "Ha, topshirildi",
     "revertTitle": "Buyurtmani qaytarish",
     "revertOrderMessage": "{order} {target} qaytadi. Sababni yozing.",
@@ -158,7 +161,23 @@
     "cancelMessage": "Buyurtma yopiladi. Bekor qilish sababini yozing.",
     "discardEditTitle": "Tahrirni bekor qilish",
     "discardEditMessage": "Tahrirdagi barcha o'zgarishlar o'chiriladi; buyurtma avvalgi holida qoladi.",
-    "discardEditAction": "Ha, bekor qilinsin"
+    "discardEditAction": "Ha, bekor qilinsin",
+    "complete": {
+      "title": "Buyurtma tayyormi?",
+      "message": "Buyurtma «Tayyor» holatiga o'tadi va material ombordan chiqim qilinadi.",
+      "stockIntro": "Ombordan chiqim:",
+      "noStock": "Bu buyurtmada ustaxona materiali yo'q — ombordan chiqim bo'lmaydi.",
+      "cutter": "Kim kesdi? (ixtiyoriy)",
+      "edger": "Kim kromka yopishtirdi? (ixtiyoriy)",
+      "noWorker": "Belgilanmagan",
+      "workersHint": "Xodimni tanlash ixtiyoriy — hisobot uchun, buyurtmani yopishga shart emas.",
+      "action": "Ha, tayyor"
+    },
+    "undoProduction": {
+      "title": "Buyurtmani orqaga qaytarish",
+      "message": "Material omborga qaytadi, buyurtma «Tayyorlanmoqda»ga qaytadi.",
+      "action": "Ha, qaytarilsin"
+    }
   },
   "toast": {
     "approved": "Buyurtma tasdiqlandi.",
@@ -178,7 +197,9 @@
     "surchargeRemoved": "Ustama olib tashlandi.",
     "noteSaved": "Izoh saqlandi.",
     "editDiscarded": "Tahrir bekor qilindi.",
-    "updated": "Buyurtma yangilandi."
+    "updated": "Buyurtma yangilandi.",
+    "productionCompleted": "Buyurtma tayyor.",
+    "productionUndone": "Buyurtma «Tayyorlanmoqda»ga qaytarildi."
   },
   "detail": {
     "backOrders": "← Buyurtmalar",

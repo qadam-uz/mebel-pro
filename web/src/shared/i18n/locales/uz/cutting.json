@@ -383,7 +383,8 @@
     "searchPlaceholder": "Ustaxona, filial yoki manzil — masalan: Chilonzor",
     "searchAria": "Filial qidirish",
     "recommended": "Tavsiya — afzal filial",
-    "noMatches": "Mos filial topilmadi."
+    "noMatches": "Mos filial topilmadi.",
+    "scopedHeader": "{workshop} filiallari"
   },
   "error": {
     "importFallback": "Faylni import qilib bo'lmadi. Qayta urinib ko'ring.",

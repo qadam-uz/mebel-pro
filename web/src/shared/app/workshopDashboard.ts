@@ -6,9 +6,18 @@ import {
   type PermissionBranch,
   type WorkshopPrincipal,
 } from '@/shared/app/workshopPermissions'
+import type { ProductionMode } from '@/shared/stores/workshop'
 
 const FINANCE_PERMISSIONS = [p.manageFinance, p.viewFinanceReports] as const
 const ORDER_PERMISSIONS = [p.viewOrders, p.manageOrders] as const
+
+/** A branch as this module reads it. `production_mode` is optional so a caller
+ *  that predates the mode (tests, an older payload) keeps the full dashboard:
+ *  only an explicit `simple` hides the stations — the same rule `workshopNav`
+ *  applies to the Kesish/Krom sidebar items. */
+export interface DashboardBranch extends PermissionBranch {
+  production_mode?: ProductionMode
+}
 
 /**
  * What the workshop dashboard shows a given principal, and where it may link.
@@ -24,7 +33,7 @@ const ORDER_PERMISSIONS = [p.viewOrders, p.manageOrders] as const
  * The `canManage*` predicates are branch-blind on purpose — that is exactly what
  * the router guard tests, and a link must agree with the guard it will hit.
  */
-export interface WorkshopDashboardAccess<TBranch extends PermissionBranch> {
+export interface WorkshopDashboardAccess<TBranch extends DashboardBranch> {
   /** Branches whose data each section may load. */
   orderBranches: TBranch[]
   financeBranches: TBranch[]
@@ -42,8 +51,18 @@ export interface WorkshopDashboardAccess<TBranch extends PermissionBranch> {
   canInventory: boolean
   /** Opens `/workshop/catalog` — no dashboard section of its own. */
   canCatalog: boolean
-  /** Renders the Stansiyalar panel; also opens the station pages. */
+  /** Holds `process_production` somewhere — the permission half of the station
+   *  question, and what opens the station pages. Whether the Stansiyalar panel
+   *  actually renders is `showStations`, which adds the branch's mode. */
   canProduction: boolean
+  /**
+   * Renders the Stansiyalar panel — `canProduction` or `canManageOrders`, and
+   * only while the selected branch runs `full`. A simple-mode branch never
+   * writes an assignment, so both station queues are permanently empty there
+   * and the panel would report "0 · hech kim" forever. Hiding it mirrors
+   * `workshopNav` dropping the Kesish/Krom sidebar items on the same branch.
+   */
+  showStations: boolean
   /** At least one tile in the KPI grid, and therefore the card grid, renders. */
   hasKpis: boolean
   /**
@@ -54,9 +73,10 @@ export interface WorkshopDashboardAccess<TBranch extends PermissionBranch> {
   hasVisibleSection: boolean
 }
 
-export function workshopDashboardAccess<TBranch extends PermissionBranch>(
+export function workshopDashboardAccess<TBranch extends DashboardBranch>(
   principal: WorkshopPrincipal | null | undefined,
   branches: TBranch[],
+  selectedBranchId: string | null = null,
 ): WorkshopDashboardAccess<TBranch> {
   const isOwner = isWorkshopOwner(principal)
   const orderBranches = branchesWithAnyPermission(principal, branches, ORDER_PERMISSIONS)
@@ -72,7 +92,16 @@ export function workshopDashboardAccess<TBranch extends PermissionBranch>(
   const canInventory = isOwner || inventoryBranches.length > 0
   const canProduction = isOwner || productionBranches.length > 0
   const canCatalog = isOwner || catalogBranches.length > 0
+  const canManageOrders = hasAnyPermission(principal, [p.manageOrders])
   const hasKpis = canOrders || canFinance || canInventory
+
+  // The dashboard follows the sidebar's branch picker, like every list surface
+  // (orders.md). With «Hammasi» selected — or before the context lands — this
+  // falls back to the first branch, the same resolution `workshopNav` uses, so
+  // the panel and the station nav items never disagree with each other.
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) ?? branches[0]
+  const showStations =
+    (canProduction || canManageOrders) && selectedBranch?.production_mode !== 'simple'
 
   return {
     orderBranches,
@@ -80,18 +109,23 @@ export function workshopDashboardAccess<TBranch extends PermissionBranch>(
     inventoryBranches,
     productionBranches,
     canOrders,
-    canManageOrders: hasAnyPermission(principal, [p.manageOrders]),
+    canManageOrders,
     canFinance,
     canManageFinance: hasAnyPermission(principal, [p.manageFinance]),
     canInventory,
     canCatalog,
     canProduction,
+    showStations,
     hasKpis,
     // The Stansiyalar panel is the one section outside the KPI/card grid, and
     // it is the whole of what `canProduction` lights up: drop it and a
     // process_production-only staffer lands in the "nothing here for you" empty
     // state instead of on the two station queues (QAD-167).
-    hasVisibleSection: hasKpis || canProduction,
+    //
+    // Which is exactly what must happen on a simple-mode branch, where the
+    // panel is hidden: that staffer has no section left, so the page owes them
+    // the existing empty state rather than a heading over blank space.
+    hasVisibleSection: hasKpis || showStations,
   }
 }
 

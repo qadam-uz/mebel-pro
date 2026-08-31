@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
+  CLIENT_PHASE_STATUSES,
   clientErrorLabel,
   clientPhaseIndex,
   clientPhaseLabels,
+  clientPhaseSubtitle,
   clientStatusLabel,
   clientStatusPillClass,
   formatRelativeDate,
@@ -64,23 +66,17 @@ const totalEdge = computed(() => {
 })
 // What this order still expects the client to hand over.
 const ownRows = computed(() => ownMaterialRows(order.value?.price_lines ?? []))
-const edgeCostSplit = computed(() => {
-  // No backend material/service split yet — use a 45/55 materials/service fallback.
-  const total = order.value?.subtotal_edge_banding_tiyin ?? 0
-  const materials = Math.round(total * 0.45)
-  return { total, materials, service: total - materials }
-})
 const financeOpen = computed(
   () =>
     Boolean(order.value?.settlement) && ['ready', 'completed'].includes(order.value?.status ?? ''),
 )
 
+// The four-phase track's own sub-line (orders.md — client track): one sentence
+// per phase, so the client never reads the workshop's internal cutting /
+// edge_banding split. Cancelled is off-track and keeps its own word.
 function statusSubtext(status: OrderStatus) {
-  if (status === 'cutting') return t('client.orderDetail.statusCutting')
-  if (status === 'edge_banding') return t('client.orderDetail.statusEdgeBanding')
-  if (status === 'ready') return t('client.orderDetail.statusReady')
   if (status === 'cancelled') return t('client.status.cancelled')
-  return ''
+  return clientPhaseSubtitle(status)
 }
 
 function phaseNodeClass(index: number) {
@@ -94,14 +90,7 @@ function phaseNodeClass(index: number) {
 
 function phaseTimestamp(index: number): string | null {
   if (!order.value) return null
-  const statusForPhase: OrderStatus[][] = [
-    ['new'],
-    ['confirmed'],
-    ['cutting', 'edge_banding'],
-    ['ready'],
-    ['completed'],
-  ]
-  const statuses = statusForPhase[index] ?? []
+  const statuses = CLIENT_PHASE_STATUSES[index] ?? []
   const event = order.value.events.find((entry) => statuses.includes(entry.to_status))
   if (event) return formatRelativeDate(event.changed_at)
   if (index === 0) return formatRelativeDate(order.value.created_at)
@@ -411,38 +400,22 @@ onMounted(() => {
                   {{ formatTiyin(order.subtotal_materials_tiyin) }}
                 </div>
               </div>
-              <template v-if="order.subtotal_edge_banding_tiyin > 0">
-                <div class="client-row-item">
-                  <div>
-                    <div class="client-row-name">{{ $t('client.orderDetail.edge') }}</div>
-                    <div class="text-sm text-ink-muted">
-                      {{ metres(totalEdge) }} ·
-                      {{ $t('client.orderDetail.edgeMaterialAndService') }}
-                    </div>
-                  </div>
-                  <div class="client-row-meta">
-                    {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+              <!-- One combined row: the backend prices kromka as a single
+                   subtotal (material + service together). A per-part split is
+                   not in the payload, and an invented one would put made-up
+                   numbers on a client-facing bill. -->
+              <div v-if="order.subtotal_edge_banding_tiyin > 0" class="client-row-item">
+                <div>
+                  <div class="client-row-name">{{ $t('client.orderDetail.edge') }}</div>
+                  <div class="text-sm text-ink-muted">
+                    {{ metres(totalEdge) }} ·
+                    {{ $t('client.orderDetail.edgeMaterialAndService') }}
                   </div>
                 </div>
-                <div class="client-row-item">
-                  <div>
-                    <div class="client-row-name">{{ $t('client.orderDetail.edgeMaterial') }}</div>
-                    <div class="text-sm text-ink-muted">
-                      {{ $t('client.orderDetail.edgeTapePrice') }}
-                    </div>
-                  </div>
-                  <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
+                <div class="client-row-meta">
+                  {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
                 </div>
-                <div class="client-row-item">
-                  <div>
-                    <div class="client-row-name">{{ $t('client.orderDetail.edgeService') }}</div>
-                    <div class="text-sm text-ink-muted">
-                      {{ $t('client.orderDetail.edgeServiceDetail') }}
-                    </div>
-                  </div>
-                  <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
-                </div>
-              </template>
+              </div>
               <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
                 <div>
                   <div class="client-row-name">{{ $t('client.orderDetail.surcharge') }}</div>
@@ -476,16 +449,15 @@ onMounted(() => {
                   <span>{{ $t('client.common.material') }}</span
                   ><span class="text-ink">{{ formatTiyin(order.subtotal_materials_tiyin) }}</span>
                 </div>
-                <template v-if="order.subtotal_edge_banding_tiyin > 0">
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>{{ $t('client.orderDetail.edgeMaterial') }}</span
-                    ><span class="text-ink">{{ formatTiyin(edgeCostSplit.materials) }}</span>
-                  </div>
-                  <div class="flex justify-between py-1 text-ink-soft">
-                    <span>{{ $t('client.orderDetail.edgeService') }}</span
-                    ><span class="text-ink">{{ formatTiyin(edgeCostSplit.service) }}</span>
-                  </div>
-                </template>
+                <div
+                  v-if="order.subtotal_edge_banding_tiyin > 0"
+                  class="flex justify-between py-1 text-ink-soft"
+                >
+                  <span>{{ $t('client.orderDetail.edge') }}</span
+                  ><span class="text-ink">{{
+                    formatTiyin(order.subtotal_edge_banding_tiyin)
+                  }}</span>
+                </div>
                 <div
                   v-if="order.surcharge_tiyin > 0"
                   class="flex justify-between py-1 text-ink-soft"

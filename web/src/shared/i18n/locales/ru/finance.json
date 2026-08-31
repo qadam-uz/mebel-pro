@@ -267,7 +267,8 @@
     "noEdgeMetres": "Метров кромки нет",
     "noThickness": "Сводки нет",
     "materialFallback": "Материал {id}",
-    "unknownThickness": "Неизвестно"
+    "unknownThickness": "Неизвестно",
+    "unassigned": "Не указан"
   },
   "queue": {
     "loadFailed": "Не удалось загрузить очередь работ",

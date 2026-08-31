@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 30
 ---
 
@@ -10,7 +10,8 @@ order: 30
 
 The order lifecycle: a client places an order from a finished cutting — or workshop staff
 place it for a walk-in client (see [Staff-created orders](#staff-created-orders-walk-in-clients))
-— the workshop verifies it, two production phases run, and the client collects it. v1 is **pickup-only**, the order
+— the workshop verifies it, production runs (step by step, or as one tap — see
+[Production mode](#production-mode)), and the client collects it. v1 is **pickup-only**, the order
 **never moves money** (the finance module records what the client paid —
 [`finance.md`](finance.md)) and **never holds stock balances** (the inventory module
 auto-decrements as production completes — [`catalog-inventory.md`](catalog-inventory.md)).
@@ -53,6 +54,48 @@ Set at creation:
 Post-placement modification is **workshop-side only**, pre-production — a staff **revision**
 (see [Revising a placed order](#revising-a-placed-order)). The client's own path stays
 cancel-and-reorder while `new`.
+
+## Production mode
+
+How much of production a branch actually operates is a **branch setting** —
+`production_mode`, owner-only, alongside kerf and the edge overhang
+([`workshop.md`](workshop.md)):
+
+| Mode | What the branch runs |
+|---|---|
+| **`simple`** — the default | production is **one tap**: a `manage_orders` admin marks the order **Tayyor** when the job is done, and **Olib ketdi** when the client takes it. No assignment, no start taps, no station queues, no worker account required. |
+| **`full`** — the owner opts in | the per-stage choreography below: assign a cutter and an edger, the worker starts each job, each stage is completed at its own station. |
+
+**Why simple is the default.** In the shops we visited the floor runs on paper — the saw
+operator and the bander never touch a screen; the admin is the only person at one. The
+per-stage taps therefore never happened, and since the **stock seam hangs off those taps**,
+the warehouse — the module the shops themselves named as their pain — silently died with
+them. Simple mode buys the warehouse back at the price of one honest tap. **The paper stays
+the floor interface**: the system runs up to the printed cutting map and resumes when the
+admin says the job is done. Nothing in simple mode may require a worker account, an
+assignment, or a start tap. Every branch is `simple` unless its owner says otherwise —
+including branches that predate the setting; `full` is the opt-in for a shop that genuinely
+staffs two stations and wants the queues.
+
+**Simple mode is a collapse, not a fork.** The six-status spine below stays authoritative in
+both modes, and so does every effect it drives — stock, stamps, events, audit, reports. One
+composite action writes the *remaining* spine events in a single transaction, reusing each
+step's own effect logic; it is the same pattern the walk-in
+[auto-confirm](#staff-created-orders-walk-in-clients) already uses for `∅ → new → confirmed`.
+
+**The mode is read at the moment of the action, never stamped on the order.** Any order is
+valid in either mode and switching migrates nothing: a `confirmed` order simply regains its
+assignment and start actions on simple → full, and an order caught mid-spine on full →
+simple is finished by the composite **Tayyor**, which completes only what is left.
+
+**The two flows' surfaces are exclusive**, so no branch ever has two ways to move the same
+order. On a simple branch the per-step production operations — assign, start cutting, start
+banding, cutting done, banding done, single-step revert — are refused with
+`simple_mode_active`; on a full branch the composite Tayyor and Orqaga are refused with
+`full_mode_active`. Both carry the branch's actual mode, and the app refetches on either.
+Everything outside production — approve, cancel, mark collected, discount, surcharge, order
+prices, own-material, the internal note, and revision — is **mode-independent** and behaves
+identically. So is what the client sees ([UX — client app](#ux-client-app)).
 
 ## Staff-created orders (walk-in clients)
 
@@ -155,6 +198,11 @@ bottom: the solid path is the happy flow and the dashed arrows are the operator 
 (one step back, a mistake fix). **Cancellation is not drawn** — it would cross every box:
 any non-terminal status can go to `cancelled` (see the table below).
 
+**This spine is authoritative in both [production modes](#production-mode).** It is drawn
+here as full mode taps it — one action per arrow; simple mode walks the same arrows and
+writes the same events, several at a time
+([The simple-mode collapse](#the-simple-mode-collapse)).
+
 ```mermaid
 flowchart TD
     start([▶ order placed]) --> new[new<br/>placed · awaiting review]
@@ -177,7 +225,10 @@ is out of v1 ([`scope.md`](../../scope.md)) — `completed` is final by design.
 
 ### Transitions
 
-Who triggers each step (by per-branch grant — there are no fixed roles), and its effects:
+Who triggers each step (by per-branch grant — there are no fixed roles), and its effects.
+The four production rows are how a **`full`**-mode branch taps them; a simple branch reaches
+the same rows through one composite action, with the same effects
+([below](#the-simple-mode-collapse)).
 
 | From → To | Trigger · who | Effect |
 |---|---|---|
@@ -192,7 +243,58 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 | `* → cancelled` | **Cancel** · `manage_orders` + reason (any pre-`completed` status) | already-decremented material stays consumed |
 | revert: `cutting→confirmed`, `edge_banding→cutting`, `ready→edge_banding\|cutting` | **Revert** one step · `manage_orders` + reason | clears that step's stamps; **re-increments** the stock it decremented |
 
+### The simple-mode collapse
+
+On a [`simple`](#production-mode) branch the same spine is walked by two composite actions,
+both `manage_orders`, both one transaction with the usual optimistic `version` check. The
+lifecycle the admin actually sees:
+
+| Step | Trigger | Internal effect |
+|---|---|---|
+| order placed | client app or the walk-in counter, unchanged | `∅ → new` (walk-in: auto-confirm to `confirmed`) |
+| **Tasdiqlash** (client orders only) | `manage_orders` | `new → confirmed`, with the projected-stock warning and the `order_has_unpriced_materials` gate, unchanged |
+| **Tayyor** | `manage_orders`, one tap + confirm dialog | every spine event still owed, through to `ready` |
+| **Olib ketdi** | `manage_orders` | `ready → completed`, unchanged |
+| **Orqaga** | `manage_orders` + reason | composite revert `ready → … → confirmed` |
+| **Cancel** | unchanged | any non-terminal + reason |
+
+A walk-in order is therefore **two taps** end to end, a client order three.
+
+**Tayyor** is accepted from `confirmed`, `cutting`, or `edge_banding` — the latter two being
+full → simple leftovers. It walks the remaining transitions in order, each guarded by the
+status the order has reached *by then* and each **running that step's existing effect
+logic**, so no decrement can fire twice: `confirmed → cutting` (event only), then the
+cutting completion (cutter + snapshots stamped, **panel stock decremented**) through the
+gateway, then, when a side is banded, the banding completion (edger +
+`edge_length_snapshot` stamped, **edge stock decremented**). An order already past a step
+gets only what remains. Every event is an ordinary `order_status_event` with the acting
+staffer as actor — the append-only spine and its audit rows are untouched — and the client
+gets exactly one notification, `order.ready`, from the final event.
+
+**Worker credit is optional and picked at completion.** The dialog offers a cutter and (when
+a side is banded) an edger from the branch's `process_production` holders, validated exactly
+as an assignment is. Picked, the ids land in `cutter_user_id` / `edger_user_id` with
+assignment stamps, and the production reports work unchanged — the snapshot counters replace
+the cutter's paper tally. Left empty they stay `NULL` and the order still completes: in
+simple mode **worker accounts are a reporting dimension, not a gate**. A shop that wants
+per-worker figures creates accounts for its workers and never hands them a tablet. This is
+the counterpart of full mode's "completion credits the assignee, never a completion-time
+pick" ([Rules](#rules)) — that rule presumes an assignment, and simple mode has none, so
+completion-time *is* the pick.
+
+**Orqaga** is the whole Tayyor taken back, from `ready` only, reason required. It chains the
+existing single-step reverts to `confirmed` — `ready → edge_banding → cutting → confirmed`,
+or `ready → cutting` for an unbanded order — so each step re-increments exactly what it
+decremented and clears exactly the stamps it wrote, the composite's worker ids and
+assignment stamps included. One revert event per step, all carrying the same reason. There
+is **no partial undo**: a shop that needs step-level surgery switches the branch to full
+mode. Never out of `completed`, as with any revert.
+
 ### Rules
+
+Assignment, starts, and per-stage completion are the **`full`**-mode choreography, so the
+first five rules below describe that mode; the last three hold in both. Simple mode's
+counterparts are in [The simple-mode collapse](#the-simple-mode-collapse).
 
 - **Assignment is metadata, not a trigger.** `manage_orders` staff assign the cutter and
   edger once the order is `confirmed`; assigning stamps `cutter_assigned_at` /
@@ -200,13 +302,18 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
   until the cutter starts. There is **no self-claiming** — a worker only sees and starts
   work already assigned to them. *Why the split:* when assignment itself flipped the
   status, "cutting" meant "a name was typed into a form", the queue/in-progress
-  distinction was fake, and job durations were unknowable. Revisit if workshops routinely
-  skip the start tap and lean on on-behalf — then fold start back into assign.
+  distinction was fake, and job durations were unknowable. **Revisited 2026-08-31 — and
+  resolved the other way.** The field visits met that revisit condition and then some: the
+  shops were not leaning on on-behalf, they were not tapping at all. Folding start into
+  assign would have kept a choreography nobody performs; instead the whole choreography
+  became opt-in and [simple mode](#production-mode) is the default. Full mode keeps the
+  split, unchanged, for the shops that do staff two stations.
 - **The worker starts the job.** **Start cutting** (`confirmed → cutting`) and **Start
   banding** (a stamp within `edge_banding`, no status change) are one-tap actions by the
   assigned worker — or `manage_orders` on-behalf. "In production" therefore means a
-  machine is actually running — including for the client, whose tracker enters *In
-  production* only at the start, not at assignment.
+  machine is actually running — on the workshop's own screens. The **client's** track does
+  not carry that distinction in either mode: it reads *Tayyorlanmoqda* from `confirmed`
+  onward ([UX — client app](#ux-client-app)).
 - **Each stage gates on its own worker, at its own start.** Start cutting requires only
   the assigned cutter (`cutter_required`); Start banding requires an assigned edger
   (`edger_required`). A banded order may start cutting with the edger slot still open —
@@ -219,14 +326,17 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
   **Banding done** once. A `manage_orders` user may complete a job **on behalf** (worker
   absent / system issue) — completion always **credits the assigned worker** in the
   production reports ([`finance.md`](finance.md)); changing who gets credit is a
-  deliberate revert → reassign, never a completion-time pick.
+  deliberate revert → reassign, never a completion-time pick. This is a **full-mode** rule:
+  it exists because there *is* an assignment to be faithful to. Simple mode has none, so
+  its Tayyor dialog picks the credit at completion — optionally, and it may be left empty.
 - **Re-assignment locks when the stage starts.** The cutter can be changed only while the
   order is `confirmed`; the edger until banding is stamped started (so still swappable while
   cutting runs). After the lock the deliberate path is a **revert** — it clears the start
   stamp and reopens assignment — never a silent mid-job swap that would re-credit running
   work.
-- **Revert is mistake-correction only** — one step, never out of `completed` or
-  `cancelled`.
+- **Revert is mistake-correction only** — never out of `completed` or `cancelled`. One step
+  at a time in full mode; in simple mode the whole composite comes back at once, because
+  there was only ever one action to undo.
 - **Every transition is an `order_status_event`** (actor, from → to, reason, metadata),
   append-only, mirrored to the audit log.
 - **Optimistic locking** on transitions (a `version` column): concurrent staff actions
@@ -260,6 +370,18 @@ set them. Start stamps follow the phase: a revert that leaves a phase clears its
 `banding_started_at`), while `ready → edge_banding` keeps `banding_started_at` — banding had
 genuinely started. Assignment stamps persist across reverts.
 
+**Simple-mode stamps carry one instant.** The composite Tayyor writes every start and
+completion stamp at the action time, so `cutting_started_at = cut_completed_at` and, for a
+banded order, `banding_started_at = edge_completed_at`. The invariant (start ≤ complete)
+holds; the durations are zero by construction and render as **"—"** rather than "0 min",
+and a zero-duration row is excluded from any average. The admin is recording a finished job,
+not driving a stopwatch. A start stamp a **previous full-mode tap already wrote** on a
+leftover is left alone — that duration was real. `cutter_user_id` and `edger_user_id` may
+also be `NULL` on a completed simple-mode order; the production report groups those under a
+**Belgilanmagan** bucket ([`finance.md`](finance.md)) so the accountant still sees the
+volume, and such rows never reach a per-worker pay view. Station queues only ever hold
+assigned jobs, so simple-mode orders never appear in one.
+
 ## The stock seam
 
 Driven entirely by this state machine; the mechanics live in
@@ -270,11 +392,19 @@ Driven entirely by this state machine; the mechanics live in
   balance won't cover this order (projected = on-hand minus the not-yet-decremented demand
   of active orders ahead), so they can prompt the warehouseman. It is a warning, not a
   gate.
-- **Auto-decrement at job completion.** `shop` panels decrement when **Cutting done** is
-  marked; each `shop` edge material's **consumed length** decrements when **Banding done** is
-  marked (one inventory transaction per edge material the order's `edge_length_snapshot`
+- **Auto-decrement at job completion.** `shop` panels decrement at the **cutting**
+  completion; each `shop` edge material's **consumed length** decrements at the **banding**
+  completion (one inventory transaction per edge material the order's `edge_length_snapshot`
   carries with shop millimetres — these are **consumed** metres when displayed/priced, see *Pricing*). A
-  revert re-increments exactly what its step decremented.
+  revert re-increments exactly what its step decremented. On a **`full`**-mode branch those
+  are the two separate **Cutting done** / **Banding done** taps; on a **`simple`** branch the
+  composite **Tayyor** runs both completions in one transaction, so panels **and** edges
+  decrement together at that single moment ([Production mode](#production-mode)). The
+  contract is otherwise identical — same effects, same restores, same figures. Which taps
+  the seam hangs off is precisely why the mode exists: hung off taps a paper-run shop never
+  makes, the warehouse silently stopped moving. The edge figure stays the **optimiser's
+  consumed metres** in both modes, never the bander's actual tape; drift is reconciled by
+  ordinary inventory adjustments. Revisit if shops ask to type real metres at Tayyor.
 - **Staff set the unit prices, up to production.** A counter negotiates the *rate* — "these
   sheets at 250 000, not 300 000" — so `manage_orders` may replace the branch rate card for
   one order while it is `new` or `confirmed`: the per-sheet price of each panel material, the
@@ -424,11 +554,46 @@ one tap away (**New cutting** + **My drafts** + **My orders** all reachable from
 chosen at placement, against a specific cutting — defaulted from the draft's
 `preferred_branch_id` if set.
 
+**The client track is four phases, and it is the same in both
+[production modes](#production-mode)** — the phase strip, the progress fraction, the
+next-phase label, the status pills, and the dashboard counts all run off it:
+
+| Phase | Internal statuses | Sub-line |
+|---|---|---|
+| **Yangi** | `new` | *Ustaxona tasdiqlashi kutilmoqda* |
+| **Tayyorlanmoqda** | `confirmed`, `cutting`, `edge_banding` | *Ishlab chiqarish jarayonida* |
+| **Tayyor** | `ready` | *Olib ketishingiz mumkin* |
+| **Olib ketildi** | `completed` | — |
+
+`cancelled` is terminal and off-track, shown as its own **Bekor qilindi** pill.
+
+*Why one phase for the three production statuses.* The client can act on exactly one thing —
+whether the order is collectable — and a queued-vs-sawing distinction is not client value,
+it is workshop kitchen. Splitting it also made the track depend on how the workshop is run:
+a full-mode order crawled through two extra phases, a simple-mode one would jump them. A
+client with orders at two branches in different modes sees the identical track on both; only
+the timing differs. **Stability beats fake precision.**
+
+*Why these words.* **Tayyorlanmoqda** says what is happening rather than what the workshop
+clicked, and it self-explains against the next phase — *Tayyorlanmoqda → Tayyor* reads as a
+progression without a legend. **Olib ketildi** is the truth of the terminal status (a
+completed order is a collected order) and mirrors the **Olib ketdi** action that produces
+it; that symmetry between the button and the resulting status is deliberate. Both replaced
+earlier labels (*Tasdiqlandi* / *Yakunlandi*) on 2026-08-31.
+
+Consequently the client is notified on exactly **four order-status events** —
+`order.confirmed`, `order.ready`, `order.completed`, `order.cancelled`. The intermediate
+`cutting` / `edge_banding` transitions produce no client notification **in either mode**;
+inbox rows written before that (`order.status_changed`) still render
+([`notifications.md`](notifications.md)). A revision still notifies separately
+(`order.updated`, see [Revising a placed order](#revising-a-placed-order)).
+
 - **Home dashboard** (`/c`) — greets the client by first name and leads with whatever most
   needs attention. When an order is `ready`, a **ready-for-pickup** banner surfaces the first
   such order (number, branch, total, a pickup action into its detail, and a *N more ready* hint
   when several are waiting); the subtitle and a three-up count strip summarise **active
-  orders**, **in production** (`cutting` + `edge_banding`), and **saved drafts**. Below, the
+  orders**, **Tayyorlanmoqda** (`confirmed` + `cutting` + `edge_banding` — the track's second
+  phase, so the strip and the pills can never disagree), and **saved drafts**. Below, the
   **active orders** list shows each order as a row — number, branch, placed-at, a phase-progress
   bar with the current and next phase, the status pill, total, and a track/detail action — and a
   **continue** list opens drafts with a chosen result on the result stage and unfinished drafts
@@ -468,9 +633,7 @@ chosen at placement, against a specific cutting — defaulted from the draft's
   creation — primary action "Track", which opens the order detail). Empty: "No orders
   yet — start from a cutting."
 - **Order detail** (`/c/orders/:id`) — header (order #, branch, status badge, times).
-  The client-facing status is **five phases**: Placed → **Confirmed** → **In production**
-  → **Ready** → Done — collapsing `cutting`/`edge_banding` into "In production" with
-  optional sub-text. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
+  The client-facing status is the **four-phase track** below. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
   (the SVG + a button opening the PDF in a new tab), **Finance**
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
@@ -484,6 +647,17 @@ chosen at placement, against a specific cutting — defaulted from the draft's
 Permission names below are the per-branch grants from
 [`access-management.md`](access-management.md); a single user may hold all of them.
 
+**The workshop's status vocabulary follows the order's own branch
+[mode](#production-mode).** A **`full`** branch keeps all six internal names — there
+`confirmed` genuinely means *queued, not started*, and calling it *Tayyorlanmoqda* would be
+a lie, so it stays **Tasdiqlangan**. A **`simple`** branch shows three: `confirmed`,
+`cutting` and `edge_banding` are one word, **Tayyorlanmoqda**, and share one pill tone (two
+tones under one label read as a defect, not as detail). Independently of mode, `completed`
+is labelled **Olib ketildi** everywhere — client and workshop, board, table, timeline and
+filters — mirroring the **Olib ketdi** action that produces it; it was *Yakunlandi* before
+2026-08-31. A surface with no branch in hand — global search, the finance payable-order
+picker — renders the six-status vocabulary rather than guessing a collapse.
+
 - **Nav counters** (`manage_orders`, `process_production`) — the sidebar's **Buyurtmalar** item
   carries a graphite `+N` pill with bone text: how many orders sit in `new` for the selected
   branch, so an arrival is visible from any screen. It is a live count, not an unread marker —
@@ -493,17 +667,33 @@ Permission names below are the per-branch grants from
   after any order mutation; a failed count renders no badge and never disturbs the shell.
   **Kesish** and **Krom** carry the same counter over the signed-in user's **own** queue at that
   station — the number their station page shows, not a branch-wide backlog, because the queue is
-  personal for everyone, owner included.
+  personal for everyone, owner included. Both items are **hidden entirely while the selected
+  branch is [`simple`](#production-mode)** — their queues are assignment-fed and a simple
+  branch writes no assignment, so they would be permanently empty screens; hiding the items
+  takes their counters with them, since the shell derives the counters from the nav list. The
+  Buyurtmalar pill is unaffected. A deep link to a station page or a Chizma job sheet on a
+  simple branch lands on the existing no-access / empty state — the mode adds no new screens.
 - **Orders** (`/workshop/orders`, `manage_orders`; a `view_orders` holder reads individual
   orders by link or search, not this board) —
-  branch-scoped, two modes:
-  - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each
-    header has a count; cards: order #, client name + phone, total, item count, age, the
+  branch-scoped, two views:
+  - **Board** — one column per active status on a **`full`** branch (`new` / `confirmed` /
+    `cutting` / `edge_banding` / `ready`); **three** on a [`simple`](#production-mode) one,
+    named as the three statuses that branch has — **Yangi** / **Tayyorlanmoqda** / **Tayyor**
+    — where the middle column groups `confirmed` + `cutting` + `edge_banding`, the same
+    grouping the client track uses, so a full → simple leftover lands there naturally. There
+    is no separate board vocabulary: every header is the status label in the column's own
+    mode, which is why cards carry no status pill of their own — the header is the pill. The
+    board follows the **sidebar's branch picker**; «Hammasi», which mixes branches, keeps the
+    full lifecycle so no branch's orders are folded into a column its own mode lacks.
+    Each header has a count; cards: order #, client name + phone, total, item count, age, the
     assigned cutter / edger chip when set — plus a warning chip when a banded order in
-    `cutting` / `edge_banding` still has no edger. **No drag between status columns** —
+    `cutting` / `edge_banding` still has no edger. Both chips are **full-mode only**: a
+    simple branch has no assignment to show and no station to stall at, so "kesuvchi yo'q"
+    there would name a gap that does not exist. **No drag between status columns** —
     status changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: a status dropdown of lifecycle buckets
+    total, items, created, action menu; each row's status reads in **its own order's branch
+    mode**. Filters: a status dropdown of lifecycle buckets
     (active default · completed · cancelled · all) — per-status drill-down is the board's
     columns, not the filter — plus the app-wide
     date-range picker (preset shortcuts + a calendar for custom spans), and a **client
@@ -547,8 +737,19 @@ Permission names below are the per-branch grants from
   (added/edited in place, saved on blur; a quiet "add note" ghost when empty), a compact
   phase strip along the bottom, and exactly **one status-appropriate primary action**;
   the status history opens from a header clock button as a modal timeline; rarer actions
-  (edit, discount and surcharge — each a modal, revert, cancel) fold into an overflow menu. The
-  status-appropriate actions:
+  (edit, discount and surcharge — each a modal, revert, cancel) fold into an overflow menu.
+
+  Everything on this page reads the **order's own branch [mode](#production-mode)**, off the
+  payload — never the sidebar's selection, which may be pointing elsewhere. The **phase
+  strip** collapses with it: six steps on a full branch (minus `edge_banding` when nothing
+  is banded), **four** on a simple one — Yangi → Tayyorlanmoqda → Tayyor → Olib ketildi —
+  where a full → simple leftover in `cutting` marks the middle step current rather than
+  falling off the strip. A strip listing steps nobody on that branch can move separately
+  would describe the machine, not the order. The **history/timeline keeps all six names in
+  both modes**: it is the event spine, the composite really did write `confirmed → cutting →
+  ready`, and collapsing it there would print "Tayyorlanmoqda → Tayyorlanmoqda".
+
+  The **full**-mode actions:
 
   | Status | Actions | Permission |
   |---|---|---|
@@ -563,12 +764,38 @@ Permission names below are the per-branch grants from
   (cancel, revert) and "Mark collected" use a danger / confirm dialog that names the
   effect ("client collected everything?").
 
+  On a **simple** branch the assignment selects and the start buttons are simply not there,
+  and every forward action is `manage_orders` — there is no assignment, so no worker ever
+  holds one:
+
+  | Status | Primary | Also (overflow / secondary) |
+  |---|---|---|
+  | `new` | **Tasdiqlash** | Edit · discount / surcharge · Cancel |
+  | `confirmed` | **Tayyor** | Edit · discount / surcharge · Cancel |
+  | `cutting` / `edge_banding` (full → simple leftovers) | **Tayyor** | Cancel |
+  | `ready` | **Olib ketdi** | **Orqaga qaytarish** (reason) · Cancel |
+  | `completed` / `cancelled` | read-only | — |
+
+  - **The Tayyor dialog** is success-styled, not danger — it confirms a finished job, not a
+    destruction — and names the effects before the button: first the stock lines it will
+    decrement (each `shop` panel material with its sheets, each `shop` edge material with its
+    consumed metres, read from the order's own price lines so the dialog can never disagree
+    with the money card beside it), then the two **optional** worker selects — *Kim kesdi?*
+    and, only when a side is banded, *Kim kromka yopishtirdi?* Both default to empty and
+    offer the branch's last pick as a preselected suggestion, a convenience that stays
+    clearable. Confirming runs the composite; the detail comes back at `ready`. An empty
+    slot afterwards reads as the reports' own **Belgilanmagan**, not as a "nobody assigned
+    yet" nag.
+  - **The Orqaga dialog** is danger-styled with a required reason, and names both effects:
+    the material returns to the warehouse and the order goes back to *Tayyorlanmoqda*.
+
   Below the header the page splits into two equal cards that fill the viewport (no page
   scroll at desktop heights; short or narrow windows fall back to normal scrolling): the
-  **production card** — instant-apply assignment selects per the lock rules, full-width,
-  with the kromka slot always rendered (a quiet disabled box when the order has no
-  banding), completion sub-lines carrying the cut snapshot counters, and a **"Chizma va
-  tarkib"** button opening a modal with the cutting SVG + PDF, the item snapshots showing
+  **production card** — on a full branch, instant-apply assignment selects per the lock
+  rules, full-width, with the kromka slot always rendered (a quiet disabled box when the
+  order has no banding); on a simple branch the selects are absent and the card is its
+  completion sub-lines alone. Either way the sub-lines carry the cut snapshot counters, and
+  a **"Chizma va tarkib"** button opens a modal with the cutting SVG + PDF, the item snapshots showing
   per-side edge materials, and edge-material consumption — and the **money card**: total,
   the **read-only settlement summary** (recorded / balance, sourced from the finance
   module, shown at any status to staff with `view_finance_reports`/`manage_finance`,
@@ -591,8 +818,16 @@ Permission names below are the per-branch grants from
   genuine transport error.
 
 - **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
-  `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar
-  pages** (replacing the tabbed "Ishlarim" workspace, whose URL redirects to Kesish). Each
+  `process_production`) — **full-mode surfaces**: they are fed by assignments, which a
+  [`simple`](#production-mode) branch never writes, so both pages and the home dashboard's
+  **Stansiyalar** panel ([`workshop.md`](workshop.md)) are hidden while such a branch is
+  selected — a panel reading "0 · hech kim" forever is worse than no panel. That is one rule
+  with one carried consequence: the Stansiyalar panel is the only dashboard section a
+  `process_production`-only staffer has, so on a simple branch that staffer has none, and
+  the page owes them the existing "nothing here for you" empty state rather than a heading
+  over blank space. The panel's visibility and the empty state are computed from the same
+  flag so they cannot disagree. In full mode the stations are the shop-floor terminal,
+  tablet-first, as **two separate sidebar pages** (replacing the tabbed "Ishlarim" workspace, whose URL redirects to Kesish). Each
   station is a priority stack, not columns: the started job pinned on top ("Hozirgi ish"),
   the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at
@@ -663,15 +898,16 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Revert** → exactly reverses the prior step's stamps and re-increments the stock that
   step decremented (for edges, one restore per edge material the step had consumed);
   never out of `completed`.
-- **Order has no banded sides** → `edge_banding` is skipped; **Cutting done** goes
-  straight to `ready`.
+- **Order has no banded sides** → `edge_banding` is skipped; the cutting completion goes
+  straight to `ready` (the gateway's *no* branch), in either mode.
 - **Order has banded sides but every side is `own`** → the `edge_banding` step still
   runs (the edger applies the tape the client brought), but no inventory transactions
-  fire at `Banding done` — `shop` metres-by-material is empty.
-- **Assigned but not started** → the order stays `confirmed`: queued in the assignee's
-  station, grouped under them in the owner's view, still "Confirmed" to the client. No
-  auto-start, no timeout.
-- **Start guards** → starting cutting without an assigned cutter (`cutter_required`) is
+  fire at the banding completion — `shop` metres-by-material is empty.
+- **Assigned but not started** (full mode) → the order stays `confirmed`: queued in the
+  assignee's station, grouped under them in the owner's view, and *Tayyorlanmoqda* to the
+  client. No auto-start, no timeout.
+- **Start guards** (full mode; in simple mode these endpoints are gated off, so none of
+  them can fire) → starting cutting without an assigned cutter (`cutter_required`) is
   rejected — the edger slot never blocks the saw; **Start banding** without an assigned
   edger (`edger_required`) or twice (`banding_already_started`) is rejected; a
   non-assigned `process_production` user starting someone else's job is rejected.
@@ -703,6 +939,36 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Revision applied after the client already paid** → the settlement summary recomputes
   against the new total; an overpayment is corrected by the accountant in the finance
   module, like any recorded-payment dispute.
+- **Tayyor on a full → simple leftover** (order already in `cutting` or `edge_banding`) →
+  the composite writes only the events still owed and runs only the effects those steps own,
+  so nothing decrements twice; a start stamp the earlier full-mode tap wrote is kept. A
+  cutter pick is refused on a leftover already past the saw (`cutting_already_started`) —
+  that credit is not this tap's to rewrite.
+- **Tayyor on an order with no banded side** → the gateway's `ready` branch: two events
+  (`confirmed → cutting → ready`), panels decremented, no edger select shown (offering one
+  is refused with `edger_not_required`).
+- **Tayyor on a fully-`own` order** → the events run and no stock moves; zero `shop` demand
+  skips the seam, as the contract already states. Banded-but-all-`own`: the `edge_banding`
+  event is still written (the spine is unchanged) with no edge decrement.
+- **Tayyor twice** (double tap, or two admins) → the second call finds the order `ready` and
+  is refused as an invalid transition; it surfaces as the existing "this order changed —
+  refresh" state. A Tayyor racing a revision save, discount, or cancel loses on the
+  optimistic-lock check — the composite is one transaction.
+- **Orqaga then Tayyor again** → fully supported: new events, new stamps, stock decremented
+  again. The spine records the whole story rather than editing it.
+- **Branch switched to `simple` mid-order** → nothing is migrated or stranded. An order in
+  `cutting` or `edge_banding` reads *Tayyorlanmoqda* on every simple-mode surface and is
+  finished by the composite Tayyor. This is why the switch carries **no warning modal** — a
+  count of "stranded" orders would warn about a non-event.
+- **Branch switched to `full` mid-order** → a `confirmed` order simply regains its
+  assignment and start actions; a simple-mode order that was already `ready` is unaffected.
+- **Mode switched between page load and action** → the stale surface's call is refused with
+  `simple_mode_active` / `full_mode_active`, a toast explains which mode the branch is in,
+  and the page refetches.
+- **A worker id invalid at Tayyor** (another branch, blocked, no grant) → the existing
+  assignment validation errors and nothing is written.
+- **A client with orders at two branches in different modes** → the same four-phase track on
+  both; only the timing differs.
 
 ## Next
 

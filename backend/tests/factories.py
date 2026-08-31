@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.core.security import hash_password
-from app.models.enums import DecorType, MaterialStatus
+from app.models.enums import DecorType, MaterialStatus, ProductionMode
 from app.modules.access.contracts import PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer
 
@@ -41,9 +41,17 @@ async def seed_workshop_with_owner(
     db: AsyncSession,
     *,
     login: str = "owner",
+    production_mode: ProductionMode = ProductionMode.FULL,
 ) -> tuple[Workshop, Branch, WorkshopUser]:
     """Seed a workshop with its owner. Logins are globally unique — pass a distinct
-    `login` when a test seeds more than one workshop."""
+    `login` when a test seeds more than one workshop.
+
+    The branch is seeded in **full** mode purely as a test convenience: the
+    per-step choreography is what most of this suite exercises, and defaulting to
+    it keeps those tests from opting in one by one. It deliberately does NOT
+    mirror production, where every branch — provisioned or new — is `simple`
+    (the migration has no backfill). A simple-mode test asks for it explicitly.
+    """
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
     workshop = Workshop(
@@ -61,6 +69,7 @@ async def seed_workshop_with_owner(
         phone="+998902222222",
         latitude=Decimal("41.365"),
         longitude=Decimal("69.285"),
+        production_mode=production_mode,
     )
     db.add(branch)
     await db.flush()

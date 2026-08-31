@@ -45,7 +45,37 @@ describe('workshop dashboard access', () => {
     const access = workshopDashboardAccess(staff(p.processProduction), branches)
 
     expect(access.hasKpis).toBe(false)
+    expect(access.showStations).toBe(true)
     expect(access.hasVisibleSection).toBe(true)
+  })
+
+  // A simple-mode branch never writes an assignment, so both station queues are
+  // permanently empty there — the panel goes, exactly as the Kesish/Krom sidebar
+  // items do (orders.md).
+  it('hides the station panel while the selected branch runs simple mode', () => {
+    const modal = [
+      { id: 'branch-1', production_mode: 'simple' as const },
+      { id: 'branch-2', production_mode: 'full' as const },
+    ]
+
+    expect(workshopDashboardAccess(owner, modal, 'branch-1').showStations).toBe(false)
+    expect(workshopDashboardAccess(owner, modal, 'branch-2').showStations).toBe(true)
+    // No selection («Hammasi», or the context still loading) falls back to the
+    // first branch — the same resolution the sidebar nav uses.
+    expect(workshopDashboardAccess(owner, modal).showStations).toBe(false)
+    // A branch payload without the field (older client, tests) stays full.
+    expect(workshopDashboardAccess(owner, branches).showStations).toBe(true)
+  })
+
+  it('sends a production-only staffer on a simple branch to the empty state, not a blank page', () => {
+    const simple = [{ id: 'branch-1', production_mode: 'simple' as const }]
+    const access = workshopDashboardAccess(staff(p.processProduction), simple, 'branch-1')
+
+    // The permission is still held — it is the branch that has no stations.
+    expect(access.canProduction).toBe(true)
+    expect(access.showStations).toBe(false)
+    expect(access.hasKpis).toBe(false)
+    expect(access.hasVisibleSection).toBe(false)
   })
 
   it('renders the order cards for view_orders but refuses to link at the board (QAD-170)', () => {

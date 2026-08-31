@@ -8,11 +8,16 @@ import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import { useRolePath } from '@/shared/app/paths'
 import {
   isRevisionEvent,
+  lastProductionWorkerKey,
   orderPhaseSteps,
+  productionStockLines,
   productionTimelineDetails,
   revertTargetLabelForOrder,
   revisionTimelineDetails,
+  workshopOrderMenuKeys,
+  workshopOrderPrimaryKey,
   type WorkshopAdjustmentKind,
+  type WorkshopOrderMenuKey,
 } from '@/shared/app/workshopOrderDetail'
 import { ownMaterialRows } from '@/shared/app/ownMaterial'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -29,6 +34,7 @@ import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
 import DateField from '@/shared/components/DateField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import OrderCompleteProductionModal from '@/shared/components/OrderCompleteProductionModal.vue'
 import OrderOwnMaterialModal from '@/shared/components/OrderOwnMaterialModal.vue'
 import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
 import OrderPricesModal from '@/shared/components/OrderPricesModal.vue'
@@ -48,6 +54,7 @@ import {
   type OrderPriceLine,
   type OrderStockWarning,
 } from '@/shared/stores/orders'
+import type { ProductionMode } from '@/shared/stores/workshop'
 import {
   metres,
   useCuttingStore,
@@ -78,7 +85,9 @@ const actionTraceId = ref<string | null>(null)
 const pendingAction = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
-const reasonDialogAction = ref<'revert' | 'cancel' | null>(null)
+const reasonDialogAction = ref<'revert' | 'cancel' | 'undoProduction' | null>(null)
+const completeProductionOpen = ref(false)
+const completeProductionError = ref<string | null>(null)
 const reasonDraft = ref('')
 const markCollectedOpen = ref(false)
 const discardEditOpen = ref(false)
@@ -107,6 +116,10 @@ const orderOutOfReach = computed(
 const canManageOrders = computed(() =>
   permissions.canOnBranch(p.manageOrders, order.value?.branch_id),
 )
+// The ORDER's own branch mode, straight off the payload — never inferred from
+// whichever branch the sidebar happens to have selected (orders.md).
+const orderMode = computed<ProductionMode>(() => order.value?.branch_production_mode ?? 'full')
+const isSimpleMode = computed(() => orderMode.value === 'simple')
 const canProcessProduction = computed(() =>
   permissions.canOnBranch(p.processProduction, order.value?.branch_id),
 )
@@ -225,10 +238,13 @@ const canEditOrder = computed(
 // Assignment locks per role once that stage starts: the cutter the moment the
 // order leaves `confirmed`, the edger once banding is stamped started. After
 // the lock the deliberate fix path is revert (which clears the start stamp).
-const canAssignCutter = computed(() => canManageOrders.value && order.value?.status === 'confirmed')
+// Simple mode has no assignment at all: the credit, if any, is picked at Tayyor.
+const canAssignCutter = computed(
+  () => canManageOrders.value && !isSimpleMode.value && order.value?.status === 'confirmed',
+)
 const canAssignEdger = computed(() => {
   const current = order.value
-  if (!current || !canManageOrders.value || !current.has_banding) return false
+  if (!current || !canManageOrders.value || isSimpleMode.value || !current.has_banding) return false
   if (current.status === 'confirmed' || current.status === 'cutting') return true
   return current.status === 'edge_banding' && !current.banding_started_at
 })
@@ -248,7 +264,8 @@ const cutterSub = computed<SlotSub>(() => {
       bits.push(translatePlural('orders.unit.panels', current.panels_used_snapshot))
     return { kind: 'done', text: bits.join(' · ') }
   }
-  if (canManageOrders.value && current.status === 'cutting')
+  // Every hint below names an assignment lock, which simple mode does not have.
+  if (canManageOrders.value && !isSimpleMode.value && current.status === 'cutting')
     return { kind: 'hint', text: t('orders.detail.cutterLocked') }
   return null
 })
@@ -257,6 +274,7 @@ const edgerSub = computed<SlotSub>(() => {
   if (!current || !current.has_banding) return null
   if (current.edge_completed_at)
     return { kind: 'done', text: formatDate(current.edge_completed_at) }
+  if (isSimpleMode.value) return null
   if (canManageOrders.value && current.status === 'edge_banding' && current.banding_started_at)
     return { kind: 'hint', text: t('orders.detail.edgerLocked') }
   // The open slot doesn't block the saw, so from `cutting` on it carries the
@@ -333,7 +351,9 @@ const productionMeta = computed(() => {
     ? `${pieces} · ${translatePlural('orders.unit.panels', totalPanels.value)}`
     : pieces
 })
-const phaseSteps = computed(() => (order.value ? orderPhaseSteps(order.value) : []))
+const phaseSteps = computed(() =>
+  order.value ? orderPhaseSteps(order.value, orderMode.value) : [],
+)
 const isCancelled = computed(() => order.value?.status === 'cancelled')
 const discountButtonLabel = computed(() =>
   order.value?.discount_tiyin ? t('orders.detail.discountUpdate') : t('orders.detail.discountAdd'),
@@ -368,12 +388,31 @@ type PrimaryAction = {
   hint?: string | null
   run: () => void
 }
-const primaryAction = computed<PrimaryAction | null>(() => {
+// The matrix itself is a pure function shared with the tests (workshopOrderDetail);
+// this view only dresses the key it returns in a label and a handler.
+const actionMatrixOrder = computed(() => {
   const current = order.value
   if (!current) return null
-  if (current.status === 'new' && canManageOrders.value)
+  return {
+    status: current.status,
+    mode: orderMode.value,
+    banding_started_at: current.banding_started_at,
+    revision_draft_id: current.revision_draft_id,
+  }
+})
+const actionMatrixAccess = computed(() => ({
+  canManageOrders: canManageOrders.value,
+  canCompleteCutting: canCompleteCutting.value,
+  canCompleteBanding: canCompleteBanding.value,
+}))
+
+const primaryAction = computed<PrimaryAction | null>(() => {
+  const matrixOrder = actionMatrixOrder.value
+  if (!matrixOrder) return null
+  const key = workshopOrderPrimaryKey(matrixOrder, actionMatrixAccess.value)
+  if (key === 'approve')
     return {
-      key: 'approve',
+      key,
       label: t('orders.action.approve'),
       busyLabel: t('orders.busy.approving'),
       // Gated like startCutting: the backend refuses this transition while any
@@ -383,44 +422,51 @@ const primaryAction = computed<PrimaryAction | null>(() => {
       hint: unpricedMissing.value,
       run: approve,
     }
-  if (current.status === 'confirmed' && (canManageOrders.value || canCompleteCutting.value))
+  if (key === 'startCutting')
     return {
-      key: 'startCutting',
+      key,
       label: t('orders.action.startCutting'),
       busyLabel: t('orders.busy.starting'),
       disabled: !canStartCutting.value,
       hint: startCuttingMissing.value,
       run: startCutting,
     }
-  if (current.status === 'cutting' && canCompleteCutting.value)
+  if (key === 'completeCutting')
     return {
-      key: 'completeCutting',
+      key,
       label: t('orders.action.completeCutting'),
       busyLabel: t('orders.busy.running'),
       run: completeCutting,
     }
-  if (current.status === 'edge_banding' && canCompleteBanding.value) {
-    // Guided two-tap flow: start stamps the duration, then the same slot turns
-    // into the completion action.
-    return current.banding_started_at
-      ? {
-          key: 'completeBanding',
-          label: t('orders.action.completeBanding'),
-          busyLabel: t('orders.busy.running'),
-          run: completeBanding,
-        }
-      : {
-          key: 'startBanding',
-          label: t('orders.action.startBanding'),
-          busyLabel: t('orders.busy.starting'),
-          disabled: startBandingMissing.value !== null,
-          hint: startBandingMissing.value,
-          run: startBanding,
-        }
-  }
-  if (current.status === 'ready' && canManageOrders.value)
+  // Guided two-tap flow: start stamps the duration, then the same slot turns
+  // into the completion action.
+  if (key === 'completeBanding')
     return {
-      key: 'markCollected',
+      key,
+      label: t('orders.action.completeBanding'),
+      busyLabel: t('orders.busy.running'),
+      run: completeBanding,
+    }
+  if (key === 'startBanding')
+    return {
+      key,
+      label: t('orders.action.startBanding'),
+      busyLabel: t('orders.busy.starting'),
+      disabled: startBandingMissing.value !== null,
+      hint: startBandingMissing.value,
+      run: startBanding,
+    }
+  // Simple mode's whole production, one tap — the dialog names what it spends.
+  if (key === 'completeProduction')
+    return {
+      key,
+      label: t('orders.action.ready'),
+      busyLabel: t('orders.busy.completing'),
+      run: openCompleteProduction,
+    }
+  if (key === 'markCollected')
+    return {
+      key,
       label: t('orders.action.markCollected'),
       busyLabel: t('orders.busy.running'),
       run: () => (markCollectedOpen.value = true),
@@ -430,44 +476,46 @@ const primaryAction = computed<PrimaryAction | null>(() => {
 
 type OrderMenuItem = { key: string; label: string; danger?: boolean; run: () => void }
 const menuItems = computed<OrderMenuItem[]>(() => {
-  const current = order.value
-  if (!current) return []
-  const items: OrderMenuItem[] = []
-  if (canEditOrder.value && !current.revision_draft_id)
-    items.push({ key: 'edit', label: t('orders.action.edit'), run: startEdit })
-  if (canManageOrders.value && ['new', 'confirmed'].includes(current.status)) {
-    items.push({
+  const matrixOrder = actionMatrixOrder.value
+  if (!matrixOrder) return []
+  const build: Record<WorkshopOrderMenuKey, OrderMenuItem> = {
+    edit: { key: 'edit', label: t('orders.action.edit'), run: startEdit },
+    discount: {
       key: 'discount',
       label: discountButtonLabel.value,
       run: () => {
         discountSubmitError.value = null
         discountOpen.value = true
       },
-    })
-    items.push({
+    },
+    surcharge: {
       key: 'surcharge',
       label: surchargeButtonLabel.value,
       run: () => {
         surchargeSubmitError.value = null
         surchargeOpen.value = true
       },
-    })
-  }
-  if (canManageOrders.value && ['cutting', 'edge_banding', 'ready'].includes(current.status))
-    items.push({
+    },
+    revert: {
       key: 'revert',
       label: revertButtonLabel.value,
       danger: true,
       run: requestRevertOrder,
-    })
-  if (canManageOrders.value && !['completed', 'cancelled'].includes(current.status))
-    items.push({
+    },
+    undoProduction: {
+      key: 'undoProduction',
+      label: t('orders.action.undoProduction'),
+      danger: true,
+      run: requestUndoProduction,
+    },
+    cancel: {
       key: 'cancel',
       label: t('orders.action.cancelOrder'),
       danger: true,
       run: requestCancelOrder,
-    })
-  return items
+    },
+  }
+  return workshopOrderMenuKeys(matrixOrder, actionMatrixAccess.value).map((key) => build[key])
 })
 
 // Itemized breakdown (always expanded): one row per material actually used,
@@ -566,6 +614,14 @@ function workerName(id: string | null) {
     orders.workerOptions.find((worker) => worker.id === id)?.full_name ??
     t('orders.detail.unknownWorker')
   )
+}
+
+// Who got the credit. In simple mode the pick is optional, so an empty slot is
+// a legitimate outcome and reads as the reports' own «Belgilanmagan» bucket —
+// not as the full-mode "nobody has been assigned yet" nag.
+function creditedWorkerName(id: string | null) {
+  if (!id && isSimpleMode.value) return t('orders.confirm.complete.noWorker')
+  return workerName(id)
 }
 
 function timelineProductionDetails(event: OrderEvent) {
@@ -753,6 +809,114 @@ async function completeBanding() {
   if (ok) warnOnStockShortfall()
 }
 
+// --- Simple mode: the two composite taps (orders.md) -------------------------
+
+// What Tayyor will take out of the warehouse, from the order's own price lines —
+// the same figures the money card beside the dialog prints.
+const completeStockLines = computed(() => productionStockLines(order.value?.price_lines ?? []))
+// A full→simple leftover already past the saw has its cutter credit written, and
+// the backend refuses a second one (`cutting_already_started`) — so the select
+// is not offered rather than offered and rejected.
+const showCompleteCutter = computed(() => order.value?.cut_completed_at === null)
+const showCompleteEdger = computed(
+  () => order.value?.has_banding === true && order.value?.edge_completed_at === null,
+)
+const lastCutterId = ref<string | null>(null)
+const lastEdgerId = ref<string | null>(null)
+
+function branchStorage() {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage
+  } catch {
+    // Private-mode Safari throws on the accessor itself; the preselect is a
+    // convenience, so losing it must never break the dialog.
+    return null
+  }
+}
+
+function readLastWorkerPicks(branchId: string) {
+  const storage = branchStorage()
+  lastCutterId.value = storage?.getItem(lastProductionWorkerKey(branchId, 'cutter')) ?? null
+  lastEdgerId.value = storage?.getItem(lastProductionWorkerKey(branchId, 'edger')) ?? null
+}
+
+function rememberWorkerPick(branchId: string, role: 'cutter' | 'edger', userId: string | null) {
+  const storage = branchStorage()
+  if (!storage) return
+  const key = lastProductionWorkerKey(branchId, role)
+  try {
+    if (userId) storage.setItem(key, userId)
+    else storage.removeItem(key)
+  } catch {
+    // Quota or a locked-down profile — the pick simply is not remembered.
+  }
+}
+
+function openCompleteProduction() {
+  const current = order.value
+  if (!current || !canManageOrders.value) return
+  completeProductionError.value = null
+  readLastWorkerPicks(current.branch_id)
+  completeProductionOpen.value = true
+}
+
+async function confirmCompleteProduction(picks: {
+  cutterUserId: string | null
+  edgerUserId: string | null
+}) {
+  const current = order.value
+  if (!current || !canManageOrders.value) return
+  completeProductionError.value = null
+  const ok = await run(
+    () =>
+      orders.completeProduction(current.id, {
+        version: current.version,
+        cutter_user_id: picks.cutterUserId,
+        edger_user_id: picks.edgerUserId,
+      }),
+    t('orders.toast.productionCompleted'),
+    'completeProduction',
+  )
+  if (!ok) {
+    // Inside the open dialog, where the operator is looking — the page banner
+    // sits behind the scrim.
+    completeProductionError.value = actionError.value
+    return
+  }
+  if (showCompleteCutter.value) rememberWorkerPick(current.branch_id, 'cutter', picks.cutterUserId)
+  if (showCompleteEdger.value) rememberWorkerPick(current.branch_id, 'edger', picks.edgerUserId)
+  completeProductionOpen.value = false
+  warnOnStockShortfall()
+}
+
+// One dialog serves three reasoned actions; only the single-step revert is not
+// destructive enough for the danger skin (Orqaga puts stock back and unwinds
+// three events, Cancel ends the order).
+const reasonDialogTitle = computed(() => {
+  if (reasonDialogAction.value === 'revert') return t('orders.confirm.revertTitle')
+  if (reasonDialogAction.value === 'undoProduction') return t('orders.confirm.undoProduction.title')
+  return t('orders.confirm.cancelTitle')
+})
+const reasonDialogMessage = computed(() => {
+  if (reasonDialogAction.value === 'revert')
+    return t('orders.confirm.revertMessage', { target: revertTargetLabel.value })
+  if (reasonDialogAction.value === 'undoProduction')
+    return t('orders.confirm.undoProduction.message')
+  return t('orders.confirm.cancelMessage')
+})
+const reasonDialogConfirmLabel = computed(() => {
+  if (reasonDialogAction.value === 'revert') return t('orders.confirm.revertAction')
+  if (reasonDialogAction.value === 'undoProduction')
+    return t('orders.confirm.undoProduction.action')
+  return t('orders.action.cancel')
+})
+
+function requestUndoProduction() {
+  if (!canManageOrders.value) return
+  reasonDraft.value = ''
+  reasonDialogAction.value = 'undoProduction'
+}
+
 // The completion mutation stores the fresh order on the store, so the shortfall
 // flag rides along with it — a warn toast next to the success one, never in
 // place of it (QAD-150).
@@ -790,16 +954,25 @@ async function confirmReasonedAction() {
   const action = reasonDialogAction.value
   const reason = reasonDraft.value.trim()
   if (!action || !reason) return
-  const ok =
-    action === 'revert'
-      ? await run(
-          () => orders.revert(current.id, current.version, reason),
-          t('orders.toast.reverted'),
-        )
-      : await run(
-          () => orders.cancelWorkshopOrder(current.id, current.version, reason),
-          t('orders.toast.cancelled'),
-        )
+  let ok = false
+  if (action === 'revert') {
+    ok = await run(
+      () => orders.revert(current.id, current.version, reason),
+      t('orders.toast.reverted'),
+    )
+  } else if (action === 'undoProduction') {
+    // One dialog, one reason, the whole action: simple mode has no partial
+    // undo — a shop that needs step-level surgery switches to full mode.
+    ok = await run(
+      () => orders.undoProduction(current.id, current.version, reason),
+      t('orders.toast.productionUndone'),
+    )
+  } else {
+    ok = await run(
+      () => orders.cancelWorkshopOrder(current.id, current.version, reason),
+      t('orders.toast.cancelled'),
+    )
+  }
   if (ok) reasonDialogAction.value = null
 }
 
@@ -1030,8 +1203,10 @@ onBeforeUnmount(() => {
       <header class="od-head">
         <div class="od-top">
           <h1>{{ order.order_number }}</h1>
-          <span :class="orderPillClass(order.status)">
-            <span class="pd"></span>{{ workshopStatusUz(order.status) }}
+          <!-- The order's own branch mode: on a simple branch the three
+               production statuses read as one word, «Tayyorlanmoqda». -->
+          <span :class="orderPillClass(order.status, orderMode)">
+            <span class="pd"></span>{{ workshopStatusUz(order.status, orderMode) }}
           </span>
           <div class="actions">
             <button
@@ -1166,7 +1341,7 @@ onBeforeUnmount(() => {
               :aria-current="step.state === 'current' ? 'step' : undefined"
             >
               <span class="od-dot" aria-hidden="true"></span>
-              <span class="od-lbl">{{ workshopStatusUz(step.status) }}</span>
+              <span class="od-lbl">{{ workshopStatusUz(step.status, orderMode) }}</span>
             </span>
             <span
               v-if="i < phaseSteps.length - 1"
@@ -1278,7 +1453,10 @@ onBeforeUnmount(() => {
             >
               {{ $t('orders.own.edit') }}
             </button>
-            <div class="flex flex-col gap-1 py-4">
+            <!-- Simple mode has no assignment, so the two role slots only earn
+                 their space once there is a completion to report; before that
+                 the card is the own-material notice, the meta and Chizma. -->
+            <div v-if="!isSimpleMode || order.cut_completed_at" class="flex flex-col gap-1 py-4">
               <FormSelect
                 v-if="canAssignCutter"
                 v-model="cutterId"
@@ -1294,7 +1472,7 @@ onBeforeUnmount(() => {
                 <div
                   class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
                 >
-                  {{ workerName(order.cutter_user_id ?? order.assigned_cutter_user_id) }}
+                  {{ creditedWorkerName(order.cutter_user_id ?? order.assigned_cutter_user_id) }}
                 </div>
               </template>
               <p
@@ -1311,7 +1489,10 @@ onBeforeUnmount(() => {
             </div>
             <!-- The kromka slot is always present so the card reads the same on
                  every order; without banding it is a quiet disabled box. -->
-            <div class="flex flex-col gap-1 border-t border-hairline py-4">
+            <div
+              v-if="!isSimpleMode || order.edge_completed_at"
+              class="flex flex-col gap-1 border-t border-hairline py-4"
+            >
               <template v-if="!order.has_banding">
                 <span class="form-select-label block text-sm font-bold text-ink">{{
                   $t('orders.detail.edger')
@@ -1337,7 +1518,7 @@ onBeforeUnmount(() => {
                 <div
                   class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 text-sm font-semibold text-ink"
                 >
-                  {{ workerName(order.edger_user_id ?? order.assigned_edger_user_id) }}
+                  {{ creditedWorkerName(order.edger_user_id ?? order.assigned_edger_user_id) }}
                 </div>
               </template>
               <p
@@ -1672,6 +1853,10 @@ onBeforeUnmount(() => {
           >
             <span class="when">{{ formatDate(event.changed_at) }}</span>
             <template v-if="isRevisionEvent(event)">{{ $t('orders.detail.edited') }}</template>
+            <!-- The history is the spine, so it keeps the six-status vocabulary
+                 in both modes: the composite Tayyor really did write
+                 confirmed → cutting → ready, and collapsing those names here
+                 would print «Tayyorlanmoqda → Tayyorlanmoqda». -->
             <template v-else>
               {{
                 event.from_status
@@ -1703,24 +1888,12 @@ onBeforeUnmount(() => {
 
     <ConfirmDialog
       :open="reasonDialogAction !== null"
-      :title="
-        reasonDialogAction === 'revert'
-          ? $t('orders.confirm.revertTitle')
-          : $t('orders.confirm.cancelTitle')
-      "
-      :message="
-        reasonDialogAction === 'revert'
-          ? $t('orders.confirm.revertMessage', { target: revertTargetLabel })
-          : $t('orders.confirm.cancelMessage')
-      "
-      :confirm-label="
-        reasonDialogAction === 'revert'
-          ? $t('orders.confirm.revertAction')
-          : $t('orders.action.cancel')
-      "
+      :title="reasonDialogTitle"
+      :message="reasonDialogMessage"
+      :confirm-label="reasonDialogConfirmLabel"
       :cancel-label="$t('orders.confirm.closeLabel')"
       :busy-label="$t('orders.confirm.busyLabel')"
-      :danger="reasonDialogAction === 'cancel'"
+      :danger="reasonDialogAction !== 'revert'"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"
       @cancel="reasonDialogAction = null"
@@ -1869,6 +2042,21 @@ onBeforeUnmount(() => {
       :submit-error="pricesSubmitError"
       @save="savePrices"
       @close="pricesOpen = false"
+    />
+
+    <OrderCompleteProductionModal
+      v-if="order"
+      :open="completeProductionOpen"
+      :stock-lines="completeStockLines"
+      :worker-options="workerOptions"
+      :show-cutter="showCompleteCutter"
+      :show-edger="showCompleteEdger"
+      :default-cutter-id="lastCutterId"
+      :default-edger-id="lastEdgerId"
+      :busy="orders.actionLoading"
+      :submit-error="completeProductionError"
+      @confirm="confirmCompleteProduction"
+      @cancel="completeProductionOpen = false"
     />
 
     <OrderOwnMaterialModal

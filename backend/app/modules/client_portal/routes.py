@@ -6,18 +6,23 @@ from fastapi import APIRouter
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.modules.client_portal.api import (
+    apply_entry,
     branch_options,
     client_branch_materials,
     client_branches,
     get_client_profile,
+    my_workshops,
     update_client_profile,
 )
 from app.modules.client_portal.schemas import (
     ClientBranchMaterialResponse,
     ClientBranchOption,
     ClientBranchResponse,
+    ClientEntryRequest,
+    ClientEntryResponse,
     ClientProfilePatchRequest,
     ClientProfileResponse,
+    ClientWorkshopResponse,
 )
 
 router = APIRouter(prefix="/client", tags=["client"])
@@ -46,6 +51,28 @@ async def profile_update(
         update_preferred_branch="preferred_branch_id" in payload.model_fields_set,
     )
     return ClientProfileResponse.model_validate(client)
+
+
+@router.post("/entry", response_model=ClientEntryResponse)
+async def entry_apply(
+    payload: ClientEntryRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> ClientEntryResponse:
+    return await apply_entry(
+        db,
+        principal=principal,
+        code=payload.code,
+        branch_id=payload.branch_id,
+    )
+
+
+@router.get("/my-workshops", response_model=list[ClientWorkshopResponse])
+async def my_workshops_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> list[ClientWorkshopResponse]:
+    return await my_workshops(db, principal=principal)
 
 
 @router.get("/branch-options", response_model=list[ClientBranchOption])

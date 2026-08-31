@@ -363,6 +363,17 @@ BRANCH2_ID="$(jcall POST "$API/workshop/branches" "$OWNER_TOKEN" "$(jq -nc \
   '{name:"Yunusobod filiali",address:"Toshkent, Yunusobod tumani, Amir Temur ko‘chasi 108",phone:$b2phone}')" | jq -r .id)"
 ok "branch 2 created (Yunusobod filiali)"
 
+# Every branch is SIMPLE (one Tayyor tap closes an order) — that is the column
+# default and the migration adds no backfill, so real workshops all start there.
+# The demo world below drives the per-stage choreography — assign, start, stage
+# completions, station queues — so both branches are switched to FULL, which is
+# the opt-in a shop that wants stations makes on the branch form.
+for _branch in "$BRANCH1_ID" "$BRANCH2_ID"; do
+  jcall PATCH "$API/workshop/branches/$_branch" "$OWNER_TOKEN" \
+    '{"production_mode":"full"}' >/dev/null
+done
+ok "production mode: full on B1 and B2"
+
 branch_id_for() { case "$1" in B1) echo "$BRANCH1_ID";; B2) echo "$BRANCH2_ID";; esac; }
 
 # ============================================================================

@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-08-09
+updated: 2026-08-31
 order: 40
 ---
 
@@ -32,7 +32,7 @@ reading order:
 | --- | --- | --- |
 | **KPI row** — four cards | today's income · orders in production, with their value · client debt · low-stock materials, naming how many are negative | [`finance.md`](finance.md#finance-summary) · this module's order counts · [`catalog-inventory.md`](catalog-inventory.md) |
 | **Sizdan kutilmoqda** — a work list | one row per condition that needs a person: new orders unconfirmed, ready orders not collected, a material gone negative, a branch with no cutter assigned. Each row is a title, a detail line, and the action that clears it | the module the condition belongs to |
-| **Stansiyalar** | Kesish and Krom, each with who is on it and how many orders are queued, plus a text link to the queues | [`orders.md`](orders.md) → production stations |
+| **Stansiyalar** | Kesish and Krom, each with who is on it and how many orders are queued, plus a text link to the queues. **Hidden while the selected branch runs `simple`** — it has no assignments to report ([`orders.md`](orders.md#production-mode)) | [`orders.md`](orders.md) → production stations |
 | **Savdo** | income per day over the chosen period as a bar chart, the period total in the panel head | [`finance.md`](finance.md#finance-summary) |
 
 Two rules the screen exists to hold:
@@ -105,6 +105,16 @@ After platform provisioning creates the first branch, branch operations are **ow
   ([`sales.md`](../entities/sales.md)). It is shown, never edited: an owner holding a printed
   `#26-1-0003` has to be able to find out which branch the `1` is, and the number is the only
   part of that document that identifies one.
+- **Set the production mode** — `simple` (the default) or `full`: whether the branch closes
+  an order with one **Tayyor** tap or runs the per-stage choreography of assignment, start
+  taps and station queues ([`orders.md`](orders.md#production-mode) owns the behaviour). It
+  is a shop-floor property like kerf and the edge overhang — how *this* floor is actually
+  operated — which is why it sits with them rather than in workshop settings. **Switching
+  never blocks and carries no warning**: the mode is read at the moment of each action, so
+  nothing is migrated and nothing is stranded — an order caught mid-spine on a switch to
+  `simple` is finished by the composite Tayyor and reads *Tayyorlanmoqda* meanwhile, so a
+  modal counting such orders would warn about a non-event. Audited like any branch settings
+  change.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
   carry an optional reason. **Status changes do not revoke staff sessions or grants** — a
   staff grant on an `inactive` branch just stays inert until the branch is reactivated. A
@@ -130,7 +140,9 @@ Visibility for read operations:
   printed document. Below it, an owner-only editable branch form: branch contact, pricing
   (entered in so'm), cutting settings (kerf + edge trim, in mm), edge settings (the
   glue-and-trim overhang, in mm), material settings (whether the branch takes a client's own
-  sheets), and status controls. It does not duplicate materials, stock, staff, or order
+  sheets), **production settings** — an **Ishlab chiqarish rejimi** radio group, `Oddiy` /
+  `To'liq`, each explained in one line, with no confirmation step on switching — and status
+  controls. It does not duplicate materials, stock, staff, or order
   management; those stay in their own sidebar sections. Edge settings are their own group
   rather than a third cutting setting: the overhang is consumed at the bander, and it is the
   one branch millimetre that moves what the client is billed for tape

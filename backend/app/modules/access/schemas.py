@@ -99,6 +99,12 @@ class MeResponse(APIModel):
     phone: str | None = None
     name: str | None = None
     preferred_branch_id: uuid.UUID | None = None
+    # The pinned context, resolved off `preferred_branch_id` so the client
+    # home's header can name it without a second request. Both are null when
+    # nothing is pinned (and when the pin points into a blocked workshop) —
+    # the subtitle then stays as it was.
+    pinned_workshop_name: str | None = None
+    pinned_branch_name: str | None = None
     status: UserStatus | None = None
 
 

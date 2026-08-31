@@ -60,6 +60,7 @@ async def branch_context_route(
                 edge_trim_mm=context.branch.edge_trim_mm,
                 edge_overhang_mm=context.branch.edge_overhang_mm,
                 own_material_allowed=context.branch.own_material_allowed,
+                production_mode=context.branch.production_mode,
                 permissions=sorted(context.permissions),
             )
             for context in contexts

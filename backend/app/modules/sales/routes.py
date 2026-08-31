@@ -21,6 +21,7 @@ from app.modules.sales.api import (
     cancel_workshop_order,
     complete_banding,
     complete_cutting,
+    complete_production,
     count_new_workshop_orders,
     get_client_order,
     get_client_order_cutting_result,
@@ -43,6 +44,7 @@ from app.modules.sales.api import (
     set_order_prices,
     start_banding,
     start_cutting,
+    undo_production,
     update_workshop_note,
 )
 from app.modules.sales.schemas import (
@@ -58,6 +60,7 @@ from app.modules.sales.schemas import (
     ReasonedVersionedRequest,
     VersionedRequest,
     WorkshopOrderAssignRequest,
+    WorkshopOrderCompleteProductionRequest,
     WorkshopOrderCompleteRequest,
     WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
@@ -361,6 +364,29 @@ async def workshop_orders_banding_done(
     db: Session,
 ) -> OrderDetailResponse:
     return await complete_banding(db, principal=principal, order_id=order_id, payload=payload)
+
+
+# Simple mode's two production taps (orders.md). They are the composite twins of
+# the per-step endpoints above, and the branch's mode decides which pair answers:
+# the other one 409s rather than offering a second way to move the same order.
+@router.post("/workshop/orders/{order_id}/complete-production", response_model=OrderDetailResponse)
+async def workshop_orders_complete_production(
+    order_id: uuid.UUID,
+    payload: WorkshopOrderCompleteProductionRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await complete_production(db, principal=principal, order_id=order_id, payload=payload)
+
+
+@router.post("/workshop/orders/{order_id}/undo-production", response_model=OrderDetailResponse)
+async def workshop_orders_undo_production(
+    order_id: uuid.UUID,
+    payload: ReasonedVersionedRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await undo_production(db, principal=principal, order_id=order_id, payload=payload)
 
 
 @router.post("/workshop/orders/{order_id}/mark-collected", response_model=OrderDetailResponse)

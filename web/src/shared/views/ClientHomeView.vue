@@ -9,14 +9,17 @@ import {
   draftDisplayName,
   clientHomeSubtitle,
   clientNextPhaseLabel,
+  clientPhaseIndex,
   clientPhaseProgress,
   clientStatusLabel,
   clientStatusPillClass,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import { takeEntryToast } from '@/shared/app/clientEntry'
 import { useRolePath } from '@/shared/app/paths'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -28,17 +31,18 @@ const rolePath = useRolePath()
 const auth = useAuthStore()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
+const toast = useToast()
 
 const activeOrders = computed(() =>
   orders.clientOrders.filter((order) => activeClientStatuses.includes(order.status)),
 )
 const readyOrders = computed(() => activeOrders.value.filter((order) => order.status === 'ready'))
 const primaryReady = computed(() => readyOrders.value[0] ?? null)
+// The count strip's second tile is the client track's phase-2 bucket, not the
+// workshop's saw queue: `confirmed`, `cutting` and `edge_banding` are one client
+// phase, so an approved order counts here the moment it is approved (orders.md).
 const productionCount = computed(
-  () =>
-    activeOrders.value.filter(
-      (order) => order.status === 'cutting' || order.status === 'edge_banding',
-    ).length,
+  () => activeOrders.value.filter((order) => clientPhaseIndex(order.status) === 1).length,
 )
 const RECENT_DRAFT_LIMIT = 4
 
@@ -64,6 +68,16 @@ const subtitle = computed(() =>
     drafts: cutting.drafts.length,
   }),
 )
+// The pinned context replaces the counts line when there is a pin (spec §3.4);
+// an un-pinned client keeps today's subtitle exactly as it was. Both names come
+// from `/auth/me`, so the line follows a re-pin without a second request.
+const pinnedContext = computed(() => {
+  const me = auth.me
+  if (!me?.pinned_workshop_name) return null
+  return me.pinned_branch_name
+    ? `${me.pinned_workshop_name} · ${me.pinned_branch_name}`
+    : me.pinned_workshop_name
+})
 // Nothing active and nothing saved → a single focused start state instead of a wall of zeros.
 const isFirstRun = computed(() => activeOrders.value.length === 0 && cutting.drafts.length === 0)
 
@@ -116,6 +130,11 @@ function currentAction(order: OrderSummary) {
 }
 
 onMounted(() => {
+  // One-time: the connected line names the workshop the client just entered.
+  // Parked by the entry apply and read-and-cleared here, so a plain home load
+  // never repeats it and a re-scan truthfully shows it again (spec §3.4/§8).
+  const connectedTo = takeEntryToast()
+  if (connectedTo) toast.success(t('client.entry.connected', { workshop: connectedTo }))
   void reloadHome()
 })
 </script>
@@ -125,7 +144,17 @@ onMounted(() => {
     <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="font-display text-[26px] font-semibold leading-tight text-ink">{{ heading }}</h1>
-        <p v-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
+        <!-- Pinned: the workshop · branch the app is scoped to, linking to
+             Ustaxonalarim. It sits above the loading/error gate because it is
+             read off the principal, not off this page's two lists. -->
+        <RouterLink
+          v-if="pinnedContext"
+          :to="rolePath('/c/branches')"
+          class="mt-1 inline-block text-sm font-semibold text-accent-deep"
+        >
+          {{ pinnedContext }}
+        </RouterLink>
+        <p v-else-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
           {{ subtitle }}
         </p>
       </div>

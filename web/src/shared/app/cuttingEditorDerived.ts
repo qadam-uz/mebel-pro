@@ -11,10 +11,11 @@ export interface EdgeRegistryColorStyle {
 /**
  * Tape colours, and they are *categorical* — their only job is telling one edge
  * tape apart from another on the job sheet, so they deliberately do not mirror
- * the brand tokens. One rule binds them: no entry may be a retired brand colour
- * (entry 1 was the old ultramarine `#4341c6`, which would read as chrome beside
- * the new graphite). Entry 1 sits in the largest hue gap the ramp had — between
- * amber and green — so the two most-used tapes never look alike.
+ * the brand tokens. One rule binds them: no entry may be the brand colour
+ * (entry 1 was once the ultramarine `#4341c6` — which is now `brand-tile`
+ * again, so the ban matters twice over: a chip in it would read as the logo).
+ * Entry 1 sits in the largest hue gap the ramp had — between amber and green —
+ * so the two most-used tapes never look alike.
  *
  * `fg` is pure white and deliberately NOT the bone `--color-on-accent`
  * (`#f4f2ee`). Bone is specified for text on GRAPHITE, where it takes the glare

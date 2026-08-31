@@ -11,7 +11,9 @@ import {
   requiredText,
   type FieldErrors,
 } from '@/shared/app/adminValidation'
+import { useRolePath } from '@/shared/app/paths'
 import ImageUploadField from '@/shared/components/ImageUploadField.vue'
+import WorkshopLinkCard from '@/shared/components/WorkshopLinkCard.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useFilesStore } from '@/shared/stores/files'
@@ -23,6 +25,7 @@ const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const files = useFilesStore()
 const toast = useToast()
+const rolePath = useRolePath()
 const { t } = useI18n()
 const form = reactive({
   name: '',
@@ -176,5 +179,14 @@ onMounted(() => {
         </div>
       </div>
     </form>
+
+    <!-- The workshop-level link, once: business cards, a Telegram bio, anything
+         that is not one counter (spec §1.4). The branch QR lives on the branch. -->
+    <WorkshopLinkCard
+      v-if="auth.me?.is_owner && workshop.settings"
+      class="mt-5"
+      :code="workshop.settings.public_code"
+      :print-to="rolePath('/workshop/settings/client-link')"
+    />
   </section>
 </template>

@@ -11,10 +11,12 @@ import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { useResendCooldown } from '@/shared/composables/useResendCooldown'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useClientEntryStore } from '@/shared/stores/clientEntry'
 
 const { t } = useI18n()
 const config = useRoleConfig()
 const auth = useAuthStore()
+const entry = useClientEntryStore()
 const route = useRoute()
 const router = useRouter()
 const isDev = import.meta.env.DEV
@@ -67,6 +69,11 @@ const errorTone = computed(() =>
 )
 
 async function finish() {
+  // A workshop link scanned before signing in parked its entry in
+  // `localStorage`; this is the moment there is a session to apply it to. A
+  // missing or refused entry is a normal un-pinned login (spec §3.1) — the store
+  // swallows both, so the redirect below always happens.
+  await entry.applyPendingEntry()
   await router.replace(redirectTo.value)
 }
 

@@ -34,6 +34,20 @@ class BranchStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class ProductionMode(StrEnum):
+    """How a branch runs the production half of the order spine.
+
+    `full` is the assign → start → per-stage-complete choreography the state
+    machine documents; `simple` collapses it to one composite **Tayyor** action
+    by the office (orders.md). The mode is a shop-floor property of the branch —
+    like kerf and overhang — read at action time and never stamped on an order,
+    so switching it needs no migration of work in flight.
+    """
+
+    SIMPLE = "simple"
+    FULL = "full"
+
+
 class Permission(StrEnum):
     # Read-only access to the branch's orders. Named for what it actually
     # admits (QAD-166) — it used to be `view_dashboard`, which read as a

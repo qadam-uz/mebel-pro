@@ -11,6 +11,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { assignmentChipsForOrder, edgerMissingForOrder } from '@/shared/app/workshopAssignments'
 import {
   revertTargetLabelForOrder,
+  workshopBoardColumns,
   workshopOrderListActions,
   type WorkshopOrderListAction,
 } from '@/shared/app/workshopOrderDetail'
@@ -37,7 +38,7 @@ import {
   type OrderSummary,
   type WorkshopWorkerOption,
 } from '@/shared/stores/orders'
-import { useWorkshopStore } from '@/shared/stores/workshop'
+import { useWorkshopStore, type ProductionMode } from '@/shared/stores/workshop'
 
 const orders = useOrdersStore()
 const workshop = useWorkshopStore()
@@ -106,12 +107,30 @@ const statusOptions = computed<DropdownOption[]>(() => [
   { value: 'cancelled', label: t('orders.list.statusCancelled'), dot: 'danger' },
   { value: 'all', label: t('orders.list.statusAll') },
 ])
-const boardColumns = computed(() =>
-  activeWorkshopStatuses.map((state) => ({
-    state,
-    orders: orders.workshopOrders.filter((order) => order.status === state),
-  })),
+// The board's shape follows the SELECTED branch (list surfaces read the sidebar
+// picker, orders.md): a simple branch gets the three grouped columns, and «Hammasi»
+// — which mixes branches — keeps the full lifecycle so no branch's orders are
+// folded into a column its own mode does not have.
+const boardMode = computed<ProductionMode>(() =>
+  workshop.branches.find((branch) => branch.id === branchId.value)?.production_mode === 'simple'
+    ? 'simple'
+    : 'full',
 )
+const isSimpleBoard = computed(() => boardMode.value === 'simple')
+const boardColumns = computed(() => workshopBoardColumns(orders.workshopOrders, boardMode.value))
+// Per ORDER, not per board: with «Hammasi» selected the list mixes branches, and
+// a simple branch's order must not be nagged about an assignment it will never get.
+function isSimpleOrder(order: OrderSummary) {
+  return (
+    workshop.branches.find((branch) => branch.id === order.branch_id)?.production_mode === 'simple'
+  )
+}
+// Same rule, as a mode — the status vocabulary a row is labelled in. A simple
+// branch's order reads «Tayyorlanmoqda» wherever it is listed, including a
+// leftover still sitting in `cutting`.
+function orderStatusMode(order: OrderSummary): ProductionMode {
+  return isSimpleOrder(order) ? 'simple' : 'full'
+}
 const terminalStatus = computed(() => ['completed', 'cancelled'].includes(status.value))
 // Branches whose worker list this reader may actually fetch. The board admits
 // anyone with `manage_orders` *somewhere*, and then lists orders from every
@@ -189,6 +208,9 @@ function listFilters() {
 // Assignment STATUS only (never a piece count). The board meta already prints
 // "{item_count} detal", so returning the count here too double-printed it.
 function assignedText(order: OrderSummary) {
+  // A simple-mode order has no assignment to be missing — "kesuvchi yo'q" there
+  // names a gap that does not exist.
+  if (isSimpleOrder(order)) return ''
   if (order.status === 'cutting')
     return order.assigned_cutter_user_id
       ? t('orders.assignment.cutterAssigned')
@@ -212,7 +234,14 @@ function resolveAssignmentWorker(branchId: string, userId: string) {
 }
 
 function assignmentChips(order: OrderSummary) {
+  if (isSimpleOrder(order)) return []
   return assignmentChipsForOrder(order, resolveAssignmentWorker)
+}
+
+/** The no-edger warning is a full-mode staffing nudge; simple mode has no
+ *  station to stall at, so the chip would be pure noise. */
+function edgerMissing(order: OrderSummary) {
+  return !isSimpleOrder(order) && edgerMissingForOrder(order)
 }
 
 async function loadWorkerOptionsForBranches(branchIds: string[]) {
@@ -260,10 +289,16 @@ function openOrder(orderId: string) {
   void router.push(rolePath(`/workshop/orders/${orderId}`))
 }
 
-// --- Kanban drag-and-drop (desktop). Status transitions are guarded, so a drop
-// doesn't move the card directly — it triggers that order's forward action
-// (approve / assign / done) or revert, reusing the existing dialogs. All other
-// actions live on the order detail page.
+// --- Kanban drag-and-drop (desktop, full mode only). Status transitions are
+// guarded, so a drop doesn't move the card directly — it triggers that order's
+// forward action (approve / assign / done) or revert, reusing the existing
+// dialogs. All other actions live on the order detail page.
+//
+// Simple mode has no drag: its forward move is the composite **Tayyor**, whose
+// dialog names the stock it spends and offers the optional worker credit
+// (orders.md). A drag cannot stand in for that, and a drop that merely opened
+// the detail page would be a drag that is not a drag — so the card stays a link
+// and the two taps live where their dialogs are.
 const draggingOrderId = ref<string | null>(null)
 const dragOverState = ref<OrderStatus | null>(null)
 
@@ -287,6 +322,7 @@ function isValidDropTarget(targetState: OrderStatus) {
 }
 
 function onCardDragStart(order: OrderSummary, event: DragEvent) {
+  if (isSimpleBoard.value) return
   draggingOrderId.value = order.id
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
@@ -300,6 +336,7 @@ function onCardDragEnd() {
 }
 
 function onColumnDragOver(state: OrderStatus, event: DragEvent) {
+  if (isSimpleBoard.value) return
   if (!draggingOrderId.value || !isValidDropTarget(state)) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
@@ -307,6 +344,7 @@ function onColumnDragOver(state: OrderStatus, event: DragEvent) {
 }
 
 function onColumnDrop(state: OrderStatus) {
+  if (isSimpleBoard.value) return
   const order = orders.workshopOrders.find((item) => item.id === draggingOrderId.value)
   draggingOrderId.value = null
   dragOverState.value = null
@@ -733,8 +771,8 @@ onBeforeUnmount(() => {
       aria-busy="true"
     >
       <div v-if="mode === 'board'" class="board">
-        <div v-for="state in activeWorkshopStatuses" :key="state" class="board-col">
-          <h4>{{ workshopStatusUz(state) }}</h4>
+        <div v-for="column in boardColumns" :key="column.key" class="board-col">
+          <h4>{{ column.label }}</h4>
           <span class="sk mb-2 block h-24 w-full"></span>
           <span class="sk block h-24 w-full"></span>
         </div>
@@ -816,14 +854,14 @@ onBeforeUnmount(() => {
       <section v-if="mode === 'board'" class="board min-h-0 flex-1">
         <div
           v-for="column in boardColumns"
-          :key="column.state"
+          :key="column.key"
           class="board-col"
-          :class="{ 'drop-target': dragOverState === column.state }"
-          @dragover="onColumnDragOver(column.state, $event)"
-          @drop.prevent="onColumnDrop(column.state)"
+          :class="{ 'drop-target': dragOverState === column.statuses[0] }"
+          @dragover="onColumnDragOver(column.statuses[0], $event)"
+          @drop.prevent="onColumnDrop(column.statuses[0])"
         >
           <h4>
-            {{ workshopStatusUz(column.state) }}
+            {{ column.label }}
             <span class="ct">{{ column.orders.length }}</span>
           </h4>
           <article
@@ -831,7 +869,7 @@ onBeforeUnmount(() => {
             :key="order.id"
             class="board-card"
             :class="{ 'is-dragging': draggingOrderId === order.id }"
-            draggable="true"
+            :draggable="!isSimpleBoard"
             @dragstart="onCardDragStart(order, $event)"
             @dragend="onCardDragEnd"
           >
@@ -849,6 +887,11 @@ onBeforeUnmount(() => {
                 <span class="amt">{{ formatTiyin(order.total_tiyin) }}</span>
               </span>
               <span class="who">{{ order.contact_name }}</span>
+              <!-- No per-card pill. The grouped «Tayyorlanmoqda» column used to
+                   carry one because it folded three differently-named statuses
+                   under one header; simple mode now names all three with that
+                   single word, so the pill would repeat the header verbatim on
+                   every card. In every column the header is the pill again. -->
               <span class="meta">
                 <span>{{
                   $t('orders.unit.parts', { n: order.item_count }, order.item_count)
@@ -885,7 +928,7 @@ onBeforeUnmount(() => {
                 </span>
               </span>
               <span
-                v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
+                v-if="assignmentChips(order).length > 0 || edgerMissing(order)"
                 class="worker-chips mt-3"
                 :aria-label="$t('orders.list.assigneesLabel', { order: order.order_number })"
               >
@@ -901,7 +944,7 @@ onBeforeUnmount(() => {
                   {{ chip.initials }}
                 </span>
                 <span
-                  v-if="edgerMissingForOrder(order)"
+                  v-if="edgerMissing(order)"
                   class="pill p-warn"
                   :title="$t('orders.assignment.edgerMissingTitle')"
                 >
@@ -945,13 +988,16 @@ onBeforeUnmount(() => {
                 </td>
                 <td>{{ order.branch_name }}</td>
                 <td>
-                  <span :class="orderPillClass(order.status as OrderStatus)">
-                    <span class="pd"></span>{{ workshopStatusUz(order.status) }}
+                  <span
+                    :class="orderPillClass(order.status as OrderStatus, orderStatusMode(order))"
+                  >
+                    <span class="pd"></span
+                    >{{ workshopStatusUz(order.status, orderStatusMode(order)) }}
                   </span>
                 </td>
                 <td>
                   <span
-                    v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
+                    v-if="assignmentChips(order).length > 0 || edgerMissing(order)"
                     class="worker-chips"
                   >
                     <span
@@ -966,7 +1012,7 @@ onBeforeUnmount(() => {
                       {{ chip.initials }}
                     </span>
                     <span
-                      v-if="edgerMissingForOrder(order)"
+                      v-if="edgerMissing(order)"
                       class="pill p-warn"
                       :title="$t('orders.assignment.edgerMissingTitle')"
                     >

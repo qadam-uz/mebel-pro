@@ -2,15 +2,22 @@ import { describe, expect, it } from 'vitest'
 
 import {
   isRevisionEvent,
+  lastProductionWorkerKey,
   orderPhaseSteps,
   orderReworkCount,
   parseOrderAdjustmentDraft,
+  productionStockLines,
   productionTimelineDetails,
   revisionTimelineDetails,
+  workshopBoardColumns,
   workshopOrderListActions,
+  workshopOrderMenuKeys,
+  workshopOrderPrimaryKey,
   type WorkshopOrderActionAccess,
   type WorkshopOrderActionOrder,
+  type WorkshopOrderModeOrder,
 } from '@/shared/app/workshopOrderDetail'
+import type { OrderPriceLine, OrderStatus } from '@/shared/stores/orders'
 
 describe('workshop order detail helpers', () => {
   const manager: WorkshopOrderActionAccess = {
@@ -282,5 +289,260 @@ describe('workshop order detail helpers', () => {
         formatMoney,
       ),
     ).toEqual([])
+  })
+})
+
+// --- Simple production mode (orders.md) --------------------------------------
+
+describe('simple-mode board grouping', () => {
+  const orders = (
+    [
+      'new',
+      'new',
+      'confirmed',
+      'cutting',
+      'edge_banding',
+      'ready',
+      // Terminal rows never reach the board — the list is filtered to the active
+      // statuses before it gets here — but the grouping must not invent a home
+      // for one if it does.
+      'completed',
+    ] as OrderStatus[]
+  ).map((status, index) => ({ id: `o${index}`, status }))
+
+  // The three columns are named as the three statuses a simple branch has —
+  // Yangi / Tayyorlanmoqda / Tayyor — not with a board vocabulary of their own.
+  it('groups confirmed + cutting + edge_banding into one Tayyorlanmoqda column', () => {
+    const columns = workshopBoardColumns(orders, 'simple')
+    expect(columns.map((column) => column.label)).toEqual(['Yangi', 'Tayyorlanmoqda', 'Tayyor'])
+    expect(columns.map((column) => column.orders.length)).toEqual([2, 3, 1])
+    expect(columns[1].statuses).toEqual(['confirmed', 'cutting', 'edge_banding'])
+    expect(columns[1].orders.map((order) => order.status)).toEqual([
+      'confirmed',
+      'cutting',
+      'edge_banding',
+    ])
+    expect(columns[0].statuses).toHaveLength(1)
+    expect(columns[2].statuses).toHaveLength(1)
+    // `completed` belongs to no column rather than falling into the last one.
+    expect(columns.flatMap((column) => column.orders)).toHaveLength(6)
+  })
+
+  it('keeps one column per active status in full mode', () => {
+    const columns = workshopBoardColumns(orders, 'full')
+    expect(columns.map((column) => column.label)).toEqual([
+      'Yangi',
+      'Tasdiqlangan',
+      'Kesilmoqda',
+      'Kromkada',
+      'Tayyor',
+    ])
+    expect(columns.every((column) => column.statuses.length === 1)).toBe(true)
+    expect(columns.map((column) => column.orders.length)).toEqual([2, 1, 1, 1, 1])
+  })
+})
+
+describe('simple-mode phase stepper', () => {
+  it('collapses the six-status strip to the four the branch can reach', () => {
+    expect(orderPhaseSteps({ status: 'confirmed', has_banding: true }, 'simple')).toEqual([
+      { status: 'new', state: 'done' },
+      { status: 'confirmed', state: 'current' },
+      { status: 'ready', state: 'upcoming' },
+      { status: 'completed', state: 'upcoming' },
+    ])
+  })
+
+  it('marks the production step current for a full→simple leftover', () => {
+    for (const status of ['cutting', 'edge_banding'] as OrderStatus[]) {
+      expect(orderPhaseSteps({ status, has_banding: true }, 'simple')).toEqual([
+        { status: 'new', state: 'done' },
+        { status: 'confirmed', state: 'current' },
+        { status: 'ready', state: 'upcoming' },
+        { status: 'completed', state: 'upcoming' },
+      ])
+    }
+  })
+
+  it('draws the same four steps whether or not the order has banding', () => {
+    expect(
+      orderPhaseSteps({ status: 'ready', has_banding: false }, 'simple').map((s) => s.status),
+    ).toEqual(['new', 'confirmed', 'ready', 'completed'])
+    expect(
+      orderPhaseSteps({ status: 'ready', has_banding: true }, 'simple').map((s) => s.state),
+    ).toEqual(['done', 'done', 'current', 'upcoming'])
+  })
+
+  it('leaves the six-status strip alone in full mode', () => {
+    expect(
+      orderPhaseSteps({ status: 'cutting', has_banding: true }, 'full').map((s) => s.status),
+    ).toEqual(['new', 'confirmed', 'cutting', 'edge_banding', 'ready', 'completed'])
+  })
+})
+
+describe('order-detail action matrix', () => {
+  const manage = { canManageOrders: true, canCompleteCutting: true, canCompleteBanding: true }
+  const worker = { canManageOrders: false, canCompleteCutting: true, canCompleteBanding: true }
+  const viewer = { canManageOrders: false, canCompleteCutting: false, canCompleteBanding: false }
+
+  function order(
+    status: OrderStatus,
+    mode: 'simple' | 'full',
+    overrides: Partial<WorkshopOrderModeOrder> = {},
+  ): WorkshopOrderModeOrder {
+    return { status, mode, banding_started_at: null, revision_draft_id: null, ...overrides }
+  }
+
+  it('offers the composite Tayyor across the whole simple-mode spine', () => {
+    expect(workshopOrderPrimaryKey(order('new', 'simple'), manage)).toBe('approve')
+    // confirmed / cutting / edge_banding all close the same way — the composite
+    // finishes only the steps that remain, so a full→simple leftover needs no
+    // separate action.
+    expect(workshopOrderPrimaryKey(order('confirmed', 'simple'), manage)).toBe('completeProduction')
+    expect(workshopOrderPrimaryKey(order('cutting', 'simple'), manage)).toBe('completeProduction')
+    expect(workshopOrderPrimaryKey(order('edge_banding', 'simple'), manage)).toBe(
+      'completeProduction',
+    )
+    expect(workshopOrderPrimaryKey(order('ready', 'simple'), manage)).toBe('markCollected')
+    expect(workshopOrderPrimaryKey(order('completed', 'simple'), manage)).toBeNull()
+    expect(workshopOrderPrimaryKey(order('cancelled', 'simple'), manage)).toBeNull()
+  })
+
+  it('keeps every simple-mode forward action behind manage_orders', () => {
+    // There is no assignment in simple mode, so no worker ever holds a forward
+    // action — `process_production` alone must see a read-only page.
+    for (const status of [
+      'new',
+      'confirmed',
+      'cutting',
+      'edge_banding',
+      'ready',
+    ] as OrderStatus[]) {
+      expect(workshopOrderPrimaryKey(order(status, 'simple'), worker)).toBeNull()
+      expect(workshopOrderPrimaryKey(order(status, 'simple'), viewer)).toBeNull()
+    }
+  })
+
+  it('leaves the full-mode primary actions exactly as they were', () => {
+    expect(workshopOrderPrimaryKey(order('new', 'full'), manage)).toBe('approve')
+    expect(workshopOrderPrimaryKey(order('confirmed', 'full'), manage)).toBe('startCutting')
+    expect(workshopOrderPrimaryKey(order('cutting', 'full'), manage)).toBe('completeCutting')
+    // banding is the guided two-tap: start stamps the duration, then completes
+    expect(workshopOrderPrimaryKey(order('edge_banding', 'full'), manage)).toBe('startBanding')
+    expect(
+      workshopOrderPrimaryKey(
+        order('edge_banding', 'full', { banding_started_at: '2026-08-31T09:00:00Z' }),
+        manage,
+      ),
+    ).toBe('completeBanding')
+    expect(workshopOrderPrimaryKey(order('ready', 'full'), manage)).toBe('markCollected')
+    // the assigned master keeps their own forward actions without manage_orders
+    expect(workshopOrderPrimaryKey(order('confirmed', 'full'), worker)).toBe('startCutting')
+    expect(workshopOrderPrimaryKey(order('cutting', 'full'), worker)).toBe('completeCutting')
+    expect(workshopOrderPrimaryKey(order('ready', 'full'), worker)).toBeNull()
+  })
+
+  it('swaps the single-step revert for the whole-action undo in simple mode', () => {
+    expect(workshopOrderMenuKeys(order('new', 'simple'), manage)).toEqual([
+      'edit',
+      'discount',
+      'surcharge',
+      'cancel',
+    ])
+    expect(workshopOrderMenuKeys(order('confirmed', 'simple'), manage)).toEqual([
+      'edit',
+      'discount',
+      'surcharge',
+      'cancel',
+    ])
+    // mid-spine leftovers offer nothing but Cancel — money and drawing windows
+    // closed when production started, and there is no partial undo
+    expect(workshopOrderMenuKeys(order('cutting', 'simple'), manage)).toEqual(['cancel'])
+    expect(workshopOrderMenuKeys(order('edge_banding', 'simple'), manage)).toEqual(['cancel'])
+    expect(workshopOrderMenuKeys(order('ready', 'simple'), manage)).toEqual([
+      'undoProduction',
+      'cancel',
+    ])
+    expect(workshopOrderMenuKeys(order('completed', 'simple'), manage)).toEqual([])
+    expect(workshopOrderMenuKeys(order('cancelled', 'simple'), manage)).toEqual([])
+  })
+
+  it('keeps the per-step revert in full mode', () => {
+    expect(workshopOrderMenuKeys(order('cutting', 'full'), manage)).toEqual(['revert', 'cancel'])
+    expect(workshopOrderMenuKeys(order('edge_banding', 'full'), manage)).toEqual([
+      'revert',
+      'cancel',
+    ])
+    expect(workshopOrderMenuKeys(order('ready', 'full'), manage)).toEqual(['revert', 'cancel'])
+    // an open revision draft hides Edit (the banner offers resume/discard instead)
+    expect(
+      workshopOrderMenuKeys(order('confirmed', 'full', { revision_draft_id: 'draft-1' }), manage),
+    ).toEqual(['discount', 'surcharge', 'cancel'])
+    // nothing at all without manage_orders
+    expect(workshopOrderMenuKeys(order('cutting', 'full'), worker)).toEqual([])
+  })
+})
+
+describe('Tayyor dialog stock lines', () => {
+  function panel(overrides: Partial<OrderPriceLine>): OrderPriceLine {
+    return {
+      material_id: 'm-panel',
+      material_name: 'LDSP Egger H1334',
+      kind: 'panel',
+      panels_used: 3,
+      consumed_mm: null,
+      unit_price_tiyin: 25_000_000,
+      own_panels: 0,
+      own_mm: 0,
+      line_total_tiyin: 75_000_000,
+      ...overrides,
+    }
+  }
+  function edge(overrides: Partial<OrderPriceLine>): OrderPriceLine {
+    return {
+      material_id: 'm-edge',
+      material_name: 'Kromka 2x22 H1334',
+      kind: 'edge',
+      panels_used: null,
+      consumed_mm: 12_400,
+      unit_price_tiyin: 500_000,
+      own_panels: 0,
+      own_mm: 0,
+      line_total_tiyin: 6_200_000,
+      ...overrides,
+    }
+  }
+
+  it('names each shop panel in sheets and each shop edge in metres', () => {
+    expect(productionStockLines([panel({}), edge({})])).toEqual([
+      { materialId: 'm-panel', kind: 'panel', name: 'LDSP Egger H1334', amount: '3 list' },
+      { materialId: 'm-edge', kind: 'edge', name: 'Kromka 2x22 H1334', amount: '12.40 m' },
+    ])
+  })
+
+  it('lists only what the warehouse actually spends', () => {
+    // A fully client-supplied material charges and decrements nothing, so it is
+    // not a stock line — `own_panels` / `own_mm` never reach the seam.
+    expect(
+      productionStockLines([
+        panel({ panels_used: 0, own_panels: 4, line_total_tiyin: 0 }),
+        edge({ consumed_mm: 0, own_mm: 12_400, line_total_tiyin: 0 }),
+      ]),
+    ).toEqual([])
+    // …and an all-own order simply has no lines to name.
+    expect(productionStockLines([])).toEqual([])
+  })
+})
+
+describe('remembered worker picks', () => {
+  it('scopes the preselect to the branch and the role', () => {
+    // The people at the saw are a branch's people; two branches must never
+    // suggest each other's cutter.
+    expect(lastProductionWorkerKey('branch-1', 'cutter')).not.toBe(
+      lastProductionWorkerKey('branch-2', 'cutter'),
+    )
+    expect(lastProductionWorkerKey('branch-1', 'cutter')).not.toBe(
+      lastProductionWorkerKey('branch-1', 'edger'),
+    )
+    expect(lastProductionWorkerKey('branch-1', 'cutter')).toContain('branch-1')
   })
 })

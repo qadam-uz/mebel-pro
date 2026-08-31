@@ -17,6 +17,7 @@ from app.modules.workshop.api import (
     update_branch,
     update_branch_pricing,
     update_settings,
+    workshop_public_code,
 )
 from app.modules.workshop.contracts import Branch
 from app.modules.workshop.schemas import (
@@ -67,7 +68,11 @@ async def branches_index(
     db: Session,
 ) -> list[BranchResponse]:
     rows = await list_branches(db, principal=principal)
-    return [_branch_response(row) for row in rows]
+    if not rows:
+        return []
+    # Every row belongs to the caller's own workshop — one code lookup, not one per branch.
+    code = await workshop_public_code(db, workshop_id=rows[0].workshop_id)
+    return [_branch_response(row, code) for row in rows]
 
 
 @router.post("/branches", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
@@ -77,7 +82,7 @@ async def branches_create(
     db: Session,
 ) -> BranchResponse:
     row = await create_branch(db, principal=principal, payload=payload)
-    return _branch_response(row)
+    return _branch_response(row, await workshop_public_code(db, workshop_id=row.workshop_id))
 
 
 @router.get("/branches/{branch_id}", response_model=BranchResponse)
@@ -87,7 +92,7 @@ async def branches_show(
     db: Session,
 ) -> BranchResponse:
     row = await get_branch(db, principal=principal, branch_id=branch_id)
-    return _branch_response(row)
+    return _branch_response(row, await workshop_public_code(db, workshop_id=row.workshop_id))
 
 
 @router.patch("/branches/{branch_id}", response_model=BranchResponse)
@@ -98,7 +103,7 @@ async def branches_update(
     db: Session,
 ) -> BranchResponse:
     row = await update_branch(db, principal=principal, branch_id=branch_id, payload=payload)
-    return _branch_response(row)
+    return _branch_response(row, await workshop_public_code(db, workshop_id=row.workshop_id))
 
 
 @router.post("/branches/{branch_id}/status", response_model=BranchResponse)
@@ -109,7 +114,7 @@ async def branches_status(
     db: Session,
 ) -> BranchResponse:
     row = await set_branch_status(db, principal=principal, branch_id=branch_id, payload=payload)
-    return _branch_response(row)
+    return _branch_response(row, await workshop_public_code(db, workshop_id=row.workshop_id))
 
 
 @router.get("/branches/{branch_id}/pricing", response_model=BranchPricingResponse)
@@ -133,10 +138,11 @@ async def branch_pricing_update(
     return _branch_pricing_response(row)
 
 
-def _branch_response(row: Branch) -> BranchResponse:
+def _branch_response(row: Branch, workshop_code: str) -> BranchResponse:
     return BranchResponse(
         id=row.id,
         workshop_id=row.workshop_id,
+        workshop_public_code=workshop_code,
         branch_no=row.branch_no,
         name=row.name,
         address=row.address,
@@ -150,6 +156,7 @@ def _branch_response(row: Branch) -> BranchResponse:
         edge_trim_mm=row.edge_trim_mm,
         edge_overhang_mm=row.edge_overhang_mm,
         own_material_allowed=row.own_material_allowed,
+        production_mode=row.production_mode,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

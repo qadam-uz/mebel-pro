@@ -16,7 +16,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from app.models.base import Base, Timestamped, UUIDPrimaryKey
-from app.models.enums import BranchStatus, Currency, WorkshopStatus, enum_type
+from app.models.enums import BranchStatus, Currency, ProductionMode, WorkshopStatus, enum_type
+from app.modules.workshop.public_code import generate_public_code
 
 
 class Workshop(UUIDPrimaryKey, Timestamped, Base):
@@ -37,6 +38,16 @@ class Workshop(UUIDPrimaryKey, Timestamped, Base):
     name: Mapped[str] = mapped_column(nullable=False)
     logo_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    # The identifier behind this workshop's client link/QR (`/w/{code}`) —
+    # 8 Crockford-base32 characters, unique platform-wide, permanent: a printed
+    # QR must never rot, so there is no regenerate operation anywhere. The
+    # column default draws one for every insert path (provisioning allocates a
+    # checked-unique code first); see public_code.py.
+    public_code: Mapped[str] = mapped_column(
+        unique=True,
+        nullable=False,
+        default=generate_public_code,
+    )
     status: Mapped[WorkshopStatus] = mapped_column(
         enum_type(WorkshopStatus, "workshop_status"),
         default=WorkshopStatus.ACTIVE,
@@ -100,6 +111,17 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     # a decision a branch makes rather than a default it inherits.
     own_material_allowed: Mapped[bool] = mapped_column(
         nullable=False, default=False, server_default=false()
+    )
+    # Which production choreography this branch's orders run (orders.md). Every
+    # branch is `simple` — the shops the field visits met run on paper and never
+    # tap a station screen, so the collapsed two-tap flow is the adoption
+    # default. Branches provisioned before the mode existed took the same
+    # default (the migration has no backfill); `full` is an owner opt-in.
+    production_mode: Mapped[ProductionMode] = mapped_column(
+        enum_type(ProductionMode, "production_mode"),
+        nullable=False,
+        default=ProductionMode.SIMPLE,
+        server_default=ProductionMode.SIMPLE.value,
     )
     status: Mapped[BranchStatus] = mapped_column(
         enum_type(BranchStatus, "branch_status"),

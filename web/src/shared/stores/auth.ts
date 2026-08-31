@@ -28,6 +28,13 @@ export interface MeResponse {
   phone: string | null
   name: string | null
   preferred_branch_id: string | null
+  // The pin, resolved to names for the client home header (spec §3.4). Both are
+  // null when there is no pin — and when the pinned workshop is blocked, which
+  // is what makes `pinned_workshop_name` the app's "is this client scoped?"
+  // signal rather than `preferred_branch_id`. Optional because the field is
+  // client-only — a workshop or platform principal's `/auth/me` omits it.
+  pinned_workshop_name?: string | null
+  pinned_branch_name?: string | null
   status: 'active' | 'blocked' | null
 }
 

@@ -442,10 +442,36 @@ export async function stockIn(
 }
 
 /**
+ * Put a branch on the full per-stage production flow.
+ *
+ * A branch is born `simple` (orders.md — that is the adoption default), where
+ * the whole spine closes with one **Tayyor** tap and the per-step endpoints
+ * answer `409 simple_mode_active`. Suites that drive assignment, the two starts,
+ * the per-stage completions or the Kesish/Krom sidebar entries have to ask for
+ * that surface explicitly.
+ */
+export async function setBranchProductionMode(
+  request: APIRequestContext,
+  ownerToken: string,
+  branchId: string,
+  mode: "simple" | "full",
+) {
+  const response = await request.patch(`/api/v1/workshop/branches/${branchId}`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    data: { production_mode: mode },
+  });
+  await expectOk(response);
+}
+
+/**
  * A workshop+branch with pricing, two carried branch materials, and stock —
  * everything a client needs to optimize a draft and place an order. Returns the
  * IDs + an owner token (for driving workshop-side transitions) and the client
  * phone to log in.
+ *
+ * The branch is switched to **full** production mode: every suite built on this
+ * fixture asserts the per-stage surfaces (assignment, starts, the station
+ * sidebar), which a simple-mode branch deliberately does not offer.
  *
  * `panel` / `edge` are **branch materials**, not dekorlar: that is the id a part,
  * a stock row and an order item resolve to. The dekorlar behind them come back
@@ -467,6 +493,7 @@ export async function seedOrderableBranch(
   );
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
+  await setBranchProductionMode(request, ownerAccess, branchId, "full");
   const panel = await carryOneFormat(
     request,
     ownerAccess,

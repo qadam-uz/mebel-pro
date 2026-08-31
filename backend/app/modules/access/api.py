@@ -22,7 +22,11 @@ from app.modules.access.clients import (
     normalize_uz_phone,
     seed_preferred_branch_if_missing,
 )
-from app.modules.access.login_throttle import LoginIpThrottle, login_throttle
+from app.modules.access.login_throttle import (
+    LoginIpThrottle,
+    SlidingWindowIpThrottle,
+    login_throttle,
+)
 from app.modules.access.otp import (
     ClientOtpLoginResult,
     ClientOtpVerifyResult,
@@ -67,6 +71,7 @@ __all__ = [
     "OtpRequestResult",
     "OtpSender",
     "PlainSessionTokens",
+    "SlidingWindowIpThrottle",
     "TelegramDeliveryError",
     "TelegramGatewaySender",
     "authenticate_platform_user",
