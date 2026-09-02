@@ -14,6 +14,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import get_logger
@@ -36,7 +37,9 @@ from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.support.contracts import File as StoredFile
 from app.modules.support.image_variants import (
     ImageDecodeError,
+    ImageVariant,
     resize_image,
+    resolve_variant,
     variant_storage_key,
 )
 from app.modules.workshop.contracts import Branch, Workshop
@@ -373,6 +376,92 @@ async def get_file_for_read(
     ):
         return row
     raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+
+
+async def get_stored_file(db: AsyncSession, *, file_id: uuid.UUID) -> StoredFile | None:
+    """The row behind a file id, or `None` when there is nothing to serve.
+
+    Deliberately unauthorised: it answers *does this file exist*, never *may you
+    read it*. Only a caller that already holds its own capability — the workshop
+    code on the public logo route, say — may reach a file through it; everything
+    addressed by a bare file id goes through `get_file_for_read`.
+    """
+    row = await db.get(StoredFile, file_id)
+    if row is None or row.storage_status is not FileStorageStatus.STORED:
+        return None
+    return row
+
+
+# A stored file is immutable: re-uploading produces a new row with a new id and a
+# new storage_key, and nothing mutates an existing object. So the body for a given
+# id can never change, and a strong validator built from the (unique) storage_key
+# is always correct.
+#
+# `private` — not `public` — because reads are authorised per principal: a shared
+# cache must never hand one workshop's file to another. A browser's own cache is
+# private by definition, which is the one we want, and `fetch()` uses it by default.
+FILE_CACHE_CONTROL = "private, max-age=31536000, immutable"
+
+
+def file_etag(storage_key: str) -> str:
+    return f'"{storage_key}"'
+
+
+def etag_matches(header: str | None, etag: str) -> bool:
+    """RFC 9110 If-None-Match: `*`, or any member of the comma-separated list.
+
+    Weak validators (`W/"x"`) compare equal to their strong form here, which is
+    correct for a body that is byte-identical for the life of the id.
+    """
+    if not header:
+        return False
+    candidates = (value.strip() for value in header.split(","))
+    return any(candidate == "*" or candidate.removeprefix("W/") == etag for candidate in candidates)
+
+
+async def serve_stored_file(
+    *,
+    row: StoredFile,
+    storage: FileStorage,
+    if_none_match: str | None,
+    size: ImageVariant | None = None,
+) -> Response:
+    """Turn a stored file into an HTTP response — bytes, type, validators.
+
+    The mechanics live here rather than in a route so every surface that serves a
+    file serves it identically: same rendition fallback, same cache policy, same
+    revalidation. Authorisation is the *caller's* job and has to have happened
+    before this is reached.
+    """
+    # Resolved before the validator is built, because the key IS the validator.
+    # `sm` and the original are different bytes under one file id, so an ETag that
+    # ignored `size` would let a cache answer one with the other.
+    key, media_type = resolve_variant(
+        requested=size,
+        variant_keys=row.variant_keys,
+        original_key=row.storage_key,
+        original_content_type=row.content_type,
+    )
+    etag = file_etag(key)
+    headers = {
+        "Cache-Control": FILE_CACHE_CONTROL,
+        "ETag": etag,
+        # Same URL, different body per `size`. Without this a shared cache keyed
+        # on the URL alone could serve the wrong rendition; `private` already
+        # rules those out, and this states the contract regardless.
+        "Vary": "Accept-Encoding",
+    }
+
+    # Revalidation hit: the caller's permission check already ran, so this is
+    # safe — and it skips both the object-store round trip and the body transfer.
+    if etag_matches(if_none_match, etag):
+        return Response(status_code=304, headers=headers)
+
+    # `storage.open` is a blocking boto3 call. Inline it would stall the whole
+    # event loop for the duration of the download — a catalog page opens ~50 of
+    # these at once, so every other request in the process queues behind them.
+    content = await anyio.to_thread.run_sync(storage.open, key)
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 def _safe_filename(original_name: str) -> str:

@@ -1,6 +1,11 @@
 // Thin fetch wrapper for the same-origin backend JSON API.
 
-const API_PREFIX = '/api/v1'
+/**
+ * Exported because a few URLs are handed to the browser rather than to
+ * `fetch` — an `<img src>` on a public route, say — and they must be built off
+ * the same prefix as everything else.
+ */
+export const API_PREFIX = '/api/v1'
 
 // `fetch` has no timeout of its own: a connection the network drops without an
 // RST never settles, so the promise stays pending for the life of the tab. Every

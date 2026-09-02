@@ -155,6 +155,40 @@ describe('ClientEntryView — resolved single branch, signed out', () => {
   })
 })
 
+describe('ClientEntryView — the workshop logo', () => {
+  it('shows the real logo over the code-scoped public route, signed out', async () => {
+    vi.mocked(api.get).mockResolvedValue(linkPayload({ workshop_logo_file_id: 'file-1' }))
+
+    const view = await mountEntry()
+
+    const logo = view.find('img')
+    expect(logo.exists()).toBe(true)
+    // Addressed by code, never by file id — the code is the whole capability.
+    expect(logo.attributes('src')).toBe('/api/v1/public/workshop-links/ABCD2345/logo')
+    expect(logo.attributes('alt')).toBe('Mebel Master')
+  })
+
+  it('keeps the monogram for a workshop with no logo', async () => {
+    vi.mocked(api.get).mockResolvedValue(linkPayload())
+
+    const view = await mountEntry()
+
+    expect(view.find('img').exists()).toBe(false)
+    expect(view.find('span[aria-hidden="true"]').text()).toBe('M')
+  })
+
+  it('falls back to the monogram when the logo fails to load', async () => {
+    vi.mocked(api.get).mockResolvedValue(linkPayload({ workshop_logo_file_id: 'file-1' }))
+    const view = await mountEntry()
+
+    await view.find('img').trigger('error')
+    await flushPromises()
+
+    expect(view.find('img').exists()).toBe(false)
+    expect(view.find('span[aria-hidden="true"]').text()).toBe('M')
+  })
+})
+
 describe('ClientEntryView — the branch choice (§3.2)', () => {
   const multi = () =>
     linkPayload({

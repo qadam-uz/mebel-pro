@@ -8,6 +8,7 @@ import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
 import { useToast } from '@/shared/composables/useToast'
 import ClientHomeView from '@/shared/views/ClientHomeView.vue'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
+import type { OrderSummary } from '@/shared/stores/orders'
 
 vi.mock('@/shared/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/shared/api/client')>('@/shared/api/client')
@@ -20,6 +21,9 @@ const routes = [
   { path: '/c', name: 'client-home', component: ClientHomeView },
   { path: '/c/branches', name: 'client-branches', component: { template: '<div />' } },
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
+  { path: '/c/cutting/drafts', name: 'client-drafts', component: { template: '<div />' } },
+  { path: '/c/orders', name: 'client-orders', component: { template: '<div />' } },
+  { path: '/c/orders/:id', name: 'client-order', component: { template: '<div />' } },
 ]
 
 function clientMe(overrides: Partial<MeResponse> = {}): MeResponse {
@@ -42,6 +46,29 @@ function clientMe(overrides: Partial<MeResponse> = {}): MeResponse {
     status: 'active',
     ...overrides,
   }
+}
+
+/**
+ * Just enough of an order for the header: the counts line only reads statuses,
+ * and the rest of the dashboard renders off the same two lists.
+ */
+function activeOrder(id: string): OrderSummary {
+  return {
+    id,
+    order_number: `ORD-${id}`,
+    branch_name: 'Chilonzor',
+    status: 'new',
+    total_tiyin: 100_000,
+    created_at: '2026-09-01T10:00:00Z',
+  } as unknown as OrderSummary
+}
+
+/** The dashboard with content, so the counts subtitle is on screen at all. */
+function withActiveOrders(count: number) {
+  const orders = Array.from({ length: count }, (_, index) => activeOrder(`order-${index + 1}`))
+  vi.mocked(api.get).mockImplementation(async (path: string) =>
+    path.startsWith('/client/orders') ? orders : [],
+  )
 }
 
 let router: Router
@@ -89,6 +116,28 @@ describe('ClientHomeView — the pinned header subtitle', () => {
     const link = view.find('a[href="/c/branches"]')
     expect(link.exists()).toBe(true)
     expect(link.text()).toBe('Mebel Master · Chilonzor')
+  })
+
+  it('stacks the pinned line above the counts line — it joins, never replaces', async () => {
+    // Owner decision 2026-09-02: where the app is scoped and what is waiting are
+    // two different questions, and the counts line was the one the client came for.
+    withActiveOrders(2)
+
+    const view = await mountHome(
+      clientMe({ pinned_workshop_name: 'Mebel Master', pinned_branch_name: 'Chilonzor' }),
+    )
+
+    expect(view.find('a[href="/c/branches"]').text()).toBe('Mebel Master · Chilonzor')
+    expect(view.text()).toContain('2 ta faol buyurtmangiz bor.')
+  })
+
+  it('leaves the counts line alone for an un-pinned client', async () => {
+    withActiveOrders(2)
+
+    const view = await mountHome(clientMe())
+
+    expect(view.find('a[href="/c/branches"]').exists()).toBe(false)
+    expect(view.text()).toContain('2 ta faol buyurtmangiz bor.')
   })
 
   it('falls back to the workshop alone when the pinned branch has no name', async () => {

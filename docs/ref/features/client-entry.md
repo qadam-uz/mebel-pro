@@ -2,7 +2,7 @@
 title: Client entry & workshop links
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-02
 order: 25
 ---
 
@@ -176,9 +176,11 @@ be scanned again.
 - **Dead link** → **"Havola topilmadi"** with the plain-language body and a way into the
   normal client home. Never a raw 404; a throttled lookup gets the transient variant with a
   retry rather than a raw 429.
-- The signed-out landing renders a **monogram of the workshop name, not its logo** — the logo
-  lives behind the authenticated file route and v1 adds no public one. A known limitation,
-  worth revisiting only if the trust cue proves too thin to convert.
+- The signed-out landing shows the workshop's **real logo**, over a public route scoped to the
+  code rather than to a file id: it serves that one workshop's logo and nothing else, shares
+  the lookup's throttle, and answers the same not-found for a workshop that has none. The
+  general file route stays authenticated, and the name monogram remains the fallback whenever
+  a logo is absent or fails to load.
 
 ### After entry
 
@@ -186,8 +188,10 @@ Entry lands on the **existing home dashboard** — no profile page, no storefron
 carry the trust cue:
 
 - a one-time toast, *"Siz {workshop} ustaxonasiga ulandingiz"*;
-- the home header's subtitle, which **replaces** its usual line with `{workshop} · {branch}`
-  while a pin is set and links to Ustaxonalarim. With no pin the subtitle is unchanged.
+- the home header's pinned line, `{workshop} · {branch}`, linking to Ustaxonalarim. It
+  **joins** the usual counts subtitle rather than replacing it (owner decision, 2026-09-02):
+  where the app is scoped and what is waiting are two different questions, and the counts line
+  is the one the client came for. With no pin the header is unchanged.
 
 ### Ustaxonalarim (`/c/branches`)
 

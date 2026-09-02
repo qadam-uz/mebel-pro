@@ -68,9 +68,11 @@ const subtitle = computed(() =>
     drafts: cutting.drafts.length,
   }),
 )
-// The pinned context replaces the counts line when there is a pin (spec §3.4);
-// an un-pinned client keeps today's subtitle exactly as it was. Both names come
-// from `/auth/me`, so the line follows a re-pin without a second request.
+// The pinned context joins the counts line rather than replacing it (owner
+// decision 2026-09-02, spec §3.4): where the app is scoped and what is waiting
+// answer two different questions, and the counts line was the one the client
+// came for. An un-pinned client's header is unchanged. Both names come from
+// `/auth/me`, so the line follows a re-pin without a second request.
 const pinnedContext = computed(() => {
   const me = auth.me
   if (!me?.pinned_workshop_name) return null
@@ -146,7 +148,9 @@ onMounted(() => {
         <h1 class="font-display text-[26px] font-semibold leading-tight text-ink">{{ heading }}</h1>
         <!-- Pinned: the workshop · branch the app is scoped to, linking to
              Ustaxonalarim. It sits above the loading/error gate because it is
-             read off the principal, not off this page's two lists. -->
+             read off the principal, not off this page's two lists — and above
+             the counts line, which keeps its place beneath rather than being
+             replaced by it. -->
         <RouterLink
           v-if="pinnedContext"
           :to="rolePath('/c/branches')"
@@ -154,7 +158,7 @@ onMounted(() => {
         >
           {{ pinnedContext }}
         </RouterLink>
-        <p v-else-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
+        <p v-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
           {{ subtitle }}
         </p>
       </div>
