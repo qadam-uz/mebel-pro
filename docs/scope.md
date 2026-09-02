@@ -10,10 +10,10 @@ order: 20
 
 What v1 covers and what it deliberately doesn't. v1 is the smallest system a real workshop and
 a real customer can use end to end — a minimal ERP for a furniture-cutting business: the
-storefront the customer sees, the workshop floor the staff runs, the warehouse the inventory
-moves through, and the books the accountant closes. The "out" list below carries as much weight
-as the "in" list: where v1 ships a manual path instead of an integration (payments, refunds),
-that's a considered substitution.
+self-serve surface the workshop hands its own customers, the workshop floor the staff runs,
+the warehouse the inventory moves through, and the books the accountant closes. The "out"
+list below carries as much weight as the "in" list: where v1 ships a manual path instead of
+an integration (payments, refunds), that's a considered substitution.
 
 ## In scope
 
@@ -70,6 +70,14 @@ that's a considered substitution.
   today, this week, this month, this year — are in scope and drive the admin dashboard, because
   a tally carries no client, panel, price, or workshop identity. Anything that resolves an
   individual order, or breaks a total down per workshop, is not.
+- **A marketplace** — public workshop cards, open catalogs and price comparison, or any
+  cross-workshop browsing or search in the client app. The client app is a tool a workshop
+  hands its own customers: they enter through that workshop's link and the app stays scoped
+  to it ([`ref/features/client-entry.md`](ref/features/client-entry.md)). This is a
+  positioning decision, not a backlog item — a first screen listing a workshop's competitors
+  is a screen its owner will not recommend, and recommendation is the growth channel v1 has.
+  Revisit when the platform itself brings the demand a marketplace would allocate; until
+  then nothing may be built toward it, and nothing may make the pivot harder.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
   edits, multiple panel sizes, 3D nesting, CNC paths.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion

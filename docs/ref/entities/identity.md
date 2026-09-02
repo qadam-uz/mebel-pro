@@ -99,7 +99,7 @@ branch per order. Uses the client app.
 | `telegram_user_id` | bigint? | **unique when set** — the Telegram account that signs in as this client; linked by the bot's contact step, relinked when a new account proves the same phone; `null` on a staff-created row until first bot sign-in. Private-chat id equals user id, so bot messages are sent to it directly |
 | `telegram_unreachable_at` | timestamp? | set when a bot send bounces with 403 (client blocked the bot); cleared on the next `/start` or successful send; while set, Telegram delivery is skipped — the inbox is unaffected |
 | `name` | text | required; the client's display name (1–80 chars) — prefilled from the Telegram profile at registration, client-editable, never re-synced; how the workshop addresses them |
-| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced**. |
+| `preferred_branch_id` | UUID? | the **pin**: the branch, and through it the workshop, the client app is scoped to ([`client-entry.md`](../features/client-entry.md)). Seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches it. Written by exactly one operation — applying a workshop-link entry, which cross-checks the branch against the link's code before it writes — and by no profile form; the client app surfaces it as **Asosiy**, never as a bare branch field |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
@@ -119,11 +119,13 @@ Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; `telegram_user_id` u
 created only by a successful first bot registration or by workshop staff resolving a walk-in
 (never by a platform operator); a `blocked` client can neither sign in nor be resolved by
 staff (`account_blocked` on both paths);
-`preferred_branch_id`, when set, references a branch the client may see (any workshop's
-`active` or `temporarily_closed` branch); the field is **not** scope-enforced (a branch
-later going `inactive` doesn't clear it — the branch-scoped catalog simply comes back empty
-and the editor asks for a different workshop; see
-[`cutting.md`](../features/cutting.md)).
+`preferred_branch_id`, when set, references a branch that was visible (`active` or
+`temporarily_closed`) at the moment it was pinned; the field is **not** scope-enforced (a
+branch later going `inactive` doesn't clear it — the branch-scoped catalog simply comes back
+empty and the editor asks for a different branch; see
+[`cutting.md`](../features/cutting.md)). It is likewise never cleared when its workshop is
+`blocked`: the session read reports the pinned workshop and branch **names as null** instead,
+so the app stops scoping while the row survives to revive on unblock.
 
 ## Telegram login token
 

@@ -80,7 +80,9 @@ editing settings.
 ### UX (workshop app)
 
 - **Workshop settings** (`/workshop/settings`, owner-only): a single profile form with name
-  and logo. Contact phone and address are branch fields.
+  and logo, plus the workshop-level **Mijoz havolasi** card — the link and QR that pin a
+  client to the workshop rather than to one branch ([`client-entry.md`](client-entry.md)).
+  Contact phone and address are branch fields.
 
 ## Branches
 
@@ -126,7 +128,9 @@ normally); the UI warns and lists how many.
 Visibility for read operations:
 - Owner sees every branch of their workshop.
 - Staff see only branches they hold a grant on.
-- Clients see `active` and `temporarily_closed` branches of any workshop (per the picker).
+- Clients may see `active` and `temporarily_closed` branches of any workshop. What the client
+  app *offers* them is narrower once they are pinned to a workshop — one workshop's branches,
+  not the platform's ([`client-entry.md`](client-entry.md)).
 
 ### UX
 
@@ -146,7 +150,9 @@ Visibility for read operations:
   management; those stay in their own sidebar sections. Edge settings are their own group
   rather than a third cutting setting: the overhang is consumed at the bander, and it is the
   one branch millimetre that moves what the client is billed for tape
-  ([`orders.md`](orders.md#pricing)).
+  ([`orders.md`](orders.md#pricing)). It also carries the **Mijoz havolasi** card — this
+  branch's client link, its QR, and the print sheet for the counter
+  ([`client-entry.md`](client-entry.md) owns it).
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.
 
@@ -183,5 +189,7 @@ yet (the logs are still recorded against their workshop).
 
 ## Next
 
-[`catalog-inventory.md`](catalog-inventory.md) — what a branch carries from the platform
-catalog, its prices, and its stock.
+- [`catalog-inventory.md`](catalog-inventory.md) — what a branch carries from the platform
+  catalog, its prices, and its stock.
+- [`client-entry.md`](client-entry.md) — the client link and QR these screens publish, and
+  what following one does to the client app.

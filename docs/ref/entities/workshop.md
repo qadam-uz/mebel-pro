@@ -25,6 +25,7 @@ branches, not the workshop.
 |---|---|---|
 | `id` | UUID | PK |
 | `name` | text | required |
+| `public_code` | text | required, **unique platform-wide**. 8 characters of Crockford base32 (no `I L O U`), generated at provisioning and backfilled for older workshops. The code in the workshop's client link and printed QR ([`client-entry.md`](../features/client-entry.md)): machine-generated only — no API sets, regenerates, or revokes it, because a printed QR must never rot. Lookups normalize lookalike characters before matching |
 | `logo_file_id` | UUID? | → [file](support.md#file) |
 | `owner_user_id` | UUID | → workshop user with `is_owner`; 1:1 |
 | `status` | enum | `active` / `blocked` (soft delete only) |
@@ -41,9 +42,11 @@ pickup-only and an order moves no money ([`scope.md`](../../scope.md)); they ret
 delivery and a gateway.
 
 Blocking cascades: the owner's + staff's sessions are revoked immediately; open orders freeze
-(no automatic transitions); clients are unaffected. Unblocking does not restore sessions.
-Invariants: exactly one `is_owner = true` workshop user per workshop (DB/service);
-`owner_user_id` references that user; never deleted.
+(no automatic transitions); client sessions and orders are untouched, though a client pinned
+to the workshop falls back to un-pinned for as long as the block lasts and its client link
+resolves to nothing ([`client-entry.md`](../features/client-entry.md)). Unblocking does not
+restore sessions. Invariants: exactly one `is_owner = true` workshop user per workshop
+(DB/service); `owner_user_id` references that user; `public_code` unique (DB); never deleted.
 
 ## Branch
 

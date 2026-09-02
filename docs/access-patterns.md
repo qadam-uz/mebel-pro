@@ -135,9 +135,9 @@ its price**, and that branch material is what everything downstream points at.
   Crossing these returns `forbidden` (or simply excludes rows on list endpoints).
 
 - **Workshop blocking is a cascade.** A platform operator blocks a workshop: the owner's +
-  staff's sessions are revoked immediately; their next login is rejected; **clients are
-  unaffected**; open orders **freeze** — no automatic transitions, and staff can't act because
-  they can't log in. Unblocking doesn't restore sessions — users log in again.
+  staff's sessions are revoked immediately; their next login is rejected; **client sessions
+  and orders are unaffected**; open orders **freeze** — no automatic transitions, and staff
+  can't act because they can't log in. Unblocking doesn't restore sessions — users log in again.
 - **Branch status governs visibility, not access destruction.**
 
   | Status               | Visible to clients               | Accepts new orders | Existing orders |
