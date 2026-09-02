@@ -9,12 +9,19 @@ workshop, and "my workshops" is derived from what the client actually did.
 import uuid
 
 import pytest
-from app.models.enums import AuthenticatedPrincipalType, BranchStatus, WorkshopStatus
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    BranchStatus,
+    FileStorageStatus,
+    WorkshopStatus,
+)
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.sales.contracts import Order
-from app.modules.support.contracts import ActionLog
+from app.modules.support.api import FILE_CACHE_CONTROL, InMemoryFileStorage
+from app.modules.support.contracts import ActionLog, File
+from app.modules.support.files import file_storage
 from app.modules.workshop.api import (
     PUBLIC_CODE_ALPHABET,
     PUBLIC_CODE_LENGTH,
@@ -358,6 +365,164 @@ async def test_resolve_is_rate_limited_per_ip(
     assert second.status_code == 200
     assert third.status_code == 429
     assert third.json()["code"] == "workshop_link_rate_limited"
+
+
+# --- The public logo -------------------------------------------------------
+
+
+async def _attach_logo(
+    db: AsyncSession,
+    *,
+    workshop: Workshop,
+    storage: InMemoryFileStorage,
+    content: bytes = b"logo-bytes",
+) -> File:
+    row = File(
+        storage_key=f"uploads/{uuid.uuid4().hex}/logo.png",
+        original_name="logo.png",
+        content_type="image/png",
+        size_bytes=len(content),
+        storage_status=FileStorageStatus.STORED,
+        entity_type="workshop",
+        entity_id=workshop.id,
+        uploaded_by_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        uploaded_by_id=workshop.owner_user_id,
+    )
+    db.add(row)
+    await db.flush()
+    workshop.logo_file_id = row.id
+    await db.flush()
+    storage.put(row.storage_key, content, "image/png")
+    return row
+
+
+def _use_storage() -> InMemoryFileStorage:
+    from app.main import app
+
+    storage = InMemoryFileStorage()
+    app.dependency_overrides[file_storage] = lambda: storage
+    return storage
+
+
+async def test_public_logo_is_served_to_a_signed_out_scan(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The landing's trust cue works before there is a session."""
+    storage = _use_storage()
+    workshop, _, _ = await seed_workshop_with_owner(db_session, login="logo_owner")
+    await _attach_logo(db_session, workshop=workshop, storage=storage)
+
+    response = await client.get(f"/api/v1/public/workshop-links/{workshop.public_code}/logo")
+
+    assert response.status_code == 200
+    assert response.content == b"logo-bytes"
+    assert response.headers["content-type"].startswith("image/png")
+    # Same mechanics as the authenticated file route — a scanned QR should not
+    # re-download the logo on every hop through the login round-trip.
+    assert response.headers["cache-control"] == FILE_CACHE_CONTROL
+    revalidated = await client.get(
+        f"/api/v1/public/workshop-links/{workshop.public_code}/logo",
+        headers={"If-None-Match": response.headers["etag"]},
+    )
+    assert revalidated.status_code == 304
+    assert revalidated.content == b""
+
+
+async def test_public_logo_answers_the_same_404_as_a_dead_link(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    storage = _use_storage()
+    blocked, _, _ = await seed_workshop_with_owner(db_session, login="logo_blocked")
+    await _attach_logo(db_session, workshop=blocked, storage=storage)
+    blocked.status = WorkshopStatus.BLOCKED
+    branchless, only_branch, _ = await seed_workshop_with_owner(db_session, login="logo_branchless")
+    await _attach_logo(db_session, workshop=branchless, storage=storage)
+    only_branch.status = BranchStatus.INACTIVE
+    logoless, _, _ = await seed_workshop_with_owner(db_session, login="logo_none")
+    await db_session.flush()
+
+    responses = [
+        await client.get("/api/v1/public/workshop-links/ZZZZZZZZ/logo"),
+        await client.get("/api/v1/public/workshop-links/nope/logo"),
+        await client.get(f"/api/v1/public/workshop-links/{blocked.public_code}/logo"),
+        await client.get(f"/api/v1/public/workshop-links/{branchless.public_code}/logo"),
+        # No logo is a dead end like any other: the landing falls back to the
+        # monogram, and the answer says nothing about which cause it was.
+        await client.get(f"/api/v1/public/workshop-links/{logoless.public_code}/logo"),
+    ]
+
+    for response in responses:
+        assert response.status_code == 404
+        assert response.json()["code"] == "workshop_link_not_found"
+
+
+async def test_public_logo_shares_the_resolve_budget(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One landing, one budget — a scan makes both calls."""
+    storage = _use_storage()
+    workshop, _, _ = await seed_workshop_with_owner(db_session, login="logo_throttled")
+    await _attach_logo(db_session, workshop=workshop, storage=storage)
+    monkeypatch.setattr("app.core.config.settings.PUBLIC_LINK_LOOKUPS_PER_IP", 2)
+
+    resolved = await client.get(f"/api/v1/public/workshop-links/{workshop.public_code}")
+    logo = await client.get(f"/api/v1/public/workshop-links/{workshop.public_code}/logo")
+    third = await client.get(f"/api/v1/public/workshop-links/{workshop.public_code}/logo")
+
+    assert resolved.status_code == 200
+    assert logo.status_code == 200
+    # Two buckets would double what a walk of the code space is allowed.
+    assert third.status_code == 429
+    assert third.json()["code"] == "workshop_link_rate_limited"
+
+
+async def test_public_logo_can_never_address_another_file(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The code is the capability; no other file is reachable through it.
+
+    The route takes no file id at all, so the only thing it can serve is the
+    workshop the code names — not another workshop's logo, and not a receipt
+    that happens to live in the same bucket.
+    """
+    storage = _use_storage()
+    workshop, _, owner = await seed_workshop_with_owner(db_session, login="logo_scoped")
+    await _attach_logo(db_session, workshop=workshop, storage=storage, content=b"ours")
+    other, _, _ = await seed_workshop_with_owner(db_session, login="logo_other")
+    theirs = await _attach_logo(db_session, workshop=other, storage=storage, content=b"theirs")
+    receipt = File(
+        storage_key=f"uploads/{uuid.uuid4().hex}/receipt.pdf",
+        original_name="receipt.pdf",
+        content_type="application/pdf",
+        size_bytes=7,
+        storage_status=FileStorageStatus.STORED,
+        entity_type="expense",
+        entity_id=uuid.uuid4(),
+        uploaded_by_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        uploaded_by_id=owner.id,
+    )
+    db_session.add(receipt)
+    await db_session.flush()
+    storage.put(receipt.storage_key, b"secret.", "application/pdf")
+
+    ours = await client.get(f"/api/v1/public/workshop-links/{workshop.public_code}/logo")
+    # A file id in the code slot is not a code, so it can never resolve.
+    by_receipt_id = await client.get(f"/api/v1/public/workshop-links/{receipt.id}/logo")
+    by_logo_id = await client.get(f"/api/v1/public/workshop-links/{theirs.id}/logo")
+
+    assert ours.content == b"ours"
+    assert by_receipt_id.status_code == 404
+    assert by_receipt_id.json()["code"] == "workshop_link_not_found"
+    assert by_logo_id.status_code == 404
+    # And the unauthenticated surface stays exactly one route wide: the general
+    # file route still refuses a caller with no session.
+    unauthenticated = await client.get(f"/api/v1/files/{receipt.id}")
+    assert unauthenticated.status_code == 401
 
 
 # --- Applying the entry ----------------------------------------------------

@@ -3,11 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { formatPhone } from '@/shared/app/clientUi'
-import { storeClientEntry } from '@/shared/app/clientEntry'
+import { publicWorkshopLogoUrl, storeClientEntry } from '@/shared/app/clientEntry'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import Icon from '@/shared/components/AppIcon.vue'
-import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import BrandMark from '@/shared/components/BrandMark.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -60,8 +59,22 @@ const resolvedBranch = computed<WorkshopLinkBranch | null>(() => {
 /** 429 gets the dead-link screen's transient variant — a retry, not a dead end. */
 const isTransient = computed(() => entry.linkError === 'workshop_link_rate_limited')
 
+/**
+ * The real logo, over the code-scoped public route — this screen renders before
+ * there is a session, so the authenticated file route is out of reach here.
+ *
+ * Only requested when the resolve says the workshop has a logo, and any failure
+ * (a file that went away, a throttled lookup, an offline hop) falls back to the
+ * name monogram this screen drew before the route existed.
+ */
+const logoFailed = ref(false)
+const logoUrl = computed(() =>
+  link.value?.workshop_logo_file_id ? publicWorkshopLogoUrl(link.value.code) : null,
+)
+
 async function resolve() {
   applyFailed.value = false
+  logoFailed.value = false
   selectedBranchId.value = null
   const resolved = await entry.resolveLink(code.value, branchNo.value)
   if (!resolved) return
@@ -161,15 +174,15 @@ onMounted(resolve)
 
       <template v-else>
         <div class="flex items-center gap-3">
-          <!-- The stored logo is served over an authenticated route, so a
-               signed-out scan gets the workshop's monogram instead of a broken
-               frame; the name beside it is the trust cue either way. -->
-          <AuthFileImage
-            v-if="link.workshop_logo_file_id && auth.isAllowedFor('client')"
-            :file-id="link.workshop_logo_file_id"
+          <!-- The workshop's own logo, fetched by code over the public route so
+               a signed-out scan sees the real thing; the monogram stays as the
+               fallback for a workshop that has none or a load that fails. -->
+          <img
+            v-if="logoUrl && !logoFailed"
+            :src="logoUrl"
             :alt="link.workshop_name"
-            size="sm"
             class="size-14 rounded-[14px] border border-hairline object-contain"
+            @error="logoFailed = true"
           />
           <span
             v-else
