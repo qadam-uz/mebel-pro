@@ -1074,10 +1074,26 @@ test('client browses the workshop directory without catalog or stock details', a
   ])
 
   await loginClient(page, phoneFor(id, 60), 'Catalog Client')
-  await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
-  await page.getByLabel('Ustaxona yoki shahar nomi').fill(`Catalog Workshop ${id}`)
 
-  await expect(page.getByRole('heading', { name: 'Ustaxonalar' })).toBeVisible()
+  // The public directory is gone — Ustaxonalarim lists only entered workshops,
+  // so the client arrives through the workshop link first. Signed in, the entry
+  // applies itself and lands on home (no tap: the URL already names the branch).
+  const ownerHeaders = { Authorization: `Bearer ${ownerAccess}` }
+  const settingsResponse = await request.get('/api/v1/workshop/settings', {
+    headers: ownerHeaders,
+  })
+  expect(settingsResponse.ok()).toBeTruthy()
+  const { public_code } = (await settingsResponse.json()) as { public_code: string }
+  const branchResponse = await request.get(`/api/v1/workshop/branches/${branchId}`, {
+    headers: ownerHeaders,
+  })
+  expect(branchResponse.ok()).toBeTruthy()
+  const { branch_no } = (await branchResponse.json()) as { branch_no: number }
+  await page.goto(`/client/w/${public_code}/${branch_no}`)
+  await expect(page).toHaveURL(/\/client\/c\/?$/)
+
+  await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
+  await expect(page.getByRole('heading', { name: /Ustaxonalar/ })).toBeVisible()
   const branchCard = page.locator('article.client-card').filter({
     has: page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),
   })
