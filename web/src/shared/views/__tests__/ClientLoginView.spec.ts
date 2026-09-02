@@ -38,13 +38,36 @@ const session = {
   me: clientMe,
 }
 
-function handshake(index = 1) {
+/** Where the card parks the handshake it is polling (per tab). */
+const HANDSHAKE_KEY = 'mp-client-login-handshake'
+
+/** A minted handshake, alive for the five minutes the server gives it. */
+function handshake(index = 1, livesForMs = 5 * 60_000) {
   return {
     token: `tok-${index}`,
     poll_secret: `secret-${index}`,
     deep_link: `https://t.me/mebel_pro_uz_bot?start=tok-${index}`,
-    expires_at: '2026-01-01T00:05:00Z',
+    expires_at: new Date(Date.now() + livesForMs).toISOString(),
   }
+}
+
+/** What a card that is mid-handshake left behind for the tab that comes back. */
+function parkHandshake(index = 1, livesForMs = 5 * 60_000) {
+  const issued = handshake(index, livesForMs)
+  window.sessionStorage.setItem(
+    HANDSHAKE_KEY,
+    JSON.stringify({
+      deep_link: issued.deep_link,
+      poll_secret: issued.poll_secret,
+      expires_at: issued.expires_at,
+    }),
+  )
+  return issued
+}
+
+function parkedHandshake(): { poll_secret?: string } | null {
+  const raw = window.sessionStorage.getItem(HANDSHAKE_KEY)
+  return raw ? (JSON.parse(raw) as { poll_secret?: string }) : null
 }
 
 function poll(status: ClientLoginPoll['status'], expired = false): ClientLoginPoll {
@@ -114,6 +137,9 @@ async function mountLogin() {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.useFakeTimers()
+  // The parked handshake outlives its card by design, so it also outlives a
+  // test — every case states its own starting point.
+  window.sessionStorage.clear()
   setViewport(false)
   Object.defineProperty(document, 'hidden', { configurable: true, value: false })
 })
@@ -256,6 +282,8 @@ describe('ClientLoginView — Telegram handshake', () => {
     await tick()
 
     expect(view.text()).toContain('QR eskirdi.')
+    // Nothing left to resume: a reload onto a dead handshake must mint, not poll.
+    expect(parkedHandshake()).toBeNull()
     const pollsWhileExpired = pollSpy.mock.calls.length
     await tick(2)
     expect(pollSpy.mock.calls.length).toBe(pollsWhileExpired)
@@ -378,6 +406,103 @@ describe('ClientLoginView — Telegram handshake', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
     expect(pollSpy).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('ClientLoginView — surviving the trip to Telegram', () => {
+  it('sends the deep link to a new tab so the card is never torn down', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    await selectTab(view, 'telegram')
+
+    // Navigating *this* tab to t.me unmounts the card mid-handshake: the poll
+    // stops and nothing is left to redeem the token the client just confirmed.
+    const link = view.find('a.mp-button-primary')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toBe('noopener')
+  })
+
+  it('resumes a parked handshake instead of minting a second one', async () => {
+    parkHandshake(7)
+    const auth = useAuthStore()
+    const create = vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake(1))
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('started'))
+
+    const view = await mountLogin()
+
+    // Straight away, not two seconds from now: the page is usually back
+    // precisely because the client has finished answering in the bot.
+    expect(create).not.toHaveBeenCalled()
+    expect(pollSpy).toHaveBeenCalledWith('secret-7')
+    expect(view.text()).toContain('Telefoningizda tasdiqlang')
+
+    // Same handshake behind both affordances — the QR and the button the
+    // resumed card renders are the token the client is already holding.
+    await selectTab(view, 'telegram')
+    expect(view.find('a.mp-button-primary').attributes('href')).toBe(
+      'https://t.me/mebel_pro_uz_bot?start=tok-7',
+    )
+    await tick()
+    expect(pollSpy).toHaveBeenLastCalledWith('secret-7')
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('parks the live handshake, so a reload finds it', async () => {
+    const auth = useAuthStore()
+    const create = vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake(1))
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    await tick()
+    expect(parkedHandshake()).toMatchObject({ poll_secret: 'secret-1' })
+
+    // The tab is re-created around the same login — a reload, or a browser that
+    // evicted it while the client was in Telegram.
+    view.unmount()
+    wrapper = null
+    await mountLogin()
+
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(pollSpy).toHaveBeenLastCalledWith('secret-1')
+  })
+
+  it('mints afresh when the parked handshake has already expired', async () => {
+    parkHandshake(7, -1_000)
+    const auth = useAuthStore()
+    const create = vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake(2))
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    await tick()
+
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(pollSpy).toHaveBeenCalledWith('secret-2')
+    expect(pollSpy).not.toHaveBeenCalledWith('secret-7')
+    await selectTab(view, 'telegram')
+    expect(view.find('a.mp-button-primary').attributes('href')).toBe(
+      'https://t.me/mebel_pro_uz_bot?start=tok-2',
+    )
+    // The dead entry is replaced, not left for the next reload to trip over.
+    expect(parkedHandshake()).toMatchObject({ poll_secret: 'secret-2' })
+  })
+
+  it('drops the parked handshake once the session is won', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin')
+      .mockResolvedValueOnce(poll('started'))
+      .mockResolvedValue(session)
+
+    await mountLogin()
+    await tick()
+    expect(parkedHandshake()).toMatchObject({ poll_secret: 'secret-1' })
+
+    await tick()
+
+    expect(parkedHandshake()).toBeNull()
   })
 })
 

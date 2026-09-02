@@ -284,8 +284,15 @@ Telegram lives on the other device is one click away from the affordance they ne
 
 - **QR kod** — the QR of the deep link, scanned by **the phone's camera** (not by Telegram;
   the copy says so). Under it, collapsed, sits the code fallback below.
-- **Telegram orqali** — one primary **Telegram botga o'tish** button opening the deep link;
-  the poll picks the session up when the client returns to the browser.
+- **Telegram orqali** — one primary **Telegram botga o'tish** button opening the deep link in a
+  **new tab**, so the card is never navigated away from and its poll keeps running; the poll
+  picks the session up when the client returns to the browser.
+- **The in-flight handshake survives the round trip.** The live token, its poll secret and its
+  expiry are parked in per-tab storage (`sessionStorage`), so a reload — or a mobile browser
+  evicting the tab during the switch to Telegram — resumes the same handshake and polls it
+  immediately rather than minting a second one and abandoning the token the client is about to
+  confirm. The entry is dropped the moment the handshake ends: session issued, expired, used,
+  declined, or replaced.
 - **States, shared by both tabs** — *waiting* → *started* ("Telefoningizda tasdiqlang" the
   moment `/start` lands) → redirect into the app on `confirmed`. A `declined` token returns to
   *waiting* on a fresh handshake with a line saying why; an expired one names what died in the

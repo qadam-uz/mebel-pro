@@ -12,7 +12,7 @@ import Icon from '@/shared/components/AppIcon.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import QrCode from '@/shared/components/QrCode.vue'
 import { useCountdown } from '@/shared/composables/useCountdown'
-import { useAuthStore, type ClientLoginPoll } from '@/shared/stores/auth'
+import { useAuthStore, type ClientLoginPoll, type ClientLoginToken } from '@/shared/stores/auth'
 import { useClientEntryStore } from '@/shared/stores/clientEntry'
 
 const { t } = useI18n()
@@ -33,6 +33,12 @@ const CODE_LENGTH = 6
 // The bot's handle, read back off the deep link so the code fallback's `t.me`
 // link and the deep link can never name two different bots.
 const BOT_LINK_PATTERN = /^https:\/\/t\.me\/([A-Za-z0-9_]+)/
+// Where the in-flight handshake is parked so this card can be re-created without
+// abandoning it. `sessionStorage`, never `localStorage`: the poll secret is the
+// credential a session is released against, so it belongs to exactly the tab
+// that minted it and must die with that tab — not sit in a store every other tab
+// and every later visit can read.
+const HANDSHAKE_KEY = 'mp-client-login-handshake'
 
 /** What the card is showing. `loading` covers minting the first token. */
 type Phase = 'loading' | 'waiting' | 'started' | 'expired' | 'error'
@@ -66,6 +72,81 @@ let pollTimer: number | undefined
 let pollInFlight = false
 let unmounted = false
 let viewportQuery: MediaQueryList | undefined
+
+/** The half of a minted handshake this card needs to keep polling it. */
+interface SavedHandshake {
+  deep_link: string
+  poll_secret: string
+  expires_at: string
+}
+
+/**
+ * Per-tab storage, or `null`. Reaching `sessionStorage` throws outright in a few
+ * real configurations (Safari private mode, storage blocked by policy), and a
+ * store this card cannot reach only costs it the resume — never the login.
+ */
+function tabStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage
+  } catch {
+    return null
+  }
+}
+
+function saveHandshake(issued: ClientLoginToken) {
+  const entry: SavedHandshake = {
+    deep_link: issued.deep_link,
+    poll_secret: issued.poll_secret,
+    expires_at: issued.expires_at,
+  }
+  try {
+    tabStorage()?.setItem(HANDSHAKE_KEY, JSON.stringify(entry))
+  } catch {
+    // A full or refusing store is not a login failure — the card just loses its
+    // ability to survive a reload.
+  }
+}
+
+function clearHandshake() {
+  try {
+    tabStorage()?.removeItem(HANDSHAKE_KEY)
+  } catch {
+    // Nothing to do: an unreachable store holds nothing worth resuming either.
+  }
+}
+
+/**
+ * The handshake this tab left in flight, if there still is one. Anything that
+ * cannot be resumed — unparseable, incomplete, or past its `expires_at` — is
+ * dropped here rather than carried into a poll the server would refuse.
+ */
+function readHandshake(): SavedHandshake | null {
+  let raw: string | null = null
+  try {
+    raw = tabStorage()?.getItem(HANDSHAKE_KEY) ?? null
+  } catch {
+    return null
+  }
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<SavedHandshake>
+    const expiresAt = Date.parse(String(parsed.expires_at))
+    if (
+      typeof parsed.deep_link === 'string' &&
+      typeof parsed.poll_secret === 'string' &&
+      parsed.deep_link &&
+      parsed.poll_secret &&
+      Number.isFinite(expiresAt) &&
+      expiresAt > Date.now()
+    ) {
+      return parsed as SavedHandshake
+    }
+  } catch {
+    // Fall through: garbage in the store reads exactly like no store at all.
+  }
+  clearHandshake()
+  return null
+}
 
 const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.homePath))
 // Set by the API client's 401 interceptor when a silent refresh fails (CB-08).
@@ -148,6 +229,7 @@ const codeBlocked = computed(() => codeRetryLeft.value > 0)
 async function finish() {
   stopPolling()
   pollSecret = null
+  clearHandshake()
   // A workshop link scanned before signing in parked its entry in
   // `localStorage`; this is the moment there is a session to apply it to. A
   // missing or refused entry is a normal un-pinned login (spec §3.1) — the store
@@ -160,6 +242,10 @@ async function finish() {
 async function mintToken() {
   stopPolling()
   pollSecret = null
+  // The handshake being replaced is dead the moment this call is made — declined,
+  // burned, or simply unwanted — so it goes before the new one arrives rather
+  // than after, and a mint that fails leaves nothing stale behind to resume.
+  clearHandshake()
   stopRetry()
   tokenError.value = null
   phase.value = 'loading'
@@ -169,6 +255,10 @@ async function mintToken() {
     pollSecret = issued.poll_secret
     deepLink.value = issued.deep_link
     readBotUsername(issued.deep_link)
+    // Park it before the first poll: a reload one tick later — or the browser
+    // evicting this tab while the client is in Telegram — then finds a handshake
+    // to resume instead of minting a second one against the same client.
+    saveHandshake(issued)
     phase.value = 'waiting'
     startPolling()
   } catch {
@@ -258,8 +348,32 @@ function applyPollState(poll: ClientLoginPoll) {
 function expire() {
   stopPolling()
   pollSecret = null
+  clearHandshake()
   declined.value = false
   phase.value = 'expired'
+}
+
+/**
+ * Pick up the handshake this tab left in flight. A reload, a browser that
+ * evicted the tab while the client was in Telegram, or a back-navigation to this
+ * route all land here — and every one of them used to mint a second token and
+ * abandon the first, which is what left the client confirming a handshake
+ * nothing was polling. Returns `false` when there is nothing to resume.
+ */
+function resumeHandshake(): boolean {
+  const saved = readHandshake()
+  if (!saved) return false
+  pollSecret = saved.poll_secret
+  deepLink.value = saved.deep_link
+  readBotUsername(saved.deep_link)
+  phase.value = 'waiting'
+  // The page is usually back precisely because the client finished in the bot,
+  // so ask now rather than up to two seconds from now. `startPolling` is the
+  // hidden-tab guard for both — a hidden tab arms nothing and this poll is the
+  // one `onVisibilityChange` will fire on return.
+  if (typeof document === 'undefined' || !document.hidden) void runPoll()
+  startPolling()
+  return true
 }
 
 function onVisibilityChange() {
@@ -312,7 +426,9 @@ onMounted(() => {
     viewportQuery.addEventListener('change', onViewportChange)
   }
   document.addEventListener('visibilitychange', onVisibilityChange)
-  void mintToken()
+  // Resume before minting: a token this tab is already holding is the one the
+  // client is answering in the bot.
+  if (!resumeHandshake()) void mintToken()
 })
 
 onBeforeUnmount(() => {
@@ -321,6 +437,9 @@ onBeforeUnmount(() => {
   stopRetry()
   stopCodeRetry()
   pollSecret = null
+  // The stored handshake deliberately outlives the card: unmounting is not the
+  // handshake ending, it is this tab being re-created around a login the client
+  // is still completing in the bot. Only a terminal answer clears it.
   viewportQuery?.removeEventListener('change', onViewportChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
@@ -404,12 +523,17 @@ onBeforeUnmount(() => {
             <QrCode v-else :value="deepLink" :label="$t('client.login.qrLabel')" />
           </div>
 
+          <!-- A new tab, not this one. Navigating this tab to `t.me` tears the
+               card down mid-handshake: the poll stops, nothing redeems the token
+               the client is about to confirm, and coming back mints a second
+               one. The same reason the code fallback's @bot link opens away. -->
           <a
             v-else
             class="mp-button mp-button-primary mt-4 min-h-[46px] w-full"
             :class="phase === 'loading' ? 'pointer-events-none opacity-50' : ''"
             :href="deepLink || undefined"
             :aria-disabled="phase === 'loading' ? 'true' : undefined"
+            target="_blank"
             rel="noopener"
           >
             {{ $t('client.login.telegramButton') }}
