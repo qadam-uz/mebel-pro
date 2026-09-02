@@ -272,6 +272,12 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          # The action's own command timeout defaults to 10m, which a cold
+          # backend image build blows past (the PackingSolver compile alone is
+          # ~7m once the server prunes its build cache) — the 2026-09-02 deploy
+          # died exactly there. Keep it under the job's 25m so the job-level
+          # limit stays the backstop.
+          command_timeout: 20m
           # The deploy script does:
           #   - git fetch + reset --hard $DEPLOY_REF
           #   - verifies deploy/.env and the infra-net network exist
