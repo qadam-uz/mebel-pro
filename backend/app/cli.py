@@ -58,6 +58,22 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Stop after this many images. Omit to process all remaining.",
     )
 
+    webhook = subcommands.add_parser(
+        "telegram-webhook",
+        help="Register, inspect, or remove the bot's webhook with the Telegram Bot API.",
+    )
+    webhook.add_argument("action", choices=["set", "info", "delete"])
+    webhook.add_argument(
+        "--base-url",
+        default=None,
+        help="Public origin the webhook lives behind (default: CLIENT_APP_BASE_URL).",
+    )
+    webhook.add_argument(
+        "--drop-pending-updates",
+        action="store_true",
+        help="Discard updates Telegram queued while the webhook was down.",
+    )
+
     args = parser.parse_args(argv)
     if args.command == "seed-platform-user":
         asyncio.run(
@@ -73,6 +89,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         asyncio.run(_seed_error_record(code=args.code, module=args.module, message=args.message))
     elif args.command == "backfill-image-variants":
         asyncio.run(_backfill_image_variants(batch_size=args.batch_size, limit=args.limit))
+    elif args.command == "telegram-webhook":
+        asyncio.run(
+            _telegram_webhook(
+                action=args.action,
+                base_url=args.base_url,
+                drop_pending_updates=args.drop_pending_updates,
+            )
+        )
 
 
 async def _seed_platform_user(
@@ -118,6 +142,47 @@ async def _seed_platform_user(
                 }
             )
         )
+
+
+async def _telegram_webhook(
+    *,
+    action: str,
+    base_url: str | None,
+    drop_pending_updates: bool,
+) -> None:
+    """Point the bot at this deployment's webhook route, inspect it, or remove it.
+
+    Telegram keeps the registration until it is changed, so `set` is a one-time
+    deploy step (re-run only when the public origin or the secret rotates).
+    """
+    from app.core import telegram
+    from app.core.config import settings
+
+    try:
+        if action == "info":
+            print(json.dumps(await telegram.call("getWebhookInfo", {})))
+            return
+        if action == "delete":
+            await telegram.call("deleteWebhook", {"drop_pending_updates": drop_pending_updates})
+            print(json.dumps({"status": "deleted"}))
+            return
+        if settings.TELEGRAM_WEBHOOK_SECRET in {"", "{{change-me}}"}:
+            raise SystemExit("TELEGRAM_WEBHOOK_SECRET must be set before registering the webhook")
+        origin = (base_url or settings.CLIENT_APP_BASE_URL).rstrip("/")
+        url = f"{origin}{settings.API_V1_PREFIX}/telegram/webhook"
+        payload: dict[str, object] = {
+            "url": url,
+            "secret_token": settings.TELEGRAM_WEBHOOK_SECRET,
+            # The conversation only consumes these two; narrowing the
+            # subscription keeps unrelated update spam off the endpoint.
+            "allowed_updates": ["message", "callback_query"],
+        }
+        if drop_pending_updates:
+            payload["drop_pending_updates"] = True
+        await telegram.call("setWebhook", payload)
+        print(json.dumps({"status": "set", "url": url}))
+    except telegram.TelegramApiError as exc:
+        raise SystemExit(f"Telegram Bot API refused: {exc}") from exc
 
 
 async def _seed_error_record(*, code: str, module: str, message: str) -> None:

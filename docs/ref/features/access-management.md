@@ -245,7 +245,10 @@ both split the customer's history and require a claim/merge path v1 doesn't have
 The bot is configured by `TELEGRAM_BOT_TOKEN` (secret), `TELEGRAM_BOT_USERNAME` (builds the
 deep links), and `TELEGRAM_WEBHOOK_SECRET`. Updates arrive by **webhook** through the prod
 edge, authenticated by Telegram's `secret_token` header — no polling process, no queue;
-outbound messages go straight to the Bot API. Topology and the module split are
+outbound messages go straight to the Bot API. The registration itself is a one-time deploy
+step: `python -m app.cli telegram-webhook set` points the bot at this deployment's webhook
+route with the configured secret (`info` inspects, `delete` removes; re-run `set` only when
+the public origin or the secret rotates). Topology and the module split are
 [`architecture.md`](../../architecture.md)'s.
 
 ### Dev & local sign-in

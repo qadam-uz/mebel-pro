@@ -39,7 +39,7 @@ uv run mypy app                            # type check
 uv run alembic revision --autogenerate -m "add products"
 uv run alembic upgrade head
 
-uv run python -m app.cli                  # maintenance CLI: seed-platform-user · seed-error-record · backfill-image-variants
+uv run python -m app.cli                  # maintenance CLI: seed-platform-user · seed-error-record · backfill-image-variants · telegram-webhook
 ```
 
 Run from `backend/` — `Settings` reads `.env` relative to the **CWD**, so a server started
