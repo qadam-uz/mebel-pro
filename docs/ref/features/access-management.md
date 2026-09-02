@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-02
 order: 20
 ---
 
@@ -135,9 +135,9 @@ sequenceDiagram
    rate-limited per client IP (`TELEGRAM_LOGIN_*` settings, env-tunable; exceeding it is
    `login_token_rate_limited` with `retry_after_seconds`); like every per-IP budget it needs
    the deploy's trusted-proxy config (`TRUSTED_PROXY_CIDRS`) or all traffic shares one bucket.
-2. **The client opens the bot.** The page renders
-   `https://t.me/<bot>?start=<token>` — as a QR on desktop, as a button on mobile. Scanning
-   or tapping opens the bot chat with the token attached.
+2. **The client opens the bot.** The page renders `https://t.me/<bot>?start=<token>` two
+   ways at once — as a QR and as a button, one per tab (UX below). Scanning or tapping opens
+   the bot chat with the token attached.
 3. **The bot identifies and confirms** (the conversation below). On success the token is
    `confirmed` and bound to the client.
 4. **The browser polls with the poll secret.** The poll reports the token's state (so the
@@ -189,7 +189,7 @@ For the client who reached the bot without a deep link (opened it by hand, camer
 the **Kirish kodi** button runs the same identification as above (confirm; contact share if the
 account is unknown), then issues a [login code](../entities/identity.md#telegram-login-code) —
 6 digits shown in the chat, single-use, 5-minute TTL, bound to the now-identified client. The
-login page's "Kod bilan kirish" input redeems it and receives the session directly.
+login card's collapsed "Kod bilan kirish" input redeems it and receives the session directly.
 
 Note the inversion against the old OTP: the code travels **from Telegram to the site**, so
 nothing is ever sent to a typed phone number — there is nothing to deliver, budget, or probe.
@@ -270,18 +270,32 @@ repeated parallel browser tests from one localhost IP do not exhaust the per-IP 
 
 ### UX
 
-One sign-in card (client app `/auth/login`) whose primary affordance follows the device:
+One sign-in card (client app `/auth/login`) carrying two tabs — **QR kod** and **Telegram
+orqali** — over one handshake. Both are available on every device; only which one *opens*
+follows the device (desktop → QR, mobile → Telegram orqali, by the same `matchMedia` check the
+old layout used — the card keeps following it until the reader picks a tab, then stops, so a
+rotation cannot move them). Switching tabs is a change of instructions, not a restart: the
+token and its
+background poll belong to the card, so the handshake survives the switch and a reader whose
+Telegram lives on the other device is one click away from the affordance they need.
 
-- **Desktop** — a QR of the deep link with "Telegram orqali kirish" copy and the link itself
-  as a secondary anchor (for Telegram Desktop users). The page polls in the background:
-  *waiting* (QR shown) → *started* ("Telefoningizda tasdiqlang" the moment `/start` lands) →
-  redirect into the app on `confirmed`. A `declined` token returns to *waiting* with a fresh
-  QR; an expired one shows "QR eskirdi" with a **Yangilash** action that mints a new token.
-- **Mobile** — a primary **Telegram orqali kirish** button opening the deep link (the poll
-  picks the session up when the client returns to the browser), plus a secondary "QR
-  ko'rsatish" for the client whose Telegram lives on a different device.
-- **Code fallback** — a collapsed "Kod bilan kirish" affordance on both layouts: a 6-digit
-  input, generic `invalid_code` inline, `retry_after_seconds` countdown when throttled.
+- **QR kod** — the QR of the deep link, scanned by **the phone's camera** (not by Telegram;
+  the copy says so). Under it, collapsed, sits the code fallback below.
+- **Telegram orqali** — one primary **Telegram botga o'tish** button opening the deep link;
+  the poll picks the session up when the client returns to the browser.
+- **States, shared by both tabs** — *waiting* → *started* ("Telefoningizda tasdiqlang" the
+  moment `/start` lands) → redirect into the app on `confirmed`. A `declined` token returns to
+  *waiting* on a fresh handshake with a line saying why; an expired one names what died in the
+  tab's own words ("QR eskirdi" / "Kirish havolasi eskirdi") over a **Yangilash** action that
+  mints a new token. A handshake that cannot be minted at all names its cause and holds
+  Yangilash for the `retry_after_seconds` budget.
+- **Code fallback** — a disclosure under the QR tab, "Kamera ishlamayaptimi? Kod bilan
+  kirish", collapsed by default so the reader who scanned the QR never meets it. Expanded it
+  carries the instruction (open the bot, press **Kirish kodi**, type the digits here), a
+  clickable `@<bot>` link built from the bot username the deep link already names, and the
+  6-digit input: generic `invalid_code` inline, `retry_after_seconds` countdown when
+  throttled. It needs no handshake of its own, so it still works while this browser's token is
+  expired or throttled.
 - **No name step** — registration happens entirely inside the bot.
 - **Client profile** (`/c/profile`) — `name` editable (prefilled from Telegram at
   registration, never re-synced); `phone` read-only (changing it would mean re-sharing a

@@ -657,9 +657,24 @@ export async function approveWorkshopOrder(
   return (await response.json()).version as number;
 }
 
-/** The deep link the desktop card renders beside the QR — where the token rides. */
+/** The card's «Telegram orqali» tab, which holds the deep-link button. */
+export const telegramTab = /^(Telegram orqali|Через Telegram)$/;
+
+/** The deep-link button in that tab — where the handshake token rides. */
 export const telegramDeepLink =
-  /^(Havolani Telegram'da ochish|Открыть ссылку в Telegram)$/;
+  /^(Telegram botga o'tish|Перейти в Telegram-бота)$/;
+
+/**
+ * Open the login card's Telegram tab and hand back its deep-link button. The
+ * card opens on «QR kod» at a desktop viewport, so the link is one tab over —
+ * both tabs render the same handshake token.
+ */
+export async function openTelegramLoginTab(page: Page) {
+  await page.getByRole("tab", { name: telegramTab }).click();
+  const link = page.getByRole("link", { name: telegramDeepLink });
+  await expect(link).toBeVisible();
+  return link;
+}
 
 /**
  * Log a client in through the UI (Telegram bot handshake).
@@ -671,8 +686,7 @@ export const telegramDeepLink =
  */
 export async function loginClient(page: Page, phone: string, name?: string) {
   await page.goto("/client/auth/login");
-  const link = page.getByRole("link", { name: telegramDeepLink });
-  await expect(link).toBeVisible();
+  const link = await openTelegramLoginTab(page);
   const href = await link.getAttribute("href");
   const token = new URL(href ?? "").searchParams.get("start");
   expect(token, `no ?start= token in the deep link ${href}`).toBeTruthy();

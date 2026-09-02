@@ -12,7 +12,7 @@ import {
   databaseUrl,
   devConfirmLogin,
   expectOk,
-  telegramDeepLink,
+  openTelegramLoginTab,
 } from "./helpers";
 
 const execFileAsync = promisify(execFile);
@@ -424,15 +424,19 @@ test("client signs in through the Telegram bot handshake", async ({
   const id = runId(testInfo);
   await page.goto("/client/auth/login");
 
-  // Desktop card: a QR of the deep link, the link itself beside it, and a poll
-  // running in the background — no phone field, no code, no name step.
+  // Desktop card: it opens on the QR tab — a QR of the deep link, scanned by the
+  // phone's camera — with a poll running in the background. No phone field, no
+  // code, no name step.
+  await expect(
+    page.getByRole("tab", { name: "QR kod" }),
+  ).toHaveAttribute("aria-selected", "true");
   await expect(
     page.getByRole("img", { name: "Telegram botiga kirish QR kodi" }),
   ).toBeVisible();
   await expect(page.getByText("Telegramdan javob kutilmoqda")).toBeVisible();
-  const href = await page
-    .getByRole("link", { name: telegramDeepLink })
-    .getAttribute("href");
+
+  // The same token, one tab over, behind the button that opens the bot.
+  const href = await (await openTelegramLoginTab(page)).getAttribute("href");
   const token = new URL(href ?? "").searchParams.get("start");
   expect(token).toBeTruthy();
 
@@ -456,7 +460,13 @@ test("client sign-in refuses an unknown fallback code without saying why", async
   page,
 }) => {
   await page.goto("/client/auth/login");
-  await page.getByRole("button", { name: "Kod bilan kirish" }).click();
+  // The code path is a disclosure under the QR tab, collapsed by default.
+  await page
+    .getByRole("button", { name: "Kamera ishlamayaptimi? Kod bilan kirish" })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "@mebel_pro_uz_bot" }),
+  ).toHaveAttribute("href", "https://t.me/mebel_pro_uz_bot");
   await page.getByLabel("Kirish kodi").fill("000000");
   await page.getByRole("button", { name: "Kirish", exact: true }).click();
 

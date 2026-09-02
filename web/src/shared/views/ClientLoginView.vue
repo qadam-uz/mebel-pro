@@ -6,6 +6,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { sanitizeWholeNumberInput } from '@/shared/app/inputSanitizers'
 import { safeRedirectPath } from '@/shared/app/redirect'
 import { useRoleConfig } from '@/shared/app/roleConfig'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import BrandMark from '@/shared/components/BrandMark.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
@@ -24,20 +25,32 @@ const router = useRouter()
 // Two seconds: the handshake lives five minutes, so this costs ~150 requests at
 // the very worst and still reads as instant when the client presses Tasdiqlash.
 const POLL_INTERVAL_MS = 2_000
-// The primary affordance follows the device, not the window: a phone gets the
-// button that opens Telegram, everything else gets the QR another device scans.
+// Both ways into the bot are on the card at once; only the tab that *opens*
+// first follows the device — a phone leads with the button that opens Telegram,
+// everything else with the QR another device scans.
 const MOBILE_QUERY = '(max-width: 768px), (pointer: coarse)'
 const CODE_LENGTH = 6
+// The bot's handle, read back off the deep link so the code fallback's `t.me`
+// link and the deep link can never name two different bots.
+const BOT_LINK_PATTERN = /^https:\/\/t\.me\/([A-Za-z0-9_]+)/
 
 /** What the card is showing. `loading` covers minting the first token. */
 type Phase = 'loading' | 'waiting' | 'started' | 'expired' | 'error'
+/** The two ways into the bot, each its own tab on the card. */
+type LoginTab = 'qr' | 'telegram'
 
 const phase = ref<Phase>('loading')
 const deepLink = ref('')
+const botUsername = ref('')
 const tokenError = ref<string | null>(null)
 const declined = ref(false)
 const isMobile = ref(false)
-const qrShown = ref(false)
+// `null` means "nobody has picked yet", so the card keeps following the device
+// until the reader chooses a tab — and then stops, because a rotated phone or a
+// dragged window must not yank them off the tab they are reading. Latching the
+// device answer at mount instead would freeze whatever the very first
+// `matchMedia` read said, which is not reliably the final viewport.
+const chosenTab = ref<LoginTab | null>(null)
 const codeOpen = ref(false)
 const code = ref('')
 const codeError = ref<string | null>(null)
@@ -58,10 +71,28 @@ const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.
 // Set by the API client's 401 interceptor when a silent refresh fails (CB-08).
 const sessionExpired = computed(() => route.query.reason === 'session_expired')
 
-// The QR is on screen whenever it is the primary affordance (desktop) or the
-// client asked for it (mobile, Telegram on another device).
-const showQr = computed(() => !isMobile.value || qrShown.value)
 const isLive = computed(() => phase.value === 'waiting' || phase.value === 'started')
+// The tab that opens follows the device — a phone leads with the button that
+// opens Telegram, everything else with the QR another device scans.
+const activeTab = computed<LoginTab>({
+  get: () => chosenTab.value ?? (isMobile.value ? 'telegram' : 'qr'),
+  set: (value) => {
+    chosenTab.value = value
+  },
+})
+// Expired and un-mintable both replace the handshake affordance with a named
+// cause and one retry — in the QR tab and the Telegram tab alike, because both
+// render the same dead token. The code disclosure is unaffected: its code comes
+// from the chat, not from this browser's handshake.
+const handshakeStopped = computed(() => phase.value === 'expired' || phase.value === 'error')
+
+const tabs = computed(() => [
+  { value: 'qr', label: t('client.login.tabQr') },
+  { value: 'telegram', label: t('client.login.tabTelegram') },
+])
+
+const botLink = computed(() => (botUsername.value ? `https://t.me/${botUsername.value}` : ''))
+const botHandle = computed(() => `@${botUsername.value}`)
 
 // The token budget is measured in hours, so its `retry_after_seconds` arrives as
 // a four-digit number — "3061 soniyadan keyin" is a figure nobody converts. Under
@@ -81,6 +112,12 @@ const tokenErrorText = computed(() => {
   return errorCode === 'network_error'
     ? t('client.error.network_error')
     : t('client.error.loginFallback')
+})
+// One line for the dead handshake, named per tab: the QR reader lost a QR, the
+// Telegram reader lost a link, and a mint that failed outright names its cause.
+const handshakeStoppedText = computed(() => {
+  if (phase.value !== 'expired') return tokenErrorText.value
+  return activeTab.value === 'qr' ? t('client.login.expiredQr') : t('client.login.expiredLink')
 })
 // A throttle or a dropped connection is not the client's mistake — amber, not red.
 const tokenErrorTone = computed(() =>
@@ -131,6 +168,7 @@ async function mintToken() {
     if (unmounted) return
     pollSecret = issued.poll_secret
     deepLink.value = issued.deep_link
+    readBotUsername(issued.deep_link)
     phase.value = 'waiting'
     startPolling()
   } catch {
@@ -142,6 +180,18 @@ async function mintToken() {
       startRetry(retryAfter)
     }
   }
+}
+
+/**
+ * Pull the bot's handle out of the freshly minted deep link. The server builds
+ * that link from `TELEGRAM_BOT_USERNAME`, so reading it back keeps the code
+ * tab's `t.me` link on the same bot with no second config channel. A link that
+ * does not parse leaves the last known handle alone — the tab then simply shows
+ * its instructions without the shortcut.
+ */
+function readBotUsername(link: string) {
+  const match = BOT_LINK_PATTERN.exec(link)
+  if (match) botUsername.value = match[1]
 }
 
 function startPolling() {
@@ -294,163 +344,165 @@ onBeforeUnmount(() => {
       <h1 class="font-display text-3xl font-semibold leading-tight text-ink">
         {{ $t('client.login.title') }}
       </h1>
-      <!-- The subtitle explains the affordance below it, so it goes away in the
-           states that have none — "scan the QR" over a dead handshake with no QR
-           on screen is an instruction the reader cannot carry out. -->
-      <p v-if="isLive || phase === 'loading'" class="mt-2 text-sm text-ink-muted">
-        {{ isMobile ? $t('client.login.subtitleMobile') : $t('client.login.subtitleDesktop') }}
-      </p>
 
-      <!-- Expired: the one thing to do is mint a new handshake. -->
-      <div v-if="phase === 'expired'" class="mt-5">
-        <div class="client-banner warn">
-          <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
-          <span>{{
-            isMobile ? $t('client.login.expiredLink') : $t('client.login.expiredQr')
-          }}</span>
-        </div>
-        <button
-          type="button"
-          class="mp-button mp-button-primary min-h-[46px] w-full"
-          @click="mintToken"
-        >
-          {{ $t('client.login.refresh') }}
-        </button>
-      </div>
+      <!-- Two ways into the same bot, both available on every device. Switching
+           tabs is a change of instructions, not a restart: the handshake token
+           and its background poll belong to the card, not to a tab. -->
+      <AppTabs
+        v-model="activeTab"
+        class="mt-5"
+        id-prefix="client-login"
+        :label="$t('client.login.tabsLabel')"
+        :tabs="tabs"
+      />
 
-      <!-- The handshake could not be minted at all: named cause + retry. -->
-      <div v-else-if="phase === 'error'" class="mt-5">
-        <div class="client-banner" :class="tokenErrorTone">
-          <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
-          <span>{{ tokenErrorText }}</span>
-        </div>
-        <button
-          type="button"
-          class="mp-button mp-button-primary min-h-[46px] w-full"
-          :disabled="!canRetryToken"
-          @click="mintToken"
-        >
-          {{ $t('client.login.refresh') }}
-        </button>
-      </div>
-
-      <div v-else class="mt-5">
+      <!-- The QR and the deep link are two renderings of one token, so they
+           share a panel body and differ only in the affordance and its
+           instruction. One element, so the tab switch patches in place instead
+           of tearing the card down. -->
+      <section
+        :id="`client-login-${activeTab}-panel`"
+        role="tabpanel"
+        :aria-labelledby="`client-login-${activeTab}-tab`"
+        tabindex="0"
+      >
         <div v-if="declined" class="client-banner info" role="status">
           <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
           <span>{{ $t('client.login.declined') }}</span>
         </div>
 
-        <!-- Mobile: Telegram is on this device, so the deep link is the action. -->
-        <a
-          v-if="isMobile"
-          class="mp-button mp-button-primary min-h-[46px] w-full"
-          :class="phase === 'loading' ? 'pointer-events-none opacity-50' : ''"
-          :href="deepLink || undefined"
-          :aria-disabled="phase === 'loading' ? 'true' : undefined"
-          rel="noopener"
-        >
-          {{ $t('client.login.telegramButton') }}
-        </a>
-
-        <!-- The QR frame keeps its size while the token is minting, so the card
-             does not jump when it arrives. -->
-        <div
-          v-if="showQr"
-          class="mx-auto w-[210px] rounded-xl border border-hairline p-3"
-          :class="isMobile ? 'mt-4' : ''"
-        >
-          <div v-if="phase === 'loading'" class="client-skeleton aspect-square w-full"></div>
-          <QrCode v-else :value="deepLink" :label="$t('client.login.qrLabel')" />
-        </div>
-
-        <div class="mt-4 text-center">
+        <!-- Dead handshake — expired, or never minted: named cause + one retry.
+             The instruction and the affordance both go away, because "scan the
+             QR" over a QR that is not there cannot be carried out. -->
+        <template v-if="handshakeStopped">
+          <div class="client-banner" :class="phase === 'expired' ? 'warn' : tokenErrorTone">
+            <Icon name="alert" class="mt-0.5 size-4 shrink-0" />
+            <span>{{ handshakeStoppedText }}</span>
+          </div>
           <button
-            v-if="isMobile"
             type="button"
-            class="text-sm font-bold text-accent-deep"
-            :aria-expanded="qrShown"
-            @click="qrShown = !qrShown"
+            class="mp-button mp-button-primary min-h-[46px] w-full"
+            :disabled="phase === 'error' && !canRetryToken"
+            @click="mintToken"
           >
-            {{ qrShown ? $t('client.login.hideQr') : $t('client.login.showQr') }}
+            {{ $t('client.login.refresh') }}
           </button>
-          <a
-            v-else-if="deepLink"
-            class="text-sm font-bold text-accent-deep"
-            :href="deepLink"
-            rel="noopener"
-          >
-            {{ $t('client.login.openInTelegram') }}
-          </a>
-        </div>
+        </template>
 
-        <p class="mt-4 text-center text-sm text-ink-soft" role="status">
-          {{ phase === 'started' ? $t('client.login.confirmOnPhone') : $t('client.login.waiting') }}
-        </p>
-      </div>
-
-      <!-- Fallback: the client who reached the bot without the deep link and got
-           a 6-digit code there. Collapsed — it is the exception, not the path. -->
-      <div class="mt-6 border-t border-hairline pt-5">
-        <button
-          type="button"
-          class="flex w-full items-center justify-between text-sm font-bold text-accent-deep"
-          :aria-expanded="codeOpen"
-          aria-controls="client-code-form"
-          @click="codeOpen = !codeOpen"
-        >
-          <span>{{ $t('client.login.codeToggle') }}</span>
-          <Icon
-            name="chevron-down"
-            class="size-4 transition-transform"
-            :class="codeOpen ? 'rotate-180' : ''"
-          />
-        </button>
-
-        <form
-          v-if="codeOpen"
-          id="client-code-form"
-          class="mt-4 space-y-3"
-          novalidate
-          @submit.prevent="submitCode"
-        >
-          <p class="text-sm text-ink-muted">{{ $t('client.login.codeHint') }}</p>
-          <label class="block" for="client-login-code">
-            <span class="mb-1 block text-sm font-bold text-ink">
-              {{ $t('client.login.codeLabel') }}
-            </span>
-            <input
-              id="client-login-code"
-              v-model="code"
-              class="mp-input tracking-[0.5em]"
-              type="text"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              :maxlength="CODE_LENGTH"
-              placeholder="123456"
-              :aria-invalid="codeError ? 'true' : undefined"
-              :aria-describedby="codeError ? 'client-login-code-error' : undefined"
-              @input="sanitizeCode"
-            />
-          </label>
-
-          <p
-            v-if="codeErrorText"
-            id="client-login-code-error"
-            class="text-sm font-bold"
-            :class="codeError === 'login_code_rate_limited' ? 'text-warning' : 'text-danger'"
-          >
-            {{ codeErrorText }}
+        <template v-else>
+          <p class="text-sm text-ink-muted">
+            {{ activeTab === 'qr' ? $t('client.login.qrHint') : $t('client.login.telegramHint') }}
           </p>
 
-          <button
-            type="submit"
-            class="mp-button mp-button-outline w-full"
-            :disabled="isRedeeming || codeBlocked"
+          <!-- The QR frame keeps its size while the token is minting, so the card
+               does not jump when it arrives. -->
+          <div
+            v-if="activeTab === 'qr'"
+            class="mx-auto mt-4 w-[210px] rounded-xl border border-hairline p-3"
           >
-            {{ isRedeeming ? $t('client.login.codeSubmitting') : $t('client.login.codeSubmit') }}
+            <div v-if="phase === 'loading'" class="client-skeleton aspect-square w-full"></div>
+            <QrCode v-else :value="deepLink" :label="$t('client.login.qrLabel')" />
+          </div>
+
+          <a
+            v-else
+            class="mp-button mp-button-primary mt-4 min-h-[46px] w-full"
+            :class="phase === 'loading' ? 'pointer-events-none opacity-50' : ''"
+            :href="deepLink || undefined"
+            :aria-disabled="phase === 'loading' ? 'true' : undefined"
+            rel="noopener"
+          >
+            {{ $t('client.login.telegramButton') }}
+          </a>
+
+          <p class="mt-4 text-center text-sm text-ink-soft" role="status">
+            {{
+              phase === 'started' ? $t('client.login.confirmOnPhone') : $t('client.login.waiting')
+            }}
+          </p>
+        </template>
+
+        <!-- The camera-less way in: the client opens the bot by hand, presses
+             «Kirish kodi» there and types the 6 digits back here. It belongs to
+             the QR tab because that is the tab whose affordance can fail, and it
+             stays collapsed — the reader who scanned the QR never meets it. It
+             needs no handshake of its own, so it also works while this browser's
+             token is expired or throttled. -->
+        <div v-if="activeTab === 'qr'" class="mt-6 border-t border-hairline pt-5">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between text-sm font-bold text-accent-deep"
+            :aria-expanded="codeOpen"
+            aria-controls="client-code-fallback"
+            @click="codeOpen = !codeOpen"
+          >
+            <span>{{ $t('client.login.codeToggle') }}</span>
+            <Icon
+              name="chevron-down"
+              class="size-4 shrink-0 transition-transform"
+              :class="codeOpen ? 'rotate-180' : ''"
+            />
           </button>
-        </form>
-      </div>
+
+          <div v-if="codeOpen" id="client-code-fallback" class="mt-4">
+            <p class="text-sm text-ink-muted">{{ $t('client.login.codeHint') }}</p>
+            <a
+              v-if="botLink"
+              class="mt-2 inline-flex text-sm font-bold text-accent-deep"
+              :href="botLink"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ botHandle }}
+            </a>
+
+            <form
+              id="client-code-form"
+              class="mt-4 space-y-3"
+              novalidate
+              @submit.prevent="submitCode"
+            >
+              <label class="block" for="client-login-code">
+                <span class="mb-1 block text-sm font-bold text-ink">
+                  {{ $t('client.login.codeLabel') }}
+                </span>
+                <input
+                  id="client-login-code"
+                  v-model="code"
+                  class="mp-input tracking-[0.5em]"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  :maxlength="CODE_LENGTH"
+                  placeholder="123456"
+                  :aria-invalid="codeError ? 'true' : undefined"
+                  :aria-describedby="codeError ? 'client-login-code-error' : undefined"
+                  @input="sanitizeCode"
+                />
+              </label>
+
+              <p
+                v-if="codeErrorText"
+                id="client-login-code-error"
+                class="text-sm font-bold"
+                :class="codeError === 'login_code_rate_limited' ? 'text-warning' : 'text-danger'"
+              >
+                {{ codeErrorText }}
+              </p>
+
+              <button
+                type="submit"
+                class="mp-button mp-button-outline w-full"
+                :disabled="isRedeeming || codeBlocked"
+              >
+                {{
+                  isRedeeming ? $t('client.login.codeSubmitting') : $t('client.login.codeSubmit')
+                }}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
 
       <!-- Below the actions, not above them: the card has one primary action and a
            three-way radiogroup over the heading would compete with it. Still on

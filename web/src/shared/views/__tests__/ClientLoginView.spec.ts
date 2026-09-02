@@ -42,7 +42,7 @@ function handshake(index = 1) {
   return {
     token: `tok-${index}`,
     poll_secret: `secret-${index}`,
-    deep_link: `https://t.me/mebelpro_bot?start=tok-${index}`,
+    deep_link: `https://t.me/mebel_pro_uz_bot?start=tok-${index}`,
     expires_at: '2026-01-01T00:05:00Z',
   }
 }
@@ -59,7 +59,10 @@ async function tick(times = 1) {
   await flushPromises()
 }
 
+let viewportListeners: ((event: MediaQueryListEvent) => void)[] = []
+
 function setViewport(mobile: boolean) {
+  viewportListeners = []
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     writable: true,
@@ -67,10 +70,28 @@ function setViewport(mobile: boolean) {
       ({
         matches: mobile,
         media: query,
-        addEventListener: () => {},
+        addEventListener: (_: string, listener: (event: MediaQueryListEvent) => void) => {
+          viewportListeners.push(listener)
+        },
         removeEventListener: () => {},
       }) as unknown as MediaQueryList,
   })
+}
+
+/** The viewport answering later than mount — a settling layout, a rotation. */
+async function emitViewportChange(mobile: boolean) {
+  for (const listener of viewportListeners) listener({ matches: mobile } as MediaQueryListEvent)
+  await flushPromises()
+}
+
+/** Click one of the card's two tabs, the way a reader does. */
+async function selectTab(view: VueWrapper, tab: 'qr' | 'telegram') {
+  await view.find(`#client-login-${tab}-tab`).trigger('click')
+  await flushPromises()
+}
+
+function selectedTab(view: VueWrapper) {
+  return view.find('[role="tab"][aria-selected="true"]').text()
 }
 
 let router: Router
@@ -105,16 +126,72 @@ afterEach(() => {
 })
 
 describe('ClientLoginView — Telegram handshake', () => {
-  it('renders the QR and the link on desktop and waits', async () => {
+  it('opens on the QR tab on desktop and waits', async () => {
     const auth = useAuthStore()
     vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
     vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
 
     const view = await mountLogin()
 
+    expect(selectedTab(view)).toBe('QR kod')
     expect(view.find('svg[role="img"]').exists()).toBe(true)
-    expect(view.find('a[href="https://t.me/mebelpro_bot?start=tok-1"]').exists()).toBe(true)
+    // The phone's camera scans it — the QR is not something Telegram scans.
+    expect(view.text()).toContain('telefoningiz kamerasi bilan skanerlang')
     expect(view.text()).toContain('Telegramdan javob kutilmoqda')
+  })
+
+  it('keeps one handshake and one live poll across a tab switch', async () => {
+    const auth = useAuthStore()
+    const create = vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    await tick()
+    expect(pollSpy).toHaveBeenCalledTimes(1)
+
+    await selectTab(view, 'telegram')
+
+    // Same token behind the button the QR was encoding, and no second mint.
+    const link = view.find('a.mp-button-primary')
+    expect(link.attributes('href')).toBe('https://t.me/mebel_pro_uz_bot?start=tok-1')
+    expect(link.text()).toBe("Telegram botga o'tish")
+    expect(create).toHaveBeenCalledTimes(1)
+
+    // The poll is the card's, not the tab's — it never stopped.
+    await tick()
+    expect(pollSpy).toHaveBeenCalledTimes(2)
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows a late viewport answer, then defers to the reader', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    expect(selectedTab(view)).toBe('QR kod')
+
+    // A viewport that only answers after mount still moves the default.
+    await emitViewportChange(true)
+    expect(selectedTab(view)).toBe('Telegram orqali')
+
+    // Once the reader picks, no rotation or resize takes them off that tab.
+    await selectTab(view, 'qr')
+    await emitViewportChange(false)
+    await emitViewportChange(true)
+    expect(selectedTab(view)).toBe('QR kod')
+  })
+
+  it('offers the code fallback under the QR tab only', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    expect(view.find('button[aria-controls="client-code-fallback"]').exists()).toBe(true)
+
+    await selectTab(view, 'telegram')
+    expect(view.find('button[aria-controls="client-code-fallback"]').exists()).toBe(false)
   })
 
   it('says to confirm on the phone once the bot chat opens', async () => {
@@ -187,7 +264,9 @@ describe('ClientLoginView — Telegram handshake', () => {
     await flushPromises()
 
     expect(create).toHaveBeenCalledTimes(2)
-    expect(view.find('a[href="https://t.me/mebelpro_bot?start=tok-2"]').exists()).toBe(true)
+    expect(view.find('svg[role="img"]').exists()).toBe(true)
+    await selectTab(view, 'telegram')
+    expect(view.find('a[href="https://t.me/mebel_pro_uz_bot?start=tok-2"]').exists()).toBe(true)
   })
 
   it('returns to waiting on a fresh handshake when the client declines', async () => {
@@ -205,7 +284,9 @@ describe('ClientLoginView — Telegram handshake', () => {
 
     expect(create).toHaveBeenCalledTimes(2)
     expect(view.text()).toContain('Kirish bekor qilindi')
-    expect(view.find('a[href="https://t.me/mebelpro_bot?start=tok-2"]').exists()).toBe(true)
+    await selectTab(view, 'telegram')
+    expect(view.find('a[href="https://t.me/mebel_pro_uz_bot?start=tok-2"]').exists()).toBe(true)
+    await selectTab(view, 'qr')
 
     // The line survives the fresh handshake's own `pending` polls — clearing it
     // per tick would flash it for two seconds and take it away unread.
@@ -306,14 +387,33 @@ describe('ClientLoginView — code fallback', () => {
     vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
     vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
     const view = await mountLogin()
-    await view.find('button[aria-controls="client-code-form"]').trigger('click')
+    await view.find('button[aria-controls="client-code-fallback"]').trigger('click')
     return { auth, view }
   }
 
   it('is collapsed until asked for', async () => {
-    const { view } = await openFallback()
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    const toggle = view.find('button[aria-controls="client-code-fallback"]')
+    expect(toggle.text()).toBe('Kamera ishlamayaptimi? Kod bilan kirish')
+    expect(view.find('#client-code-form').exists()).toBe(false)
+
+    await toggle.trigger('click')
+
     expect(view.find('#client-code-form').exists()).toBe(true)
     expect(view.find('#client-login-code').exists()).toBe(true)
+  })
+
+  it('links the bot the deep link names, so the two can never disagree', async () => {
+    const { view } = await openFallback()
+
+    const link = view.find('a[href="https://t.me/mebel_pro_uz_bot"]')
+    expect(link.exists()).toBe(true)
+    expect(link.text()).toBe('@mebel_pro_uz_bot')
+    expect(view.text()).toContain('«Kirish kodi» tugmasini bosing')
   })
 
   it('keeps a rejected code on screen behind one generic message', async () => {
@@ -376,22 +476,25 @@ describe('ClientLoginView — code fallback', () => {
 })
 
 describe('ClientLoginView — mobile', () => {
-  it('leads with the Telegram button and hides the QR behind a toggle', async () => {
+  it('opens on the Telegram tab and keeps the QR one click away', async () => {
     setViewport(true)
     const auth = useAuthStore()
-    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const create = vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
     vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
 
     const view = await mountLogin()
 
+    expect(selectedTab(view)).toBe('Telegram orqali')
     const button = view.find('a.mp-button-primary')
-    expect(button.attributes('href')).toBe('https://t.me/mebelpro_bot?start=tok-1')
-    expect(button.text()).toBe('Telegram orqali kirish')
+    expect(button.attributes('href')).toBe('https://t.me/mebel_pro_uz_bot?start=tok-1')
+    expect(button.text()).toBe("Telegram botga o'tish")
     expect(view.find('svg[role="img"]').exists()).toBe(false)
 
-    const toggle = view.findAll('button').find((item) => item.text() === "QR ko'rsatish")
-    await toggle?.trigger('click')
+    // The QR is still there for the client whose Telegram lives on another
+    // device — one tab away, on the same handshake.
+    await selectTab(view, 'qr')
 
     expect(view.find('svg[role="img"]').exists()).toBe(true)
+    expect(create).toHaveBeenCalledTimes(1)
   })
 })

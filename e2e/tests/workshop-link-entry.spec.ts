@@ -10,12 +10,12 @@ import {
   continueButton,
   devConfirmLogin,
   expectOk,
+  openTelegramLoginTab,
   ownerReadyPassword,
   passwordLabel,
   phoneFor,
   runId,
   seedOrderableBranch,
-  telegramDeepLink,
 } from "./helpers";
 
 test.setTimeout(120_000);
@@ -104,8 +104,7 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   // 2. Kirish → the existing Telegram handshake. The entry survives the trip
   //    through `localStorage`, so no branch has to be chosen again after login.
   await page.getByRole("button", { name: /^Kirish$/ }).click();
-  const link = page.getByRole("link", { name: telegramDeepLink });
-  await expect(link).toBeVisible();
+  const link = await openTelegramLoginTab(page);
   const href = await link.getAttribute("href");
   const token = new URL(href ?? "").searchParams.get("start");
   expect(token, `no ?start= token in the deep link ${href}`).toBeTruthy();
