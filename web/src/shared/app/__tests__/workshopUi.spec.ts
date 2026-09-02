@@ -3,11 +3,52 @@ import { describe, expect, it } from 'vitest'
 import {
   dashboardFailureLine,
   loginPrefix,
+  orderPillClass,
   stockTransactionTypeLabel,
   workshopDraftStatus,
   workshopErrorMessage,
+  workshopStatusUz,
   workshopTenantName,
 } from '@/shared/app/workshopUi'
+
+// The status vocabulary is per branch mode (orders.md). Full mode keeps all six
+// names; simple mode collapses the three production statuses into one word,
+// because nobody on such a branch can move them apart.
+describe('workshop status vocabulary', () => {
+  it('keeps the six-name vocabulary in full mode', () => {
+    expect(workshopStatusUz('new', 'full')).toBe('Yangi')
+    expect(workshopStatusUz('confirmed', 'full')).toBe('Tasdiqlangan')
+    expect(workshopStatusUz('cutting', 'full')).toBe('Kesilmoqda')
+    expect(workshopStatusUz('edge_banding', 'full')).toBe('Kromkada')
+    expect(workshopStatusUz('ready', 'full')).toBe('Tayyor')
+    // A caller with no branch in hand (global search) must not guess a collapse.
+    expect(workshopStatusUz('confirmed')).toBe('Tasdiqlangan')
+  })
+
+  it('reads the three production statuses as one word on a simple branch', () => {
+    expect(workshopStatusUz('confirmed', 'simple')).toBe('Tayyorlanmoqda')
+    // A full→simple leftover still sitting mid-spine reads as production too —
+    // it is not a stage anyone on that branch can advance separately.
+    expect(workshopStatusUz('cutting', 'simple')).toBe('Tayyorlanmoqda')
+    expect(workshopStatusUz('edge_banding', 'simple')).toBe('Tayyorlanmoqda')
+    expect(workshopStatusUz('new', 'simple')).toBe('Yangi')
+    expect(workshopStatusUz('ready', 'simple')).toBe('Tayyor')
+  })
+
+  it('names the completed status by what it means — the client took the order', () => {
+    expect(workshopStatusUz('completed', 'full')).toBe('Olib ketildi')
+    expect(workshopStatusUz('completed', 'simple')).toBe('Olib ketildi')
+    expect(workshopStatusUz('cancelled', 'simple')).toBe('Bekor qilingan')
+  })
+
+  it('gives the collapsed statuses one pill tone, since they share one label', () => {
+    expect(orderPillClass('cutting', 'simple')).toBe(orderPillClass('confirmed', 'simple'))
+    expect(orderPillClass('edge_banding', 'simple')).toBe(orderPillClass('confirmed', 'simple'))
+    // Full mode still tells the stages apart by colour.
+    expect(orderPillClass('cutting', 'full')).not.toBe(orderPillClass('confirmed', 'full'))
+    expect(orderPillClass('ready', 'simple')).toBe('pill p-rdy')
+  })
+})
 
 describe('workshop UI helpers', () => {
   it('maps backend/action error codes to Uzbek operator copy', () => {

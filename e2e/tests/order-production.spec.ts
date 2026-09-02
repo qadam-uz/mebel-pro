@@ -13,9 +13,12 @@ import {
   createCatalogDecors,
   databaseUrl,
   edgeNumbers,
+  devConfirmLogin,
   escapeRegExp,
   expectOk,
+  loginClient,
   panelNumbers,
+  setBranchProductionMode,
   type BranchMaterialResponse,
 } from "./helpers";
 
@@ -81,7 +84,6 @@ async function seedPlatform(login: string) {
         ...process.env,
         ENV: "test",
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   );
@@ -218,16 +220,20 @@ async function stockIn(
   await expectOk(response);
 }
 
+// The three calls the login card makes, with dev-confirm standing in for the bot.
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
-  const requested = await request.post("/api/v1/auth/client/otp/request", {
-    data: { phone },
+  const issued = await request.post("/api/v1/auth/client/telegram/token");
+  await expectOk(issued);
+  const handshake = (await issued.json()) as {
+    token: string;
+    poll_secret: string;
+  };
+  await devConfirmLogin(request, handshake.token, phone, name);
+  const polled = await request.post("/api/v1/auth/client/telegram/poll", {
+    data: { poll_secret: handshake.poll_secret },
   });
-  await expectOk(requested);
-  const verified = await request.post("/api/v1/auth/client/otp/verify", {
-    data: { phone, code: "000000", name },
-  });
-  await expectOk(verified);
-  return (await verified.json()) as TokenResponse;
+  await expectOk(polled);
+  return (await polled.json()) as TokenResponse;
 }
 
 async function optimizedDraftWithoutPricing(
@@ -275,25 +281,6 @@ async function optimizedDraftWithoutPricing(
   const result = (await optimized.json()) as CuttingDraftResponse;
   expect(result.chosen_result_id).not.toBeNull();
   return result;
-}
-
-async function loginClient(page: Page, phone: string, name?: string) {
-  await page.goto("/client/auth/login");
-  await page.getByLabel("Telefon raqami").fill(phone);
-  await page.getByRole("button", { name: "Kod yuborish" }).click();
-  await page.getByLabel("Tasdiqlash kodi").fill("000000");
-  await page.getByRole("button", { name: "Tasdiqlash" }).click();
-  const nameField = page.getByLabel("Ismingiz");
-  if (
-    await nameField
-      .waitFor({ state: "visible", timeout: 2_000 })
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    await nameField.fill(name ?? "Order Client");
-    await page.getByRole("button", { name: "Davom etish" }).click();
-  }
-  await expect(page).toHaveURL(/\/client\/c$/);
 }
 
 async function loginWorkshop(
@@ -369,6 +356,11 @@ test("client places an order and workshop completes it through production queues
   const ownerAccess = await readyOwnerToken(request, setup);
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
+  // This spec walks the full per-stage choreography — assignment, the two
+  // starts, both station terminals. A branch is born `simple` (orders.md), where
+  // those endpoints answer `409 simple_mode_active` and the Kesish/Krom sidebar
+  // entries are hidden, so the surface under test has to be asked for.
+  await setBranchProductionMode(request, ownerAccess, branchId, "full");
   const { panelDecor, panel, edge } = await carriedMaterials(
     request,
     adminAccess,
@@ -566,16 +558,19 @@ test("client places an order and workshop completes it through production queues
     .click();
   await collected;
   await expect(
-    workshopPage.getByText("Tugatilgan", { exact: true }).first(),
+    workshopPage.getByText("Olib ketildi", { exact: true }).first(),
   ).toBeVisible();
   await workshopContext.close();
 
   await page.goto("/client/c/orders");
   await expect(page.getByText(orderNumber as string).first()).toBeVisible();
-  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+  // The client track is four phases, mode-independent (orders.md): the final
+  // one reads «Olib ketildi» whichever way the workshop ran the floor — the
+  // completed status always means the client took the order.
+  await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "Tafsilot" }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
-  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
 });
 
 test("client sees branch pricing setup errors while placing an order", async ({

@@ -80,7 +80,8 @@ export const clientConfig: RoleConfig = {
     { labelKey: 'nav.item.clientHome', to: '/c', icon: 'home' },
     { labelKey: 'nav.item.clientDrafts', to: '/c/cutting/drafts', icon: 'scissors' },
     { labelKey: 'nav.item.clientOrders', to: '/c/orders', icon: 'orders' },
-    { labelKey: 'nav.item.clientBranches', to: '/c/branches', icon: 'store' },
+    // Ustaxonalarim: the client's own workshops, not a platform directory (spec §5).
+    { labelKey: 'nav.item.clientWorkshops', to: '/c/branches', icon: 'store' },
   ],
 }
 

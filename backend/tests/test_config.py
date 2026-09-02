@@ -17,12 +17,12 @@ def clear_env(monkeypatch: pytest.MonkeyPatch, *keys: str) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
-def test_otp_dev_codes_parse_from_json_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OTP_DEV_CODES", '["000000", "111111"]')
+def test_trusted_proxy_cidrs_parse_from_json_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", '["172.29.0.0/24", "10.0.0.0/8"]')
 
     settings = Settings(ENV="dev", _env_file=None)
 
-    assert settings.OTP_DEV_CODES == ["000000", "111111"]
+    assert settings.TRUSTED_PROXY_CIDRS == ["172.29.0.0/24", "10.0.0.0/8"]
 
 
 def test_dev_minio_defaults_match_local_compose_credentials(
@@ -39,49 +39,59 @@ def test_dev_minio_defaults_match_local_compose_credentials(
     assert settings.MINIO_BUCKET == "mebel"
 
 
-def test_otp_dev_codes_are_rejected_in_prod() -> None:
-    with pytest.raises(ValidationError, match="OTP_DEV_CODES"):
-        Settings(ENV="prod", OTP_DEV_CODES=["000000"], _env_file=None)
+def _prod_settings(**overrides: object) -> Settings:
+    """A fully configured production Settings, minus whatever the test breaks."""
+    values: dict[str, object] = {
+        "ENV": "prod",
+        "TELEGRAM_BOT_TOKEN": "bot-token",
+        "TELEGRAM_BOT_USERNAME": "mebelpro_bot",
+        "TELEGRAM_WEBHOOK_SECRET": "webhook-secret",
+        "TELEGRAM_LOGIN_CODE_PEPPER": "prod-pepper",
+        "_env_file": None,
+    }
+    values.update(overrides)
+    return Settings(**values)  # type: ignore[arg-type]  # kwargs are settings fields
 
 
-def test_prod_otp_dev_codes_require_explicit_testing_override() -> None:
-    settings = Settings(
-        ENV="prod",
-        OTP_DEV_CODES=["000000"],
-        ALLOW_PROD_OTP_DEV_CODES=True,
-        OTP_CODE_PEPPER="{{change-me}}",
-        TELEGRAM_GATEWAY_ACCESS_TOKEN="",
-        _env_file=None,
+def test_dev_mode_defaults_off_so_a_missing_setting_cannot_open_sign_in() -> None:
+    settings = Settings(ENV="dev", _env_file=None)
+
+    assert settings.TELEGRAM_LOGIN_DEV_MODE is False
+    assert settings.ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE is False
+    assert settings.TELEGRAM_LOGIN_RATE_LIMITS_ENABLED is True
+
+
+def test_dev_mode_is_rejected_in_prod() -> None:
+    with pytest.raises(ValidationError, match="TELEGRAM_LOGIN_DEV_MODE"):
+        _prod_settings(TELEGRAM_LOGIN_DEV_MODE=True)
+
+
+def test_prod_dev_mode_requires_explicit_testing_override() -> None:
+    """The pre-production escape hatch: dev mode before the bot is registered."""
+    settings = _prod_settings(
+        TELEGRAM_LOGIN_DEV_MODE=True,
+        ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE=True,
+        TELEGRAM_BOT_TOKEN="",
+        TELEGRAM_BOT_USERNAME="",
+        TELEGRAM_WEBHOOK_SECRET="",
+        TELEGRAM_LOGIN_CODE_PEPPER="{{change-me}}",
     )
 
-    assert settings.OTP_DEV_CODES == ["000000"]
-    assert settings.ALLOW_PROD_OTP_DEV_CODES is True
+    assert settings.TELEGRAM_LOGIN_DEV_MODE is True
 
 
-def test_prod_requires_telegram_gateway_token_and_otp_pepper() -> None:
-    with pytest.raises(ValidationError, match="TELEGRAM_GATEWAY_ACCESS_TOKEN"):
-        Settings(
-            ENV="prod",
-            OTP_DEV_CODES=[],
-            OTP_CODE_PEPPER="prod-pepper",
-            TELEGRAM_GATEWAY_ACCESS_TOKEN="",
-            _env_file=None,
-        )
-    with pytest.raises(ValidationError, match="OTP_CODE_PEPPER"):
-        Settings(
-            ENV="prod",
-            OTP_DEV_CODES=[],
-            OTP_CODE_PEPPER="{{change-me}}",
-            TELEGRAM_GATEWAY_ACCESS_TOKEN="token",
-            _env_file=None,
-        )
+@pytest.mark.parametrize(
+    "field",
+    [
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_BOT_USERNAME",
+        "TELEGRAM_WEBHOOK_SECRET",
+        "TELEGRAM_LOGIN_CODE_PEPPER",
+    ],
+)
+def test_prod_requires_every_bot_secret(field: str) -> None:
+    """An unset bot secret is a boot failure, not a silently disabled bot."""
+    with pytest.raises(ValidationError, match=field):
+        _prod_settings(**{field: "{{change-me}}"})
 
-    settings = Settings(
-        ENV="prod",
-        OTP_DEV_CODES=[],
-        OTP_CODE_PEPPER="prod-pepper",
-        TELEGRAM_GATEWAY_ACCESS_TOKEN="token",
-        _env_file=None,
-    )
-
-    assert settings.TELEGRAM_GATEWAY_API_BASE_URL == "https://gatewayapi.telegram.org"
+    assert _prod_settings().TELEGRAM_API_BASE_URL == "https://api.telegram.org"

@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 70
 ---
 
@@ -47,13 +47,14 @@ flowchart TD
     App["<b>FastAPI app</b> (1 process)<br/>modular monolith · in-process scheduler<br/>+ live docs site (/docs)"]
     DB[("PostgreSQL<br/>single DB")]
     Files[("MinIO / S3<br/>file store")]
-    TG([Telegram Gateway<br/>client OTP delivery only])
+    TG([Telegram Bot API<br/>client sign-in + notifications])
 
     Net ==>|HTTPS| Edge
     Edge ==> App
     App ==> DB
     App ==> Files
-    App -.->|send verification code| TG
+    App -.->|send bot messages| TG
+    TG -.->|bot webhook| Edge
 ```
 
 Caddy (config in `deploy/Caddyfile`) routes by **subdomain** under a single apex
@@ -79,9 +80,12 @@ failure mode are documented in the repo's `deploy/AGENTS.md`.
   stored files; others attach/detach by id. Cutting PDFs are generated on demand from immutable
   cutting-result rows, not stored as file records in v1.
 - **In-process scheduler** — platform maintenance jobs that stay inside the app process; in v1,
-  this prunes expired sessions and expired OTP challenges.
+  this prunes expired sessions and expired Telegram login tokens / codes.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
-- **One external integration** — Telegram Gateway, used only to deliver client sign-in OTP codes.
+- **One external integration** — the **Telegram Bot API**: the platform's bot handles client
+  sign-in (the deep-link handshake) and delivers client order notifications. Updates arrive by
+  webhook through the edge, authenticated by Telegram's `secret_token` header; sends go
+  straight to the Bot API. No polling process, no queue.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
   (the only published service in prod — HTTPS + Let's Encrypt). Push to `main`.
 
@@ -103,7 +107,7 @@ retired layer-first packages) are working instructions and live in the repo's
 
 | Module | Owns |
 |---|---|
-| `access` | platform/workshop/client identity, sessions, OTP, password gates, permission checks |
+| `access` | platform/workshop/client identity, sessions, Telegram bot login, password gates, permission checks |
 | `client_portal` | client profile, public branch browsing, client-visible catalog reads |
 | `workshop` | workshops, branches, branch context, workshop settings |
 | `catalog` | manufacturers, platform decors + decor formats, branch materials (carry + price), branch pricing |
@@ -111,7 +115,7 @@ retired layer-first packages) are working instructions and live in the repo's
 | `cutting` | cutting drafts, optimizer results, panel layouts, customer boards, PDFs |
 | `sales` | orders, order state transitions, frozen price snapshots, order status events |
 | `finance` | income, expenses, settlement summaries, finance and production reports |
-| `support` | files, audit/status logs, notifications inbox |
+| `support` | files, audit/status logs, notifications inbox + Telegram delivery |
 | `platform` | workshop provisioning orchestration, jobs, error monitor, platform users |
 
 App-facing routes may compose module APIs, but they do not become domain owners. A client-portal
@@ -121,7 +125,7 @@ shows an order cutting plan still reads through `sales`/`cutting`.
 ## Three SPAs + a static landing
 
 A static SEO landing page at `/` (plain HTML, indexable) plus a Vue 3 / Vite repo building
-**three SPAs**, each its own entry, auth surface, and route set: **client** (Telegram OTP-auth
+**three SPAs**, each its own entry, auth surface, and route set: **client** (Telegram-bot-auth
 customers — cut, order, track), **workshop** (workshop owner & staff — every screen permission-gated),
 **superadmin** (platform operators — provisioning, blocks, jobs console, error monitor). The
 three audiences barely overlap, and a marketing page needs to be indexable — a single SPA can't
@@ -144,7 +148,7 @@ Three rules every module respects.
   success response immediately — its next request must see the write. The default FastAPI
   dependency scope commits *after* the response, which loses this guarantee: a success could
   reach the client while its write still fails to commit, and an immediate follow-up request
-  (verify after OTP send, an authed call after login) races the commit.
+  (a login-token poll after the bot confirms, an authed call after login) races the commit.
 
 ## Quality requirements
 

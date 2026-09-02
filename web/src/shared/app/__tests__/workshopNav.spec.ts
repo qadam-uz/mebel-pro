@@ -85,6 +85,52 @@ describe('workshop navigation permissions', () => {
     ).toEqual(['Asosiy', 'Kesish', 'Krom'])
   })
 
+  // orders.md — simple mode: the station queues are assignment-fed and a simple
+  // branch never writes an assignment, so the two entries (and the counters the
+  // shell derives from this list) come off the sidebar entirely.
+  it('hides the station pages while the selected branch runs simple mode', () => {
+    expect(
+      workshopNavItems({
+        isOwner: false,
+        branches: [
+          { id: 'branch-1', permissions: ['process_production'], production_mode: 'simple' },
+        ],
+        selectedBranchId: 'branch-1',
+        path: identity,
+      }).map((item) => i18n.global.t(item.labelKey)),
+    ).toEqual(['Asosiy'])
+  })
+
+  it('hides the station pages for the owner too when the selected branch is simple', () => {
+    const labels = workshopNavItems({
+      isOwner: true,
+      branches: [
+        { id: 'branch-1', permissions: [], production_mode: 'full' },
+        { id: 'branch-2', permissions: [], production_mode: 'simple' },
+      ],
+      selectedBranchId: 'branch-2',
+      path: identity,
+    }).map((item) => i18n.global.t(item.labelKey))
+    expect(labels).not.toContain('Kesish')
+    expect(labels).not.toContain('Krom')
+    // everything else the owner has stays put — this hides two entries, not a group
+    expect(labels).toContain('Buyurtmalar')
+    expect(labels).toContain('Ombor')
+  })
+
+  it('keeps the station pages on a full-mode branch', () => {
+    expect(
+      workshopNavItems({
+        isOwner: false,
+        branches: [
+          { id: 'branch-1', permissions: ['process_production'], production_mode: 'full' },
+        ],
+        selectedBranchId: 'branch-1',
+        path: identity,
+      }).map((item) => i18n.global.t(item.labelKey)),
+    ).toEqual(['Asosiy', 'Kesish', 'Krom'])
+  })
+
   it('shows only worker production to reports-only finance staff', () => {
     expect(
       workshopNavItems({

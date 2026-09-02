@@ -317,6 +317,11 @@ export async function mountRoleApp(
 
   router.beforeEach(async (to) => {
     await auth.restore()
+    // A public route works signed in AND signed out, so it is checked before the
+    // auth-route branch below — that one bounces an authenticated principal to
+    // home, which would kill the workshop link's logged-in fast path (spec §3.1).
+    // `auth.restore()` still runs first: the route needs to know which it is.
+    if (to.meta.public === true) return true
     const isAuthRoute = to.meta.layout === 'auth'
     if (isAuthRoute) {
       if (auth.isAllowedFor(roleConfig.role)) return roleConfig.homePath

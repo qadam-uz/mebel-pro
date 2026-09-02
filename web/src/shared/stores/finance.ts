@@ -185,7 +185,10 @@ export interface FinanceSummary {
 }
 
 export interface WorkerProductionRow {
-  user_id: string
+  // Null on the unassigned bucket: a simple-mode order can complete with nobody
+  // credited, and the volume still has to be counted (orders.md). It is a
+  // bucket, not a worker — it never appears in a per-worker pay view.
+  user_id: string | null
   full_name: string
   panels_cut: number
   cut_count: number

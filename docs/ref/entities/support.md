@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 60
 ---
 
@@ -51,7 +51,7 @@ recipients, polled by the front-end apps. v1's only notification channel.
 | `id` | UUID | PK |
 | `recipient_type` | enum | `platform_user` / `workshop_user` / `client` |
 | `recipient_id` | UUID | the principal |
-| `event_code` | text | e.g. `order.status_changed`, `warehouse.low_stock`, `workshop.blocked` |
+| `event_code` | text | e.g. `order.ready`, `warehouse.low_stock`, `workshop.blocked`. Free text by design — a code that stopped being produced (`order.status_changed`) still has to render on the rows already written under it ([`notifications.md`](../features/notifications.md)) |
 | `entity_type` | text? | the subject entity type (`order` / `stock_item` / `branch` / …) |
 | `entity_id` | UUID? | the subject entity's id (for the deep link) |
 | `payload` | json | small denormalized fields needed to render without extra lookups |

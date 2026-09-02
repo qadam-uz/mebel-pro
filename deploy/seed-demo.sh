@@ -40,7 +40,7 @@
 #                                                          inventory @ B2 (home @ B2)
 #     accountant   / HisobchiDemo123   Hisobchi         — finance + reports @ B1+B2
 #
-#   CLIENT SPA  (app.<host>)          — OTP login, dev code 000000:
+#   CLIENT SPA  (app.<host>)          — Telegram-bot login (TELEGRAM_LOGIN_DEV_MODE=true):
 #     +998901112233  Dilshod          6 orders (new→ready) + 2 saved drafts
 #     +998901234455  Aziza            3 orders (completed ×2, cancelled)
 #
@@ -84,7 +84,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API="${API:-http://localhost:8000/api/v1}"
 READYZ="${READYZ:-http://localhost:8000/api/v1/readyz}"
 ASSETS_DIR="$SCRIPT_DIR/seed-assets/materials"
-OTP_CODE="000000"
 
 # Credentials (see header). Temp passwords are used once during seeding, then
 # changed to the documented finals so the finals are ready to use immediately.
@@ -363,6 +362,17 @@ BRANCH2_ID="$(jcall POST "$API/workshop/branches" "$OWNER_TOKEN" "$(jq -nc \
   '{name:"Yunusobod filiali",address:"Toshkent, Yunusobod tumani, Amir Temur ko‘chasi 108",phone:$b2phone}')" | jq -r .id)"
 ok "branch 2 created (Yunusobod filiali)"
 
+# Every branch is SIMPLE (one Tayyor tap closes an order) — that is the column
+# default and the migration adds no backfill, so real workshops all start there.
+# The demo world below drives the per-stage choreography — assign, start, stage
+# completions, station queues — so both branches are switched to FULL, which is
+# the opt-in a shop that wants stations makes on the branch form.
+for _branch in "$BRANCH1_ID" "$BRANCH2_ID"; do
+  jcall PATCH "$API/workshop/branches/$_branch" "$OWNER_TOKEN" \
+    '{"production_mode":"full"}' >/dev/null
+done
+ok "production mode: full on B1 and B2"
+
 branch_id_for() { case "$1" in B1) echo "$BRANCH1_ID";; B2) echo "$BRANCH2_ID";; esac; }
 
 # ============================================================================
@@ -565,13 +575,20 @@ skeleton "Nur Mebel"   "owner-nur"   "Olmazor filiali" "Toshkent, Olmazor tumani
 ok "2 skeleton workshops created"
 
 # ============================================================================
-# 10 · Clients (OTP login, dev code 000000)
+# 10 · Clients (Telegram-bot login, dev-mode confirm)
 # ============================================================================
-say "10 · Client OTP logins"
+say "10 · Client bot logins"
 client_token() { # phone name -> access token
-  jcall POST "$API/auth/client/otp/request" "" "{\"phone\":\"$1\"}" >/dev/null
-  jcall POST "$API/auth/client/otp/verify" "" \
-    "{\"phone\":\"$1\",\"code\":\"$OTP_CODE\",\"name\":\"$2\"}" | jq -r .access_token
+  # The real flow is browser -> bot -> poll. With TELEGRAM_LOGIN_DEV_MODE=true a
+  # dev-only confirm stands in for the bot, so seeding needs no Telegram at all.
+  local handshake poll_secret token
+  handshake="$(jcall POST "$API/auth/client/telegram/token" "" "{}")"
+  poll_secret="$(printf '%s' "$handshake" | jq -r .poll_secret)"
+  token="$(printf '%s' "$handshake" | jq -r .token)"
+  jcall POST "$API/auth/client/telegram/dev-confirm" "" \
+    "{\"token\":\"$token\",\"phone\":\"$1\",\"name\":\"$2\"}" >/dev/null
+  jcall POST "$API/auth/client/telegram/poll" "" \
+    "{\"poll_secret\":\"$poll_secret\"}" | jq -r .access_token
 }
 DILSHOD_TOKEN="$(client_token "$DILSHOD_PHONE" "$DILSHOD_NAME")"
 AZIZA_TOKEN="$(client_token "$AZIZA_PHONE" "$AZIZA_NAME")"
@@ -799,7 +816,7 @@ $(printf '\033[1;32m')╔══════════════════�
                manager / ManagerDemo123     cutter / CutterDemo123
                edger / EdgerDemo123         usta2 / Usta2Demo123
                accountant / HisobchiDemo123
-  CLIENT       $DILSHOD_PHONE (Dilshod) · $AZIZA_PHONE (Aziza) · OTP $OTP_CODE
+  CLIENT       $DILSHOD_PHONE (Dilshod) · $AZIZA_PHONE (Aziza) · bot login (dev mode)
 
   30 dekorlar (with images) · $n_bm branch materials across both branches, all
   stocked · 9 orders (every status) · finance ledger populated · full credential

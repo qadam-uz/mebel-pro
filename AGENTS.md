@@ -104,10 +104,10 @@ ships silently otherwise.
 Prefer sensible behavior baked in over knobs the user must set. **Every config has a default**, and the default's _direction_ is deliberate:
 
 - **Non-security config → leans to dev.** `ENV=dev` out of the box; the dev conveniences
-  (`DEBUG=true`, the `000000` dev OTP code) live in the `.env.dev.example` templates — copy
+  (`DEBUG=true`, `TELEGRAM_LOGIN_DEV_MODE=true`) live in the `.env.dev.example` templates — copy
   the template and everything works, no edits.
 - **Security config → leans to prod (fail safe).** The baked-in _code_ default is the
-  locked-down one (empty `OTP_DEV_CODES`, `DEBUG=false`, auth required, no secret bypass).
+  locked-down one (`TELEGRAM_LOGIN_DEV_MODE=false`, `DEBUG=false`, auth required, no secret bypass).
   A misconfiguration must err toward refusing access, never toward opening it. Secrets have
   **no real default** — they're `{{change-me}}` placeholders that must be set.
 

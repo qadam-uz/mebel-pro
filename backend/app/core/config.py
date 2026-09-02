@@ -49,26 +49,41 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "mebel"
     MINIO_USE_SSL: bool = False
 
-    # Client phone-OTP dev sign-in. Empty means the real Telegram flow is required.
-    # A non-empty list is a local/CI bypass and is rejected in production unless
-    # the explicit pre-production testing override below is set.
-    OTP_DEV_CODES: list[str] = []
-    ALLOW_PROD_OTP_DEV_CODES: bool = False
-    OTP_RATE_LIMITS_ENABLED: bool = True
-    # OTP send budgets (each Telegram Gateway message costs money). Env-tunable
-    # so an ongoing abuse incident can be throttled with an env edit + restart.
-    # The global daily cap is the hard ceiling on the worst-case Telegram bill.
-    OTP_RESEND_COOLDOWN_SECONDS: int = 60
-    OTP_PHONE_SENDS_PER_HOUR: int = 5
-    OTP_PHONE_SENDS_PER_DAY: int = 10
-    OTP_IP_SENDS_PER_HOUR: int = 30
-    OTP_IP_SENDS_PER_DAY: int = 50
-    OTP_GLOBAL_SENDS_PER_HOUR: int = 150
-    OTP_GLOBAL_SENDS_PER_DAY: int = 1000
-    OTP_CODE_PEPPER: str = "{{change-me}}"
-    TELEGRAM_GATEWAY_ACCESS_TOKEN: str = "{{change-me}}"  # noqa: S105 - secret placeholder.
-    TELEGRAM_GATEWAY_API_BASE_URL: str = "https://gatewayapi.telegram.org"
-    TELEGRAM_GATEWAY_TIMEOUT_SECONDS: float = 5.0
+    # --- Telegram bot (client sign-in + client notifications) ---------------
+    # One bot serves both: the deep-link sign-in handshake and outbound order
+    # notifications. Updates arrive by webhook, authenticated by Telegram's
+    # `secret_token` header; sends go straight to the Bot API.
+    TELEGRAM_BOT_TOKEN: str = ""  # secret; empty disables outbound sends
+    TELEGRAM_BOT_USERNAME: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""  # secret; empty refuses every webhook call
+    TELEGRAM_API_BASE_URL: str = "https://api.telegram.org"
+    TELEGRAM_API_TIMEOUT_SECONDS: float = 5.0
+    # HMAC pepper for the 6-digit fallback login codes.
+    TELEGRAM_LOGIN_CODE_PEPPER: str = "{{change-me}}"
+
+    # Dev/CI/E2E sign-in without a real bot: a dev-only operation confirms any
+    # pending login token as a given phone. Locked-down by default and rejected
+    # in production unless the explicit pre-production override below is set.
+    TELEGRAM_LOGIN_DEV_MODE: bool = False
+    ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE: bool = False
+
+    # Master switch for the per-IP login-token budget and the code-redeem
+    # throttle. Must stay on outside automated test runs; local E2E turns it off
+    # so parallel browser tests from one localhost IP don't exhaust the bucket.
+    TELEGRAM_LOGIN_RATE_LIMITS_ENABLED: bool = True
+    # Per-IP login-token creation budgets. Env-tunable so an ongoing abuse
+    # incident can be throttled with an env edit + restart. The daily window is
+    # the longest one, so login-token retention must exceed 24 h.
+    TELEGRAM_LOGIN_TOKENS_PER_IP_PER_HOUR: int = 30
+    TELEGRAM_LOGIN_TOKENS_PER_IP_PER_DAY: int = 100
+    # Fallback-code redeem attempts per IP per window. The low-entropy code is
+    # protected by this throttle, the 5-minute TTL, and burn-on-redeem.
+    TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP: int = 10
+    TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS: int = 60
+
+    # Public origin of the client SPA — used to build the order links carried by
+    # the bot's notification messages.
+    CLIENT_APP_BASE_URL: str = "http://localhost:5173"
 
     # Only trust X-Forwarded-For when the immediate peer is in one of these
     # CIDRs. Keep prod narrow and add the Caddy peer/network explicitly.
@@ -82,6 +97,14 @@ class Settings(BaseSettings):
     LOGIN_IP_THROTTLE_ENABLED: bool = True
     LOGIN_IP_MAX_FAILURES: int = 20
     LOGIN_IP_WINDOW_SECONDS: int = 900
+
+    # Public workshop-link resolve budget per client IP. The 8-character code is
+    # unguessable (32^8) but the endpoint is unauthenticated, so a budget is what
+    # keeps it from being walked or used as a scraping surface. One landing page
+    # costs one lookup, so a shared office IP stays far under this.
+    PUBLIC_LINK_THROTTLE_ENABLED: bool = True
+    PUBLIC_LINK_LOOKUPS_PER_IP: int = 60
+    PUBLIC_LINK_WINDOW_SECONDS: int = 60
 
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
@@ -125,23 +148,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_defaults(self) -> "Settings":
-        using_dev_otp_codes = bool(self.OTP_DEV_CODES)
-        if self.ENV == "prod" and using_dev_otp_codes and not self.ALLOW_PROD_OTP_DEV_CODES:
-            msg = "OTP_DEV_CODES must be empty in production"
+        if self.ENV != "prod":
+            return self
+        # Dev mode is a full sign-in bypass: any pending token can be confirmed
+        # as any phone without Telegram. It stays off in production unless the
+        # temporary pre-production testing override is explicitly enabled.
+        if self.TELEGRAM_LOGIN_DEV_MODE and not self.ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE:
+            msg = "TELEGRAM_LOGIN_DEV_MODE must be false in production"
             raise ValueError(msg)
-        if (
-            self.ENV == "prod"
-            and not using_dev_otp_codes
-            and self.TELEGRAM_GATEWAY_ACCESS_TOKEN in {"", "{{change-me}}"}
-        ):
-            msg = "TELEGRAM_GATEWAY_ACCESS_TOKEN must be set in production"
-            raise ValueError(msg)
-        if (
-            self.ENV == "prod"
-            and not using_dev_otp_codes
-            and self.OTP_CODE_PEPPER in {"", "{{change-me}}"}
-        ):
-            msg = "OTP_CODE_PEPPER must be set in production"
+        if self.TELEGRAM_LOGIN_DEV_MODE:
+            # Pre-production testing: the bot need not be configured yet.
+            return self
+        for name in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_USERNAME", "TELEGRAM_WEBHOOK_SECRET"):
+            if getattr(self, name) in {"", "{{change-me}}"}:
+                msg = f"{name} must be set in production"
+                raise ValueError(msg)
+        if self.TELEGRAM_LOGIN_CODE_PEPPER in {"", "{{change-me}}"}:
+            msg = "TELEGRAM_LOGIN_CODE_PEPPER must be set in production"
             raise ValueError(msg)
         return self
 

@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 20
 ---
 
@@ -18,7 +18,7 @@ that's a considered substitution.
 ## In scope
 
 - **Identity & access** — platform operators provision workshops; owners manage staff with
-  per-branch permissions; clients self-register with phone + Telegram OTP (walk-ins may be
+  per-branch permissions; clients sign in through the platform's Telegram bot (walk-ins may be
   registered at the counter by workshop staff). Tenant-isolated, revocable,
   brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks the formats it carries
@@ -32,7 +32,8 @@ that's a considered substitution.
   print-ready cutting map.
 - **Orders** — orders from a finalized cutting result — placed by the client, or by workshop
   staff on behalf of a walk-in client — with **frozen pricing** and a small production workflow
-  (verify → cut → band → ready → collected, pickup-only), one-step operator revert, and
+  (verify → cut → band → ready → collected, pickup-only) that each branch either taps stage by
+  stage or collapses into one **Tayyor** action, operator revert, and
   reasoned cancellation. The order tracks production only — it moves no money and holds no
   stock.
 - **Finance & accounting** — a workshop money ledger: income (incl. order payments) and

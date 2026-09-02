@@ -230,7 +230,7 @@ describe('cuttingEditorDerived', () => {
     expect(registryColorStyle(11).bg).toMatch(/^hsl\(/)
   })
 
-  it('never paints a chip with the retired brand blue', () => {
+  it('never paints a chip with the brand-tile ultramarine', () => {
     for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 25]) {
       expect(registryColorStyle(number).bg.toLowerCase()).not.toBe('#4341c6')
     }

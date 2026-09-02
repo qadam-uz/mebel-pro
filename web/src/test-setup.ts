@@ -35,6 +35,9 @@ function memoryStorage(): Storage {
 }
 
 Object.defineProperty(window, 'localStorage', { configurable: true, value: memoryStorage() })
+// Same story for the per-tab store — the client login card parks its in-flight
+// Telegram handshake there.
+Object.defineProperty(window, 'sessionStorage', { configurable: true, value: memoryStorage() })
 
 // Every mounted component can reach `$t`, exactly as it can in the app. Tests
 // assert the *rendered message*, not a key echo: a spec that passes against

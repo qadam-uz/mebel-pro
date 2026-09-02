@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-31
 order: 20
 ---
 
@@ -66,6 +66,7 @@ whether clients see it and order from it.
 | `edge_trim_mm` | int | edge trim per side (usable panel area = panel − 2× this); 0–50 mm; default `5` |
 | `edge_overhang_mm` | int | the bander's glue-and-trim allowance per banded **side** — tape is glued long and cut flush by hand, so consumed length = geometric length + this, once per side; 0–100 mm; default `30`. Drives what the client is billed and what stock is decremented ([`orders.md`](../features/orders.md#pricing)) |
 | `own_material_allowed` | bool | whether a **client** may claim their own sheets self-serve in the app; default `false`. Off until the owner turns it on — accepting client material changes what the shop stores and what has to arrive before the saw starts, so it is opted into, never inherited. Gates the client's cutting editor and the client write path on the server. **Not** a shop-floor ban: staff always may arrange client material — in the staff editor and on a placed order ([`orders.md`](../features/orders.md#pricing)) |
+| `production_mode` | enum | `simple` / `full`; **default `simple`**, for existing branches as well as new ones — owner opt-in either way, never inherited from a backfill. Decides whether production is one **Tayyor** tap or the per-stage choreography; read at the moment of each action and never stamped on an order, so switching migrates nothing ([`orders.md`](../features/orders.md#production-mode)) |
 | `created_at` / `updated_at` | timestamp | |
 
 Lifecycle: `active` — visible to clients, accepts new orders & cutting; `temporarily_closed` —

@@ -45,14 +45,14 @@ test("client sees a localized order notification in the bell and opens it", asyn
   // The dropdown renders the localized title and the denormalized order number,
   // never the raw event_code.
   const menu = page.getByRole("menu", { name: "Bildirishnomalar" });
-  await expect(menu.getByText("Buyurtma tasdiqlandi")).toBeVisible();
+  await expect(menu.getByText("Buyurtma tayyorlanmoqda")).toBeVisible();
   await expect(
     menu.getByText(`Buyurtma № ${order.order_number}`),
   ).toBeVisible();
   await expect(menu.getByText("order.confirmed")).toHaveCount(0);
 
   // Opening the row navigates to the order and marks it read (badge clears).
-  await menu.getByRole("menuitem", { name: /Buyurtma tasdiqlandi/ }).click();
+  await menu.getByRole("menuitem", { name: /Buyurtma tayyorlanmoqda/ }).click();
   await expect(page).toHaveURL(new RegExp(`/client/c/orders/${order.id}`));
   await expect(
     page.getByRole("heading", { name: order.order_number }),

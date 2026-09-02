@@ -5,8 +5,9 @@
     "cutting": "Kesilmoqda",
     "edge_banding": "Kromkada",
     "ready": "Tayyor",
-    "completed": "Tugatilgan",
-    "cancelled": "Bekor qilingan"
+    "completed": "Olib ketildi",
+    "cancelled": "Bekor qilingan",
+    "inProduction": "Tayyorlanmoqda"
   },
   "orderStatusHint": {
     "new": "ko'rib chiqish kerak",
@@ -200,7 +201,10 @@
     "statusSaveFailed": "Holat saqlanmadi",
     "statusSaving": "O'zgartirilmoqda",
     "statusSubmit": "Holatni o'zgartirish",
-    "statusChanged": "Filial holati o'zgartirildi."
+    "statusChanged": "Filial holati o'zgartirildi.",
+    "productionMode": "Ishlab chiqarish rejimi",
+    "productionModeSimple": "Oddiy — buyurtma bitta «Tayyor» tugmasi bilan yopiladi",
+    "productionModeFull": "To'liq — usta tayinlash, boshlash va bosqichma-bosqich kuzatuv"
   },
   "staff": {
     "title": "Xodimlar ro'yxati",
@@ -428,6 +432,20 @@
     "supplier_not_found": "Ta'minotchi topilmadi — ro'yxatdan qaytadan tanlang.",
     "client_not_found": "Mijoz topilmadi — ro'yxatdan qaytadan tanlang.",
     "adjustment_not_found": "Tuzatish topilmadi — ro'yxatni yangilang.",
-    "invalid_party": "Tuzatish bitta tomonga yoziladi: yo ta'minotchi, yo mijoz."
+    "invalid_party": "Tuzatish bitta tomonga yoziladi: yo ta'minotchi, yo mijoz.",
+    "simple_mode_active": "Bu filial oddiy rejimda — buyurtma «Tayyor» tugmasi bilan yopiladi.",
+    "full_mode_active": "Bu filial to'liq rejimda — bosqichlarni alohida o'tkazing."
+  },
+  "clientLink": {
+    "title": "Mijoz havolasi",
+    "branchHint": "Mijoz shu QR kodni skanerlasa, ilova shu filialga ulanadi.",
+    "workshopHint": "Mijoz shu QR kodni skanerlasa, ilova ustaxonangizga ulanadi va filialni o'zi tanlaydi.",
+    "urlLabel": "Havola",
+    "copy": "Nusxalash",
+    "copied": "Havola nusxalandi",
+    "copyFailed": "Nusxalab bo'lmadi — havolani belgilab qo'lda nusxalang.",
+    "print": "Chop etish",
+    "qrLabel": "Mijoz havolasining QR kodi",
+    "tagline": "Chizmangizni o'zingiz chizing — narxini darhol bilasiz"
   }
 }

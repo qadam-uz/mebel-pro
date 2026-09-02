@@ -63,6 +63,20 @@ async def get_settings(
     return workshop
 
 
+async def workshop_public_code(db: AsyncSession, *, workshop_id: uuid.UUID) -> str:
+    """The workshop's client-link code, for the branch reads that print it.
+
+    Branch responses are ORM rows; the code lives one table over, and the
+    "Mijoz havolasi" card on the branch screen needs both halves of
+    `/w/{code}/{branch_no}`. One scalar per response beats denormalising a
+    permanent code onto every branch row.
+    """
+    code = await db.scalar(select(Workshop.public_code).where(Workshop.id == workshop_id))
+    if code is None:
+        raise APIError("workshop_not_found", "Workshop not found", status_code=404)
+    return code
+
+
 async def update_settings(
     db: AsyncSession,
     *,
@@ -133,6 +147,7 @@ async def create_branch(
         edge_trim_mm=payload.edge_trim_mm,
         edge_overhang_mm=payload.edge_overhang_mm,
         own_material_allowed=payload.own_material_allowed,
+        production_mode=payload.production_mode,
     )
     db.add(branch)
     await db.flush()
@@ -215,6 +230,11 @@ async def update_branch(
         and payload.own_material_allowed is not None
     ):
         branch.own_material_allowed = payload.own_material_allowed
+    # Owner-only like the rest of this form, and never blocked: an order caught
+    # mid-spine by a full → simple switch is finished by the composite Tayyor
+    # action, which completes only the steps it still owes (orders.md).
+    if "production_mode" in payload.model_fields_set and payload.production_mode is not None:
+        branch.production_mode = payload.production_mode
     await record_action(
         db,
         actor=actor_from_principal(principal),

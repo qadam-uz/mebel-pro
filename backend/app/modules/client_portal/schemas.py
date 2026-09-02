@@ -33,6 +33,81 @@ class ClientProfilePatchRequest(BaseModel):
     preferred_branch_id: uuid.UUID | None = None
 
 
+class WorkshopLinkBranch(APIModel):
+    """One visible branch behind a workshop link.
+
+    Pickup information only — what a client needs to choose a counter and call
+    it. Deliberately nothing about prices, catalog, staff or volumes: the
+    landing is a trust cue, not a storefront (spec §1.3).
+    """
+
+    id: uuid.UUID
+    branch_no: int
+    name: str
+    address: str
+    phone: str
+    status: BranchStatus
+    closed_reason: str | None
+
+
+class WorkshopLinkResponse(APIModel):
+    """The public resolve payload behind `/w/{code}` and `/w/{code}/{branch_no}`."""
+
+    # Echoed in canonical form so the landing posts back exactly what resolved.
+    code: str
+    workshop_name: str
+    workshop_logo_file_id: uuid.UUID | None
+    branches: list[WorkshopLinkBranch]
+    # Set when the link named a branch that resolved — the landing then skips
+    # the choice step entirely.
+    requested_branch_id: uuid.UUID | None
+    # True when a `branch_no` was asked for and did NOT resolve (renumbered,
+    # retired, or made invisible). The link falls back to workshop-level
+    # behavior instead of dying, because a printed QR outlives branch
+    # reshuffles (spec §8) — the flag is how the landing knows to show the
+    # choice step it was about to skip.
+    branch_no_fallback: bool
+
+
+class ClientEntryRequest(BaseModel):
+    """Applying a scanned link. The code — never a bare branch id — is the
+    capability that names the workshop; the server re-resolves both."""
+
+    code: str
+    branch_id: uuid.UUID
+
+
+class ClientEntryResponse(APIModel):
+    workshop_id: uuid.UUID
+    workshop_name: str
+    branch_id: uuid.UUID
+    branch_name: str
+
+
+class ClientWorkshopBranch(APIModel):
+    id: uuid.UUID
+    branch_no: int
+    name: str
+    address: str
+    phone: str
+    status: BranchStatus
+    closed_reason: str | None
+    is_pinned: bool
+
+
+class ClientWorkshopResponse(APIModel):
+    """One workshop on Ustaxonalarim — the pinned one plus every workshop the
+    client has an order or a draft with (spec §2). `public_code` travels so
+    "Asosiy qilish" can re-pin through the same entry endpoint a scan uses."""
+
+    workshop_id: uuid.UUID
+    name: str
+    logo_file_id: uuid.UUID | None
+    public_code: str
+    is_pinned: bool
+    branches: list[ClientWorkshopBranch]
+
+
 class ClientBranchOption(APIModel):
     branch_id: uuid.UUID
     workshop_id: uuid.UUID

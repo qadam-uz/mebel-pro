@@ -1,12 +1,34 @@
 import { translate, translatePlural } from '@/shared/i18n'
 import type { OrderStatus } from '@/shared/stores/orders'
-import type { BranchStatus, StockTransactionType } from '@/shared/stores/workshop'
+import type { BranchStatus, ProductionMode, StockTransactionType } from '@/shared/stores/workshop'
 
 // Labels are resolved on every call, never captured in a module-level const: a
 // record built at import time would freeze at whatever locale happened to be
 // active then, and a language switch would leave the words already on screen.
 
-export function workshopStatusUz(status: OrderStatus): string {
+// The three spine statuses a SIMPLE-mode branch shows as one word,
+// «Tayyorlanmoqda» (orders.md). There is no assignment and no start tap on such
+// a branch, so "queued", "at the saw" and "on the bander" are the same state to
+// everyone who can see the screen — and a full→simple leftover sitting in
+// `cutting` must read as production, not as a stage nobody can advance.
+//
+// Full mode keeps all six: there `confirmed` genuinely means queued-not-started,
+// and «Tayyorlanmoqda» would be a lie.
+const SIMPLE_PRODUCTION_STATUSES: ReadonlyArray<OrderStatus> = [
+  'confirmed',
+  'cutting',
+  'edge_banding',
+]
+
+function isCollapsed(status: OrderStatus, mode: ProductionMode): boolean {
+  return mode === 'simple' && SIMPLE_PRODUCTION_STATUSES.includes(status)
+}
+
+/** The status as the workshop names it. `mode` defaults to `full` so a caller
+ *  with no branch in hand (global search, a payable-order option) keeps the
+ *  six-status vocabulary rather than guessing a collapse. */
+export function workshopStatusUz(status: OrderStatus, mode: ProductionMode = 'full'): string {
+  if (isCollapsed(status, mode)) return translate('workshopAdmin.orderStatus.inProduction')
   return translate(`workshopAdmin.orderStatus.${status}`)
 }
 
@@ -14,7 +36,10 @@ export function workshopStatusHint(status: OrderStatus): string {
   return translate(`workshopAdmin.orderStatusHint.${status}`)
 }
 
-export function orderPillClass(status: OrderStatus) {
+export function orderPillClass(status: OrderStatus, mode: ProductionMode = 'full') {
+  // One word, one colour: in simple mode the three collapsed statuses share a
+  // label, and two tones under it would read as a defect rather than as detail.
+  if (isCollapsed(status, mode)) return 'pill p-conf'
   if (status === 'completed') return 'pill p-dn'
   if (status === 'cancelled') return 'pill p-bad'
   if (status === 'ready') return 'pill p-rdy'
@@ -158,6 +183,11 @@ const WORKSHOP_ERROR_CODES: ReadonlySet<string> = new Set([
   'order_revision_failed',
   'cutting_already_started',
   'banding_already_started',
+  // The branch's mode moved between page load and tap: the surface offered an
+  // action the other flow owns. Both sentences name the flow that IS live, so
+  // the operator knows what to reach for after the page refetches (orders.md).
+  'simple_mode_active',
+  'full_mode_active',
   'cutter_required',
   'edger_required',
   'cutting_complete_failed',

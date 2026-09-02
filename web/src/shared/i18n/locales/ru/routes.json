@@ -10,7 +10,7 @@
   "newDraft": "Новый раскрой",
   "draft": "Раскрой",
   "cuttingResult": "Результат раскроя",
-  "workshops": "Мастерские",
+  "workshops": "Мои мастерские",
   "notifications": "Уведомления",
   "notFound": "Страница не найдена",
   "dashboard": "Главная",
@@ -44,5 +44,7 @@
   "labour": "Труд сотрудников",
   "staffDetail": "Детали сотрудника",
   "dekorlar": "Декоры",
-  "dekorDetail": "Детали декора"
+  "dekorDetail": "Детали декора",
+  "entry": "Ссылка мастерской",
+  "clientLink": "Ссылка для клиента"
 }

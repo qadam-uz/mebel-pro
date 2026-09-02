@@ -150,7 +150,6 @@ export async function seedPlatform(login: string) {
         ...process.env,
         ENV: "test",
         DATABASE_URL: databaseUrl,
-        OTP_DEV_CODES: '["000000"]',
       },
     },
   );
@@ -442,10 +441,36 @@ export async function stockIn(
 }
 
 /**
+ * Put a branch on the full per-stage production flow.
+ *
+ * A branch is born `simple` (orders.md — that is the adoption default), where
+ * the whole spine closes with one **Tayyor** tap and the per-step endpoints
+ * answer `409 simple_mode_active`. Suites that drive assignment, the two starts,
+ * the per-stage completions or the Kesish/Krom sidebar entries have to ask for
+ * that surface explicitly.
+ */
+export async function setBranchProductionMode(
+  request: APIRequestContext,
+  ownerToken: string,
+  branchId: string,
+  mode: "simple" | "full",
+) {
+  const response = await request.patch(`/api/v1/workshop/branches/${branchId}`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    data: { production_mode: mode },
+  });
+  await expectOk(response);
+}
+
+/**
  * A workshop+branch with pricing, two carried branch materials, and stock —
  * everything a client needs to optimize a draft and place an order. Returns the
  * IDs + an owner token (for driving workshop-side transitions) and the client
  * phone to log in.
+ *
+ * The branch is switched to **full** production mode: every suite built on this
+ * fixture asserts the per-stage surfaces (assignment, starts, the station
+ * sidebar), which a simple-mode branch deliberately does not offer.
  *
  * `panel` / `edge` are **branch materials**, not dekorlar: that is the id a part,
  * a stock row and an order item resolve to. The dekorlar behind them come back
@@ -467,6 +492,7 @@ export async function seedOrderableBranch(
   );
   const branchId = setup.branch.id as string;
   await updateBranchPricing(request, ownerAccess, branchId);
+  await setBranchProductionMode(request, ownerAccess, branchId, "full");
   const panel = await carryOneFormat(
     request,
     ownerAccess,
@@ -486,20 +512,46 @@ export async function seedOrderableBranch(
   return { setup, ownerAccess, branchId, panelDecor, edgeDecor, panel, edge };
 }
 
+/**
+ * A client access token through the bot handshake, without a bot.
+ *
+ * The three calls are exactly the ones the login card makes — mint, confirm,
+ * poll — with `TELEGRAM_LOGIN_DEV_MODE`'s dev-confirm standing in for the
+ * Telegram conversation. The token is passed explicitly: the route falls back to
+ * the newest pending handshake, which under `fullyParallel` would be another
+ * test's.
+ */
 export async function clientTokenViaApi(
   request: APIRequestContext,
   phone: string,
   name: string,
 ) {
-  const requested = await request.post("/api/v1/auth/client/otp/request", {
-    data: { phone },
+  const issued = await request.post("/api/v1/auth/client/telegram/token");
+  await expectOk(issued);
+  const handshake = (await issued.json()) as {
+    token: string;
+    poll_secret: string;
+  };
+  await devConfirmLogin(request, handshake.token, phone, name);
+  const polled = await request.post("/api/v1/auth/client/telegram/poll", {
+    data: { poll_secret: handshake.poll_secret },
   });
-  await expectOk(requested);
-  const verified = await request.post("/api/v1/auth/client/otp/verify", {
-    data: { phone, code: "000000", name },
-  });
-  await expectOk(verified);
-  return (await verified.json()).access_token as string;
+  await expectOk(polled);
+  return (await polled.json()).access_token as string;
+}
+
+/** Stand in for the bot: confirm one pending handshake as `phone`. */
+export async function devConfirmLogin(
+  request: APIRequestContext,
+  token: string,
+  phone: string,
+  name: string,
+) {
+  const confirmed = await request.post(
+    "/api/v1/auth/client/telegram/dev-confirm",
+    { data: { token, phone, name } },
+  );
+  await expectOk(confirmed);
 }
 
 /**
@@ -605,23 +657,45 @@ export async function approveWorkshopOrder(
   return (await response.json()).version as number;
 }
 
-/** Log a client in through the UI (OTP). Skips the name step for existing clients. */
+/** The card's «Telegram orqali» tab, which holds the deep-link button. */
+export const telegramTab = /^(Telegram orqali|Через Telegram)$/;
+
+/** The deep-link button in that tab — where the handshake token rides. */
+export const telegramDeepLink =
+  /^(Telegram botga o'tish|Перейти в Telegram-бота)$/;
+
+/**
+ * Open the login card's Telegram tab and hand back its deep-link button. The
+ * card opens on «QR kod» at a desktop viewport, so the link is one tab over —
+ * both tabs render the same handshake token.
+ */
+export async function openTelegramLoginTab(page: Page) {
+  await page.getByRole("tab", { name: telegramTab }).click();
+  const link = page.getByRole("link", { name: telegramDeepLink });
+  await expect(link).toBeVisible();
+  return link;
+}
+
+/**
+ * Log a client in through the UI (Telegram bot handshake).
+ *
+ * The card mints a handshake and polls it; the token is read off the rendered
+ * deep link — the same string the QR encodes — and confirmed through the
+ * dev-confirm route in the bot's place. Registration happens inside the bot, so
+ * there is no name step on screen: the name goes with the confirm.
+ */
 export async function loginClient(page: Page, phone: string, name?: string) {
   await page.goto("/client/auth/login");
-  await page.getByLabel("Telefon raqami").fill(phone);
-  await page.getByRole("button", { name: "Kod yuborish" }).click();
-  await page.getByLabel("Tasdiqlash kodi").fill("000000");
-  await page.getByRole("button", { name: "Tasdiqlash" }).click();
-  const nameField = page.getByLabel("Ismingiz");
-  if (
-    await nameField
-      .waitFor({ state: "visible", timeout: 2_000 })
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    await nameField.fill(name ?? "Order Client");
-    await page.getByRole("button", { name: "Davom etish" }).click();
-  }
+  const link = await openTelegramLoginTab(page);
+  const href = await link.getAttribute("href");
+  const token = new URL(href ?? "").searchParams.get("start");
+  expect(token, `no ?start= token in the deep link ${href}`).toBeTruthy();
+  await devConfirmLogin(
+    page.request,
+    token as string,
+    phone,
+    name ?? "Order Client",
+  );
   await expect(page).toHaveURL(/\/client\/c$/);
 }
 

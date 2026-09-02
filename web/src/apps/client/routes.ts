@@ -11,6 +11,23 @@ export const clientRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/ClientLoginView.vue'),
     meta: { layout: 'auth', titleKey: 'routes.login' },
   },
+  // The workshop link a QR opens. `meta.public` is what keeps the auth guard
+  // off it: `layout: 'auth'` alone would bounce an already-signed-in client to
+  // home, which is exactly the fast path this route has to own (spec §3.1).
+  // The two-segment form is the branch QR (`/w/{code}/{branch_no}`); it must
+  // precede nothing else, since `/w` has no other shapes.
+  {
+    path: '/w/:code',
+    name: 'client-entry',
+    component: () => import('@/shared/views/ClientEntryView.vue'),
+    meta: { layout: 'auth', public: true, titleKey: 'routes.entry' },
+  },
+  {
+    path: '/w/:code/:branchNo',
+    name: 'client-entry-branch',
+    component: () => import('@/shared/views/ClientEntryView.vue'),
+    meta: { layout: 'auth', public: true, titleKey: 'routes.entry' },
+  },
   {
     path: '/c',
     name: 'client-home',
@@ -68,6 +85,8 @@ export const clientRoutes: RouteRecordRaw[] = [
     meta: { titleKey: 'routes.cuttingResult' },
   },
   {
+    // Ustaxonalarim — the client's own workshops (spec §5). The route name and
+    // path stay; the platform-wide directory that used to live here is gone.
     path: '/c/branches',
     name: 'client-branches',
     component: () => import('@/shared/views/ClientBranchesView.vue'),

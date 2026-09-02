@@ -6,7 +6,14 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import BranchStatus, Currency, Permission, UserStatus, WorkshopStatus
+from app.models.enums import (
+    BranchStatus,
+    Currency,
+    Permission,
+    ProductionMode,
+    UserStatus,
+    WorkshopStatus,
+)
 from app.modules.access.schemas import PermissionGrantResponse, SessionResponse
 from app.schemas.common import APIModel
 
@@ -22,6 +29,10 @@ class BranchContextItem(APIModel):
     edge_trim_mm: int
     edge_overhang_mm: int
     own_material_allowed: bool
+    # Which production surface this branch's orders offer — the workshop shell
+    # reads it off the selected branch to pick actions and hide the station
+    # pages a simple branch never fills.
+    production_mode: ProductionMode
     permissions: list[Permission] = Field(default_factory=list)
 
 
@@ -33,6 +44,10 @@ class WorkshopSettingsResponse(APIModel):
     id: uuid.UUID
     name: str
     logo_file_id: uuid.UUID | None
+    # Read-only, machine-generated, permanent: the identifier behind the
+    # workshop's client link (`/w/{code}`) that the "Mijoz havolasi" card
+    # prints. There is no write path for it anywhere in the API.
+    public_code: str
     status: WorkshopStatus
     currency: Currency
     owner_user_id: uuid.UUID
@@ -60,6 +75,9 @@ class BranchCreateRequest(BaseModel):
     edge_overhang_mm: int = Field(default=30, ge=0, le=100)
     # Off unless asked for — a branch opts in to client-supplied sheets.
     own_material_allowed: bool = False
+    # Born simple: a new shop closes orders with one Tayyor tap until its owner
+    # asks for the per-stage choreography (orders.md).
+    production_mode: ProductionMode = ProductionMode.SIMPLE
 
 
 class BranchPatchRequest(BaseModel):
@@ -73,6 +91,7 @@ class BranchPatchRequest(BaseModel):
     edge_trim_mm: int | None = Field(default=None, ge=0, le=50)
     edge_overhang_mm: int | None = Field(default=None, ge=0, le=100)
     own_material_allowed: bool | None = None
+    production_mode: ProductionMode | None = None
 
 
 class BranchStatusRequest(BaseModel):
@@ -83,6 +102,9 @@ class BranchStatusRequest(BaseModel):
 class BranchResponse(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    # Read-only, carried so the branch screen can print `/w/{code}/{branch_no}`
+    # on its "Mijoz havolasi" card without a second request.
+    workshop_public_code: str
     # Read-only: assigned once at creation, never patchable (workshop.md).
     branch_no: int
     name: str
@@ -97,6 +119,7 @@ class BranchResponse(APIModel):
     edge_trim_mm: int
     edge_overhang_mm: int
     own_material_allowed: bool
+    production_mode: ProductionMode
     created_at: datetime
     updated_at: datetime
 

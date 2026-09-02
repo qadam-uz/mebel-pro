@@ -25,5 +25,8 @@
     "reason": "Sabab",
     "total": "Jami",
     "amount": "Summa"
+  },
+  "qr": {
+    "failed": "QR kodni chizib bo'lmadi — havoladan foydalaning."
   }
 }

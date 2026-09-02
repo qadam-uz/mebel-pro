@@ -48,6 +48,13 @@ interface EdgeCellLine {
   length: string
 }
 
+// The unassigned bucket is named in the operator's language, not by the
+// backend's placeholder string: simple-mode orders complete without a worker
+// pick, and the accountant still has to see that volume (orders.md).
+function workerRowName(row: WorkerProductionRow) {
+  return row.user_id === null ? t('finance.labour.unassigned') : row.full_name
+}
+
 function edgeLengthLines(row: WorkerProductionRow): EdgeCellLine[] {
   if (row.edge_lines.length > 0) {
     return row.edge_lines.map((line) => ({
@@ -167,8 +174,10 @@ watch([dateFrom, dateTo], () => {
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
-            <tr v-for="row in finance.production.rows" :key="row.user_id">
-              <td class="px-5 py-3 font-bold text-ink">{{ row.full_name }}</td>
+            <!-- `user_id` is null on the unassigned bucket, so it cannot be the
+                 key on its own — a second null row would collide with it. -->
+            <tr v-for="row in finance.production.rows" :key="row.user_id ?? 'unassigned'">
+              <td class="px-5 py-3 font-bold text-ink">{{ workerRowName(row) }}</td>
               <td class="px-5 py-3 text-right text-xs tabular-nums">
                 {{ row.panels_cut }}
               </td>

@@ -26,8 +26,8 @@ from app.models.enums import (
 )
 from app.modules.access.api import (
     normalize_uz_phone,
-    prune_expired_otp_challenges,
     prune_expired_sessions,
+    prune_expired_telegram_logins,
     revoke_for_principal,
     revoke_for_workshop,
 )
@@ -113,8 +113,11 @@ class WorkshopDetailRow:
 
 async def _cleanup_expired_sessions_job(db: AsyncSession) -> str:
     count = await prune_expired_sessions(db)
-    challenge_count = await prune_expired_otp_challenges(db)
-    return f"Pruned {count} expired sessions, {challenge_count} OTP challenges"
+    token_count, code_count = await prune_expired_telegram_logins(db)
+    return (
+        f"Pruned {count} expired sessions, "
+        f"{token_count} Telegram login tokens, {code_count} login codes"
+    )
 
 
 DEFAULT_JOBS = (
@@ -251,7 +254,7 @@ async def provision_workshop(
 ) -> ProvisionedWorkshop:
     # Imported inside the function: `workshop.api` reaches back into
     # `platform.api` at import time, so a module-level import would cycle.
-    from app.modules.workshop.api import next_branch_no
+    from app.modules.workshop.api import allocate_public_code, next_branch_no
 
     require_platform_operator(principal)
     temp_password = payload.temp_password or generate_temp_password()
@@ -271,6 +274,8 @@ async def provision_workshop(
     workshop = Workshop(
         id=workshop_id,
         name=_required_text(payload.workshop.name, "workshop_name_required"),
+        # The client link/QR the shop will print, drawn once and never rewritten.
+        public_code=await allocate_public_code(db),
         owner_user_id=owner_id,
         status=WorkshopStatus.ACTIVE,
         currency=payload.workshop.currency,

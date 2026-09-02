@@ -10,7 +10,7 @@
   "newDraft": "Yangi kesim chizmasi",
   "draft": "Kesim chizmasi",
   "cuttingResult": "Kesish natijasi",
-  "workshops": "Ustaxonalar",
+  "workshops": "Ustaxonalarim",
   "notifications": "Bildirishnomalar",
   "notFound": "Sahifa topilmadi",
   "dashboard": "Asosiy",
@@ -44,5 +44,7 @@
   "labour": "Xodimlar mehnati",
   "staffDetail": "Xodim tafsilotlari",
   "dekorlar": "Dekorlar",
-  "dekorDetail": "Dekor tafsilotlari"
+  "dekorDetail": "Dekor tafsilotlari",
+  "entry": "Ustaxona havolasi",
+  "clientLink": "Mijoz havolasi"
 }

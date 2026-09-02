@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 50
 ---
 
@@ -67,19 +67,23 @@ post-placement modification, so it is never re-priced)
 
 **Worker assignment + production stamps** (assignment is mutable until the job is done;
 stamps are immutable once set and cleared by a revert of the step that set them — they are
-the only input to the worker-production reports in [`finance.md`](../features/finance.md))
+the only input to the worker-production reports in [`finance.md`](../features/finance.md)).
+The "set at" column names the **`full`**-mode action; on a `simple`-mode branch the
+composite **Tayyor** writes the same columns for the steps it walks, all at one instant, and
+its worker ids are optional and may stay `NULL`
+([`orders.md`](../features/orders.md#production-mode)).
 
 | Field | Type | Set at | Notes |
 |---|---|---|---|
-| `assigned_cutter_user_id` | UUID? | operator assigns | pure metadata — assignment does **not** change status; holds `process_production` on the branch |
-| `assigned_edger_user_id` | UUID? | operator assigns | set when the order has banded parts; holds `process_production` on the branch |
-| `cutter_assigned_at` / `edger_assigned_at` | timestamp? | operator assigns | restamped on re-assignment; station-queue FIFO key; persists across reverts |
-| `cutting_started_at` | timestamp? | **Start cutting** (`confirmed → cutting`) | cleared by revert `cutting → confirmed` |
-| `banding_started_at` | timestamp? | **Start banding** (within `edge_banding`) | cleared by revert `edge_banding → cutting`; survives `ready → edge_banding` |
-| `cutter_user_id` | UUID? | `cutting → next` | the user credited (assignee, or the on-behalf "who did this work?" pick) |
+| `assigned_cutter_user_id` | UUID? | operator assigns | pure metadata — assignment does **not** change status; holds `process_production` on the branch; in simple mode set only by a Tayyor worker pick, and cleared by its undo |
+| `assigned_edger_user_id` | UUID? | operator assigns | set when the order has banded parts; holds `process_production` on the branch; same simple-mode rule |
+| `cutter_assigned_at` / `edger_assigned_at` | timestamp? | operator assigns | restamped on re-assignment; station-queue FIFO key; persists across reverts (except the simple-mode undo, which clears what its composite wrote) |
+| `cutting_started_at` | timestamp? | **Start cutting** (`confirmed → cutting`) | cleared by revert `cutting → confirmed`; simple mode stamps it at Tayyor, equal to `cut_completed_at` |
+| `banding_started_at` | timestamp? | **Start banding** (within `edge_banding`) | cleared by revert `edge_banding → cutting`; survives `ready → edge_banding`; simple mode stamps it at Tayyor unless a full-mode start had already written it |
+| `cutter_user_id` | UUID? | `cutting → next` | the user credited (assignee, or the on-behalf "who did this work?" pick; in simple mode the optional completion-time pick, so it may stay null) |
 | `cut_completed_at` | timestamp? | `cutting → next` | |
 | `panels_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |
-| `edger_user_id` | UUID? | `edge_banding → ready` | the user credited; null when the order had no banded parts |
+| `edger_user_id` | UUID? | `edge_banding → ready` | the user credited; null when the order had no banded parts, and nullable in simple mode for the same reason as `cutter_user_id` |
 | `edge_completed_at` | timestamp? | `edge_banding → ready` | |
 | `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<kromka branch_material_id>": 12500, … }` — consumed banding length in integer millimetres per tape format (only `shop` source). UI/reports display metres. Thickness is part of the format itself. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
@@ -95,8 +99,11 @@ are independent manual adjustments (either, both, or neither), each requiring a 
 applied-by stamp when non-zero, settable only while `new`/`confirmed` and cleared by a
 revision; the price snapshot is otherwise frozen
 at creation (no re-pricing — there is no modification); status transitions follow the state
-machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
-`edger_user_id` reference workshop users who hold `process_production` on `branch_id`;
+machine only, in both production modes, and a status transition is never conditioned on the
+mode the branch happens to run — the mode decides only which action writes it;
+concurrent transitions serialize by `version`; `cutter_user_id` /
+`edger_user_id`, when set, reference workshop users who hold `process_production` on
+`branch_id`;
 production stamps are set in the same atomic transaction as their transition and **cleared by
 a revert** of that step; stock is auto-decremented per `shop` source by the inventory module
 (panels at `cutting →` next, edges at `edge_banding → ready`, per tape format) — the order
@@ -160,7 +167,9 @@ from this.
 Invariants: written for **every** transition in the same atomic operation; the creation
 event (`from_status` null) carries the order's creator as actor — `client` on the self-serve
 path, `workshop_user` on the staff walk-in path, which writes both `∅ → new` and
-`new → confirmed` with the same actor in one operation; `to_status` is a legal transition
+`new → confirmed` with the same actor in one operation — as does a `simple`-mode branch's
+composite **Tayyor** (and its undo) for the several production events it writes at once
+([`orders.md`](../features/orders.md#the-simple-mode-collapse)); `to_status` is a legal transition
 (or revert) from `from_status` per the state machine; cancellation and revert carry a
 `reason`; never updated or deleted.
 

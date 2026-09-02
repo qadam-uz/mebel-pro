@@ -1240,9 +1240,11 @@ async def test_workshop_status_changes_notify_the_client(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """CB-02: every workshop-driven status change fans one inbox row to the order's
-    client, carrying the status + denormalized order number. Placing the order
-    (client's own action) emits nothing."""
+    """CB-02: workshop-driven status changes fan inbox rows to the order's client,
+    carrying the status + denormalized order number. Placing the order (client's
+    own action) emits nothing, and the two cutting-floor stages emit nothing
+    either — they are one client phase, so the client hears about the order being
+    confirmed and about it being ready, not about which machine it is at."""
     order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
     worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
     order_id = order["id"]
@@ -1294,8 +1296,8 @@ async def test_workshop_status_changes_notify_the_client(
     codes = [n.event_code for n in await _client_order_notifications(db_session, order_id)]
     assert codes == [
         "order.confirmed",  # approve
-        "order.status_changed",  # start-cutting → cutting (assignment itself emits nothing)
-        "order.status_changed",  # cutting-done → edge_banding
+        # start-cutting → cutting and cutting-done → edge_banding are silent:
+        # the client track has no intermediate phase to move to.
         "order.ready",  # banding-done → ready
     ]
 

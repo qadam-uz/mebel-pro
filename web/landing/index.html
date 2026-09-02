@@ -36,8 +36,8 @@
       --line: #e4e6ea;            /* --color-hairline */
       --panel-line: #e4e6ea;      /* --color-hairline — the diagram sheet's edge */
       --line-strong: #c3c8d0;     /* --color-hairline-strong — a line that survives on --panel */
-      --accent: #22252a;          /* --color-accent — graphite carries every action */
-      --accent-hover: #34383f;    /* --color-accent-hover */
+      --accent: #2b4a80;          /* --color-accent — indigo carries every action */
+      --accent-hover: #35599a;    /* --color-accent-hover */
       --on-accent: #f4f2ee;       /* --color-on-accent — bone, not white */
       --navy: #0f1115;            /* --color-ink — the ustaxona card's family */
       --navy-tint: #eef0f3;       /* --color-neutral-soft */
@@ -512,7 +512,7 @@
 
     /* The two audiences read apart by family, not by button colour: the ustaxona
        card is ink, the mijoz card is the orange signal — a 3px rule and a chip,
-       never a fill under text. Both buttons stay graphite: one action colour. */
+       never a fill under text. Both buttons stay `--accent`: one action colour. */
     .card--shop .card__accent {
       background: var(--navy)
     }
@@ -766,16 +766,11 @@
   <!-- NAV -->
   <nav class="nav">
     <div class="wrap nav__in">
-      <a href="#" class="brand" aria-label="Mebel Pro — bosh sahifa"><svg class="brand__mark" viewBox="0 0 32 32"
-          role="img" aria-label="Mebel Pro" xmlns="http://www.w3.org/2000/svg">
-          <!-- M, the cut, P — the same geometry as /favicon.svg, with the letters
-               as Wix Madefor Display 800 outlines because an inline SVG cannot
-               depend on the webfont having loaded. -->
-        <rect width="32" height="32" rx="7.0" fill="var(--accent)"/>
-        <path transform="translate(2.482 21.005) scale(0.014 -0.014)" d="M528 88H402L128 658L227 661V0H61V715H253L496 206H436L679 715H867V0H699V661L802 658Z" fill="var(--on-accent)"/>
-        <rect x="16.83" y="7.5" width="2.0" height="17.0" fill="var(--signal)"/>
-        <path transform="translate(20.334 21.005) scale(0.014 -0.014)" d="M234 0H62V715H361Q441 715 502.0 686.0Q563 657 597.0 605.5Q631 554 631 485Q631 417 597.0 365.0Q563 313 502.0 284.0Q441 255 361 255H224V398H361Q405 398 431.0 421.5Q457 445 457 485Q457 525 431.0 548.5Q405 572 361 572H234Z" fill="var(--on-accent)"/>
-        </svg><span>Mebel Pro</span></a>
+      <a href="#" class="brand" aria-label="Mebel Pro — bosh sahifa"><!-- The mark is the generated
+          /favicon.svg, not an inline drawing: one source (the @theme brand tokens →
+          scripts/generate-brand-assets.mjs) feeds the tab icon and this lockup alike,
+          so the landing can never show a different logo than the app. -->
+        <img class="brand__mark" src="/favicon.svg" alt="" width="28" height="28"><span>Mebel Pro</span></a>
       <div class="nav__links">
         <a class="nav__link" href="#mahsulotlar">Ustaxona</a>
         <a class="nav__link" href="#mahsulotlar">Mijozlar</a>

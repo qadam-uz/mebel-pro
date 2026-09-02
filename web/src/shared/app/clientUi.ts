@@ -34,18 +34,24 @@ export function draftDisplayName(draft: CuttingDraft): string {
 
 // Status → catalog key, not status → copy: the label itself must be resolved on
 // every call so a language switch reaches labels already on screen.
+//
+// `cutting` and `edge_banding` deliberately resolve to the SAME key as
+// `confirmed` (orders.md, four-phase client track): the client sees one
+// "Tayyorlanmoqda" phase whichever production mode the workshop runs, because a
+// queued-vs-sawing distinction is workshop kitchen, not client value. The key
+// stays named for the internal status it starts at; only the copy is the phase.
 const STATUS_KEYS: Readonly<Record<OrderStatus, string>> = {
   new: 'new',
   confirmed: 'confirmed',
-  cutting: 'production',
-  edge_banding: 'production',
+  cutting: 'confirmed',
+  edge_banding: 'confirmed',
   ready: 'ready',
   completed: 'completed',
   cancelled: 'cancelled',
 }
 
-/** The five phases of the client-facing order track, in order. */
-const PHASE_KEYS = ['new', 'confirmed', 'production', 'ready', 'completed'] as const
+/** The four phases of the client-facing order track, in order. */
+const PHASE_KEYS = ['new', 'confirmed', 'ready', 'completed'] as const
 
 export function clientStatusLabel(status: OrderStatus): string {
   return translate(`client.status.${STATUS_KEYS[status]}`)
@@ -53,6 +59,23 @@ export function clientStatusLabel(status: OrderStatus): string {
 
 export function clientPhaseLabels(): string[] {
   return PHASE_KEYS.map((key) => translate(`client.status.${key}`))
+}
+
+/** The internal statuses each client phase absorbs, in phase order. Used by the
+ *  order-detail track to stamp a phase with the first event that reached it. */
+export const CLIENT_PHASE_STATUSES: ReadonlyArray<ReadonlyArray<OrderStatus>> = [
+  ['new'],
+  ['confirmed', 'cutting', 'edge_banding'],
+  ['ready'],
+  ['completed'],
+]
+
+/** One-line explanation of where the order stands, keyed off the phase rather
+ *  than the internal status — the final phase and off-track statuses have none. */
+export function clientPhaseSubtitle(status: OrderStatus): string {
+  const index = clientPhaseIndex(status)
+  if (index < 0 || index >= PHASE_KEYS.length - 1) return ''
+  return translate(`client.statusSub.${PHASE_KEYS[index]}`)
 }
 
 export const activeClientStatuses: OrderStatus[] = [
@@ -65,10 +88,9 @@ export const activeClientStatuses: OrderStatus[] = [
 
 export function clientPhaseIndex(status: OrderStatus): number {
   if (status === 'new') return 0
-  if (status === 'confirmed') return 1
-  if (status === 'cutting' || status === 'edge_banding') return 2
-  if (status === 'ready') return 3
-  if (status === 'completed') return 4
+  if (status === 'confirmed' || status === 'cutting' || status === 'edge_banding') return 1
+  if (status === 'ready') return 2
+  if (status === 'completed') return 3
   return -1
 }
 
@@ -76,17 +98,19 @@ export function clientStatusPillClass(status: OrderStatus): string {
   if (status === 'completed') return 'client-pill client-pill-done'
   if (status === 'cancelled') return 'client-pill client-pill-danger'
   if (status === 'ready') return 'client-pill client-pill-ready'
-  if (status === 'confirmed') return 'client-pill client-pill-info'
-  if (status === 'cutting' || status === 'edge_banding') return 'client-pill client-pill-work'
+  // The three production statuses carry one word on the client side, so they
+  // must carry one colour too — two tones under the same label read as a bug.
+  if (status === 'confirmed' || status === 'cutting' || status === 'edge_banding')
+    return 'client-pill client-pill-info'
   return 'client-pill client-pill-new'
 }
 
-/** Filled fraction (0..100) of the five-phase order track, for the dashboard progress bar.
+/** Filled fraction (0..100) of the four-phase order track, for the dashboard progress bar.
  *  Terminal/off-track statuses (`cancelled`) read as 0. */
 export function clientPhaseProgress(status: OrderStatus): number {
   const index = clientPhaseIndex(status)
   if (index < 0) return 0
-  return [14, 30, 55, 85, 100][index] ?? 0
+  return [14, 45, 80, 100][index] ?? 0
 }
 
 /** The next phase label after `status`, or null when already at the final phase / off-track. */
@@ -275,6 +299,9 @@ const NOTIFICATION_TITLE_KEYS: Readonly<Record<string, string>> = {
   'inventory.negative_stock': 'inventoryNegativeStock',
   'order.placed': 'orderPlaced',
   'order.confirmed': 'orderConfirmed',
+  // Historical only: the backend stopped emitting intermediate-status events
+  // with the four-phase client track (orders.md). The mapping stays so inbox
+  // rows written before that still render as a sentence, not a raw code.
   'order.status_changed': 'orderStatusChanged',
   'order.updated': 'orderUpdated',
   'order.ready': 'orderReady',

@@ -2,9 +2,9 @@
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,56 +12,47 @@ from app.api.deps import Principal, Session
 from app.core.config import settings
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal
+from app.core.telegram import deep_link
 from app.core.trace import get_trace_id
-from app.models.enums import AuthenticatedPrincipalType
+from app.models.enums import AuthenticatedPrincipalType, WorkshopStatus
 from app.modules.access.api import (
     INVALID_CREDENTIALS_CODE,
-    OtpSender,
     PlainSessionTokens,
-    TelegramGatewaySender,
     authenticate_platform_user,
     authenticate_workshop_user,
     change_password,
+    create_login_token,
+    dev_confirm_login_token,
     login_throttle,
+    poll_login_token,
+    redeem_login_code,
     refresh_session,
-    request_otp_code,
     resolve_client_ip,
     revoke_for_principal,
     revoke_session,
-    verify_otp_code,
 )
 from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.access.contracts import Session as AuthSession
 from app.modules.access.schemas import (
-    ClientOtpRegistrationRequiredResponse,
-    ClientOtpRequest,
-    ClientOtpRequestResponse,
-    ClientOtpVerifyRequest,
     MeResponse,
     PasswordChangeRequest,
     PermissionGrantResponse,
     PlatformLoginRequest,
     SessionResponse,
+    TelegramLoginCodeRequest,
+    TelegramLoginDevConfirmRequest,
+    TelegramLoginPollRequest,
+    TelegramLoginPollResponse,
+    TelegramLoginTokenResponse,
     TokenResponse,
     WorkshopLoginRequest,
 )
-from app.modules.workshop.contracts import Workshop
+from app.modules.workshop.contracts import Branch, Workshop
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 REFRESH_COOKIE_NAME = "mp_refresh_token"
 REFRESH_COOKIE_PATH = f"{settings.API_V1_PREFIX}/auth"
-
-
-def get_otp_sender() -> OtpSender:
-    return TelegramGatewaySender(
-        access_token=settings.TELEGRAM_GATEWAY_ACCESS_TOKEN,
-        api_base_url=settings.TELEGRAM_GATEWAY_API_BASE_URL,
-        timeout_seconds=settings.TELEGRAM_GATEWAY_TIMEOUT_SECONDS,
-    )
-
-
-OtpSenderDep = Annotated[OtpSender, Depends(get_otp_sender)]
 
 
 @router.post("/platform/login", response_model=TokenResponse)
@@ -112,50 +103,82 @@ async def workshop_login(
     return await _token_response(db, result.tokens, result.principal)
 
 
-@router.post("/client/otp/request", response_model=ClientOtpRequestResponse)
-async def client_otp_request(
-    payload: ClientOtpRequest,
+@router.post("/client/telegram/token", response_model=TelegramLoginTokenResponse)
+async def client_telegram_login_token(
     request: Request,
     db: Session,
-    sender: OtpSenderDep,
-) -> ClientOtpRequestResponse:
-    result = await request_otp_code(
+) -> TelegramLoginTokenResponse:
+    issued = await create_login_token(
         db,
-        phone=payload.phone,
         request_ip=_request_ip(request),
-        sender=sender,
+        device_info=_device_info(request),
     )
-    return ClientOtpRequestResponse(
-        phone=result.phone,
-        expires_at=result.expires_at,
-        resend_after_seconds=result.resend_after_seconds,
+    return TelegramLoginTokenResponse(
+        token=issued.token,
+        poll_secret=issued.poll_secret,
+        deep_link=deep_link(issued.token),
+        expires_at=issued.expires_at,
     )
 
 
 @router.post(
-    "/client/otp/verify",
-    response_model=TokenResponse | ClientOtpRegistrationRequiredResponse,
+    "/client/telegram/poll",
+    response_model=TokenResponse | TelegramLoginPollResponse,
 )
-async def client_otp_verify(
-    payload: ClientOtpVerifyRequest,
+async def client_telegram_login_poll(
+    payload: TelegramLoginPollRequest,
     request: Request,
     response: Response,
     db: Session,
-) -> TokenResponse | ClientOtpRegistrationRequiredResponse:
-    result = await verify_otp_code(
+) -> TokenResponse | TelegramLoginPollResponse:
+    result = await poll_login_token(
         db,
-        phone=payload.phone,
-        code=payload.code,
-        name=payload.name,
+        poll_secret=payload.poll_secret,
         trace_id=get_trace_id(),
         device_info=_device_info(request),
     )
-    if result.is_new:
-        return ClientOtpRegistrationRequiredResponse()
     if result.login is None:
-        raise RuntimeError("OTP verification returned no login result for existing client")
+        return TelegramLoginPollResponse(status=result.status, expired=result.expired)
     _set_refresh_cookie(response, result.login.tokens)
     return await _token_response(db, result.login.tokens, result.login.principal)
+
+
+@router.post("/client/telegram/code", response_model=TokenResponse)
+async def client_telegram_login_code(
+    payload: TelegramLoginCodeRequest,
+    request: Request,
+    response: Response,
+    db: Session,
+) -> TokenResponse:
+    login = await redeem_login_code(
+        db,
+        code=payload.code,
+        request_ip=_request_ip(request),
+        trace_id=get_trace_id(),
+        device_info=_device_info(request),
+    )
+    _set_refresh_cookie(response, login.tokens)
+    return await _token_response(db, login.tokens, login.principal)
+
+
+@router.post("/client/telegram/dev-confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def client_telegram_dev_confirm(
+    payload: TelegramLoginDevConfirmRequest,
+    db: Session,
+) -> None:
+    """Confirm a pending token without Telegram — `TELEGRAM_LOGIN_DEV_MODE` only.
+
+    Off by default and rejected outright in production (see `Settings`), the
+    route 404s when disabled rather than advertising a sign-in bypass.
+    """
+    if not settings.TELEGRAM_LOGIN_DEV_MODE:
+        raise APIError("not_found", "Not found", status_code=status.HTTP_404_NOT_FOUND)
+    await dev_confirm_login_token(
+        db,
+        phone=payload.phone,
+        token=payload.token,
+        name=payload.name,
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -321,6 +344,9 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
                 "Authentication required",
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
+        pinned_workshop_name, pinned_branch_name = await _pinned_names(
+            db, client.preferred_branch_id
+        )
         return MeResponse(
             principal_type=principal.principal_type,
             principal_id=principal.principal_id,
@@ -328,6 +354,8 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
             name=client.name,
             phone=client.phone,
             preferred_branch_id=client.preferred_branch_id,
+            pinned_workshop_name=pinned_workshop_name,
+            pinned_branch_name=pinned_branch_name,
             status=client.status,
         )
     workshop_user = await db.get(WorkshopUser, principal.principal_id)
@@ -360,6 +388,34 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
         phone=workshop_user.phone,
         status=workshop_user.status,
     )
+
+
+async def _pinned_names(
+    db: AsyncSession,
+    preferred_branch_id: uuid.UUID | None,
+) -> tuple[str | None, str | None]:
+    """Workshop and branch names behind the client's pin — one join, no gates.
+
+    The pin is not scope-enforced (identity.md): an `inactive` or
+    `temporarily_closed` branch still names itself in the header, and nothing
+    here ever clears the column. A blocked workshop is the one exception — it is
+    off the platform, absent from Ustaxonalarim, and must not be named either.
+    """
+    if preferred_branch_id is None:
+        return None, None
+    row = (
+        await db.execute(
+            select(Workshop.name, Branch.name)
+            .join(Branch, Branch.workshop_id == Workshop.id)
+            .where(
+                Branch.id == preferred_branch_id,
+                Workshop.status == WorkshopStatus.ACTIVE,
+            )
+        )
+    ).first()
+    if row is None:
+        return None, None
+    return row[0], row[1]
 
 
 def _session_response(row: AuthSession, *, current_session_id: uuid.UUID) -> SessionResponse:

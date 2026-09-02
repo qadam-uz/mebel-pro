@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-08-07
+updated: 2026-08-31
 order: 10
 ---
 
@@ -87,35 +87,36 @@ an `inactive` branch is inert.
 ## Client
 
 The customer. A **separate entity** from workshop/platform users. Identified by a **phone
-number verified by a one-time code sent over Telegram**; self-registers (name only) the first
-time a new number is verified, or is registered at the counter by workshop staff resolving a
-walk-in by phone; global to the platform (no workshop/branch binding); picks a branch per
-order. Uses the client app.
+number**, proven by sharing the Telegram-verified contact in the platform's bot; self-registers
+the first time a new number is shared, or is registered at the counter by workshop staff
+resolving a walk-in by phone; global to the platform (no workshop/branch binding); picks a
+branch per order. Uses the client app.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `phone` | text | `+998XXXXXXXXX`; **unique, required** — the identity and natural key (verified by OTP on the self-serve path; staff-entered for a walk-in until their first OTP login) |
-| `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
+| `phone` | text | `+998XXXXXXXXX`; **unique, required** — the identity and natural key (Telegram-verified via the bot's contact share on the self-serve path; staff-entered for a walk-in until their first bot sign-in) |
+| `telegram_user_id` | bigint? | **unique when set** — the Telegram account that signs in as this client; linked by the bot's contact step, relinked when a new account proves the same phone; `null` on a staff-created row until first bot sign-in. Private-chat id equals user id, so bot messages are sent to it directly |
+| `telegram_unreachable_at` | timestamp? | set when a bot send bounces with 403 (client blocked the bot); cleared on the next `/start` or successful send; while set, Telegram delivery is skipped — the inbox is unaffected |
+| `name` | text | required; the client's display name (1–80 chars) — prefilled from the Telegram profile at registration, client-editable, never re-synced; how the workshop addresses them |
 | `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced**. |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
-The phone is the identity; `name` is self-entered and editable by the client (no external
-source of truth — nothing is synced from Telegram, which is only the delivery channel for the
-login code). No password, no password-reset warning / lockout (auth integrity is the OTP
-check).
-A client row is created by the first successful verification of a new number via the
-[code challenge](#phone-verification-challenge), **or by workshop staff resolving a walk-in
+The phone is the identity; the Telegram account is the credential linked to it. No password,
+no password-reset warning / lockout (auth integrity is the bot handshake).
+A client row is created by the first confirmed contact share of a new number in the bot
+([login token](#telegram-login-token)), **or by workshop staff resolving a walk-in
 by phone** (find-or-create; semantics and rationale in
 [`access-management.md`](../features/access-management.md#staff-resolved-walk-ins-find-or-create)).
 On the self-serve path the phone is verified before the row exists; on the staff path it is
-staff-entered and verified the first time the client logs in via OTP — which is also when
-they claim the row. The staff path never creates a client session — OTP remains the only
-login.
+staff-entered and verified the first time the client signs in through the bot — which is also
+when they claim the row and `telegram_user_id` is filled. The staff path never creates a
+client session — the bot remains the only login.
 
-Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; blocking deletes its sessions;
-created only by a successful first verification or by workshop staff resolving a walk-in
+Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; `telegram_user_id` unique when set
+(DB, partial); blocking deletes its sessions;
+created only by a successful first bot registration or by workshop staff resolving a walk-in
 (never by a platform operator); a `blocked` client can neither sign in nor be resolved by
 staff (`account_blocked` on both paths);
 `preferred_branch_id`, when set, references a branch the client may see (any workshop's
@@ -124,36 +125,55 @@ later going `inactive` doesn't clear it — the branch-scoped catalog simply com
 and the editor asks for a different workshop; see
 [`cutting.md`](../features/cutting.md)).
 
-## Phone verification challenge
+## Telegram login token
 
-Transient state for an in-flight client sign-in: one code sent to a phone over Telegram,
-awaiting entry. Not tied to a `Client` row — it precedes login/registration and exists for both
-returning and brand-new numbers.
+Transient state for one browser↔bot sign-in handshake: the browser mints it, the bot advances
+it, the browser's poll redeems it. Not tied to a `Client` row at creation — it precedes
+login/registration and exists for both returning and brand-new clients.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `phone` | text | `+998XXXXXXXXX`; the number the code was sent to |
-| `request_ip` | text | normalized client IP used for per-IP send limiting |
-| `code_hash` | text | HMAC-SHA-256 of the 6-digit code using `OTP_CODE_PEPPER`; plaintext never stored |
+| `token_hash` | text | SHA-256 of the deep-link token (random ≥ 32 bytes, URL-safe); unique; plaintext never stored |
+| `poll_secret_hash` | text | SHA-256 of the browser-held poll secret; unique; the **only** credential a session is released against |
+| `status` | enum | `pending` → `started` → (`awaiting_contact` →) `confirmed` → `used`; `declined` terminal (client cancelled, blocked account, expired mid-conversation) |
+| `telegram_user_id` | bigint? | set at `/start` |
+| `client_id` | UUID? | set at `confirmed` |
+| `request_ip` / `device_info` | text / json | normalized creating IP (per-IP budget) + UA — rendered into the bot's confirm message |
 | `expires_at` | timestamp | now + 5 min at issue |
-| `attempt_count` | int | wrong-code counter; burned at 5. Committed even when the request fails (CB-133) — a rejected guess must consume an attempt |
-| `consumed_at` | timestamp? | set when a correct code is accepted **or** when Telegram delivery fails (a code nobody received must never be guessable); single-use |
-| `created_at` | timestamp | |
+| `created_at` / `confirmed_at` / `used_at` | timestamp / timestamp? / timestamp? | |
 
-Invariants: code is 6 digits, HMAC-hashed at rest with a server-side pepper, single-use,
-5-minute TTL; ≤ 5 verify attempts before the challenge is burned (concurrent guesses serialize
-on the row, so the cap can't be raced past). Every row — delivered or not — counts toward the
-send budgets: per-phone resend cooldown (60 s), per-phone (5 / hour, 10 / day), per-IP
-(30 / hour, 50 / day), and platform-wide (150 / hour, 1000 / day) caps, all env-tunable
-(`OTP_*` settings; rules in
-[`access-management.md`](../features/access-management.md#client-sign-in-phone-telegram-otp)).
+Invariants: both secrets random ≥ 32 bytes, hashed at rest, single-use; status only moves
+forward; a session is issued exactly once, only against the poll secret, only from `confirmed`;
+the deep-link token alone can never redeem a session. Creation counts toward the per-IP budget
+(`TELEGRAM_LOGIN_*` settings; rules in
+[`access-management.md`](../features/access-management.md#client-sign-in-telegram-bot)).
 `request_ip` is the socket peer in direct/dev traffic; when the immediate peer is a trusted
 proxy (`TRUSTED_PROXY_CIDRS`), it is the right-most `X-Forwarded-For` hop outside the trusted
 CIDRs — the address a trusted proxy actually vouches for; untrusted or malformed headers are
 ignored. Rows are pruned by the periodic session/expiry job after 7 days — retention must
-exceed the longest (24 h) budget window. Delivery is **Telegram-only** — a number not reachable
-on Telegram cannot sign in (no SMS fallback in v1).
+exceed the longest (24 h) budget window.
+
+## Telegram login code
+
+Transient state for the fallback path: a short code the bot shows to an already-identified
+client, typed into the login page. Issued only after the bot conversation has resolved the
+client, so it always references a `Client` row.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `code_hash` | text | HMAC-SHA-256 of the 6-digit code using `TELEGRAM_LOGIN_CODE_PEPPER`; plaintext never stored |
+| `client_id` | UUID | required — the identified client the code logs in |
+| `expires_at` | timestamp | now + 5 min at issue |
+| `consumed_at` | timestamp? | set on successful redeem; single-use |
+| `created_at` | timestamp | |
+
+Invariants: 6 digits, HMAC-hashed at rest with a server-side pepper, single-use, 5-minute TTL;
+redeeming is throttled per client IP and answers one generic `invalid_code` for unknown,
+expired, and used alike — the low-entropy code is protected by the throttle, the TTL, and
+burn-on-redeem, not by per-row attempt counters (no row is addressable before a correct
+guess). Pruned with login tokens after 7 days.
 
 ## Session
 

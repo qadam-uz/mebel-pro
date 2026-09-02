@@ -276,7 +276,7 @@ async def test_staff_creates_and_auto_confirms_order_for_walk_in(
     assert await db_session.get(CuttingDraft, uuid.UUID(draft_id)) is None
 
 
-async def test_walk_in_sees_order_after_otp_login(
+async def test_walk_in_sees_order_after_bot_login(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -300,7 +300,8 @@ async def test_walk_in_sees_order_after_otp_login(
     assert placed.status_code == 201
     order_id = placed.json()["id"]
 
-    # The walk-in later logs in (find-or-create returns the SAME row) and sees it.
+    # The walk-in later signs in through the bot (find-or-create returns the SAME
+    # row) and sees it.
     resolution = await find_or_create_client(db_session, phone=phone, name=None)
     assert resolution is not None
     assert resolution.client.id == uuid.UUID(client_id)

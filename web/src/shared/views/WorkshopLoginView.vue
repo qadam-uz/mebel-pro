@@ -25,9 +25,13 @@ const valuePoints = computed(() => [
 
 <template>
   <main class="grid min-h-[var(--app-vh)] text-ink lg:grid-cols-[1.05fr_1fr]">
-    <!-- Brand panel — hidden below lg; the form carries the brand on mobile. -->
+    <!-- Brand panel — hidden below lg; the form carries the brand on mobile.
+         `deep`, not `accent`: the panel hosts login-workshop-scene.svg, whose
+         whole value ramp is tuned to sit on the graphite brand surface (see the
+         SVG's own header), so it must not follow a retheme of the action
+         colour. Bone text on graphite is the original pairing. -->
     <section
-      class="relative hidden flex-col overflow-hidden bg-accent px-12 py-12 text-on-accent lg:flex xl:px-16"
+      class="relative hidden flex-col overflow-hidden bg-deep px-12 py-12 text-on-accent lg:flex xl:px-16"
     >
       <RouterLink :to="config.homePath" class="flex items-center gap-3">
         <span class="inline-flex size-9 items-center justify-center rounded-lg bg-white">

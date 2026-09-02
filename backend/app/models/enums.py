@@ -23,6 +23,25 @@ class UserStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class TelegramLoginTokenStatus(StrEnum):
+    """One browser↔bot sign-in handshake, start to finish.
+
+    `pending` → `started` (the deep link opened the chat) → `awaiting_contact`
+    (an unknown Telegram account must share its number first) → `confirmed`
+    (bound to a client) → `used` (a session was released against the poll
+    secret). `declined` is terminal: the client cancelled, the account is
+    blocked, or the token died mid-conversation. Status only ever moves
+    forward.
+    """
+
+    PENDING = "pending"
+    STARTED = "started"
+    AWAITING_CONTACT = "awaiting_contact"
+    CONFIRMED = "confirmed"
+    USED = "used"
+    DECLINED = "declined"
+
+
 class WorkshopStatus(StrEnum):
     ACTIVE = "active"
     BLOCKED = "blocked"
@@ -32,6 +51,20 @@ class BranchStatus(StrEnum):
     ACTIVE = "active"
     TEMPORARILY_CLOSED = "temporarily_closed"
     INACTIVE = "inactive"
+
+
+class ProductionMode(StrEnum):
+    """How a branch runs the production half of the order spine.
+
+    `full` is the assign → start → per-stage-complete choreography the state
+    machine documents; `simple` collapses it to one composite **Tayyor** action
+    by the office (orders.md). The mode is a shop-floor property of the branch —
+    like kerf and overhang — read at action time and never stamped on an order,
+    so switching it needs no migration of work in flight.
+    """
+
+    SIMPLE = "simple"
+    FULL = "full"
 
 
 class Permission(StrEnum):

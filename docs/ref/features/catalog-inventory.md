@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 50
 ---
 
@@ -444,14 +444,21 @@ stock; it only decrements it.
   deferred).
 - **Consume / restore** (system) — driven entirely by the order state machine.
 
-**The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed**
-when the order's **Cutting done** is marked; `shop` edge consumed length (geometric
-banded length + the branch's per-side glue-and-trim overhang) is decremented in **integer
-millimetres**, per edge material, when **Banding done** is marked. A revert re-increments
-exactly what its step decremented. `own`-source panels and `own`-source edge sides never
-touch stock.
+**The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed** at the
+order's **cutting completion**; `shop` edge consumed length (geometric banded length + the
+branch's per-side glue-and-trim overhang) is decremented in **integer millimetres**, per
+edge material, at its **banding completion**. A revert re-increments exactly what its step
+decremented. `own`-source panels and `own`-source edge sides never touch stock.
 
-The seam **never blocks the worker**. The panels are already cut when *Cutting done* is
+**When those completions happen is the branch's
+[production mode](orders.md#production-mode)**, and it is the only thing the mode changes
+here. A `full`-mode branch taps them separately — **Cutting done**, then **Banding done**. A
+`simple`-mode branch (the default) taps **Tayyor** once, which runs both completions in one
+transaction, so panels and edges decrement together at that moment. Same demands, same
+transactions, same restores. The mode exists precisely because this seam hung off per-stage
+taps that paper-run shops never made, which quietly froze the warehouse.
+
+The seam **never blocks the worker**. The panels are already cut when the completion is
 marked, so the consume records history, not intent — it proceeds even when the balance
 goes negative, and even when the material was dropped from the branch catalog after the
 order was placed (in which case the branch's stock row is created at zero and the material

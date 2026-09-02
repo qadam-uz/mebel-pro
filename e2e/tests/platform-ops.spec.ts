@@ -46,7 +46,7 @@ async function seedPlatform(login: string, { resetRequired = false } = {}) {
   if (!resetRequired) args.push('--no-password-reset-required')
   await execFileAsync('uv', args, {
     cwd: process.cwd(),
-    env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl, OTP_DEV_CODES: '["000000"]' },
+    env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl },
   })
 }
 
@@ -70,7 +70,7 @@ async function seedErrorRecord(code: string) {
     ],
     {
       cwd: process.cwd(),
-      env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl, OTP_DEV_CODES: '["000000"]' },
+      env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl },
     },
   )
 }

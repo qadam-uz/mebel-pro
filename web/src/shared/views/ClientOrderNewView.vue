@@ -10,7 +10,7 @@ import {
   canPlaceBlockerLabel,
   fieldDiffersFromProfile,
 } from '@/shared/app/clientOrderReview'
-import { traceLine } from '@/shared/app/errorTrace'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import BranchContact from '@/shared/components/BranchContact.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -124,7 +124,11 @@ async function placeOrder() {
     toast.success(t('client.orderNew.placedToast'))
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
-    localError.value = clientErrorLabel(orders.error, t('client.orderNew.placeFailed'))
+    // createClientOrder captures the failure to actionError/actionTraceId —
+    // `orders.error` belongs to loads (the quote) and would be stale or null here.
+    localError.value =
+      clientErrorLabel(orders.actionError, t('client.orderNew.placeFailed')) +
+      traceSuffix(orders.actionTraceId)
   } finally {
     placing.value = false
   }

@@ -1,5 +1,12 @@
 """Public workshop API used by routes and other modules."""
 
+from app.modules.workshop.public_code import (
+    PUBLIC_CODE_ALPHABET,
+    PUBLIC_CODE_LENGTH,
+    allocate_public_code,
+    generate_public_code,
+    normalize_public_code,
+)
 from app.modules.workshop.setup import (
     create_branch,
     get_branch,
@@ -12,6 +19,7 @@ from app.modules.workshop.setup import (
     update_branch,
     update_branch_pricing,
     update_settings,
+    workshop_public_code,
 )
 from app.modules.workshop.users import (
     BranchContext,
@@ -35,12 +43,16 @@ from app.modules.workshop.users import (
 )
 
 __all__ = [
+    "PUBLIC_CODE_ALPHABET",
+    "PUBLIC_CODE_LENGTH",
     "BranchContext",
     "CreatedWorkshopUser",
+    "allocate_public_code",
     "block_user",
     "branch_context",
     "create_branch",
     "create_user",
+    "generate_public_code",
     "get_branch",
     "get_branch_pricing",
     "get_onboarding_status",
@@ -52,6 +64,7 @@ __all__ = [
     "list_user_sessions",
     "list_users",
     "next_branch_no",
+    "normalize_public_code",
     "replace_user_grants",
     "require_workshop_owner",
     "require_workshop_principal",
@@ -64,4 +77,5 @@ __all__ = [
     "update_branch_pricing",
     "update_settings",
     "update_user",
+    "workshop_public_code",
 ]

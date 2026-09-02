@@ -321,6 +321,31 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
       branchScope: 'entity',
     },
   },
+  // The counter sheet the "Chop etish" action opens (spec §1.4). `layout: 'print'`
+  // renders it without the shell — a sidebar and a topbar have no place on paper,
+  // and the sheet opens in its own tab.
+  {
+    path: '/workshop/branches/:branch_id/client-link',
+    name: 'workshop-branch-link-print',
+    component: () => import('@/shared/views/WorkshopLinkPrintView.vue'),
+    meta: {
+      titleKey: 'routes.clientLink',
+      layout: 'print',
+      workshopAccess: { ownerOnly: true },
+      branchScope: 'entity',
+    },
+  },
+  {
+    path: '/workshop/settings/client-link',
+    name: 'workshop-link-print',
+    component: () => import('@/shared/views/WorkshopLinkPrintView.vue'),
+    meta: {
+      titleKey: 'routes.clientLink',
+      layout: 'print',
+      workshopAccess: { ownerOnly: true },
+      branchScope: 'workshop',
+    },
+  },
   {
     path: '/workshop/finance/income',
     name: 'workshop-finance-income',

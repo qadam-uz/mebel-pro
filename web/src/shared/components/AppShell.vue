@@ -99,6 +99,11 @@ const docsMenuOpen = ref(false)
 let previousMobileFocus: HTMLElement | null = null
 let workshopSearchTimer: number | undefined
 const isAuthRoute = computed(() => route.meta.layout === 'auth')
+// Two layouts render without the shell, for different reasons: `auth` is the
+// signed-out card (and the public workshop-link landing), `print` is a document
+// that leaves the building — a sidebar and a topbar have no place on paper.
+// Everything that asks "is there chrome around me?" asks this, not `isAuthRoute`.
+const isChromeless = computed(() => isAuthRoute.value || route.meta.layout === 'print')
 // The order-drawing flow builds one document start to finish; a topbar field
 // offering to jump to a different order is the one thing those screens are not
 // for. Declared per route so a new screen in the flow opts in where it is
@@ -449,7 +454,7 @@ function closeWorkshopSearch() {
 }
 
 function focusWorkshopSearch() {
-  if (config.role !== 'workshop' || isAuthRoute.value || !showWorkshopSearch.value) return
+  if (config.role !== 'workshop' || isChromeless.value || !showWorkshopSearch.value) return
   // The search field lives in the topbar, which the drawer covers. Honouring ⌘K
   // there would move focus outside an `aria-modal` dialog — and the drawer's own
   // focus guard would immediately pull it back, leaving the keypress looking
@@ -517,7 +522,7 @@ function onDocumentPointerDown(event: PointerEvent) {
 }
 
 function onGlobalKeydown(event: KeyboardEvent) {
-  if (config.role !== 'workshop' || isAuthRoute.value) return
+  if (config.role !== 'workshop' || isChromeless.value) return
   if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return
   event.preventDefault()
   focusWorkshopSearch()
@@ -728,7 +733,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="isAuthRoute" class="min-h-[var(--app-vh)] bg-bg text-ink">
+  <div v-if="isChromeless" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <RouterView />
   </div>
 

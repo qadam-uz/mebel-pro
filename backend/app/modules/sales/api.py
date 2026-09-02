@@ -17,6 +17,7 @@ from app.modules.sales.service import (
     cancel_workshop_order,
     complete_banding,
     complete_cutting,
+    complete_production,
     count_new_workshop_orders,
     get_client_order,
     get_client_order_cutting_result,
@@ -43,6 +44,7 @@ from app.modules.sales.service import (
     set_order_prices,
     start_banding,
     start_cutting,
+    undo_production,
     update_workshop_note,
 )
 
@@ -63,6 +65,7 @@ __all__ = [
     "cancel_workshop_order",
     "complete_banding",
     "complete_cutting",
+    "complete_production",
     "count_new_workshop_orders",
     "get_client_order",
     "get_client_order_cutting_result",
@@ -89,5 +92,6 @@ __all__ = [
     "set_order_prices",
     "start_banding",
     "start_cutting",
+    "undo_production",
     "update_workshop_note",
 ]

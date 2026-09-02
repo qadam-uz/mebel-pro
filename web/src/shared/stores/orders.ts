@@ -15,6 +15,7 @@ import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import { translate } from '@/shared/i18n'
 import type { CuttingDraft, CuttingResult, MaterialSource } from '@/shared/stores/cutting'
+import type { ProductionMode } from '@/shared/stores/workshop'
 
 export type OrderStatus =
   | 'new'
@@ -254,6 +255,9 @@ export interface OrderSummary {
 }
 
 export interface OrderDetail extends OrderSummary {
+  // The production mode of the order's OWN branch — the detail screen picks its
+  // actions from this, never from whichever branch the sidebar has selected.
+  branch_production_mode: ProductionMode
   items: OrderItem[]
   events: OrderEvent[]
   price_lines: OrderPriceLine[]
@@ -404,11 +408,21 @@ export const useOrdersStore = defineStore('orders', () => {
 
   async function createClientOrder(payload: unknown) {
     actionLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
     try {
       const order = await api.post<OrderDetail>('/client/orders', payload, authInit())
       currentOrder.value = order
       clientOrders.value = [order, ...clientOrders.value.filter((item) => item.id !== order.id)]
       return order
+    } catch (errorValue) {
+      // Captured to actionError (CB-100) so the review page can show the
+      // backend's own code (branch_does_not_carry_*, draft_limit_exceeded, …)
+      // instead of a generic line. `order_place_failed` is deliberately absent
+      // from CLIENT_ERROR_CODES — clientErrorLabel then falls back to the
+      // page's own placeFailed copy for unrecognized failures.
+      captureActionError(errorValue, 'order_place_failed')
+      throw errorValue
     } finally {
       actionLoading.value = false
     }
@@ -593,6 +607,20 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/banding-done`, payload)
   }
 
+  // Simple mode's two composite taps (orders.md). They are the twins of the
+  // per-step endpoints above: the branch's mode decides which pair answers, the
+  // other 409s (`simple_mode_active` / `full_mode_active`).
+  async function completeProduction(
+    id: string,
+    payload: { version: number; cutter_user_id?: string | null; edger_user_id?: string | null },
+  ) {
+    return await mutate(`/workshop/orders/${id}/complete-production`, payload)
+  }
+
+  async function undoProduction(id: string, version: number, reason: string) {
+    return await mutate(`/workshop/orders/${id}/undo-production`, { version, reason })
+  }
+
   async function markCollected(id: string, version: number) {
     return await mutate(`/workshop/orders/${id}/mark-collected`, { version })
   }
@@ -718,7 +746,17 @@ export const useOrdersStore = defineStore('orders', () => {
       // the order so the next attempt carries the server's current version. The
       // refetch owns `error`/`traceId`; the conflict itself goes to actionError so
       // the page stays on the (now fresh) order instead of its load-error state.
-      if (apiErrorCode(errorValue) === 'order_version_conflict') {
+      //
+      // A production-mode mismatch is the same class of staleness — the branch
+      // switched mode while this page sat open, so the surface offered an action
+      // the other flow owns. Refetching swaps the page onto the live action set
+      // while the error line names which flow is now in force (orders.md).
+      const staleCode = apiErrorCode(errorValue)
+      if (
+        staleCode === 'order_version_conflict' ||
+        staleCode === 'simple_mode_active' ||
+        staleCode === 'full_mode_active'
+      ) {
         const match = path.match(/\/(client|workshop)\/orders\/([^/]+)\//)
         const orderId = match?.[2]
         if (orderId) {
@@ -833,6 +871,8 @@ export const useOrdersStore = defineStore('orders', () => {
     startBanding,
     cuttingDone,
     bandingDone,
+    completeProduction,
+    undoProduction,
     markCollected,
     revert,
     cancelWorkshopOrder,

@@ -5,11 +5,11 @@
     "drafts": "Раскрои",
     "viewGroup": "Вид",
     "boardView": "Вид доски",
-    "boardLocked": "Завершённые заказы — только в режиме таблицы",
+    "boardLocked": "Забранные заказы — только в режиме таблицы",
     "tableView": "Вид таблицы",
     "statusFilter": "Статус",
     "statusActive": "Активные",
-    "statusCompleted": "Завершённые",
+    "statusCompleted": "Забранные",
     "statusCancelled": "Отменённые",
     "statusAll": "Все",
     "phoneFilter": "Телефон",
@@ -114,7 +114,9 @@
     "edit": "Изменить",
     "revertTo": "Вернуть {target}",
     "revertFallback": "На шаг назад",
-    "backToDrawing": "Вернуться к раскрою"
+    "backToDrawing": "Вернуться к раскрою",
+    "ready": "Готов",
+    "undoProduction": "Вернуть назад"
   },
   "revertTarget": {
     "confirmed": "в статус «Подтверждён»",
@@ -125,7 +127,8 @@
     "approving": "Подтверждение…",
     "starting": "Запуск…",
     "running": "Выполняется…",
-    "saving": "Сохранение…"
+    "saving": "Сохранение…",
+    "completing": "Закрывается…"
   },
   "confirm": {
     "defaultAction": "Подтвердить",
@@ -146,8 +149,8 @@
     "completeBandingTitle": "Кромка завершена?",
     "completeBandingMessage": "Этап кромки по {order} закроется, заказ перейдёт в статус «Готов».",
     "collectedTitle": "Клиент забрал заказ?",
-    "collectedMessage": "{order} перейдёт в конечный статус «Выдан».",
-    "collectedDetailMessage": "Заказ перейдёт в конечный статус «Выдан», вернуть его будет нельзя.",
+    "collectedMessage": "{order} перейдёт в конечный статус «Забран».",
+    "collectedDetailMessage": "Заказ перейдёт в конечный статус «Забран», вернуть его будет нельзя.",
     "collectedAction": "Да, выдан",
     "revertTitle": "Вернуть заказ",
     "revertOrderMessage": "{order} вернётся {target}. Укажите причину.",
@@ -158,7 +161,23 @@
     "cancelMessage": "Заказ будет закрыт. Укажите причину отмены.",
     "discardEditTitle": "Отменить правку",
     "discardEditMessage": "Все изменения правки будут удалены; заказ останется прежним.",
-    "discardEditAction": "Да, отменить"
+    "discardEditAction": "Да, отменить",
+    "complete": {
+      "title": "Заказ готов?",
+      "message": "Заказ перейдёт в статус «Готов», материал спишется со склада.",
+      "stockIntro": "Списание со склада:",
+      "noStock": "В заказе нет материала мастерской — списания со склада не будет.",
+      "cutter": "Кто пилил? (необязательно)",
+      "edger": "Кто клеил кромку? (необязательно)",
+      "noWorker": "Не указан",
+      "workersHint": "Выбор сотрудника необязателен — он нужен только для отчёта.",
+      "action": "Да, готов"
+    },
+    "undoProduction": {
+      "title": "Вернуть заказ назад",
+      "message": "Материал вернётся на склад, заказ вернётся в «Готовится».",
+      "action": "Да, вернуть"
+    }
   },
   "toast": {
     "approved": "Заказ подтверждён.",
@@ -178,7 +197,9 @@
     "surchargeRemoved": "Наценка снята.",
     "noteSaved": "Комментарий сохранён.",
     "editDiscarded": "Правка отменена.",
-    "updated": "Заказ обновлён."
+    "updated": "Заказ обновлён.",
+    "productionCompleted": "Заказ готов.",
+    "productionUndone": "Заказ возвращён в «Готовится»."
   },
   "detail": {
     "backOrders": "← Заказы",

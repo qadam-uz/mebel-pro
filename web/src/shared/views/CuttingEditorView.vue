@@ -24,6 +24,7 @@ import {
   materialIdentityLabel,
   snapshotMaterialLabel,
 } from '@/shared/app/materialLabel'
+import { pinnedWorkshopId, scopedBranchOptions } from '@/shared/app/clientEntry'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import {
   deriveEdgeRegistry,
@@ -61,11 +62,13 @@ import {
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
 import { overlayRect } from '@/shared/app/overlayGeometry'
+import { useAuthStore } from '@/shared/stores/auth'
 import type { OrderDetail } from '@/shared/stores/orders'
 
 const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
+const auth = useAuthStore()
 const cutting = useCuttingStore()
 const toast = useToast()
 const { t } = useI18n()
@@ -270,6 +273,27 @@ const activeBranchId = computed(() => {
 })
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
+)
+// Editor scoping (spec §4). The pin scopes what the picker *offers*; it never
+// touches data, so the full option list stays loaded and an existing draft on a
+// foreign branch keeps naming its own branch (and its kerf/trim) through
+// `preferredBranch` above. Only `pickerOptions` is narrowed, and only for a
+// client the principal says is pinned — the workshop editor and the un-pinned
+// organic client both fall through to the list as it was.
+const pinnedWorkshop = computed(() =>
+  isWorkshopScope.value
+    ? null
+    : pinnedWorkshopId(
+        cutting.branchOptions,
+        auth.me?.preferred_branch_id,
+        auth.me?.pinned_workshop_name,
+      ),
+)
+const pinnedWorkshopName = computed(() =>
+  pinnedWorkshop.value ? (auth.me?.pinned_workshop_name ?? null) : null,
+)
+const pickerOptions = computed(() =>
+  scopedBranchOptions(cutting.branchOptions, pinnedWorkshop.value),
 )
 // What the in-page picker should start on. A draft already bound to a branch
 // keeps it — the topbar must never retarget an in-progress drawing. Only when
@@ -2737,7 +2761,8 @@ onBeforeRouteLeave(async () => {
     >
       <CuttingBranchPicker
         :model-value="selectedBranchId"
-        :options="cutting.branchOptions"
+        :options="pickerOptions"
+        :pinned-workshop-name="pinnedWorkshopName"
         @update:model-value="setPreferredBranch"
       />
     </AppModal>

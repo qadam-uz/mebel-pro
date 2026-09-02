@@ -1,173 +1,227 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import { formatPhone } from '@/shared/app/clientUi'
-import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
-import { yandexMapUrl } from '@/shared/app/yandexMapLink'
+import { useRolePath } from '@/shared/app/paths'
 import Icon from '@/shared/components/AppIcon.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
-import { useClientCatalogStore, type ClientBranch } from '@/shared/stores/clientCatalog'
+import { useToast } from '@/shared/composables/useToast'
+import { useClientEntryStore, type ClientWorkshop } from '@/shared/stores/clientEntry'
 
-const catalog = useClientCatalogStore()
-const search = ref('')
-let searchTimer: number | undefined
+/**
+ * **Ustaxonalarim** — the client's own workshops (spec §5).
+ *
+ * The pinned workshop plus every workshop the client has an order or a drawing
+ * with, pinned first. Pickup and contact information only: no prices, no
+ * catalogs, no CTAs into the editor — and no path from here to a list of every
+ * workshop on the platform, which this page replaced.
+ */
+const entry = useClientEntryStore()
+const toast = useToast()
+const router = useRouter()
+const rolePath = useRolePath()
+const { t } = useI18n()
 
-const visibleBranches = computed(() => catalog.branches)
+/** The workshop whose branch choice (§3.2) is open, if any. */
+const choosingFor = ref<ClientWorkshop | null>(null)
+const pinningWorkshopId = ref<string | null>(null)
+const pinError = ref<string | null>(null)
 
-async function refreshBranches() {
-  // One request now — the branch payload carries an inline material preview
-  // (CB-13), so the old per-branch materials N+1 is gone.
-  await catalog.loadBranches(search.value)
+const workshops = computed(() => entry.workshops)
+
+async function refresh() {
+  await entry.loadMyWorkshops()
 }
 
-function mapUrl(branch: ClientBranch) {
-  return yandexMapUrl(branch.latitude, branch.longitude)
+/**
+ * "Asosiy qilish" — one visible branch pins straight through; several ask which,
+ * the same question the workshop-level link asks. Either way the write goes
+ * through `POST /client/entry`, the one audited path that can move the pin.
+ */
+function makePrimary(workshop: ClientWorkshop) {
+  pinError.value = null
+  if (workshop.branches.length === 1) {
+    void pinBranch(workshop, workshop.branches[0].id)
+    return
+  }
+  choosingFor.value = workshop
 }
 
-/** Every published number, primary first — all of them tap-to-call (QAD-158). */
-function phones(branch: ClientBranch) {
-  return [branch.phone, ...(branch.additional_phones ?? [])]
+async function pinBranch(workshop: ClientWorkshop, branchId: string) {
+  pinningWorkshopId.value = workshop.workshop_id
+  pinError.value = null
+  try {
+    const applied = await entry.applyEntry(workshop.public_code, branchId)
+    choosingFor.value = null
+    toast.success(t('client.entry.connected', { workshop: applied.workshop_name }))
+    await refresh()
+  } catch {
+    pinError.value = workshop.workshop_id
+  } finally {
+    pinningWorkshopId.value = null
+  }
 }
 
-watch(search, () => {
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => void refreshBranches(), SEARCH_DEBOUNCE_MS)
-})
+function startCutting() {
+  void router.push(rolePath('/c/cutting/new'))
+}
 
-onMounted(refreshBranches)
+onMounted(refresh)
 </script>
 
 <template>
   <section>
-    <div class="client-page-head mb-2">
+    <div class="client-page-head mb-5">
       <div>
-        <h1>{{ $t('client.branches.title') }}</h1>
-        <p class="sub">{{ $t('client.branches.subtitle') }}</p>
+        <h1>{{ $t('client.workshops.title') }}</h1>
+        <p class="sub">{{ $t('client.workshops.subtitle') }}</p>
       </div>
     </div>
 
-    <div class="client-banner info !mb-5">
-      <span class="font-bold text-ink">i</span>
-      <span>{{ $t('client.branches.note') }}</span>
-    </div>
-
-    <label class="mb-2 block text-sm font-bold text-ink" for="branch-search">{{
-      $t('client.common.search')
-    }}</label>
-    <div class="relative mb-5 max-w-[380px]">
-      <span
-        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
-        aria-hidden="true"
-      >
-        <Icon name="search" />
-      </span>
-      <input
-        id="branch-search"
-        v-model="search"
-        class="mp-input pl-10"
-        :aria-label="$t('client.branches.searchPlaceholder')"
-        :placeholder="$t('client.branches.searchPlaceholder')"
-      />
-    </div>
-
-    <div v-if="catalog.loading" class="grid gap-3" aria-live="polite">
-      <div
-        v-for="item in 4"
-        :key="item"
-        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
-      >
-        <div class="client-skeleton size-[50px]"></div>
-        <div>
-          <div class="client-skeleton h-4 w-1/3"></div>
-          <div class="client-skeleton mt-3 h-3 w-2/3"></div>
-          <div class="client-skeleton mt-3 h-3 w-4/5"></div>
+    <div v-if="entry.workshopsLoading" class="grid gap-3" aria-live="polite">
+      <span class="sr-only">{{ $t('client.common.loading') }}</span>
+      <div v-for="item in 2" :key="item" class="client-card p-5">
+        <div class="flex items-center gap-3">
+          <div class="client-skeleton size-12 rounded-[14px]"></div>
+          <div class="client-skeleton h-5 w-1/3"></div>
         </div>
-        <div class="client-skeleton h-6 w-16"></div>
+        <div class="client-skeleton mt-4 h-4 w-2/3"></div>
+        <div class="client-skeleton mt-3 h-4 w-1/2"></div>
       </div>
     </div>
 
     <ClientErrorState
-      v-else-if="catalog.error"
-      :title="$t('client.branches.loadFailed')"
-      :trace-id="catalog.traceId"
-      @retry="refreshBranches"
+      v-else-if="entry.workshopsError"
+      :title="$t('client.workshops.loadFailed')"
+      :trace-id="entry.workshopsTraceId"
+      @retry="refresh"
     />
 
-    <div v-else-if="visibleBranches.length === 0" class="client-empty">
+    <!-- First run: nothing pinned and no history. The app is joined through a
+         workshop's link, so say that — and keep the organic path open. -->
+    <div v-else-if="workshops.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="store" /></div>
-      <h3>{{ $t('client.branches.emptyTitle') }}</h3>
-      <p>{{ $t('client.branches.emptyBody') }}</p>
+      <h3>{{ $t('client.workshops.emptyTitle') }}</h3>
+      <p>{{ $t('client.workshops.emptyBody') }}</p>
+      <button type="button" class="mp-button mp-button-primary mt-4" @click="startCutting">
+        {{ $t('client.common.newDraft') }}
+      </button>
     </div>
 
-    <div v-else class="grid gap-3">
+    <div v-else class="grid gap-4">
       <article
-        v-for="branch in visibleBranches"
-        :key="branch.branch_id"
-        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
-        :class="branch.status !== 'active' ? 'bg-sunk' : ''"
+        v-for="workshop in workshops"
+        :key="workshop.workshop_id"
+        class="client-card overflow-hidden"
       >
-        <div
-          class="grid size-[50px] place-items-center rounded-lg font-display text-lg font-bold"
-          :class="
-            branch.status === 'active'
-              ? 'bg-accent-tint text-accent-strong'
-              : 'bg-warning-soft text-warning'
-          "
-          aria-hidden="true"
-        >
-          {{ branch.branch_name.slice(0, 1).toUpperCase() }}
-        </div>
-
-        <div class="min-w-0">
-          <h2 class="m-0 truncate font-display text-lg font-semibold text-ink">
-            {{ branch.workshop_name }} · {{ branch.branch_name }}
-          </h2>
-          <p class="mt-1 text-xs text-ink-muted">{{ branch.address }}</p>
-          <!-- Only when the branch has a pin — an address alone does not get a
-               client to the door in a city where the same street repeats. -->
-          <!-- A pin icon that opens Yandex Maps, not an embedded map: this is a
-               list, and a map per card would mount a Leaflet instance and a
-               tile round-trip for every branch on screen. -->
-          <a
-            v-if="mapUrl(branch)"
-            :href="mapUrl(branch) ?? undefined"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="mt-1 grid size-11 place-items-center rounded-md border border-hairline text-accent-deep transition hover:border-hairline-strong hover:bg-sunk"
-            :title="$t('client.branches.openMap')"
-            :aria-label="$t('client.branches.openMap')"
+        <div class="flex flex-wrap items-center gap-3 p-5">
+          <AuthFileImage
+            v-if="workshop.logo_file_id"
+            :file-id="workshop.logo_file_id"
+            :alt="workshop.name"
+            size="sm"
+            class="size-12 rounded-[14px] border border-hairline object-contain"
+          />
+          <span
+            v-else
+            class="grid size-12 place-items-center rounded-[14px] bg-accent-soft font-display text-lg font-bold text-accent-strong"
+            aria-hidden="true"
           >
-            <Icon name="map-pin" class="size-[18px]" />
-          </a>
-          <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <a
-              v-for="(phone, index) in phones(branch)"
-              :key="phone"
-              class="inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
-              :href="`tel:${phone}`"
-            >
-              {{ formatPhone(phone) }}
-              <span
-                v-if="index === 0 && phones(branch).length > 1"
-                class="ml-1 font-sans text-[11px] text-ink-muted"
-              >
-                {{ $t('client.branches.primaryPhone') }}
+            {{ workshop.name.slice(0, 1).toUpperCase() }}
+          </span>
+
+          <div class="min-w-0 flex-1">
+            <h2 class="m-0 flex flex-wrap items-center gap-2">
+              <span class="truncate font-display text-lg font-semibold text-ink">
+                {{ workshop.name }}
               </span>
-            </a>
-          </p>
-          <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
-            {{ branch.closed_reason ?? $t('client.branches.closed') }}
-          </p>
+              <span v-if="workshop.is_pinned" class="client-pill client-pill-ready">
+                {{ $t('client.workshops.pinned') }}
+              </span>
+            </h2>
+          </div>
+
+          <button
+            v-if="!workshop.is_pinned"
+            type="button"
+            class="mp-button mp-button-outline"
+            :disabled="pinningWorkshopId === workshop.workshop_id"
+            @click="makePrimary(workshop)"
+          >
+            {{
+              pinningWorkshopId === workshop.workshop_id
+                ? $t('client.common.busy')
+                : $t('client.workshops.makePrimary')
+            }}
+          </button>
         </div>
 
-        <span
-          class="client-pill max-[480px]:col-span-2 max-[480px]:mt-1 max-[480px]:justify-self-start"
-          :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
+        <p
+          v-if="pinError === workshop.workshop_id"
+          class="px-5 pb-3 text-sm font-bold text-danger"
+          role="alert"
         >
-          {{
-            branch.status === 'active' ? $t('client.branches.active') : $t('client.branches.closed')
-          }}
-        </span>
+          {{ $t('client.workshops.pinFailed') }}
+        </p>
+
+        <!-- §3.2-style choice, inline: which counter of this workshop. -->
+        <div
+          v-if="choosingFor?.workshop_id === workshop.workshop_id"
+          class="border-t border-divider bg-sunk px-5 py-4"
+        >
+          <h3 class="text-sm font-bold text-ink">{{ $t('client.entry.chooseTitle') }}</h3>
+          <div class="mt-3 grid gap-2">
+            <button
+              v-for="branch in workshop.branches"
+              :key="branch.id"
+              type="button"
+              class="rounded-lg border border-hairline bg-elevated px-3 py-2 text-left hover:bg-sunk"
+              :disabled="pinningWorkshopId === workshop.workshop_id"
+              @click="pinBranch(workshop, branch.id)"
+            >
+              <b class="text-sm text-ink">{{ branch.name }}</b>
+              <span class="mt-0.5 block text-xs text-ink-muted">{{ branch.address }}</span>
+            </button>
+          </div>
+        </div>
+
+        <ul class="border-t border-divider">
+          <li
+            v-for="branch in workshop.branches"
+            :key="branch.id"
+            class="border-b border-divider px-5 py-4 last:border-b-0"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <b class="text-sm text-ink">{{ branch.name }}</b>
+              <span
+                class="client-pill"
+                :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
+              >
+                {{
+                  branch.status === 'active'
+                    ? $t('client.workshops.active')
+                    : $t('client.workshops.closed')
+                }}
+              </span>
+            </div>
+            <p class="mt-1 text-xs text-ink-muted">{{ branch.address }}</p>
+            <a
+              class="mt-1 inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
+              :href="`tel:${branch.phone}`"
+            >
+              {{ formatPhone(branch.phone) }}
+            </a>
+            <p v-if="branch.closed_reason" class="mt-1 text-sm font-bold text-warning">
+              {{ branch.closed_reason }}
+            </p>
+          </li>
+          <li v-if="workshop.branches.length === 0" class="px-5 py-4 text-sm text-ink-muted">
+            {{ $t('client.workshops.noBranches') }}
+          </li>
+        </ul>
       </article>
     </div>
   </section>

@@ -28,6 +28,11 @@ export type StockTransactionType =
   | 'restore'
   | 'adjust'
 
+/** Which production surface a branch's orders offer (orders.md). `simple`
+ *  collapses the floor to one Tayyor tap; `full` keeps assignment, starts and
+ *  per-stage completion. Read at action time — never stamped on an order. */
+export type ProductionMode = 'simple' | 'full'
+
 export interface BranchContextItem {
   id: string
   name: string
@@ -39,6 +44,7 @@ export interface BranchContextItem {
   edge_trim_mm: number
   edge_overhang_mm: number
   own_material_allowed: boolean
+  production_mode: ProductionMode
   permissions: string[]
 }
 
@@ -66,6 +72,9 @@ export interface WorkshopSettings {
   id: string
   name: string
   logo_file_id: string | null
+  // Read-only, machine-generated, permanent: the code behind `/w/{code}` that
+  // the "Mijoz havolasi" card prints. There is no write path for it.
+  public_code: string
   status: 'active' | 'blocked'
   currency: 'UZS'
   owner_user_id: string
@@ -76,6 +85,9 @@ export interface WorkshopSettings {
 export interface ManagedBranch {
   id: string
   workshop_id: string
+  // Read-only, carried on every branch read so the branch screen can print
+  // `/w/{code}/{branch_no}` without a second request.
+  workshop_public_code: string
   // Platform-wide branch number, assigned at creation and immutable — it is the
   // middle segment of every order number the branch prints, `#26-1-0003`
   // (QAD-146). Read-only: it is never sent back in a create or patch payload.
@@ -93,6 +105,7 @@ export interface ManagedBranch {
   edge_trim_mm: number
   edge_overhang_mm: number
   own_material_allowed: boolean
+  production_mode: ProductionMode
   created_at: string
   updated_at: string
 }

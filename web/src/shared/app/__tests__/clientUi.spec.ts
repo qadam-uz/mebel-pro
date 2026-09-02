@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CLIENT_PHASE_STATUSES,
   clientErrorLabel,
   draftDisplayName,
   clientGreetingName,
@@ -10,7 +11,10 @@ import {
   clientNotificationIconName,
   clientNotificationTitle,
   clientPhaseIndex,
+  clientPhaseLabels,
   clientPhaseProgress,
+  clientPhaseSubtitle,
+  clientStatusLabel,
   clientStatusPillClass,
   formatPercent,
   formatFullDate,
@@ -19,6 +23,7 @@ import {
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
 import type { NotificationItem } from '@/shared/stores/notifications'
+import type { OrderStatus } from '@/shared/stores/orders'
 import type { CuttingDraft, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
 
 function notification(overrides: Partial<NotificationItem>): NotificationItem {
@@ -48,29 +53,74 @@ describe('client UI helpers', () => {
     expect(isUzPhone('+997901234567')).toBe(false)
   })
 
-  it('maps client order phases and status pills', () => {
+  // Four phases, mode-independent (orders.md): `confirmed`, `cutting` and
+  // `edge_banding` are one client phase in BOTH production modes, so the client
+  // reads the same track whichever way the workshop runs its floor.
+  it('maps the three production statuses onto one client phase', () => {
     expect(clientPhaseIndex('new')).toBe(0)
-    expect(clientPhaseIndex('edge_banding')).toBe(2)
-    expect(clientPhaseIndex('completed')).toBe(4)
+    expect(clientPhaseIndex('confirmed')).toBe(1)
+    expect(clientPhaseIndex('cutting')).toBe(1)
+    expect(clientPhaseIndex('edge_banding')).toBe(1)
+    expect(clientPhaseIndex('ready')).toBe(2)
+    expect(clientPhaseIndex('completed')).toBe(3)
     expect(clientPhaseIndex('cancelled')).toBe(-1)
+    expect(clientPhaseLabels()).toEqual(['Yangi', 'Tayyorlanmoqda', 'Tayyor', 'Olib ketildi'])
+  })
+
+  it('gives one label, one pill tone and one sub-line per client phase', () => {
+    // one word for the whole production phase — and therefore one colour: two
+    // tones under the same label would read as a defect, not as detail
+    expect(clientStatusLabel('confirmed')).toBe('Tayyorlanmoqda')
+    expect(clientStatusLabel('cutting')).toBe('Tayyorlanmoqda')
+    expect(clientStatusLabel('edge_banding')).toBe('Tayyorlanmoqda')
+    expect(clientStatusPillClass('cutting')).toBe(clientStatusPillClass('confirmed'))
+    expect(clientStatusPillClass('edge_banding')).toBe(clientStatusPillClass('confirmed'))
     expect(clientStatusPillClass('ready')).toContain('client-pill-ready')
     expect(clientStatusPillClass('cancelled')).toContain('client-pill-danger')
+    expect(clientPhaseSubtitle('new')).toBe('Ustaxona tasdiqlashi kutilmoqda')
+    expect(clientPhaseSubtitle('edge_banding')).toBe('Ishlab chiqarish jarayonida')
+    expect(clientPhaseSubtitle('ready')).toBe('Olib ketishingiz mumkin')
+    // the final phase closes the track and off-track statuses have no sub-line
+    expect(clientPhaseSubtitle('completed')).toBe('')
+    expect(clientPhaseSubtitle('cancelled')).toBe('')
   })
 
   it('drives the dashboard progress bar and next-phase hint from the order phase', () => {
-    // monotonic fill across the five phases; ready is near-complete, completed is full
+    // monotonic fill across the four phases; ready is near-complete, completed is full
     expect(clientPhaseProgress('new')).toBe(14)
-    expect(clientPhaseProgress('cutting')).toBe(55)
-    expect(clientPhaseProgress('ready')).toBe(85)
+    expect(clientPhaseProgress('confirmed')).toBe(45)
+    // an order deeper in the workshop's own spine sits at the same client mark
+    expect(clientPhaseProgress('cutting')).toBe(45)
+    expect(clientPhaseProgress('ready')).toBe(80)
     expect(clientPhaseProgress('completed')).toBe(100)
     // off-track statuses read as empty rather than NaN
     expect(clientPhaseProgress('cancelled')).toBe(0)
     // next-phase label points one step ahead; the final phase has none
-    expect(clientNextPhaseLabel('new')).toBe('Tasdiqlandi')
+    expect(clientNextPhaseLabel('new')).toBe('Tayyorlanmoqda')
     expect(clientNextPhaseLabel('cutting')).toBe('Tayyor')
-    expect(clientNextPhaseLabel('ready')).toBe('Topshirildi')
+    expect(clientNextPhaseLabel('ready')).toBe('Olib ketildi')
     expect(clientNextPhaseLabel('completed')).toBeNull()
     expect(clientNextPhaseLabel('cancelled')).toBeNull()
+  })
+
+  // The dashboard count strip's second tile: the phase-2 bucket, which an order
+  // enters at Approve — not when the saw starts.
+  it('counts the whole production phase as one dashboard bucket', () => {
+    const statuses: OrderStatus[] = [
+      'new',
+      'confirmed',
+      'cutting',
+      'edge_banding',
+      'ready',
+      'completed',
+      'cancelled',
+    ]
+    expect(statuses.filter((status) => clientPhaseIndex(status) === 1)).toEqual([
+      'confirmed',
+      'cutting',
+      'edge_banding',
+    ])
+    expect(CLIENT_PHASE_STATUSES[1]).toEqual(['confirmed', 'cutting', 'edge_banding'])
   })
 
   it('greets with the first given name, falling back when no real name is set', () => {
@@ -144,9 +194,11 @@ describe('client UI helpers', () => {
   })
 
   it('presents order notifications with localized titles and an order-number body (CB-02)', () => {
-    // event_code → Uzbek title; never the raw code
+    // event_code → Uzbek title; never the raw code. The `order.confirmed` title
+    // names the phase the client's own pill will now be showing them
+    // («Tayyorlanmoqda»), not the internal transition that fired it.
     expect(clientNotificationTitle(notification({ event_code: 'order.confirmed' }))).toBe(
-      'Buyurtma tasdiqlandi',
+      'Buyurtma tayyorlanmoqda',
     )
     expect(clientNotificationTitle(notification({ event_code: 'order.ready' }))).toBe(
       'Buyurtma tayyor',

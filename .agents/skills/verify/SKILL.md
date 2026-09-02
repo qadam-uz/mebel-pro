@@ -32,13 +32,17 @@ Seed demo data (aborts safely if already seeded; credentials in the header):
 
 ## API handle (no browser needed)
 
-Client access token via OTP (dev code `000000`; request is rate-limited ~60s per phone):
+Client access token via the bot handshake. There is no real bot locally — with
+`TELEGRAM_LOGIN_DEV_MODE=true` (the dev template's default) a dev-only confirm stands in for
+it, so the same three calls the login page makes work from a shell:
 
 ```bash
 API=http://localhost:8000/api/v1
-curl -s -X POST $API/auth/client/otp/request -H 'Content-Type: application/json' -d '{"phone":"+998901112233"}'
-TOKEN=$(curl -s -X POST $API/auth/client/otp/verify -H 'Content-Type: application/json' \
-  -d '{"phone":"+998901112233","code":"000000","name":"Dilshod"}' | jq -r .access_token)
+H=$(curl -s -X POST $API/auth/client/telegram/token -H 'Content-Type: application/json' -d '{}')
+curl -s -X POST $API/auth/client/telegram/dev-confirm -H 'Content-Type: application/json' \
+  -d "{\"token\":$(jq .token <<<"$H"),\"phone\":\"+998901112233\",\"name\":\"Dilshod\"}"
+TOKEN=$(curl -s -X POST $API/auth/client/telegram/poll -H 'Content-Type: application/json' \
+  -d "{\"poll_secret\":$(jq .poll_secret <<<"$H")}" | jq -r .access_token)
 ```
 
 Workshop token: `POST $API/auth/workshop/login` with `{"login":"owner","password":"OwnerDemo123"}`
@@ -62,7 +66,8 @@ await fetch('/api/v1/auth/workshop/login', {
 location.reload()
 ```
 
-Same shape for the client SPA via the OTP endpoints (dev code `000000`).
+Same shape for the client SPA — run the dev-confirm + poll pair above as in-page fetches
+(the poll sets the refresh cookie), then reload.
 
 Useful surfaces: `GET /client/cutting-drafts/{id}`, `GET /client/cutting-results/{id}/pdf`,
 `GET /client/orders/{id}/cutting/pdf`, `GET /workshop/orders/{id}/cutting/pdf`.

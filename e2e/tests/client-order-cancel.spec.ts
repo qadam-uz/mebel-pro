@@ -36,7 +36,8 @@ test("client cancels a new order and recovers from a stale-version 409", async (
   await expect(
     page.getByRole("heading", { name: order.order_number }),
   ).toBeVisible();
-  await expect(page.getByText("Yuborildi").first()).toBeVisible();
+  // Client phase 1 of the four-phase track (orders.md).
+  await expect(page.getByText("Yangi").first()).toBeVisible();
 
   // The workshop applies a discount → the order version the page holds is now stale.
   await applyWorkshopDiscount(request, ownerAccess, order.id, order.version);

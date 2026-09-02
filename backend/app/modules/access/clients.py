@@ -1,4 +1,4 @@
-"""Client identity helpers shared by OTP login and staff walk-in resolve."""
+"""Client identity helpers shared by bot sign-in and staff walk-in resolve."""
 
 import re
 import uuid
@@ -47,12 +47,11 @@ async def find_or_create_client(
 ) -> ClientResolution | None:
     """Find the client owning ``phone``, else create one named ``name``.
 
-    This is the single lookup-else-create path for client identity — OTP
-    verification and the workshop walk-in resolve both go through it. Returns
-    ``None`` when no client exists and no usable name was provided, so callers
-    decide whether to prompt for registration (OTP) or reject
-    (``client_name_required``). A matched client with a non-active status
-    raises the same ``account_blocked`` error shape OTP verification uses.
+    This is the single lookup-else-create path for client identity — the
+    bot's contact step and the workshop walk-in resolve both go through it.
+    Returns ``None`` when no client exists and no usable name was provided, so
+    callers decide whether to reject or ask for one. A matched client with a
+    non-active status raises ``account_blocked``.
     """
     normalized_phone = normalize_uz_phone(phone)
     client = await db.scalar(select(Client).where(Client.phone == normalized_phone))

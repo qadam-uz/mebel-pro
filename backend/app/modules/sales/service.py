@@ -34,6 +34,7 @@ from app.models.enums import (
     MaterialStatus,
     OrderStatus,
     Permission,
+    ProductionMode,
     UserStatus,
     WorkshopStatus,
 )
@@ -97,6 +98,7 @@ from app.modules.sales.schemas import (
     ReasonedVersionedRequest,
     VersionedRequest,
     WorkshopOrderAssignRequest,
+    WorkshopOrderCompleteProductionRequest,
     WorkshopOrderCompleteRequest,
     WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
@@ -107,11 +109,20 @@ from app.modules.sales.schemas import (
     WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
-from app.modules.support.api import record_action, record_status_change
+from app.modules.support.api import (
+    queue_client_order_message,
+    record_action,
+    record_status_change,
+)
 from app.modules.support.contracts import Notification
 from app.modules.workshop.contracts import Branch, Workshop
 
 PHONE_RE = re.compile(r"^\+998\d{9}$")
+# Placeholder name for the production report's unassigned bucket — the rows a
+# simple-mode order produced with nobody credited (orders.md). The client keys
+# its own localized label off the row's null `user_id`; this string is only the
+# API's fallback, and the bucket is never a person, so it can never be paid.
+UNASSIGNED_WORKER_NAME = "Unassigned"
 WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
     {
         Permission.VIEW_ORDERS,
@@ -123,10 +134,14 @@ WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
 # order status change"). The client SPA renders these codes into localized titles
 # (web clientUi NOTIFICATION_TITLES); the payload carries denormalized order data.
 # NEW is absent — that is the client placing their own order, not a notifiable change.
+#
+# CUTTING and EDGE_BANDING are absent too, in BOTH production modes: the client
+# track is four phases (Yangi · Tayyorlanmoqda · Tayyor · Olib ketildi) and the two
+# cutting stages are one client phase, so a queued-vs-sawing distinction is not
+# client value — it is workshop kitchen. Historical `order.status_changed` rows
+# keep rendering in the inbox; no new ones are produced.
 _CLIENT_ORDER_EVENT_CODE: dict[OrderStatus, str] = {
     OrderStatus.CONFIRMED: "order.confirmed",
-    OrderStatus.CUTTING: "order.status_changed",
-    OrderStatus.EDGE_BANDING: "order.status_changed",
     OrderStatus.READY: "order.ready",
     OrderStatus.COMPLETED: "order.completed",
     OrderStatus.CANCELLED: "order.cancelled",
@@ -209,7 +224,10 @@ class EdgeMaterialProductionLine:
 
 @dataclass(frozen=True)
 class WorkerProductionRecord:
-    user_id: uuid.UUID
+    # `None` is the unassigned bucket: a simple-mode order can complete with
+    # nobody credited, and the accountant still has to see the volume. The web
+    # renders that row's own label off the null id — it is not a user.
+    user_id: uuid.UUID | None
     full_name: str
     panels_cut: int
     cut_count: int
@@ -749,6 +767,13 @@ async def apply_order_edit(
             created_at=now,
         )
     )
+    await queue_client_order_message(
+        db,
+        client_id=order.client_id,
+        event_code="order.updated",
+        order_id=order.id,
+        order_number=order.order_number,
+    )
     await db.flush()
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
@@ -1107,14 +1132,14 @@ async def list_worker_production_records(
             return []
         query = query.where(Order.branch_id.in_(branch_ids))
     orders = (await db.scalars(query)).all()
-    rows: dict[uuid.UUID, WorkerProductionRecord] = {}
+    rows: dict[uuid.UUID | None, WorkerProductionRecord] = {}
 
-    def current(user_id: uuid.UUID) -> WorkerProductionRecord:
+    def current(user_id: uuid.UUID | None) -> WorkerProductionRecord:
         row = rows.get(user_id)
         if row is None:
             row = WorkerProductionRecord(
                 user_id=user_id,
-                full_name="Worker",
+                full_name="Worker" if user_id is not None else UNASSIGNED_WORKER_NAME,
                 panels_cut=0,
                 cut_count=0,
                 orders_banded=0,
@@ -1127,9 +1152,11 @@ async def list_worker_production_records(
         rows[row.user_id] = row
 
     for order in orders:
+        # The completion stamp is what makes a row, not the worker id: a
+        # simple-mode order may have been closed with nobody credited, and its
+        # panels and metres still happened. Those land in the `None` bucket.
         if (
-            order.cutter_user_id is not None
-            and order.cut_completed_at is not None
+            order.cut_completed_at is not None
             and date_from <= order.cut_completed_at.date() <= date_to
         ):
             row = current(order.cutter_user_id)
@@ -1144,8 +1171,7 @@ async def list_worker_production_records(
                 )
             )
         if (
-            order.edger_user_id is not None
-            and order.edge_completed_at is not None
+            order.edge_completed_at is not None
             and date_from <= order.edge_completed_at.date() <= date_to
         ):
             row = current(order.edger_user_id)
@@ -1165,7 +1191,8 @@ async def list_worker_production_records(
 
     if not rows:
         return []
-    users = (await db.scalars(select(WorkshopUser).where(WorkshopUser.id.in_(rows.keys())))).all()
+    known_ids = [user_id for user_id in rows if user_id is not None]
+    users = (await db.scalars(select(WorkshopUser).where(WorkshopUser.id.in_(known_ids)))).all()
     for user in users:
         row = rows[user.id]
         replace(
@@ -1431,6 +1458,7 @@ async def assign_order_workers(
         order_id=order_id,
         permission=Permission.MANAGE_ORDERS,
     )
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     if order.status not in {OrderStatus.CONFIRMED, OrderStatus.CUTTING, OrderStatus.EDGE_BANDING}:
         raise APIError("order_assignment_not_allowed", "Assignment is not allowed")
@@ -1499,6 +1527,7 @@ async def start_cutting(
     payload: VersionedRequest,
 ) -> OrderDetailResponse:
     order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     _expect_status(order, {OrderStatus.CONFIRMED})
     if order.assigned_cutter_user_id is None:
@@ -1531,6 +1560,7 @@ async def start_banding(
     payload: VersionedRequest,
 ) -> OrderDetailResponse:
     order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     _expect_status(order, {OrderStatus.EDGE_BANDING})
     if order.banding_started_at is not None:
@@ -1777,6 +1807,7 @@ async def complete_cutting(
     payload: WorkshopOrderCompleteRequest,
 ) -> OrderDetailResponse:
     order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     _expect_status(order, {OrderStatus.CUTTING})
     worker_id = await _credited_worker(
@@ -1787,6 +1818,36 @@ async def complete_cutting(
         assigned_user_id=order.assigned_cutter_user_id,
         job="cutting",
     )
+    shortfall = await _complete_cutting_step(
+        db,
+        principal=principal,
+        order=order,
+        credited_user_id=worker_id,
+        completed_at=datetime.now(UTC),
+    )
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
+
+
+async def _complete_cutting_step(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order: Order,
+    credited_user_id: uuid.UUID | None,
+    completed_at: datetime,
+) -> bool:
+    """The `cutting → edge_banding | ready` effect: panel stock, stamps, gateway.
+
+    Split out of `complete_cutting` so the simple-mode composite can run the
+    *same* effect rather than a second copy of it — one decrement, one snapshot
+    formula, one gateway, whichever surface drove the step. Returns whether the
+    consume drove a balance below zero (informational; the transition stands).
+
+    `credited_user_id` may be `None` — only in simple mode, where a shop that
+    keeps no worker accounts still closes its orders.
+    """
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
     shortfall = False
@@ -1801,8 +1862,8 @@ async def complete_cutting(
             quantity=quantity,
         )
         shortfall = shortfall or transaction.balance_after < 0
-    order.cutter_user_id = worker_id
-    order.cut_completed_at = datetime.now(UTC)
+    order.cutter_user_id = credited_user_id
+    order.cut_completed_at = completed_at
     order.panels_used_snapshot = sum(
         int(value) for value in result.panels_used_by_material.values()
     )
@@ -1817,13 +1878,11 @@ async def complete_cutting(
         to_status=to_status,
         reason=None,
         metadata={
-            "credited_user_id": str(worker_id),
+            "credited_user_id": str(credited_user_id) if credited_user_id is not None else None,
             "panel_demands": {str(key): value for key, value in panel_demands.items()},
         },
     )
-    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
-    response.stock_shortfall = shortfall
-    return response
+    return shortfall
 
 
 async def complete_banding(
@@ -1834,6 +1893,7 @@ async def complete_banding(
     payload: WorkshopOrderCompleteRequest,
 ) -> OrderDetailResponse:
     order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     _expect_status(order, {OrderStatus.EDGE_BANDING})
     worker_id = await _credited_worker(
@@ -1844,6 +1904,32 @@ async def complete_banding(
         assigned_user_id=order.assigned_edger_user_id,
         job="banding",
     )
+    shortfall = await _complete_banding_step(
+        db,
+        principal=principal,
+        order=order,
+        credited_user_id=worker_id,
+        completed_at=datetime.now(UTC),
+    )
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
+
+
+async def _complete_banding_step(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order: Order,
+    credited_user_id: uuid.UUID | None,
+    completed_at: datetime,
+) -> bool:
+    """The `edge_banding → ready` effect: edge stock per material, stamps, event.
+
+    Split out of `complete_banding` for the same reason as its cutting twin —
+    the simple-mode composite runs this exact code, so the consumed-metres
+    contract has one implementation.
+    """
     result = await _order_result(db, order)
     edge_demands = _edge_stock_demands(result)
     shortfall = False
@@ -1856,8 +1942,8 @@ async def complete_banding(
             quantity=quantity,
         )
         shortfall = shortfall or transaction.balance_after < 0
-    order.edger_user_id = worker_id
-    order.edge_completed_at = datetime.now(UTC)
+    order.edger_user_id = credited_user_id
+    order.edge_completed_at = completed_at
     order.edge_length_snapshot = {str(key): value for key, value in edge_demands.items()}
     await _transition(
         db,
@@ -1866,13 +1952,11 @@ async def complete_banding(
         to_status=OrderStatus.READY,
         reason=None,
         metadata={
-            "credited_user_id": str(worker_id),
+            "credited_user_id": str(credited_user_id) if credited_user_id is not None else None,
             "edge_demands": {str(key): value for key, value in edge_demands.items()},
         },
     )
-    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
-    response.stock_shortfall = shortfall
-    return response
+    return shortfall
 
 
 async def mark_collected(
@@ -1917,6 +2001,10 @@ async def revert_order(
         order_id=order_id,
         permission=Permission.MANAGE_ORDERS,
     )
+    # Step-level surgery is a full-mode surface: a simple-mode branch never
+    # walked the steps one at a time, so it undoes the whole composite instead
+    # (`undo_production`), or switches to full mode to work step by step.
+    await _expect_full_mode_branch(db, order)
     _expect_version(order, payload.version)
     reason = _required_reason(payload.reason)
     metadata: dict[str, Any] = {}
@@ -1949,6 +2037,171 @@ async def revert_order(
         to_status=to_status,
         reason=reason,
         metadata=metadata,
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def complete_production(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderCompleteProductionRequest,
+) -> OrderDetailResponse:
+    """Simple mode's single production tap — walk what the spine still owes, to `ready`.
+
+    A collapse, not a fork: the state machine is unchanged and every step below
+    runs the *same* effect its per-stage endpoint runs, guarded by the status the
+    order has reached **by then**. So a `confirmed` order writes the whole
+    remainder, while a full → simple leftover already at `cutting` or
+    `edge_banding` gets only what is left — no decrement can fire twice.
+
+    All stamps carry one action time (`start == complete`): the admin is
+    recording a finished job, not driving a stopwatch, so durations are zero by
+    construction and the reports render them as "—". A start stamp a *previous*
+    full-mode tap already wrote is left alone — that duration was real.
+
+    Worker credit is optional and lands on the assignment first, so each step
+    credits its assigned worker exactly as full mode's completion does. Left
+    empty the ids stay NULL and the order still completes: in simple mode worker
+    accounts are a reporting dimension, not a gate.
+    """
+    order = await _locked_workshop_order_for_action(
+        db,
+        principal=principal,
+        order_id=order_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+    await _expect_simple_mode_branch(db, order)
+    _expect_version(order, payload.version)
+    _expect_status(order, {OrderStatus.CONFIRMED, OrderStatus.CUTTING, OrderStatus.EDGE_BANDING})
+    has_banding = await _order_has_banding(db, order.id)
+    if payload.edger_user_id is not None and not has_banding:
+        raise APIError("edger_not_required", "This order has no edge banding")
+    if payload.cutter_user_id is not None and order.status is OrderStatus.EDGE_BANDING:
+        # The saw is already behind this order (a full-mode leftover), and the
+        # cutter it credited then is not this tap's to rewrite.
+        raise APIError("cutting_already_started", "Cutting is already done on this order")
+    for user_id in (payload.cutter_user_id, payload.edger_user_id):
+        if user_id is not None:
+            await _validate_production_worker(
+                db,
+                workshop_id=order.workshop_id,
+                branch_id=order.branch_id,
+                user_id=user_id,
+            )
+
+    now = datetime.now(UTC)
+    if payload.cutter_user_id is not None:
+        order.assigned_cutter_user_id = payload.cutter_user_id
+        order.cutter_assigned_at = now
+    if payload.edger_user_id is not None:
+        order.assigned_edger_user_id = payload.edger_user_id
+        order.edger_assigned_at = now
+
+    shortfall = False
+    if order.status is OrderStatus.CONFIRMED:
+        # No effects beyond the event — the same step Start cutting writes.
+        order.cutting_started_at = now
+        await _transition(
+            db,
+            principal=principal,
+            order=order,
+            to_status=OrderStatus.CUTTING,
+            reason=None,
+            metadata={},
+        )
+    if order.status is OrderStatus.CUTTING:
+        shortfall = await _complete_cutting_step(
+            db,
+            principal=principal,
+            order=order,
+            credited_user_id=order.assigned_cutter_user_id,
+            completed_at=now,
+        )
+    if order.status is OrderStatus.EDGE_BANDING:
+        # A leftover that genuinely started banding under full mode keeps that
+        # start stamp — that duration was real. A stage this tap opens and closes
+        # in one instant gets the action time.
+        if order.banding_started_at is None:
+            order.banding_started_at = now
+        banding_shortfall = await _complete_banding_step(
+            db,
+            principal=principal,
+            order=order,
+            credited_user_id=order.assigned_edger_user_id,
+            completed_at=now,
+        )
+        shortfall = shortfall or banding_shortfall
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
+
+
+async def undo_production(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: ReasonedVersionedRequest,
+) -> OrderDetailResponse:
+    """Simple mode's **Orqaga** — take a whole Tayyor back, in one transaction.
+
+    Chains the existing single-step restores back to `confirmed`, so each step
+    re-increments exactly what it decremented and clears exactly the stamps it
+    wrote. One revert event per step, all carrying the same reason: the spine
+    records the undo as the walk it actually is.
+
+    There is no partial undo here — a shop that needs step-level surgery switches
+    the branch to full mode. Never out of `completed`: `ready` is the only
+    accepted from-status, as with any revert.
+    """
+    order = await _locked_workshop_order_for_action(
+        db,
+        principal=principal,
+        order_id=order_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+    await _expect_simple_mode_branch(db, order)
+    _expect_version(order, payload.version)
+    _expect_status(order, {OrderStatus.READY})
+    reason = _required_reason(payload.reason)
+
+    if await _order_has_banding(db, order.id):
+        restored_edges = await _restore_banding_step(db, order)
+        await _transition(
+            db,
+            principal=principal,
+            order=order,
+            to_status=OrderStatus.EDGE_BANDING,
+            reason=reason,
+            metadata={"restored_edges": {str(key): value for key, value in restored_edges.items()}},
+        )
+        order.banding_started_at = None
+    restored_panels = await _restore_cutting_step(db, order)
+    await _transition(
+        db,
+        principal=principal,
+        order=order,
+        to_status=OrderStatus.CUTTING,
+        reason=reason,
+        metadata={"restored_panels": {str(key): value for key, value in restored_panels.items()}},
+    )
+    order.cutting_started_at = None
+    # The composite wrote the assignment too (that is where its worker credit
+    # lands), so the undo takes it back out — a simple-mode `confirmed` order
+    # carries no assignment, exactly as one that was never touched.
+    order.assigned_cutter_user_id = None
+    order.cutter_assigned_at = None
+    order.assigned_edger_user_id = None
+    order.edger_assigned_at = None
+    await _transition(
+        db,
+        principal=principal,
+        order=order,
+        to_status=OrderStatus.CONFIRMED,
+        reason=reason,
+        metadata={},
     )
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
@@ -2415,12 +2668,12 @@ async def _transition(
         reason=reason,
         action_log_id=action.id,
     )
-    _notify_client_of_status(
+    await _notify_client_of_status(
         db, principal=principal, order=order, from_status=from_status, to_status=to_status
     )
 
 
-def _notify_client_of_status(
+async def _notify_client_of_status(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
@@ -2434,6 +2687,9 @@ def _notify_client_of_status(
     don't need to be told about their own action — and for transitions with no
     client-facing event code. Recipient/payload follow the generic Notification
     model; the client SPA already maps these event codes to localized titles.
+
+    A client with a linked Telegram account also gets the same sentence as a bot
+    message — queued here, sent after this transaction commits (notifications.md).
     """
     event_code = _CLIENT_ORDER_EVENT_CODE.get(to_status)
     if event_code is None:
@@ -2458,6 +2714,13 @@ def _notify_client_of_status(
             },
             created_at=datetime.now(UTC),
         )
+    )
+    await queue_client_order_message(
+        db,
+        client_id=order.client_id,
+        event_code=event_code,
+        order_id=order.id,
+        order_number=order.order_number,
     )
 
 
@@ -2764,6 +3027,9 @@ async def _order_response(
     ).all()
     return OrderDetailResponse(
         **base,
+        # The order's own branch decides which production actions this order has
+        # — never the branch a workshop screen happens to have selected.
+        branch_production_mode=branch.production_mode,
         items=[_order_item_response(item) for item in items],
         price_lines=_order_price_lines(items, result),
         events=[
@@ -3408,7 +3674,12 @@ async def _price_result(
                 material_name=_edge_line_name(material_id),
                 consumed_mm=mm,
                 own=shop_mm == 0,
-                metre_price_tiyin=material_prices[material_id],
+                # A tape the client brought every metre of is not in the price
+                # map at all — the map is built from the *shop* demands, and
+                # there is no shop demand to price. The receipt line still has to
+                # render, and zero is the honest per-metre figure: the workshop
+                # charges the gluing (`service_cost_tiyin`), never the roll.
+                metre_price_tiyin=material_prices.get(material_id, 0),
                 material_cost_tiyin=material_cost,
                 service_cost_tiyin=service_cost,
                 line_total_tiyin=material_cost + service_cost,
@@ -4268,6 +4539,48 @@ def _expect_version(order: Order, version: int) -> None:
 def _expect_status(order: Order, allowed: set[OrderStatus]) -> None:
     if order.status not in allowed:
         raise APIError("invalid_order_status", "Order status does not allow this action")
+
+
+async def _branch_production_mode(db: AsyncSession, order: Order) -> ProductionMode:
+    """The mode of the order's OWN branch, read at action time.
+
+    Never stamped on the order: the mode is a property of the shop floor, so a
+    branch that switches mid-job simply offers the other surface from the next
+    tap on (orders.md).
+    """
+    branch = await db.get(Branch, order.branch_id)
+    if branch is None:
+        raise APIError("order_scope_missing", "Order scope is incomplete", status_code=500)
+    return branch.production_mode
+
+
+async def _expect_full_mode_branch(db: AsyncSession, order: Order) -> None:
+    """Guard the per-step production surface (assign · start · complete · revert).
+
+    The two flows are exclusive by design, so no branch ever has two ways to move
+    the same order. A stale screen calling the wrong one is told which mode the
+    branch is actually in, so it can swap its actions and refetch.
+    """
+    mode = await _branch_production_mode(db, order)
+    if mode is ProductionMode.SIMPLE:
+        raise APIError(
+            "simple_mode_active",
+            "This branch runs simple production mode",
+            status_code=status.HTTP_409_CONFLICT,
+            details={"production_mode": mode.value},
+        )
+
+
+async def _expect_simple_mode_branch(db: AsyncSession, order: Order) -> None:
+    """Guard the composite surface (complete-production · undo-production)."""
+    mode = await _branch_production_mode(db, order)
+    if mode is ProductionMode.FULL:
+        raise APIError(
+            "full_mode_active",
+            "This branch runs full production mode",
+            status_code=status.HTTP_409_CONFLICT,
+            details={"production_mode": mode.value},
+        )
 
 
 def _expect_editable_status(order: Order) -> None:

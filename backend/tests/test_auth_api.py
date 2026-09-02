@@ -57,6 +57,8 @@ async def test_platform_login_sets_refresh_cookie_and_returns_me(
         "phone": "+998901234567",
         "name": None,
         "preferred_branch_id": None,
+        "pinned_workshop_name": None,
+        "pinned_branch_name": None,
         "status": "active",
     }
 
