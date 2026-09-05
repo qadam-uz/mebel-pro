@@ -107,37 +107,18 @@ afterEach(() => {
   wrapper = null
 })
 
-describe('ClientHomeView — the pinned header subtitle', () => {
-  it('names workshop · branch and links to Ustaxonalarim', async () => {
+describe('ClientHomeView — the Ustaxonangiz card (§3)', () => {
+  // Decision 16: with the branch list not yet in hand the card still has both
+  // names off `/auth/me`, so it renders «Workshop · Branch» rather than waiting.
+  it('titles the card by the naming rule and links to the workshop', async () => {
     const view = await mountHome(
       clientMe({ pinned_workshop_name: 'Mebel Master', pinned_branch_name: 'Chilonzor' }),
     )
 
-    const link = view.find('a[href="/c/branches"]')
-    expect(link.exists()).toBe(true)
-    expect(link.text()).toBe('Mebel Master · Chilonzor')
-  })
-
-  it('stacks the pinned line above the counts line — it joins, never replaces', async () => {
-    // Owner decision 2026-09-02: where the app is scoped and what is waiting are
-    // two different questions, and the counts line was the one the client came for.
-    withActiveOrders(2)
-
-    const view = await mountHome(
-      clientMe({ pinned_workshop_name: 'Mebel Master', pinned_branch_name: 'Chilonzor' }),
-    )
-
-    expect(view.find('a[href="/c/branches"]').text()).toBe('Mebel Master · Chilonzor')
-    expect(view.text()).toContain('2 ta faol buyurtmangiz bor.')
-  })
-
-  it('leaves the counts line alone for an un-pinned client', async () => {
-    withActiveOrders(2)
-
-    const view = await mountHome(clientMe())
-
-    expect(view.find('a[href="/c/branches"]').exists()).toBe(false)
-    expect(view.text()).toContain('2 ta faol buyurtmangiz bor.')
+    const card = view.find('a[href="/c/branches"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('Ustaxonangiz')
+    expect(card.text()).toContain('Mebel Master · Chilonzor')
   })
 
   it('falls back to the workshop alone when the pinned branch has no name', async () => {
@@ -145,14 +126,54 @@ describe('ClientHomeView — the pinned header subtitle', () => {
       clientMe({ pinned_workshop_name: 'Mebel Master', pinned_branch_name: null }),
     )
 
-    expect(view.find('a[href="/c/branches"]').text()).toBe('Mebel Master')
+    expect(view.find('a[href="/c/branches"]').text()).toContain('Mebel Master')
   })
 
-  it('leaves an un-pinned client’s header exactly as it was', async () => {
+  // §3 item 2: the page's one primary action sits UNDER the card, outside it —
+  // a card that is itself a link must not hold a second tap target.
+  it('offers «Yangi chizma» outside the card when the client is pinned', async () => {
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const action = view.findAll('button').find((node) => node.text().includes('Yangi chizma'))
+    expect(action).toBeDefined()
+    expect(view.find('a[href="/c/branches"]').element.contains(action!.element)).toBe(false)
+  })
+
+  // Decision 15: un-pinned means no card and no drawing action at all — a
+  // drawing needs a branch, so the one action opens Ustaxonalarim.
+  it('replaces the card with «Ustaxona tanlang» and no drawing action when un-pinned', async () => {
+    withActiveOrders(2)
+
     const view = await mountHome(clientMe())
 
-    expect(view.find('a[href="/c/branches"]').exists()).toBe(false)
+    expect(view.text()).toContain('Ustaxonangizni tanlang')
+    expect(view.text()).toContain('Ustaxona tanlang')
+    expect(view.text()).not.toContain('Yangi chizma')
+    expect(view.find('a[href="/c/branches"]').exists()).toBe(true)
+  })
+
+  // §3: the count strip and the greeting's counts line are gone; the greeting
+  // is the client's name and nothing else.
+  it('greets by name alone, with no counts line and no count strip', async () => {
+    withActiveOrders(2)
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
     expect(view.text()).toContain('Salom, Dilshod')
+    expect(view.text()).not.toContain('2 ta faol buyurtmangiz bor.')
+    expect(view.text()).not.toContain('Saqlangan chizma')
+  })
+
+  // §3 item 3: at most four rows, and no progress bar or "Keyingi" line on any
+  // of them — the whole row is the link to the order.
+  it('caps the active list at four rows and drops the progress bars', async () => {
+    withActiveOrders(6)
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.findAll('a[href^="/c/orders/order-"]')).toHaveLength(4)
+    expect(view.text()).not.toContain('Keyingi:')
+    expect(view.text()).not.toContain('Joriy:')
   })
 })
 

@@ -33,8 +33,13 @@ const TOAST_KEY = 'client.entry.toast'
 export interface StoredClientEntry {
   /** Canonical public code, as the resolve endpoint echoed it. */
   code: string
-  /** The branch the client chose (or the only one the link had). */
-  branch_id: string
+  /**
+   * The branch the link settled on — a branch QR, or a one-branch workshop's
+   * only counter. `null` for a multi-branch workshop link, which pins nothing
+   * (spec §2.2): entry still records the workshop, so it lands on
+   * Ustaxonalarim, and home then asks the client to choose a workshop.
+   */
+  branch_id: string | null
 }
 
 /**
@@ -76,9 +81,9 @@ export function readClientEntry(
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const { code, branch_id: branchId } = parsed as Partial<StoredClientEntry>
-    if (typeof code !== 'string' || typeof branchId !== 'string') return null
-    if (!code || !branchId) return null
-    return { code, branch_id: branchId }
+    if (typeof code !== 'string' || !code) return null
+    if (branchId !== null && branchId !== undefined && typeof branchId !== 'string') return null
+    return { code, branch_id: branchId || null }
   } catch {
     // Someone else's key, or a half-written value. Treat it as absent.
     return null

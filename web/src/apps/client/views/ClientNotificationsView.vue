@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import FormSelect from '@/shared/components/FormSelect.vue'
+import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
 import { formatRelativeDate } from '@/shared/app/clientUi'
 import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
@@ -31,22 +31,12 @@ function goBack() {
   else router.push(rolePath('/c'))
 }
 
+// The same chip row Buyurtmalar uses (UX review 2026-09-05): three mutually
+// exclusive choices, all visible, no popover to open for a one-word answer.
 const filterOptions = computed(() => [
-  {
-    value: 'all',
-    label: t('shell.notifications.clientFilterAll'),
-    meta: t('shell.notifications.clientFilterAllMeta'),
-  },
-  {
-    value: 'unread',
-    label: t('shell.notifications.clientFilterUnread'),
-    meta: t('shell.notifications.clientFilterUnreadMeta'),
-  },
-  {
-    value: 'read',
-    label: t('shell.notifications.clientFilterRead'),
-    meta: t('shell.notifications.clientFilterReadMeta'),
-  },
+  { value: 'all', label: t('shell.notifications.clientFilterAll') },
+  { value: 'unread', label: t('shell.notifications.clientFilterUnread') },
+  { value: 'read', label: t('shell.notifications.clientFilterRead') },
 ])
 
 const visibleItems = computed(() =>
@@ -132,7 +122,9 @@ onMounted(() => {
   <section>
     <button type="button" class="client-back" @click="goBack">{{ $t('shell.action.back') }}</button>
 
-    <div class="client-page-head">
+    <!-- §2: one title per phone screen — the compact header names this page,
+         so the body opens on the sub-line. Desktop keeps its H1. -->
+    <div class="client-page-head hidden md:flex">
       <div>
         <h1>{{ $t('shell.notifications.title') }}</h1>
         <p class="sub">{{ $t('shell.notifications.clientSubtitle') }}</p>
@@ -141,14 +133,23 @@ onMounted(() => {
         {{ $t('shell.notifications.markAll') }}
       </button>
     </div>
+    <p class="mb-3 mt-2.5 text-[13px] leading-[1.45] text-ink-soft md:hidden">
+      {{ $t('shell.notifications.clientSubtitle') }}
+    </p>
+    <button
+      type="button"
+      class="mp-button mp-button-outline mb-3 w-full md:hidden"
+      @click="markAllRead"
+    >
+      {{ $t('shell.notifications.markAll') }}
+    </button>
 
-    <div class="mb-4 max-w-60">
-      <FormSelect
-        v-model="readFilter"
-        :label="$t('shell.notifications.readFilterLabel')"
-        :options="filterOptions"
-      />
-    </div>
+    <ClientChipFilter
+      v-model="readFilter"
+      class="mb-3 md:mb-4"
+      :label="$t('shell.notifications.readFilterLabel')"
+      :options="filterOptions"
+    />
 
     <div class="max-w-[760px]">
       <div v-if="notifications.loading" class="grid gap-2" aria-live="polite">

@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { traceLine } from '@/shared/app/errorTrace'
+import { useRolePath } from '@/shared/app/paths'
 import { formatDate } from '@/shared/formatters'
 import Icon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import { useSessions } from '@/shared/composables/useSessions'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useClientProfileStore, type ClientProfile } from '@/shared/stores/clientProfile'
-import { useOrdersStore } from '@/shared/stores/orders'
+import { useNotificationsStore } from '@/shared/stores/notifications'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const orders = useOrdersStore()
+const notifications = useNotificationsStore()
 const profileStore = useClientProfileStore()
+const rolePath = useRolePath()
 const {
   sessions,
   logoutCurrentOpen,
@@ -72,11 +76,7 @@ async function reloadProfile() {
   profileError.value = null
   profileTraceId.value = null
   try {
-    const [profile] = await Promise.all([
-      profileStore.load(),
-      loadSessions(),
-      orders.loadClientOrders(),
-    ])
+    const [profile] = await Promise.all([profileStore.load(), loadSessions()])
     clientName.value = profile.name
   } catch (errorValue) {
     profileError.value = 'profile_load_failed'
@@ -110,7 +110,39 @@ onMounted(reloadProfile)
       </button>
     </div>
 
-    <div v-else class="grid max-w-[760px] gap-5">
+    <div v-else class="grid max-w-[760px] gap-3 md:gap-5">
+      <!-- §5.3: the phone header's 56px row has no width for the locale
+           switcher or the bell's twin, so both live here. The desktop header
+           keeps them too — the duplication is deliberate. -->
+      <section class="client-card p-3.5 md:p-5">
+        <div class="text-[12.5px] font-bold leading-[1.2] text-ink-muted">
+          {{ $t('client.profile.language') }}
+        </div>
+        <LocaleSwitcher class="mt-1.5" variant="segmented" />
+      </section>
+
+      <RouterLink
+        :to="rolePath('/c/notifications')"
+        class="client-card client-card-link flex items-center gap-3 p-3.5 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 md:p-5"
+      >
+        <span
+          class="grid size-[38px] shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
+          aria-hidden="true"
+        >
+          <Icon name="inbox" class="size-5" />
+        </span>
+        <span class="flex-1 text-[15px] font-semibold text-ink">
+          {{ $t('client.profile.notifications') }}
+        </span>
+        <span
+          v-if="notifications.unread > 0"
+          class="grid h-[22px] min-w-[22px] place-items-center rounded-full bg-accent px-1.5 text-[12.5px] font-semibold text-on-accent"
+        >
+          {{ notifications.unread > 9 ? '9+' : notifications.unread }}
+        </span>
+        <Icon name="chevron-right" class="size-[18px] shrink-0 text-ink-muted" />
+      </RouterLink>
+
       <section class="client-card">
         <div class="client-card-h">
           <h2>{{ $t('client.profile.title') }}</h2>
@@ -169,15 +201,6 @@ onMounted(reloadProfile)
               <div class="text-sm text-ink-muted">{{ $t('client.profile.phoneHint') }}</div>
             </div>
             <div class="text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
-          </div>
-
-          <div class="client-row-item">
-            <div>
-              <div class="client-row-name">{{ $t('client.profile.orderCount') }}</div>
-            </div>
-            <div class="text-sm text-ink">
-              {{ $t('client.unit.count', orders.clientOrders.length) }}
-            </div>
           </div>
 
           <p v-if="message" class="mt-3 text-sm font-bold text-success">{{ message }}</p>

@@ -43,8 +43,9 @@ export interface WorkshopLink {
 export interface ClientEntryResult {
   workshop_id: string
   workshop_name: string
-  branch_id: string
-  branch_name: string
+  /** Null when the link named no branch — the workshop is recorded, nothing pinned. */
+  branch_id: string | null
+  branch_name: string | null
 }
 
 export interface ClientWorkshopBranch {
@@ -113,8 +114,15 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
     }
   }
 
-  /** Pin this client to the branch the link named. Last write wins. */
-  async function applyEntry(code: string, branchId: string): Promise<ClientEntryResult> {
+  /**
+   * Record this entry, and pin the branch when the link named one.
+   *
+   * Every entry — pinned or not — puts the workshop on Ustaxonalarim (§2.2);
+   * `branch_id: null` is the multi-branch workshop link, which records the
+   * workshop and leaves the pin exactly where it was. A branch the link did
+   * name is pinned, last write wins.
+   */
+  async function applyEntry(code: string, branchId: string | null): Promise<ClientEntryResult> {
     const applied = await api.post<ClientEntryResult>(
       '/client/entry',
       { code, branch_id: branchId },

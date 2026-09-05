@@ -18,7 +18,8 @@
     "materials": "{n} material",
     "panels": "{n} panel",
     "drafts": "{n} chizma",
-    "count": "{n} ta"
+    "count": "{n} ta",
+    "sheets": "{n} list"
   },
   "draft": {
     "untitled": "Nomsiz chizma"
@@ -76,7 +77,14 @@
     "allDrafts": "Barcha chizmalar",
     "emptyDraftsTitle": "Saqlangan chizma yo'q",
     "emptyDraftsBody": "Yangisini boshlang.",
-    "moreDrafts": "Yana {n} ta saqlangan chizma"
+    "moreDrafts": "Yana {n} ta saqlangan chizma",
+    "yourWorkshop": "Ustaxonangiz",
+    "newDrawing": "Yangi chizma",
+    "pickWorkshopTitle": "Ustaxonangizni tanlang",
+    "pickWorkshopBody": "Ustaxona sizga bergan havola yoki QR orqali ulaning yoki ro'yxatdan tanlang.",
+    "pickWorkshop": "Ustaxona tanlang",
+    "continueDrafts": "Davom ettirish",
+    "allDraftsCount": "Barcha chizmalar ({n})"
   },
   "orders": {
     "title": "Mening buyurtmalarim",
@@ -157,7 +165,9 @@
     "paymentNote": "To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa — to'lov bo'yicha ustaxonaga murojaat qiling.",
     "paymentLockedTitle": "To'lov ma'lumotlari hali yopiq",
     "paymentLockedBody": "To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.",
-    "history": "Holatlar tarixi"
+    "history": "Holatlar tarixi",
+    "workshopTitle": "Ustaxona",
+    "priceNote": "To'lov ustaxonada qabul qilinadi; narx buyurtma berilganda belgilangan."
   },
   "orderNew": {
     "back": "Natijaga qaytish",
@@ -200,7 +210,6 @@
     "nameHint": "Telegramdagi ismingizdan olindi — o'zgartirsangiz bo'ladi",
     "editName": "Ismni o'zgartirish",
     "phoneHint": "Kirish uchun ishlatiladi · o'zgartirib bo'lmaydi",
-    "orderCount": "Buyurtmalar soni",
     "updated": "Profil yangilandi.",
     "sessions": "Faol sessiyalar",
     "logoutEverywhere": "Hammasini chiqarish",
@@ -210,7 +219,9 @@
     "logoutMessage": "Mijoz kabinetidan chiqasiz.",
     "logoutConfirm": "Chiqish",
     "logoutEverywhereTitle": "Hammasi chiqsin",
-    "logoutEverywhereMessage": "Barcha qurilmalardan chiqasiz."
+    "logoutEverywhereMessage": "Barcha qurilmalardan chiqasiz.",
+    "language": "Til",
+    "notifications": "Bildirishnomalar"
   },
   "login": {
     "expired": "Sessiya tugadi. Davom etish uchun qaytadan kiring.",
@@ -304,7 +315,8 @@
     "busyTitle": "Havola hozir ochilmadi",
     "busyBody": "So'rovlar ko'payib ketdi. Bir necha soniyadan keyin qayta urinib ko'ring.",
     "openApp": "Ilovani ochish",
-    "applyFailed": "Ustaxonaga ulanib bo'lmadi. QR kodni qaytadan skanerlang."
+    "applyFailed": "Ustaxonaga ulanib bo'lmadi. QR kodni qaytadan skanerlang.",
+    "branchCount": "{n} ta filial · {names}"
   },
   "workshops": {
     "title": "Ustaxonalarim",

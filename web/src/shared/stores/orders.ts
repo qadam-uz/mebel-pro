@@ -7,6 +7,7 @@ import {
   apiErrorCode,
   apiTraceId,
   captureApiError,
+  isAbortError,
   isPermissionDenied,
   withQuery,
 } from '@/shared/api/client'
@@ -446,10 +447,22 @@ export const useOrdersStore = defineStore('orders', () => {
   // Paginated with append (CB-38): offset 0 replaces, a higher offset appends the
   // next page. ordersHasMore is inferred from a full page, so the "load more"
   // button hides on the last page.
+  //
+  // Stale-while-revalidate (spec §4): the rows in hand are **not** cleared while
+  // a new page is in flight, so a filter change keeps the old list under a
+  // subtle dim instead of collapsing the page to a skeleton and back. The list
+  // owns one AbortController: a newer call aborts the older, and the loser's
+  // rejection is dropped rather than painted as an error — an aborted request
+  // is this store cancelling itself, not a failure the client can act on.
+  let clientOrdersRequest: AbortController | null = null
+
   async function loadClientOrders(
     filters: { status?: string; search?: string; offset?: number } = {},
   ) {
     const offset = filters.offset ?? 0
+    clientOrdersRequest?.abort()
+    const controller = new AbortController()
+    clientOrdersRequest = controller
     loading.value = true
     error.value = null
     traceId.value = null
@@ -461,14 +474,20 @@ export const useOrdersStore = defineStore('orders', () => {
           limit: ORDERS_PAGE_LIMIT,
           offset,
         }),
-        authInit(),
+        { ...authInit(), signal: controller.signal },
       )
       clientOrders.value = offset === 0 ? page : [...clientOrders.value, ...page]
       ordersHasMore.value = page.length === ORDERS_PAGE_LIMIT
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, 'client_orders_load_failed')
     } finally {
-      loading.value = false
+      // Only the newest call owns the flag; an aborted one must not switch the
+      // spinner off under the request that replaced it.
+      if (clientOrdersRequest === controller) {
+        clientOrdersRequest = null
+        loading.value = false
+      }
     }
   }
 
