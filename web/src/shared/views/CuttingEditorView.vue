@@ -404,6 +404,22 @@ function partsSignature(list: CuttingPart[] = parts.value) {
     ]),
   )
 }
+/**
+ * The same signature for a RESULT's frozen snapshot, computed once per snapshot.
+ *
+ * `currentChosenResult` is read by the primary CTA, so it re-runs on every
+ * keystroke — and it compared two freshly stringified lists each time, one of
+ * which is a server payload that cannot have changed. The array identity is the
+ * cache key: a new payload is a new array, and a re-used one is byte-identical.
+ */
+const snapshotSignatures = new WeakMap<object, string>()
+function snapshotSignature(snapshot: CuttingPart[]): string {
+  const cached = snapshotSignatures.get(snapshot)
+  if (cached !== undefined) return cached
+  const signature = partsSignature(snapshot)
+  snapshotSignatures.set(snapshot, signature)
+  return signature
+}
 // A result is actionable only when the draft explicitly chooses it and it was
 // calculated for the exact parts currently visible in the editor. This rejects
 // stale ids and preserved MAP layouts after a geometry edit, while allowing an
@@ -414,7 +430,7 @@ const currentChosenResult = computed(() => {
   const result = currentDraft.results.find((item) => item.id === currentDraft.chosen_result_id)
   if (!result || result.status === 'invalidated' || !Array.isArray(result.parts_snapshot))
     return null
-  return partsSignature(result.parts_snapshot) === partsSignature() ? result : null
+  return snapshotSignature(result.parts_snapshot) === partsSignature() ? result : null
 })
 const hasCurrentChosenResult = computed(() => currentChosenResult.value !== null)
 // docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
@@ -504,12 +520,33 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
   }
 }
 
+/**
+ * Catalog lookup by id, indexed rather than scanned.
+ *
+ * These two are the most-called functions on the screen — row validation, the
+ * size/fit check, the group label, the source chip and the swatch all resolve a
+ * material, once per row, inside computeds that re-run on every keystroke. As a
+ * `find()` over a branch catalog of a few hundred rows that made a single
+ * character cost O(parts × catalog); the index turns it into O(parts) and is
+ * rebuilt only when the catalog itself is (re)loaded.
+ *
+ * First occurrence wins, which is what `find()` returned — ids are unique, but
+ * the tie-break should not change silently if that ever stops being true.
+ */
+function indexById(options: readonly ClientCatalogMaterialOption[]) {
+  const index = new Map<string, ClientCatalogMaterialOption>()
+  for (const material of options) if (!index.has(material.id)) index.set(material.id, material)
+  return index
+}
+const panelsById = computed(() => indexById(cutting.panelOptions))
+const edgesById = computed(() => indexById(cutting.edgeOptions))
+
 function materialById(id: string | null | undefined) {
-  return cutting.panelOptions.find((material) => material.id === id) ?? null
+  return (id ? panelsById.value.get(id) : null) ?? null
 }
 
 function edgeById(id: string | null | undefined) {
-  return cutting.edgeOptions.find((material) => material.id === id) ?? null
+  return (id ? edgesById.value.get(id) : null) ?? null
 }
 
 // ── The client's group tape (§7.1) ──────────────────────────────────────────
