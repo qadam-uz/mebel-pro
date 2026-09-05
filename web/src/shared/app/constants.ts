@@ -14,6 +14,9 @@ export const SEARCH_DEBOUNCE_MS = 250
 /** Page size for the notifications list view. */
 export const NOTIFICATIONS_PAGE_LIMIT = 50
 
+/** How many rows the header bell's dropdown loads — its own slice, not the page's. */
+export const NOTIFICATIONS_MENU_LIMIT = 10
+
 /** Page size for the client orders list (load-more). */
 export const ORDERS_PAGE_LIMIT = 30
 

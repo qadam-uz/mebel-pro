@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-06
 order: 60
 ---
 
@@ -91,6 +91,10 @@ In all three apps (client / workshop / superadmin), in the header:
   on the relevant pages.
 - **A workshop-wide event** — fans out one row per staff member; each has their own unread
   count.
+- **The bell opened over the notifications page** — the dropdown's ~10 rows are fetched
+  independently of the page's paginated feed, so the page keeps every row it had loaded. Both
+  surfaces share the unread count, and marking one row (or all) read from either shows in the
+  other immediately.
 - **Low stock does not notify** — it is a state the Ombor row and the dashboard already show,
   not an event; sending it to the bell on every movement past the threshold read as noise. Only
   a balance going *negative* notifies (docs/ref/features/catalog-inventory.md).
