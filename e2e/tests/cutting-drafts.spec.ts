@@ -8,12 +8,13 @@ import {
   createCatalogDecors,
   databaseUrl,
   edgeNumbers,
+  enterViaWorkshopLink,
   escapeRegExp,
   devConfirmLogin,
   expectOk,
   expectPdfOpensInTab,
-  loginClient,
   panelNumbers,
+  workshopLinkFor,
   type BranchMaterialResponse,
 } from './helpers'
 
@@ -376,7 +377,12 @@ test('client signs in through the Telegram bot, optimizes a cutting draft, and o
     id,
   )
 
-  await loginClient(page, phoneFor(id, 40), 'Cutting Client')
+  // A drawing only ever starts from a workshop (§2.2), so the client comes in
+  // through the counter QR: that is what writes the pin. A plain `loginClient`
+  // would leave this client un-pinned and `/c/cutting/new` would redirect to
+  // Ustaxonalarim before any editor rendered.
+  const workshopLink = await workshopLinkFor(request, ownerAccess, branchId)
+  await enterViaWorkshopLink(page, workshopLink, phoneFor(id, 40), 'Cutting Client')
 
   const branchesLoaded = page.waitForResponse(
     (response) =>
@@ -384,8 +390,8 @@ test('client signs in through the Telegram bot, optimizes a cutting draft, and o
       response.url().includes('/api/v1/client/branch-options') &&
       response.ok(),
   )
-  // Fresh DB → empty home (first-run), so the create CTA is the centred
-  // "Yangi chizma" in the empty state; the header button only shows with content.
+  // Pinned home: «Yangi chizma» sits under the Ustaxonangiz card and opens the
+  // editor already scoped to the pinned branch.
   await page.getByRole('button', { name: 'Yangi chizma' }).click()
   // The editor opens unsaved — no draft is created until the first optimise
   // (docs/ref/features/cutting.md), so the URL is /new with no draft id yet.
@@ -393,14 +399,10 @@ test('client signs in through the Telegram bot, optimizes a cutting draft, and o
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
   await branchesLoaded
 
-  // Decision 17: the editor never raises a branch picker of its own — the
-  // branch is settled before it opens. An un-pinned client who reaches
-  // `/c/cutting/new` anyway gets the recovery prompt, and picking there is the
-  // last time the branch is chosen for this drawing.
-  await page.getByRole('button', { name: 'Filial tanlash' }).click()
-  await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
-  // Decision 16, the naming rule: this workshop has one branch, so it is named
-  // by the workshop alone — a branch name is never shown on its own.
+  // Decision 17: the editor never raises a branch picker of its own, so there
+  // is nothing to choose here. Decision 16, the naming rule: this workshop has
+  // one branch, so it is named by the workshop alone — a branch name is never
+  // shown on its own.
   await expect(page.getByText(`Cutting Workshop ${id}`).first()).toBeVisible()
 
   // A new compact entry starts by selecting its material; that selection creates
@@ -449,7 +451,9 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   const branchId = setup.branch.id as string
   const { panelDecor } = await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
 
-  await loginClient(page, phoneFor(id, 60), 'Resume Client')
+  // Same door as above: the QR pins the branch, so the editor opens scoped.
+  const workshopLink = await workshopLinkFor(request, ownerAccess, branchId)
+  await enterViaWorkshopLink(page, workshopLink, phoneFor(id, 60), 'Resume Client')
 
   const branchesLoaded = page.waitForResponse(
     (response) =>
@@ -461,9 +465,8 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
   await branchesLoaded
 
-  // Decision 17: no in-editor branch picker; this is the recovery prompt.
-  await page.getByRole('button', { name: 'Filial tanlash' }).click()
-  await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
+  // Decision 17: no in-editor branch picker. Decision 16: one branch, so the
+  // workshop alone names it.
   await expect(page.getByText(`Cutting Workshop ${id}`).first()).toBeVisible()
 
   await page.getByRole('button', { name: '+ Material', exact: true }).click()

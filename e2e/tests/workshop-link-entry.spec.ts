@@ -1,9 +1,4 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   clientTokenViaApi,
@@ -18,50 +13,14 @@ import {
   phoneFor,
   runId,
   seedOrderableBranch,
+  workshopLinkFor,
 } from "./helpers";
 
 test.setTimeout(120_000);
 
-interface WorkshopSettings {
-  name: string;
-  public_code: string;
-}
-
-interface BranchRead {
-  id: string;
-  branch_no: number;
-  name: string;
-  workshop_public_code: string;
-}
-
 interface CuttingDraftRead {
   id: string;
   preferred_branch_id: string | null;
-}
-
-async function workshopLinkFor(
-  request: APIRequestContext,
-  ownerAccess: string,
-  branchId: string,
-) {
-  const headers = { Authorization: `Bearer ${ownerAccess}` };
-  const settingsResponse = await request.get("/api/v1/workshop/settings", {
-    headers,
-  });
-  await expectOk(settingsResponse);
-  const settings = (await settingsResponse.json()) as WorkshopSettings;
-
-  const branchResponse = await request.get(
-    `/api/v1/workshop/branches/${branchId}`,
-    { headers },
-  );
-  await expectOk(branchResponse);
-  const branch = (await branchResponse.json()) as BranchRead;
-
-  // The code is machine-generated and permanent; the branch carries it so the
-  // counter QR needs no second request.
-  expect(branch.workshop_public_code).toBe(settings.public_code);
-  return { settings, branch };
 }
 
 async function loginWorkshop(page: Page, login: string, password: string) {
@@ -86,19 +45,19 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   const clientName = `Entry Client ${id}`;
   const { setup, ownerAccess, branchId, panel, edge } =
     await seedOrderableBranch(request, id);
-  const { settings, branch } = await workshopLinkFor(
+  const workshopLink = await workshopLinkFor(
     request,
     ownerAccess,
     branchId,
   );
 
   // 1. Scan the counter QR, signed out. The landing is public: no login bounce.
-  await page.goto(`/client/w/${settings.public_code}/${branch.branch_no}`);
+  await page.goto(`/client/w/${workshopLink.publicCode}/${workshopLink.branchNo}`);
   await expect(
-    page.getByText(`${settings.name} sizni taklif qilmoqda`),
+    page.getByText(`${workshopLink.workshopName} sizni taklif qilmoqda`),
   ).toBeVisible();
   // A branch link names its counter and never asks which branch.
-  await expect(page.getByText(branch.name)).toBeVisible();
+  await expect(page.getByText(workshopLink.branchName)).toBeVisible();
   await expect(
     page.getByText("Qaysi filialdan olib ketasiz?"),
   ).toHaveCount(0);
@@ -117,11 +76,11 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   //    now, and its body links to the workshop's own profile.
   await expect(page).toHaveURL(/\/client\/c$/);
   await expect(
-    page.getByText(`Siz ${settings.name} ustaxonasiga ulandingiz`),
+    page.getByText(`Siz ${workshopLink.workshopName} ustaxonasiga ulandingiz`),
   ).toBeVisible();
   await expect(page.getByText("Ustaxonangiz").first()).toBeVisible();
   const workshopCard = page
-    .getByRole("link", { name: new RegExp(escapeRegExp(settings.name)) })
+    .getByRole("link", { name: new RegExp(escapeRegExp(workshopLink.workshopName)) })
     .first();
   await expect(workshopCard).toBeVisible();
   await expect(workshopCard).toHaveAttribute("href", /\/c\/workshops\//);
@@ -136,8 +95,8 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   ).toBeVisible();
   // A one-branch workshop is named by the workshop alone (decision 16), so the
   // branch name never appears on that line.
-  await expect(page.getByText(settings.name).first()).toBeVisible();
-  await expect(page.getByText(`${settings.name} filiallari`)).toHaveCount(0);
+  await expect(page.getByText(workshopLink.workshopName).first()).toBeVisible();
+  await expect(page.getByText(`${workshopLink.workshopName} filiallari`)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "O'zgartirish" }),
   ).toHaveCount(0);
@@ -156,8 +115,8 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
     pinned_workshop_name: string | null;
     pinned_branch_name: string | null;
   };
-  expect(principal.pinned_workshop_name).toBe(settings.name);
-  expect(principal.pinned_branch_name).toBe(branch.name);
+  expect(principal.pinned_workshop_name).toBe(workshopLink.workshopName);
+  expect(principal.pinned_branch_name).toBe(workshopLink.branchName);
 
   const created = await request.post("/api/v1/client/cutting-drafts", {
     headers: auth,
@@ -215,7 +174,7 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   //    entered branch carrying the filled Asosiy star (spec §6.1: the pin
   //    is a branch, marked by a star rather than a pill).
   await page.goto("/client/c/branches");
-  await expect(page.getByText(settings.name).first()).toBeVisible();
+  await expect(page.getByText(workshopLink.workshopName).first()).toBeVisible();
   await expect(page.getByLabel("Asosiy", { exact: true })).toBeVisible();
 
   await page.goto("/client/c/orders");
@@ -234,7 +193,7 @@ test("the workshop's Mijoz havolasi card renders the QR and its print sheet", as
     request,
     id,
   );
-  const { settings, branch } = await workshopLinkFor(
+  const workshopLink = await workshopLinkFor(
     request,
     ownerAccess,
     branchId,
@@ -249,7 +208,7 @@ test("the workshop's Mijoz havolasi card renders the QR and its print sheet", as
 
   const urlField = page.locator("#client-link-url");
   const branchUrl = await urlField.inputValue();
-  expect(branchUrl).toContain(`/w/${settings.public_code}/${branch.branch_no}`);
+  expect(branchUrl).toContain(`/w/${workshopLink.publicCode}/${workshopLink.branchNo}`);
 
   // The QR is drawn in the page as real SVG marks — never fetched from a service.
   const qr = page.getByRole("img", { name: "Mijoz havolasining QR kodi" });
@@ -259,8 +218,8 @@ test("the workshop's Mijoz havolasi card renders the QR and its print sheet", as
 
   // The print sheet: workshop, branch, QR and the tagline, and no shell.
   await page.goto(`/workshop/branches/${branchId}/client-link`);
-  await expect(page.getByRole("heading", { name: settings.name })).toBeVisible();
-  await expect(page.getByText(branch.name)).toBeVisible();
+  await expect(page.getByRole("heading", { name: workshopLink.workshopName })).toBeVisible();
+  await expect(page.getByText(workshopLink.branchName)).toBeVisible();
   await expect(
     page.getByText("Chizmangizni o'zingiz chizing — narxini darhol bilasiz"),
   ).toBeVisible();
@@ -274,6 +233,6 @@ test("the workshop's Mijoz havolasi card renders the QR and its print sheet", as
   await page.goto("/workshop/settings");
   await expect(page.getByRole("heading", { name: "Mijoz havolasi" })).toBeVisible();
   const workshopUrl = await page.locator("#client-link-url").inputValue();
-  expect(workshopUrl).toContain(`/w/${settings.public_code}`);
-  expect(workshopUrl).not.toContain(`/w/${settings.public_code}/`);
+  expect(workshopUrl).toContain(`/w/${workshopLink.publicCode}`);
+  expect(workshopUrl).not.toContain(`/w/${workshopLink.publicCode}/`);
 });

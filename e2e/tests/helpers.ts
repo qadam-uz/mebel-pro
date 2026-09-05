@@ -694,6 +694,91 @@ export async function openTelegramLoginTab(page: Page) {
   return link;
 }
 
+/** The two coordinates a counter QR encodes: the workshop's permanent public
+ *  code and the branch's own number within it. */
+export interface WorkshopLinkTarget {
+  workshopName: string;
+  publicCode: string;
+  branchName: string;
+  branchNo: number;
+}
+
+/**
+ * Read a branch's link coordinates as the workshop owner.
+ *
+ * The public code is machine-generated and permanent, and the branch carries a
+ * copy of it, so this asserts the two agree before handing back a URL any spec
+ * can navigate to.
+ */
+export async function workshopLinkFor(
+  request: APIRequestContext,
+  ownerAccess: string,
+  branchId: string,
+): Promise<WorkshopLinkTarget> {
+  const headers = { Authorization: `Bearer ${ownerAccess}` };
+  const settingsResponse = await request.get("/api/v1/workshop/settings", {
+    headers,
+  });
+  await expectOk(settingsResponse);
+  const settings = (await settingsResponse.json()) as {
+    name: string;
+    public_code: string;
+  };
+
+  const branchResponse = await request.get(
+    `/api/v1/workshop/branches/${branchId}`,
+    { headers },
+  );
+  await expectOk(branchResponse);
+  const branch = (await branchResponse.json()) as {
+    branch_no: number;
+    name: string;
+    workshop_public_code: string;
+  };
+  expect(branch.workshop_public_code).toBe(settings.public_code);
+
+  return {
+    workshopName: settings.name,
+    publicCode: settings.public_code,
+    branchName: branch.name,
+    branchNo: branch.branch_no,
+  };
+}
+
+/**
+ * Enter as a client the way every client does: scan a branch QR while signed
+ * out, then sign in through the bot handshake.
+ *
+ * This is the only route to a pinned client, and a pin is what the editor
+ * needs — a drawing only ever starts from a workshop, so `/c/cutting/new`
+ * redirects a client who arrived through `loginClient` alone. Use `loginClient`
+ * for flows that are about the session; use this for anything that opens the
+ * editor or reads the pin.
+ *
+ * The landing and the pin it writes are asserted in full by
+ * `workshop-link-entry.spec.ts`; this helper checks only that the door opened
+ * and the client came out on home.
+ */
+export async function enterViaWorkshopLink(
+  page: Page,
+  target: WorkshopLinkTarget,
+  phone: string,
+  name: string,
+) {
+  await page.goto(`/client/w/${target.publicCode}/${target.branchNo}`);
+  await expect(
+    page.getByText(`${target.workshopName} sizni taklif qilmoqda`),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Kirish$/ }).click();
+
+  const link = await openTelegramLoginTab(page);
+  const href = await link.getAttribute("href");
+  const token = new URL(href ?? "").searchParams.get("start");
+  expect(token, `no ?start= token in the deep link ${href}`).toBeTruthy();
+  await devConfirmLogin(page.request, token as string, phone, name);
+  await expect(page).toHaveURL(/\/client\/c$/);
+}
+
 /**
  * Log a client in through the UI (Telegram bot handshake).
  *

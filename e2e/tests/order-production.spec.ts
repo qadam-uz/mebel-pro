@@ -14,11 +14,13 @@ import {
   databaseUrl,
   edgeNumbers,
   devConfirmLogin,
+  enterViaWorkshopLink,
   escapeRegExp,
   expectOk,
   loginClient,
   panelNumbers,
   setBranchProductionMode,
+  workshopLinkFor,
   type BranchMaterialResponse,
 } from "./helpers";
 
@@ -377,15 +379,26 @@ test("client places an order and workshop completes it through production queues
   await stockIn(request, ownerAccess, branchId, panel.id, 5);
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
 
-  await loginClient(page, clientPhone, `Order Client ${id}`);
+  // A drawing only ever starts from a workshop (§2.2), so the client enters
+  // through the counter QR — that is what writes the pin. `loginClient` alone
+  // leaves the client un-pinned, and `/c/cutting/new` then redirects to
+  // Ustaxonalarim before any editor renders.
+  const workshopLink = await workshopLinkFor(request, ownerAccess, branchId);
+  await enterViaWorkshopLink(
+    page,
+    workshopLink,
+    clientPhone,
+    `Order Client ${id}`,
+  );
+
   const branchesLoaded = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
       response.url().includes("/api/v1/client/branch-options") &&
       response.ok(),
   );
-  // Fresh DB → empty home (first-run), so the create CTA is the centred
-  // "Yangi chizma" in the empty state; the header button only shows with content.
+  // Pinned home: «Yangi chizma» under the Ustaxonangiz card opens the editor
+  // already scoped to the pinned branch.
   await page.getByRole("button", { name: "Yangi chizma" }).click();
   // CB-defer-draft: the editor opens unsaved at `/cutting/new`; the persisted
   // draft (with an id in the URL) is created only on the first optimise below.
@@ -396,14 +409,9 @@ test("client places an order and workshop completes it through production queues
   await branchesLoaded;
 
   // Decision 17: the editor never raises a branch picker of its own — the
-  // branch is settled before it opens. An un-pinned client who reaches
-  // `/c/cutting/new` anyway gets the recovery prompt.
-  await page.getByRole("button", { name: "Filial tanlash" }).click();
-  await page
-    .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
-    .click();
-  // Decision 16, the naming rule: a workshop with one branch is named by the
-  // workshop alone — a branch name is never shown on its own.
+  // branch is settled before it opens. Decision 16, the naming rule: a workshop
+  // with one branch is named by the workshop alone — a branch name is never
+  // shown on its own.
   await expect(page.getByText(`Order Workshop ${id}`).first()).toBeVisible();
 
   // A new compact entry starts by selecting its material; that selection creates
