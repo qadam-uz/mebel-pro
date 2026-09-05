@@ -357,6 +357,7 @@
     "emptySearch": "Hech narsa topilmadi",
     "emptySearchBody": "Boshqa nom yoki kod bilan qidiring.",
     "emptyBranch": "Bu filial hali katalog kiritmagan",
-    "emptyBranchBody": "Boshqa filialni tanlang yoki ustaxona bilan bog'laning."
+    "emptyBranchBody": "Boshqa filialni tanlang yoki ustaxona bilan bog'laning.",
+    "priceOnRequest": "Narx kelishiladi"
   }
 }

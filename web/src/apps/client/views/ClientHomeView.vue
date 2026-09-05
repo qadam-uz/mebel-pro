@@ -127,7 +127,9 @@ function openDraft(draft: CuttingDraft) {
 }
 
 async function reloadHome() {
-  await Promise.all([orders.loadClientOrders(), cutting.loadDrafts()])
+  // The card's address, phone and workshop id come from Ustaxonalarim; the
+  // shell primes it, and asking again here costs nothing when it is in hand.
+  await Promise.all([orders.loadClientOrders(), cutting.loadDrafts(), entry.ensureMyWorkshops()])
 }
 
 function chosenResult(draft: CuttingDraft) {
@@ -185,6 +187,11 @@ onMounted(() => {
     <!-- The card and its action are read off the principal, not off this page's
          two lists, so they stay put while those load or fail. -->
     <template v-if="isPinned">
+      <!-- The label is a card caption on phones and a section heading on
+           desktop — the same word in the shape each layout has room for. -->
+      <div class="client-section-title hidden md:flex">
+        <h2>{{ $t('client.home.yourWorkshop') }}</h2>
+      </div>
       <RouterLink
         :to="workshopProfileTo"
         class="client-card client-card-link block p-3 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:p-3.5 md:p-5"
@@ -373,93 +380,101 @@ onMounted(() => {
         </span>
       </RouterLink>
 
-      <!-- An empty section is omitted rather than filled with a zero state: the
-           card and its action above already carry the page. -->
-      <section v-if="visibleActiveOrders.length > 0" class="mb-5">
-        <div class="client-section-title">
-          <h2>{{ $t('client.home.activeOrders') }}</h2>
-          <RouterLink
-            :to="rolePath('/c/orders?status=active')"
-            class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
-          >
-            {{ $t('client.common.viewAll') }} →
-          </RouterLink>
-        </div>
-
-        <div class="client-card">
-          <RouterLink
-            v-for="order in visibleActiveOrders"
-            :key="order.id"
-            :to="rolePath(`/c/orders/${order.id}`)"
-            class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-divider px-3.5 py-[7px] no-underline last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:gap-x-[18px] md:px-5 md:py-3.5"
-            :aria-label="orderAriaLabel(order)"
-          >
-            <span class="row-start-1 text-sm font-bold leading-[1.35] text-ink md:text-[15px]">
-              {{ formatOrderNumber(order.order_number) }}
-            </span>
-            <span :class="clientStatusPillClass(order.status)" class="row-start-1 justify-self-end">
-              {{ clientStatusLabel(order.status) }}
-            </span>
-            <span
-              class="row-start-2 min-w-0 truncate text-[12.5px] leading-[1.3] text-ink-muted md:text-sm"
+      <!-- Side by side on desktop, stacked on phones. An empty section is
+           omitted rather than filled with a zero state: the card and its action
+           above already carry the page. -->
+      <div class="md:grid md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:items-start md:gap-6">
+        <section v-if="visibleActiveOrders.length > 0" class="mb-5 md:mb-0">
+          <div class="client-section-title">
+            <h2>{{ $t('client.home.activeOrders') }}</h2>
+            <RouterLink
+              :to="rolePath('/c/orders?status=active')"
+              class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
             >
-              {{ order.draft_name || '' }}
-            </span>
-            <span
-              class="row-start-2 justify-self-end whitespace-nowrap text-[13px] font-bold leading-[1.3] text-ink md:text-[15px]"
-            >
-              {{ formatTiyin(order.total_tiyin) }}
-            </span>
-          </RouterLink>
-        </div>
-      </section>
+              {{ $t('client.common.viewAll') }} →
+            </RouterLink>
+          </div>
 
-      <section v-if="recentDrafts.length > 0">
-        <div class="client-section-title">
-          <h2>{{ $t('client.home.continueDrafts') }}</h2>
-          <RouterLink
-            :to="rolePath('/c/cutting/drafts')"
-            class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
-          >
-            {{ $t('client.home.allDraftsCount', { n: cutting.drafts.length }) }} →
-          </RouterLink>
-        </div>
-
-        <div class="client-card">
-          <button
-            v-for="draft in recentDrafts"
-            :key="draft.id"
-            type="button"
-            class="flex w-full items-center gap-3 border-b border-divider px-3.5 py-[7px] text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:px-5 md:py-3.5"
-            @click="openDraft(draft)"
-          >
-            <span
-              class="grid size-8 shrink-0 place-items-center rounded-[10px] bg-sunk text-ink-soft md:size-10 md:rounded-[11px]"
-              aria-hidden="true"
+          <div class="client-card">
+            <RouterLink
+              v-for="order in visibleActiveOrders"
+              :key="order.id"
+              :to="rolePath(`/c/orders/${order.id}`)"
+              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-divider px-3.5 py-[7px] no-underline last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:grid-cols-[130px_minmax(0,1fr)_auto_auto] md:gap-x-[18px] md:px-5 md:py-3.5"
+              :aria-label="orderAriaLabel(order)"
             >
-              <Icon name="scissors" class="size-[17px] md:size-5" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span
-                class="block truncate text-[13.5px] font-bold leading-[1.3] text-ink md:text-[15px] md:font-semibold"
-              >
-                {{ draftTitle(draft) }}
+              <!-- One row on desktop (number · name · pill · total); two on a
+                 phone, where 390px has no room for four columns. -->
+              <span class="row-start-1 text-sm font-bold leading-[1.35] text-ink md:text-[15px]">
+                {{ formatOrderNumber(order.order_number) }}
               </span>
               <span
-                class="block truncate text-[12.5px] leading-[1.3] text-ink-muted md:text-[13px]"
+                :class="clientStatusPillClass(order.status)"
+                class="row-start-1 justify-self-end md:col-start-3"
               >
-                {{ draftMeta(draft) }}
+                {{ clientStatusLabel(order.status) }}
               </span>
-            </span>
-            <span
-              class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-[12.5px] md:inline-flex"
+              <span
+                class="row-start-2 min-w-0 truncate text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:text-sm"
+              >
+                {{ order.draft_name || '' }}
+              </span>
+              <span
+                class="row-start-2 justify-self-end whitespace-nowrap text-[13px] font-bold leading-[1.3] text-ink md:col-start-4 md:row-start-1 md:min-w-[112px] md:text-right md:text-[15px]"
+              >
+                {{ formatTiyin(order.total_tiyin) }}
+              </span>
+            </RouterLink>
+          </div>
+        </section>
+
+        <section v-if="recentDrafts.length > 0">
+          <div class="client-section-title">
+            <h2>{{ $t('client.home.continueDrafts') }}</h2>
+            <RouterLink
+              :to="rolePath('/c/cutting/drafts')"
+              class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
             >
-              {{ $t('client.common.continue') }} →
-            </span>
-            <Icon name="chevron-right" class="size-4 shrink-0 text-ink-muted md:hidden" />
-          </button>
-        </div>
-      </section>
+              {{ $t('client.home.allDraftsCount', { n: cutting.drafts.length }) }} →
+            </RouterLink>
+          </div>
+
+          <div class="client-card">
+            <button
+              v-for="draft in recentDrafts"
+              :key="draft.id"
+              type="button"
+              class="flex w-full items-center gap-3 border-b border-divider px-3.5 py-[7px] text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:px-5 md:py-3.5"
+              @click="openDraft(draft)"
+            >
+              <span
+                class="grid size-8 shrink-0 place-items-center rounded-[10px] bg-sunk text-ink-soft md:size-10 md:rounded-[11px]"
+                aria-hidden="true"
+              >
+                <Icon name="scissors" class="size-[17px] md:size-5" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span
+                  class="block truncate text-[13.5px] font-bold leading-[1.3] text-ink md:text-[15px] md:font-semibold"
+                >
+                  {{ draftTitle(draft) }}
+                </span>
+                <span
+                  class="block truncate text-[12.5px] leading-[1.3] text-ink-muted md:text-[13px]"
+                >
+                  {{ draftMeta(draft) }}
+                </span>
+              </span>
+              <span
+                class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-[12.5px] md:inline-flex"
+              >
+                {{ $t('client.common.continue') }} →
+              </span>
+              <Icon name="chevron-right" class="size-4 shrink-0 text-ink-muted md:hidden" />
+            </button>
+          </div>
+        </section>
+      </div>
 
       <!-- First run: the card and its action are above, so the prompt carries
            no second button (§3 item 6). -->

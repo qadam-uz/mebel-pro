@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   applyWorkshopDiscount,
   loginClient,
+  orderNumberText,
   phoneFor,
   placeClientOrderViaApi,
   runId,
@@ -33,8 +34,9 @@ test("client cancels a new order and recovers from a stale-version 409", async (
 
   await loginClient(page, clientPhone, `Cancel Client ${id}`);
   await page.goto(`/client/c/orders/${order.id}`);
+  // The heading prints the formatted number, never the raw column value.
   await expect(
-    page.getByRole("heading", { name: order.order_number }),
+    page.getByRole("heading", { name: orderNumberText(order.order_number) }),
   ).toBeVisible();
   // Client phase 1 of the four-phase track (orders.md).
   await expect(page.getByText("Yangi").first()).toBeVisible();

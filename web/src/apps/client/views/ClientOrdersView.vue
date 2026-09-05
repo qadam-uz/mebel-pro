@@ -3,19 +3,14 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import {
-  clientStatusLabel,
-  clientStatusPillClass,
-  formatFullDate,
-  workshopBranchName,
-} from '@/shared/app/clientUi'
+import { clientStatusLabel, clientStatusPillClass, workshopBranchName } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { useRolePath } from '@/shared/app/paths'
 import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
-import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 /**
@@ -290,7 +285,7 @@ onMounted(() => {
             <b class="font-semibold text-ink">{{ order.item_count }}</b>
             {{ $t('client.unit.part') }} ·
             <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
-            {{ $t('client.unit.sheet') }} · {{ formatFullDate(order.created_at) }}
+            {{ $t('client.unit.sheet') }} · {{ formatDate(order.created_at) }}
           </p>
         </div>
 

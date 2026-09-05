@@ -34,14 +34,23 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     error.value = null
     traceId.value = null
     try {
-      materials.value = await api.get<ClientCatalogMaterialOption[]>(
-        withQuery('/client/catalog/materials', {
-          branch_id: branchId,
-          search: search || undefined,
-          limit: CLIENT_CATALOG_LIMIT,
-        }),
-        { ...authInit(), signal: controller.signal },
+      // Two calls, because `tape` partitions the endpoint: unset returns the
+      // panels, `true` the edge bands. The catalog is the branch's whole price
+      // list, and «Kromka» is one of its type chips (§6.2), so it needs both.
+      const [panels, tapes] = await Promise.all(
+        [undefined, 'true'].map((tape) =>
+          api.get<ClientCatalogMaterialOption[]>(
+            withQuery('/client/catalog/materials', {
+              branch_id: branchId,
+              tape,
+              search: search || undefined,
+              limit: CLIENT_CATALOG_LIMIT,
+            }),
+            { ...authInit(), signal: controller.signal },
+          ),
+        ),
       )
+      materials.value = [...panels, ...tapes]
     } catch (errorValue) {
       // An abort is this store cancelling itself, never a failure to show.
       if (isAbortError(errorValue)) return

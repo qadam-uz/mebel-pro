@@ -425,8 +425,10 @@ test("client places an order and workshop completes it through production queues
   await page.getByRole("button", { name: "Buyurtmani tasdiqlash" }).click();
 
   await expect(page.getByText("Buyurtma berildi")).toBeVisible();
-  // `#26-14-0003` — year, branch number, per-branch sequence (sales.md).
-  const numberPattern = /#\d{2}-\d+-\d{4}/;
+  // Six random platform-wide digits, printed as `№ 482 917` (sales.md).
+  // The workshop app shows the same formatted string, so the one scraped
+  // here is what every later locator matches on both sides.
+  const numberPattern = /\u2116\u2009\d{3}\u2009\d{3}/;
   const orderText = await page.getByText(numberPattern).first().textContent();
   const orderNumber = orderText?.match(numberPattern)?.[0];
   expect(orderNumber).toBeTruthy();
@@ -568,7 +570,8 @@ test("client places an order and workshop completes it through production queues
   // one reads «Olib ketildi» whichever way the workshop ran the floor — the
   // completed status always means the client took the order.
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
-  await page.getByRole("link", { name: "Tafsilot" }).click();
+  // The card itself is the link now — no per-card button (spec §4).
+  await page.getByRole("link", { name: new RegExp(orderNumber as string) }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
 });

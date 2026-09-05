@@ -114,11 +114,9 @@ onMounted(reloadProfile)
       <!-- §5.3: the phone header's 56px row has no width for the locale
            switcher or the bell's twin, so both live here. The desktop header
            keeps them too — the duplication is deliberate. -->
+      <!-- The switcher renders its own «Til» label, so the card adds none. -->
       <section class="client-card p-3.5 md:p-5">
-        <div class="text-[12.5px] font-bold leading-[1.2] text-ink-muted">
-          {{ $t('client.profile.language') }}
-        </div>
-        <LocaleSwitcher class="mt-1.5" variant="segmented" />
+        <LocaleSwitcher variant="segmented" />
       </section>
 
       <RouterLink

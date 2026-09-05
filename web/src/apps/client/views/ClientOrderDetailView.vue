@@ -3,7 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { clientErrorLabel, clientStatusLabel, clientStatusPillClass } from '@/shared/app/clientUi'
+import {
+  clientErrorLabel,
+  clientStatusLabel,
+  clientStatusPillClass,
+  formatPhone,
+} from '@/shared/app/clientUi'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import { yandexMapUrl } from '@/shared/app/yandexMapLink'
@@ -299,7 +304,7 @@ onMounted(() => {
                 class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2"
                 :href="`tel:${order.branch_phone}`"
               >
-                {{ order.branch_phone }}
+                {{ formatPhone(order.branch_phone) }}
               </a>
             </div>
           </div>
@@ -307,7 +312,9 @@ onMounted(() => {
 
         <!-- NARX — one receipt, replacing «Buyurtma tarkibi» + «Narx», which
              were the same three lines twice. -->
-        <section class="client-card mb-3.5 md:col-start-2 md:row-start-1 md:mb-0">
+        <!-- Spans both rows so the left column's tabs start directly under the
+             Ustaxona card rather than under the taller receipt beside it. -->
+        <section class="client-card mb-3.5 md:col-start-2 md:row-span-2 md:row-start-1 md:mb-0">
           <div class="client-card-h">
             <h2>{{ $t('client.orderDetail.price') }}</h2>
           </div>

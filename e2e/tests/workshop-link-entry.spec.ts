@@ -11,6 +11,7 @@ import {
   devConfirmLogin,
   expectOk,
   openTelegramLoginTab,
+  orderNumberText,
   ownerReadyPassword,
   passwordLabel,
   phoneFor,
@@ -195,16 +196,17 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   expect(placed.status()).toBe(201);
   const order = (await placed.json()) as { order_number: string };
 
-  // 6. And Ustaxonalarim shows the workshop the client entered, badged Asosiy.
+  // 6. And Ustaxonalarim shows the workshop the client entered, with the
+  //    entered branch carrying the filled Asosiy star (spec §6.1: the pin
+  //    is a branch, marked by a star rather than a pill).
   await page.goto("/client/c/branches");
-  await expect(
-    page.getByRole("heading", { name: "Ustaxonalarim" }),
-  ).toBeVisible();
   await expect(page.getByText(settings.name).first()).toBeVisible();
-  await expect(page.getByText("Asosiy", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Asosiy", { exact: true })).toBeVisible();
 
   await page.goto("/client/c/orders");
-  await expect(page.getByText(order.order_number)).toBeVisible();
+  await expect(
+    page.getByText(orderNumberText(order.order_number)).first(),
+  ).toBeVisible();
 });
 
 /** §1.4 — the artifact the counter needs: the card, its QR, and the print sheet. */

@@ -185,6 +185,16 @@ function priceUnit(option: ClientCatalogMaterialOption): string {
   return isTape(option.type) ? 'client.catalog.perMetre' : 'client.catalog.perSheet'
 }
 
+/**
+ * A format the branch has not priced yet reads «Narx kelishiladi», never
+ * «0 so'm» — a zero on a price list is an offer, and this one would be a lie.
+ * The row stays listed: the branch carries the decor, and hiding it would make
+ * the catalog disagree with the shelf.
+ */
+function hasPrice(option: ClientCatalogMaterialOption): boolean {
+  return !option.price_unset && option.price_tiyin > 0
+}
+
 // --------------------------------------------------------------- lightbox
 
 function openLightbox(group: DecorGroup, event: MouseEvent | KeyboardEvent) {
@@ -440,11 +450,16 @@ onBeforeUnmount(() => {
                 <!-- The price belongs to a format, so it rides the row only when
                      the row *is* one format (§7.3). -->
                 <span v-if="group.formats.length === 1" class="shrink-0 text-right">
-                  <span class="block text-[13.5px] font-bold leading-[1.3] text-ink">
-                    {{ formatTiyin(group.formats[0].price_tiyin) }}
-                  </span>
-                  <span class="block text-[12.5px] leading-[1.3] text-ink-muted">
-                    {{ $t(priceUnit(group.formats[0])) }}
+                  <template v-if="hasPrice(group.formats[0])">
+                    <span class="block text-[13.5px] font-bold leading-[1.3] text-ink">
+                      {{ formatTiyin(group.formats[0].price_tiyin) }}
+                    </span>
+                    <span class="block text-[12.5px] leading-[1.3] text-ink-muted">
+                      {{ $t(priceUnit(group.formats[0])) }}
+                    </span>
+                  </template>
+                  <span v-else class="block text-[12.5px] leading-[1.3] text-ink-muted">
+                    {{ $t('client.catalog.priceOnRequest') }}
                   </span>
                 </span>
               </div>
@@ -457,9 +472,15 @@ onBeforeUnmount(() => {
                 <span class="min-w-0 flex-1 text-[12.5px] font-semibold text-ink">
                   {{ formatLine(format) }}
                 </span>
-                <span class="shrink-0 whitespace-nowrap text-[12.5px] font-bold text-ink">
+                <span
+                  v-if="hasPrice(format)"
+                  class="shrink-0 whitespace-nowrap text-[12.5px] font-bold text-ink"
+                >
                   {{ formatTiyin(format.price_tiyin) }}
                   <span class="font-normal text-ink-muted">{{ $t(priceUnit(format)) }}</span>
+                </span>
+                <span v-else class="shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
+                  {{ $t('client.catalog.priceOnRequest') }}
                 </span>
               </div>
             </template>

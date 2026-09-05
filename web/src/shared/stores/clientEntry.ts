@@ -204,6 +204,9 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
    */
   async function ensureMyWorkshops(): Promise<ClientWorkshop[]> {
     if (workshops.value.length > 0 || workshopsLoading.value) return workshops.value
+    // A failed attempt does not latch: the shell primes this as soon as it has
+    // a token, and a page that needs the rows asks again on mount. Latching on
+    // the first failure left the home card without its address forever.
     await loadMyWorkshops()
     return workshops.value
   }

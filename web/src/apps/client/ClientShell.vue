@@ -93,15 +93,18 @@ function isCurrentTab(tab: ClientTab): boolean {
   })
 }
 
-// Loaded once, for the tab's destination. Signed-out chromeless routes (the
-// entry landing, login) must not fire an authenticated request.
+// Loaded once, for the tab's destination. Gated on the access token, not on
+// `isAllowedFor`: on a cold load the principal is restored from the refresh
+// cookie, so the role is known a beat before the token is — and firing here
+// without one spent the single `ensureMyWorkshops` attempt on a 401. Signed-out
+// chromeless routes (the entry landing, login) never reach this.
 function primeWorkshops() {
-  if (isChromeless.value || !auth.isAllowedFor('client')) return
+  if (isChromeless.value || !auth.accessToken || !auth.isAllowedFor('client')) return
   void entry.ensureMyWorkshops()
 }
 
 onMounted(primeWorkshops)
-watch(isChromeless, primeWorkshops)
+watch([isChromeless, () => auth.accessToken], primeWorkshops)
 </script>
 
 <template>
@@ -111,25 +114,34 @@ watch(isChromeless, primeWorkshops)
 
   <div v-else class="min-h-[var(--app-vh)] bg-bg text-ink">
     <header class="client-header">
+      <!-- Explicit column AND row on all three, not auto-placement: the
+           ≤860px block in main.css sets `order` on `.client-brand` and
+           `.client-actions` for the desktop flex row, and `order` reshuffles
+           a grid too — which first put the title ahead of the brand mark and
+           then, once the columns were pinned, pushed the brand onto a second
+           row. Pinning the row as well is what makes the 56px header one
+           line whatever `order` says. At `md` the container is flex again
+           and both are inert. -->
       <div
         class="client-container grid h-14 grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2 md:flex md:h-auto md:flex-wrap md:gap-[14px] md:py-[14px]"
       >
         <RouterLink
           :to="config.homePath"
-          class="client-brand justify-self-start"
+          class="client-brand col-start-1 row-start-1 justify-self-start md:col-auto"
           :aria-label="$t('shell.a11y.clientHome')"
         >
           <BrandMark :size="32" />
           <span class="client-brand-name hidden md:inline">{{ config.productLabel }}</span>
         </RouterLink>
 
-        <!-- Phone: the page's one title. Below `md` no page renders an H1 of
-             the same words, so this is the only place the screen is named. -->
-        <h1
-          class="min-w-0 truncate text-center font-display text-[15.5px] font-bold tracking-[-0.015em] text-ink md:hidden"
+        <!-- Phone: the page's one title. Chrome, not the document heading —
+             the page below still owns its own `<h1>` (the greeting, the order
+             number), and two `<h1>`s on one screen is one too many. -->
+        <span
+          class="col-start-2 row-start-1 min-w-0 truncate text-center font-display text-[15.5px] font-bold tracking-[-0.015em] text-ink md:hidden"
         >
           {{ pageTitle }}
-        </h1>
+        </span>
 
         <nav class="client-nav hidden md:flex" :aria-label="$t('shell.a11y.mainNav')">
           <RouterLink v-for="item in config.nav" :key="item.to" :to="item.to">
@@ -140,7 +152,7 @@ watch(isChromeless, primeWorkshops)
           </RouterLink>
         </nav>
 
-        <div class="client-actions justify-self-end">
+        <div class="client-actions col-start-3 row-start-1 justify-self-end md:col-auto">
           <!-- The locale switcher moves into Profil on phones (§5.3): the 56px
                row has no width for it, and it is a once-per-install choice. -->
           <LocaleSwitcher class="hidden md:block" />

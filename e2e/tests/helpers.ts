@@ -111,6 +111,24 @@ export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * An order number as the UI prints it — the mirror of `formatOrderNumber` in
+ * `web/src/shared/formatters.ts`.
+ *
+ * Six or seven digits render as `№ 482 917` (U+2009 thin spaces, grouped from
+ * the right); anything else — a legacy `#26-14-0003` — renders unchanged. Tests
+ * hold the raw string the API returned, so every locator that reads a number
+ * off the screen goes through this.
+ */
+export function orderNumberText(raw: string) {
+  const value = raw.trim();
+  if (!/^\d{6,7}$/.test(value)) return value;
+  const head = value.length === 7 ? value.slice(0, 1) : "";
+  const rest = value.slice(value.length - 6);
+  const thin = "\u2009";
+  return `\u2116${thin}${[head, rest.slice(0, 3), rest.slice(3)].filter(Boolean).join(thin)}`;
+}
+
 export function runId(testInfo: { workerIndex: number }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
     .toString(36)
