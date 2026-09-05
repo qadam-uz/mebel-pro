@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  ref,
+  watch,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -54,7 +63,6 @@ import AppModal from '@/shared/components/AppModal.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
-import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
 import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
 import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
 import CuttingMaterialPicker from '@/shared/components/CuttingMaterialPicker.vue'
@@ -63,7 +71,6 @@ import CuttingPartSheet from '@/shared/components/CuttingPartSheet.vue'
 import CuttingTapePicker from '@/shared/components/CuttingTapePicker.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
-import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
@@ -80,6 +87,29 @@ import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cutting
 import { overlayRect } from '@/shared/app/overlayGeometry'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { OrderDetail } from '@/shared/stores/orders'
+
+/**
+ * The two workshop-only modals, split out of this view's chunk.
+ *
+ * Between them they are ~1900 lines — a fifth of what the editor used to make
+ * every role download — and the client opens neither: §7.6 took file import off
+ * the client editor, and §7.5 docks kromka in a side panel instead of raising
+ * the picker modal. Both are mounted behind `v-if="!isClientEditor"`, so in the
+ * client SPA the loader is never called and the bytes are never fetched.
+ *
+ * No `loadingComponent`, deliberately. In the workshop the gate is true from
+ * the first render, so the chunk is already in flight while the editor paints
+ * and a click lands on a component that is long since resolved — a spinner
+ * there could only flash. If the network is slow enough that it hasn't arrived,
+ * the open state is held in `importWizardOpen` / `edgePickerPart` and the modal
+ * appears the moment it does.
+ */
+const CuttingImportWizard = defineAsyncComponent(
+  () => import('@/shared/components/CuttingImportWizard.vue'),
+)
+const CuttingEdgePickerModal = defineAsyncComponent(
+  () => import('@/shared/components/CuttingEdgePickerModal.vue'),
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -3274,7 +3304,10 @@ onBeforeRouteLeave(async () => {
       @confirm="resolveImportedLayoutWarning(true)"
     />
 
+    <!-- Workshop-only mount (§7.5): the client edits kromka in the docked panel
+         and never raises this modal, so the client SPA never loads its chunk. -->
     <CuttingEdgePickerModal
+      v-if="!isClientEditor"
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
