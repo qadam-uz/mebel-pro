@@ -1,0 +1,144 @@
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
+import ClientOrderDetailView from '@/apps/client/views/ClientOrderDetailView.vue'
+import { DEFAULT_LOCALE, setLocale } from '@/shared/i18n'
+import { useAuthStore } from '@/shared/stores/auth'
+import type { OrderDetail } from '@/shared/stores/orders'
+
+vi.mock('@/shared/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api/client')>('@/shared/api/client')
+  return { ...actual, api: { get: vi.fn(), post: vi.fn() } }
+})
+
+const { api } = await import('@/shared/api/client')
+
+const routes = [
+  { path: '/c', name: 'client-home', component: { template: '<div />' } },
+  { path: '/c/orders', name: 'client-orders', component: { template: '<div />' } },
+  { path: '/c/orders/:order_id', name: 'client-order', component: ClientOrderDetailView },
+]
+
+/**
+ * Only the receipt's own fields matter here: the cutting-service line reads
+ * `planned_panels`, and one material row is built per `panel` price line from
+ * its `panels_used`. Everything else is the minimum that keeps the populated
+ * branch of the template rendering — no cutting result, so the drawing tab and
+ * the parts table stay out of the way.
+ */
+function orderWith(panels: number): OrderDetail {
+  return {
+    id: 'order-1',
+    order_number: '100001',
+    draft_name: null,
+    workshop_name: 'Mebel Master',
+    branch_name: 'Chilonzor',
+    branch_address: 'Chilonzor 12',
+    branch_phone: '+998901234567',
+    branch_additional_phones: [],
+    branch_latitude: null,
+    branch_longitude: null,
+    status: 'new',
+    version: 1,
+    item_count: panels,
+    planned_panels: panels,
+    subtotal_cutting_tiyin: 50_000,
+    subtotal_materials_tiyin: 300_000,
+    subtotal_edge_banding_tiyin: 0,
+    surcharge_tiyin: 0,
+    surcharge_reason: null,
+    discount_tiyin: 0,
+    discount_reason: null,
+    total_tiyin: 350_000,
+    created_at: '2026-09-01T10:00:00Z',
+    items: [],
+    events: [],
+    price_lines: [
+      {
+        material_id: 'material-1',
+        material_name: 'LDSP Belyy 16mm',
+        kind: 'panel',
+        panels_used: panels,
+        consumed_mm: null,
+        unit_price_tiyin: 300_000,
+        own_panels: 0,
+        own_mm: 0,
+        line_total_tiyin: 300_000,
+      },
+    ],
+    cutting_result: null,
+    settlement: null,
+  } as unknown as OrderDetail
+}
+
+let router: Router
+let wrapper: VueWrapper | null = null
+
+async function mountDetail(panels: number) {
+  const auth = useAuthStore()
+  auth.accessToken = 'access-1'
+  auth.status = 'authenticated'
+
+  vi.mocked(api.get).mockResolvedValue(orderWith(panels) as never)
+
+  router = createRouter({ history: createMemoryHistory(), routes })
+  await router.push('/c/orders/order-1')
+  await router.isReady()
+  wrapper = mount(ClientOrderDetailView, {
+    global: {
+      plugins: [router],
+      provide: { [roleConfigKey as symbol]: clientConfig },
+    },
+  })
+  await flushPromises()
+  return wrapper
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  window.localStorage.clear()
+  vi.mocked(api.get).mockReset()
+})
+
+afterEach(async () => {
+  wrapper?.unmount()
+  wrapper = null
+  await setLocale(DEFAULT_LOCALE)
+})
+
+/**
+ * The receipt counts sheets twice — under «Xizmat» for the whole order, and
+ * under every material row — and both come from `client.unit.sheets`. That key
+ * carried a single Russian form («{n} лист»), so an order of two sheets read
+ * «2 лист» however many sheets it had. Both call sites already hand the count
+ * over as the plural choice; the forms were what was missing.
+ */
+describe('ClientOrderDetailView — the receipt agrees with its sheet counts', () => {
+  it.each([
+    [1, '1 лист'],
+    [2, '2 листа'],
+    [5, '5 листов'],
+  ])('inflects лист for %i in Russian', async (panels, expected) => {
+    await setLocale('ru')
+    const view = await mountDetail(panels)
+
+    const rows = view.findAll('.client-row-item')
+    // First row is the cutting service, second the one material line.
+    expect(rows[0].text()).toContain(expected)
+    expect(rows[1].text()).toContain(expected)
+  })
+
+  it('keeps the single Uzbek form at every count', async () => {
+    for (const panels of [1, 2, 5]) {
+      const view = await mountDetail(panels)
+      const rows = view.findAll('.client-row-item')
+      expect(rows[0].text()).toContain(`${panels} list`)
+      expect(rows[1].text()).toContain(`${panels} list`)
+      view.unmount()
+      wrapper = null
+    }
+  })
+})
