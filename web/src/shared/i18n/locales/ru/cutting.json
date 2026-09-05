@@ -21,7 +21,9 @@
     "piece": "штука | штуки | штук",
     "remainder": "остаток | остатка | остатков",
     "sheet": "лист | листа | листов",
-    "waste": "отход | отхода | отходов"
+    "waste": "отход | отхода | отходов",
+    "mm": "мм",
+    "pieceShort": "шт"
   },
   "side": {
     "top": "Верх",
@@ -69,7 +71,11 @@
     "searchPlaceholder": "Название или код декора — Sonoma, H1145, сонома",
     "searchEmpty": "По этому запросу материалов не найдено.",
     "pickerEmpty": "В этом филиале нет материалов.",
-    "discontinued": "Снят с производства"
+    "discontinued": "Снят с производства",
+    "perSheet": "/ лист",
+    "formatLine": "{thickness} мм · {length}×{width} мм",
+    "formatCount": "{n} формата · выберите формат",
+    "viewImage": "{material} — открыть изображение"
   },
   "customerBoard": {
     "modeLabel": "Источник материала",
@@ -129,7 +135,13 @@
     "hintIncomplete": "Заполните незаполненные строки",
     "hintOverCap": "Превышен предел {max} шт.",
     "grainFitError": "Направление текстуры задано жёстко — деталь должна помещаться в {length}×{width} мм (повернуть нельзя).",
-    "sizeFitError": "Деталь не помещается на лист — максимум {length}×{width} мм (лист − 2×{trim} мм краевой обрез)."
+    "sizeFitError": "Деталь не помещается на лист — максимум {length}×{width} мм (лист − 2×{trim} мм краевой обрез).",
+    "ctaCalculate": "Рассчитать",
+    "ctaViewResult": "Посмотреть результат",
+    "addMaterialClient": "+ Материал",
+    "draftActionsAria": "Действия с чертежом",
+    "catalogCaption": "Каталог {workshopBranch} · {n} декоров",
+    "tapeCatalogCaption": "{workshopBranch} · {n} декоров кромки"
   },
   "parts": {
     "heading": "Детали",
@@ -147,7 +159,8 @@
     "emptyResult": "Деталей нет.",
     "listHint": "Нажмите на строку, чтобы увидеть её на раскрое.",
     "noPlacements": "В этом результате нет размещённых деталей.",
-    "rotatedCount": "{n} повёрнута | {n} повёрнуты | {n} повёрнуто"
+    "rotatedCount": "{n} повёрнута | {n} повёрнуты | {n} повёрнуто",
+    "edgeSideCount": "Кромка: {n} стороны"
   },
   "edge": {
     "label": "Кромка",
@@ -201,7 +214,20 @@
     "matchColor": "цвет совпал",
     "others": "Другие кромки",
     "alreadyInDrawing": "Эта кромка уже в раскрое — выберите её в первом списке.",
-    "noMatches": "Подходящей кромки нет. Измените поиск или толщину."
+    "noMatches": "Подходящей кромки нет. Измените поиск или толщину.",
+    "thickness": "Толщина",
+    "thicknessHint": "Выберите толщину и нажмите на сторону",
+    "thicknessFallback": "«{name}» нет в этой толщине — подобрана ближайшая.",
+    "groupLabel": "Кромка:",
+    "groupPick": "Кромка: выберите подходящую по цвету",
+    "changeForGroup": "изменить для группы",
+    "pickFirstGroup": "Сначала выберите цвет кромки для группы",
+    "pickerTitle": "Выберите подходящую кромку",
+    "boardColour": "Цвет плиты",
+    "perMetre": "сум/м",
+    "select": "Выбрать",
+    "legacyTape": "Другой цвет: {name}",
+    "emptyInBranch": "В этом филиале нет кромки."
   },
   "thickening": {
     "mark": "УТ",
@@ -359,7 +385,12 @@
     "cutSettings": "Ширина реза {kerf} мм · Краевой обрез {trim} мм",
     "panelAria": "Раскладка листа {n}",
     "offcutUsable": "Остаток {dims}",
-    "offcutWaste": "отход"
+    "offcutWaste": "отход",
+    "showDrawing": "Показать чертёж",
+    "hideDrawing": "Скрыть чертёж",
+    "usefulOffcut": "Полезный остаток",
+    "totalCaption": "итого",
+    "placeOrder": "Оформить заказ"
   },
   "drafts": {
     "title": "Сохранённые раскрои",
@@ -430,5 +461,11 @@
     "shop": "Со склада",
     "own": "Материал клиента",
     "ownClient": "Мой материал"
+  },
+  "part": {
+    "sheetTitle": "Деталь #{n}",
+    "save": "Сохранить",
+    "saveAndNext": "Сохранить и ещё",
+    "delete": "Удалить"
   }
 }

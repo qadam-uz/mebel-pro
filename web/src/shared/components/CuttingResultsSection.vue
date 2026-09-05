@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import { apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import {
+  clientResultFigures,
   deriveSnapshotEdgeRegistry,
   edgeRegistryEntryByMaterial,
 } from '@/shared/app/cuttingResultsDisplay'
@@ -52,6 +53,20 @@ const cutting = useCuttingStore()
 const rolePath = useRolePath()
 const toast = useToast()
 const { t } = useI18n()
+
+// §7.7: own material is hidden in the MVP on every client surface — no
+// «O'zim olib kelaman» toggle, no dialog, no saving line. The backend fields,
+// the draft-level `own_panel_counts` and the workshop flow all stay; only the
+// client's way in is gone, so switching it back on is a `v-if`.
+const isClientView = computed(() => cutting.scope === 'client')
+// The same four figures the result stage and the confirmation page carry, on
+// the phone summary card too, so the two summaries say the same things.
+const clientFigures = computed(() =>
+  chosenResult.value ? clientResultFigures(chosenResult.value) : [],
+)
+// Named drawings only: an untitled one shows no subtitle rather than a grey
+// «Nomsiz chizma» placeholder line (the same rule the orders list follows).
+const draftName = computed(() => props.draft.name?.trim() || '')
 
 const chosenResult = computed(() => {
   const draft = props.draft
@@ -208,6 +223,12 @@ async function choose(result: CuttingResult) {
     <div class="client-card-h">
       <div>
         <h2>{{ $t('cutting.result.title') }}</h2>
+        <!-- §7.7: the subtitle is the draft NAME alone. The «· 4 detal · 1
+             list» tail is gone — those figures sit in the summary, and the
+             heading's job is to say which drawing this is. -->
+        <p v-if="isClientView && draftName" class="mt-1 text-[13.5px] text-ink-soft">
+          {{ draftName }}
+        </p>
       </div>
       <div v-if="chosenResult" class="flex flex-wrap items-center gap-2">
         <span
@@ -292,6 +313,25 @@ async function choose(result: CuttingResult) {
               {{ $t('cutting.result.orderTitle') }}
             </h3>
 
+            <!-- §7.7, phones: a price-led hero — the number the client decides
+                 on, then the four figures as a 2×2 grid. On desktop the tally
+                 already sits in the left column of the overview, so the grid
+                 would be the same four numbers twice on one screen. -->
+            <div v-if="isClientView && quote" class="xl:hidden">
+              <p class="mt-3 font-display text-[30px] font-bold leading-[1.15] text-ink">
+                {{ formatTiyin(quote.total_tiyin) }}
+              </p>
+              <p class="mt-0.5 text-[12.5px] font-semibold text-ink-muted">
+                {{ $t('cutting.result.totalCaption') }}
+              </p>
+              <dl class="mt-3.5 grid grid-cols-2 gap-x-3.5 gap-y-3 border-t border-hairline pt-3.5">
+                <div v-for="figure in clientFigures" :key="figure.key">
+                  <dt class="text-[12.5px] font-semibold text-ink-muted">{{ figure.label }}</dt>
+                  <dd class="mt-0.5 text-[15px] font-bold text-ink">{{ figure.value }}</dd>
+                </div>
+              </dl>
+            </div>
+
             <div v-if="!branchId" class="py-4 text-sm text-ink-muted">
               {{ $t('cutting.result.priceNeedsBranch') }}
             </div>
@@ -323,7 +363,10 @@ async function choose(result: CuttingResult) {
                       >— {{ line.panels_used }} {{ $t('cutting.unit.sheet') }}</span
                     >
                   </p>
-                  <span v-if="ownSheets(line)" class="text-xs font-extrabold text-success">
+                  <span
+                    v-if="!isClientView && ownSheets(line)"
+                    class="text-xs font-extrabold text-success"
+                  >
                     {{
                       $t('cutting.own.sheetsSplit', {
                         own: ownSheets(line),
@@ -354,7 +397,10 @@ async function choose(result: CuttingResult) {
                     {{ row.line.material_name }}
                     <span class="whitespace-nowrap">— {{ metres(row.line.consumed_mm) }}</span>
                   </p>
-                  <span v-if="row.line.own" class="text-xs font-extrabold text-success">
+                  <span
+                    v-if="!isClientView && row.line.own"
+                    class="text-xs font-extrabold text-success"
+                  >
                     {{ $t('cutting.own.tapeFree') }}
                   </span>
                   <span v-else class="pt-0.5 text-right text-xs text-ink">
@@ -401,11 +447,15 @@ async function choose(result: CuttingResult) {
                   {{ formatTiyin(quote.total_tiyin) }}
                 </span>
               </div>
-              <p v-if="ownSavingTiyin > 0" class="text-right text-xs font-extrabold text-success">
+              <p
+                v-if="!isClientView && ownSavingTiyin > 0"
+                class="text-right text-xs font-extrabold text-success"
+              >
                 {{ $t('cutting.own.saved', { amount: formatTiyin(ownSavingTiyin) }) }}
               </p>
 
               <button
+                v-if="!isClientView"
                 type="button"
                 class="mp-button w-full border-accent-tint bg-accent-soft text-accent-strong"
                 @click="ownDialogOpen = true"
@@ -417,7 +467,18 @@ async function choose(result: CuttingResult) {
               {{ $t('cutting.result.priceUnavailable') }}
             </p>
 
+            <!-- The client's order is the primary and it comes first: on a
+                 phone this card is the whole screen, and «Buyurtma berish» is
+                 what the client came to press. The workshop keeps PDF first —
+                 there the print IS the next step at the counter. -->
             <div class="mt-3 grid gap-2">
+              <RouterLink
+                v-if="isClientView && draft.chosen_result_id"
+                :to="rolePath(props.checkoutPath)"
+                class="mp-button mp-button-primary min-h-12 w-full"
+              >
+                {{ props.checkoutLabel ?? $t('cutting.result.placeOrder') }}
+              </RouterLink>
               <button
                 type="button"
                 class="mp-button mp-button-outline w-full"
@@ -431,7 +492,7 @@ async function choose(result: CuttingResult) {
                 }}
               </button>
               <RouterLink
-                v-if="draft.chosen_result_id"
+                v-if="!isClientView && draft.chosen_result_id"
                 :to="rolePath(props.checkoutPath)"
                 class="mp-button mp-button-primary w-full"
               >
@@ -450,7 +511,10 @@ async function choose(result: CuttingResult) {
             </p>
           </section>
 
+          <!-- Workshop-only mount: the client app carries no own-material
+               surface at all in the MVP (§7.7). -->
           <CuttingOwnMaterialDialog
+            v-if="!isClientView"
             :open="ownDialogOpen"
             :saving="cutting.saving"
             :sheet-lines="receiptSheetLines"

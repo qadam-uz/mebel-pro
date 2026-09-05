@@ -35,6 +35,14 @@ const props = defineProps<{
   activePanelId: string | null
 }>()
 
+// SPEC_CLIENT_UX_MVP decision 9 + §7.7. The client reads a shorter version of
+// the same screen — four figures, and a materials list that is a name and a
+// sheet count. Keyed on the store scope rather than a prop because every caller
+// on the client path (result stage, order confirmation, the order detail's
+// Chizma tab) wants the same answer, and a prop would be three chances to
+// forget it. The workshop's copy is untouched.
+const isClientView = computed(() => cutting.scope === 'client')
+
 const emit = defineEmits<{
   'update:activePanelId': [string | null]
 }>()
@@ -133,7 +141,11 @@ const activePanelGroups = computed(() =>
 const summaryRows = computed(() => {
   const totals = resultTotals(props.result)
   const missing = Math.max(0, totals.requestedParts - totals.placedParts)
-  return [
+  // §7.7: four figures on the client — Detallar, Listlar, Kromka, Foydali
+  // qoldiq. «Arra yo'li» is a saw metric the shop plans around and «Chiqim» is
+  // the shop's yield; a client who is quoted a fixed price cannot act on
+  // either, so both stay in the workshop app.
+  const rows = [
     {
       key: 'parts',
       label: t('cutting.result.summaryParts'),
@@ -185,6 +197,7 @@ const summaryRows = computed(() => {
       short: false,
     },
   ]
+  return isClientView.value ? rows.filter((row) => row.key !== 'cut') : rows
 })
 
 watch(
@@ -311,7 +324,11 @@ function revealDrawing() {
                  and a track it never fills would pull its counts out of line. -->
             <span class="min-w-0">
               <span class="block font-bold leading-tight text-ink-soft">{{ material.label }}</span>
+              <!-- Decision 9: no «Ombordan» chip on the client. Own material is
+                   hidden in the MVP (§7.7), so every board is the workshop's —
+                   a chip that says the same thing on every row is noise. -->
               <span
+                v-if="!isClientView"
                 class="mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-bold"
                 :class="
                   material.own
@@ -327,8 +344,11 @@ function revealDrawing() {
               >
               <!-- The bar is a second reading of the number beside it, never
                    the only one: the percentage is written out, so a bar that
-                   fails to paint costs nothing. -->
-              <template v-if="material.fill !== null">
+                   fails to paint costs nothing.
+                   Decision 9: gone on the client — per-material utilisation is
+                   a yield question the shop answers, and the per-sheet figure
+                   on the sheet's own label already covers what a client asks. -->
+              <template v-if="!isClientView && material.fill !== null">
                 <span class="num block text-[11.5px] text-ink-soft">
                   {{ $t('cutting.result.fillUsed', { fill: `${material.fill.toFixed(0)}%` }) }}
                 </span>
