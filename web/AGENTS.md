@@ -51,7 +51,12 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   A route component one role reaches lives in `src/apps/<role>/views/`; `src/shared/views/`
   is only for screens two or more roles route to (the cutting editor and result, the drafts
   list, the 404) — grep the three `routes.ts` before putting one there. Lazy-load
-  (`() => import(...)`) everything except the initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
+  (`() => import(...)`) everything except the initial route. Keep the `:pathMatch(.*)*` 404
+  route last. **`meta.chromeless: true`** renders a signed-in route with no shell around it —
+  no header, and on the client no bottom tab bar (the cutting editor, the result stage, the
+  order confirmation; each carries its own back affordance). It is not `layout: 'auth'`, which
+  also turns the auth guard off, nor `layout: 'print'`, which is a document rather than a
+  screen; shells ask `isChromelessRoute(route.meta)`, never the layout alone. For links inside shared
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
   production is host-routed. Inside a role route file, write **absolute production paths**

@@ -98,7 +98,19 @@
     "loadMore": "Yana ko'rsatish",
     "cancelTitle": "Buyurtmani bekor qilish",
     "cancelMessage": "Buyurtma bekor qilinadi. Bu amal qaytarilmaydi.",
-    "cancelReasonDefault": "Mijoz buyurtmani tasdiqlashdan oldin bekor qildi"
+    "cancelReasonDefault": "Mijoz buyurtmani tasdiqlashdan oldin bekor qildi",
+    "filter": {
+      "label": "Holat bo'yicha filtr",
+      "all": "Hammasi",
+      "active": "Faol",
+      "ready": "Tayyor",
+      "completed": "Yakunlangan",
+      "cancelled": "Bekor"
+    },
+    "searchToggle": "Qidirishni ochish",
+    "searchClose": "Qidirishni yopish",
+    "emptyFilteredTitle": "Bu filtr bo'yicha buyurtma yo'q",
+    "emptyFilteredHint": "Boshqa holatni tanlang yoki filtrlarni tozalang."
   },
   "orderDetail": {
     "back": "Buyurtmalar",
@@ -278,7 +290,8 @@
     "login_token_rate_limited": "Juda ko'p urinish. {seconds} soniyadan keyin qayta urinib ko'ring.",
     "login_code_rate_limited": "Juda ko'p urinish. {seconds} soniyadan keyin qayta urinib ko'ring.",
     "login_token_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring.",
-    "login_code_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring."
+    "login_code_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring.",
+    "client_catalog_load_failed": "Katalogni yuklab bo'lmadi."
   },
   "entry": {
     "greeting": "{workshop} sizni taklif qilmoqda",
@@ -305,5 +318,33 @@
     "loadFailed": "Ustaxonalarni yuklab bo'lmadi",
     "emptyTitle": "Hali ustaxona ulanmagan",
     "emptyBody": "Ustaxonangiz bergan havola yoki QR kod orqali kiring — katalog va narxlar o'sha ustaxonaniki bo'ladi."
+  },
+  "workshop": {
+    "branches": "Filiallar",
+    "catalog": "Katalog",
+    "newDrawing": "Yangi chizma",
+    "viewOnMap": "Xaritada ko'rish",
+    "primary": "Asosiy",
+    "makePrimary": "Asosiy qilish",
+    "madePrimaryToast": "{name} asosiy qilindi",
+    "notFoundTitle": "Ustaxona topilmadi",
+    "notFoundBody": "Bu ustaxona sizga ulanmagan. Havola yoki QR kod orqali kiring."
+  },
+  "catalog": {
+    "searchLabel": "Material qidirish",
+    "searchPlaceholder": "Material nomi yoki kodi",
+    "clearSearch": "Qidiruvni tozalash",
+    "typeFilter": "Material turi",
+    "imageTitle": "{material}",
+    "formatCount": "{n} ta format",
+    "grain": "Teksturali",
+    "perSheet": "/ list",
+    "perMetre": "/ m",
+    "priceScope": "{workshop} · {branch} narxnomasi. Narxlar shu filialda amal qiladi.",
+    "loadFailed": "Katalogni yuklab bo'lmadi",
+    "emptySearch": "Hech narsa topilmadi",
+    "emptySearchBody": "Boshqa nom yoki kod bilan qidiring.",
+    "emptyBranch": "Bu filial hali katalog kiritmagan",
+    "emptyBranchBody": "Boshqa filialni tanlang yoki ustaxona bilan bog'laning."
   }
 }

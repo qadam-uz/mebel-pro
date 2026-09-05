@@ -98,7 +98,19 @@
     "loadMore": "Показать ещё",
     "cancelTitle": "Отменить заказ",
     "cancelMessage": "Заказ будет отменён. Действие необратимо.",
-    "cancelReasonDefault": "Клиент отменил заказ до подтверждения"
+    "cancelReasonDefault": "Клиент отменил заказ до подтверждения",
+    "filter": {
+      "label": "Фильтр по статусу",
+      "all": "Все",
+      "active": "Активные",
+      "ready": "Готовые",
+      "completed": "Завершённые",
+      "cancelled": "Отменённые"
+    },
+    "searchToggle": "Открыть поиск",
+    "searchClose": "Закрыть поиск",
+    "emptyFilteredTitle": "По этому фильтру заказов нет",
+    "emptyFilteredHint": "Выберите другой статус или сбросьте фильтры."
   },
   "orderDetail": {
     "back": "Заказы",
@@ -278,7 +290,8 @@
     "login_token_rate_limited": "Слишком много попыток. Повторите через {seconds} с.",
     "login_code_rate_limited": "Слишком много попыток. Повторите через {seconds} с.",
     "login_token_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин.",
-    "login_code_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин."
+    "login_code_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин.",
+    "client_catalog_load_failed": "Не удалось загрузить каталог."
   },
   "entry": {
     "greeting": "{workshop} приглашает вас",
@@ -305,5 +318,33 @@
     "loadFailed": "Не удалось загрузить мастерские",
     "emptyTitle": "Мастерская ещё не подключена",
     "emptyBody": "Войдите по ссылке или QR-коду вашей мастерской — каталог и цены будут её."
+  },
+  "workshop": {
+    "branches": "Филиалы",
+    "catalog": "Каталог",
+    "newDrawing": "Новый раскрой",
+    "viewOnMap": "Посмотреть на карте",
+    "primary": "Основной",
+    "makePrimary": "Сделать основным",
+    "madePrimaryToast": "{name} сделан основным",
+    "notFoundTitle": "Мастерская не найдена",
+    "notFoundBody": "Эта мастерская к вам не подключена. Войдите по ссылке или QR-коду."
+  },
+  "catalog": {
+    "searchLabel": "Поиск материала",
+    "searchPlaceholder": "Название или код материала",
+    "clearSearch": "Очистить поиск",
+    "typeFilter": "Тип материала",
+    "imageTitle": "{material}",
+    "formatCount": "{n} формата",
+    "grain": "С текстурой",
+    "perSheet": "/ лист",
+    "perMetre": "/ м",
+    "priceScope": "Прайс {workshop} · {branch}. Цены действуют в этом филиале.",
+    "loadFailed": "Не удалось загрузить каталог",
+    "emptySearch": "Ничего не найдено",
+    "emptySearchBody": "Попробуйте другое название или код.",
+    "emptyBranch": "Этот филиал ещё не завёл каталог",
+    "emptyBranchBody": "Выберите другой филиал или свяжитесь с мастерской."
   }
 }

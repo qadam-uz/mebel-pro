@@ -265,6 +265,11 @@ describe('role route matrix', () => {
       '/c/cutting/:id',
       '/c/cutting/:id/result',
       '/c/branches',
+      // A related workshop's own profile and its branch price list (spec §6) —
+      // reachable only for workshops `/client/my-workshops` returns, which is
+      // what keeps "no cross-workshop storefront" true.
+      '/c/workshops/:workshopId',
+      '/c/workshops/:workshopId/catalog',
       '/c/notifications',
       '/:pathMatch(.*)*',
     ])

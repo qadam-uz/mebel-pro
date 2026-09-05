@@ -1,3 +1,5 @@
+import type { RouteMeta } from 'vue-router'
+
 import type { NavGroupId, NavItem } from '@/shared/app/roleConfig'
 
 /**
@@ -14,6 +16,20 @@ import type { NavGroupId, NavItem } from '@/shared/app/roleConfig'
  */
 export function isChromelessLayout(layout: unknown): boolean {
   return layout === 'auth' || layout === 'print'
+}
+
+/**
+ * A route that owns its whole viewport — no header, and on the client no bottom
+ * tab bar either.
+ *
+ * `meta.chromeless: true` is the deliberate opt-in for a *signed-in* focused
+ * flow that carries its own back affordance: the cutting editor, the result
+ * stage, the order confirmation. It is not `layout: 'auth'` — these routes are
+ * behind the auth guard and must stay there — and it is not `layout: 'print'`,
+ * which is a document rather than a screen.
+ */
+export function isChromelessRoute(meta: RouteMeta): boolean {
+  return meta.chromeless === true || isChromelessLayout(meta.layout)
 }
 
 /**
@@ -60,6 +76,7 @@ export function iconPath(name: string | undefined) {
     store: '<path d="M4 10h16l-1-5H5l-1 5Z"/><path d="M6 10v10h12V10"/><path d="M9 20v-6h6v6"/>',
     users:
       '<path d="M16 20v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M20 20v-2a3 3 0 0 0-3-3"/><path d="M4 20v-2a3 3 0 0 1 3-3"/>',
+    user: '<path d="M16 20v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/>',
     settings:
       '<path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2m-5.7-3.7 1.4-1.4m8.6-8.6 1.4-1.4m0 11.4-1.4-1.4M7.7 7.7 6.3 6.3"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',

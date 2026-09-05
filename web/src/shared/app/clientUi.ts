@@ -121,6 +121,46 @@ export function clientNextPhaseLabel(status: OrderStatus): string | null {
   return translate(`client.status.${PHASE_KEYS[index + 1]}`)
 }
 
+/**
+ * The system-wide naming rule (spec decision 16).
+ *
+ * A workshop with **one** branch is shown by its workshop name alone — the
+ * branch name never appears. A workshop with several is shown as
+ * «{Workshop} · {Branch}», always in that order. A branch name is never shown
+ * alone, and the word «filialingiz» never appears: to the client a branch *is*
+ * a workshop.
+ *
+ * `branchCount` is what decides, so a caller that does not know it (an order
+ * summary carries two names and no count) passes nothing and gets the joined
+ * form — which is correct for every workshop that has more than one counter and
+ * merely redundant for the ones that do not.
+ */
+export function workshopBranchName(
+  workshopName: string | null | undefined,
+  branchName: string | null | undefined,
+  branchCount?: number,
+): string {
+  const workshop = workshopName?.trim() ?? ''
+  const branch = branchName?.trim() ?? ''
+  if (!workshop) return branch
+  if (!branch || branchCount === 1) return workshop
+  return `${workshop} · ${branch}`
+}
+
+/**
+ * Is this client scoped to a branch?
+ *
+ * The names, not `preferred_branch_id`: a blocked workshop keeps the stored id
+ * but resolves to no names, and such a client must read as un-pinned everywhere
+ * — home's «Ustaxona tanlang» prompt and the `/c/cutting/new` guard alike
+ * (spec §2.2, §3). One predicate so the two can never disagree.
+ */
+export function isClientPinned(
+  me: { pinned_workshop_name?: string | null } | null | undefined,
+): boolean {
+  return Boolean(me?.pinned_workshop_name)
+}
+
 /** First given name for the dashboard greeting, or null when no real name is set
  *  (so the caller falls back to a generic heading rather than greeting a phone number). */
 export function clientGreetingName(
@@ -287,6 +327,12 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   'map-pin':
     '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/>',
+  // The pin mark on a branch row (§6.1). Same outline for both states; the
+  // filled one carries its own `fill`/`stroke`, which as presentation
+  // attributes on the path beat the ones AppIcon sets on the <svg>.
+  star: '<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.7 5.9 21.1l1.4-6.8L2.2 9.6l6.9-.8L12 2.5z"/>',
+  'star-filled':
+    '<path fill="currentColor" stroke="none" d="M12 2.5l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.7 5.9 21.1l1.4-6.8L2.2 9.6l6.9-.8L12 2.5z"/>',
 }
 
 export function clientIconPath(name: string): string {

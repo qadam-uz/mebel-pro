@@ -56,6 +56,14 @@ export interface ClientWorkshopBranch {
   status: EntryBranchStatus
   closed_reason: string | null
   is_pinned: boolean
+  /**
+   * The pin behind «Xaritada ko'rish» (spec §6.1). Optional on purpose: the
+   * pair is nullable on the branch itself (not every workshop drops a pin), and
+   * the field was added to this read after the client shipped — an older
+   * backend simply omits it and the link is not rendered.
+   */
+  latitude?: string | null
+  longitude?: string | null
 }
 
 /** One workshop on Ustaxonalarim: the pin plus everything the client has history with. */
@@ -156,6 +164,42 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
     }
   }
 
+  /**
+   * Move the pin to one branch of a workshop already on Ustaxonalarim.
+   *
+   * The write goes through `POST /client/entry` — the one audited path that can
+   * move the pin — and the answer is applied to the rows in hand rather than
+   * refetched: the star has to fill *in place* (§6.1), and a reload would also
+   * resort the list under the reader's finger. Exactly one branch across every
+   * workshop ends up pinned, which is what the backend now holds.
+   */
+  async function pinBranch(publicCode: string, branchId: string): Promise<ClientEntryResult> {
+    const applied = await applyEntry(publicCode, branchId)
+    workshops.value = workshops.value.map((workshop) => ({
+      ...workshop,
+      is_pinned: workshop.workshop_id === applied.workshop_id,
+      branches: workshop.branches.map((branch) => ({
+        ...branch,
+        is_pinned: branch.id === branchId,
+      })),
+    }))
+    return applied
+  }
+
+  /**
+   * Load the list once per session unless it is already in hand.
+   *
+   * The shell needs it on every client page — the "Ustaxona" tab points at the
+   * one workshop's profile when there is exactly one (§2) — and so do home, the
+   * profile and the catalog. A plain `loadMyWorkshops` on each of them would
+   * refetch the same rows four times on one navigation.
+   */
+  async function ensureMyWorkshops(): Promise<ClientWorkshop[]> {
+    if (workshops.value.length > 0 || workshopsLoading.value) return workshops.value
+    await loadMyWorkshops()
+    return workshops.value
+  }
+
   function reset() {
     link.value = null
     linkLoading.value = false
@@ -178,6 +222,8 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
     applyEntry,
     applyPendingEntry,
     loadMyWorkshops,
+    ensureMyWorkshops,
+    pinBranch,
     reset,
   }
 })
