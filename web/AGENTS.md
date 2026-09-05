@@ -28,7 +28,7 @@ Current build state (rationale in [`docs/architecture.md`](../docs/architecture.
 pnpm dev                     # Vite dev server, :5173, /api proxied → :8000
 pnpm build                   # vue-tsc --build && vite build  → dist/
 pnpm test [src/path]         # Vitest once; single file/dir first while iterating
-pnpm i18n:check              # every LITERAL t()/$t() key resolves in the uz catalog (see Copy)
+pnpm i18n:check              # literal t()/$t() keys resolve, and each role ships what it renders (see Copy)
 pnpm lint / pnpm format      # autofix variants; *:check variants are the CI/pre-push form
 ```
 
@@ -105,23 +105,44 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   `@/shared/i18n` in plain modules. Two catalogs are maintained: **`uz`** is the source, **`ru`**
   its translation with the same key set; **`uz-Cyrl`** is derived from `uz` by
   `i18n/transliterate.ts` and is never hand-written — a word the rules get wrong goes in
-  `i18n/overrides/uz-Cyrl.json`. Adding a namespace means adding its file to *both* locale
-  `index.ts` files. A module-level `const LABELS = {...}` of copy is a bug: it freezes at
-  whatever locale was active when the module first evaluated — export a function instead.
-  Two holes in `pnpm i18n:check`, both by design: it only sees **literal** keys (a
-  `t(item.labelKey)` or built-up key is skipped — rename such a key and the raw path renders
-  through a green gate), and it validates against **`uz` only** (a key missing from `ru`
-  ships silently and falls back at runtime — keeping `ru` complete is on the author). Copy
-  rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
+  `i18n/overrides/uz-Cyrl.json`. A module-level `const LABELS = {...}` of copy is a bug: it
+  freezes at whatever locale was active when the module first evaluated — export a function
+  instead. Copy rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
+
+  **A role SPA ships only the namespaces it renders.** `i18n/catalogs/<role>.ts` assembles
+  that role's uz messages from explicit `locales/uz/<ns>.json` imports and points `loadRu` at
+  `<role>.ru.ts`, the matching ru list; `mountRoleApp` installs it (`installCatalog`) before
+  the first paint, and uz-Cyrl is transliterated from whatever uz the role installed. Today:
+  client 11 namespaces (no `finance`, `inventory`, `workshopAdmin`), admin 10 (also no
+  `orders`), workshop all 14. `locales/{uz,ru}/index.ts` are the all-namespaces catalogs —
+  only the specs and `test-setup.ts` may import them; from app code they put every namespace
+  back into that role's bundle, which `pnpm i18n:check` refuses.
+  - **Adding a key** to a namespace a role already ships: edit `locales/uz/<ns>.json` and
+    `locales/ru/<ns>.json`. Nothing else.
+  - **Making a role render a namespace it does not ship** (a shared component that starts
+    using one counts, and binds it to *every* role that renders that component): add the
+    import + property to `i18n/catalogs/<role>.ts` **and** `<role>.ru.ts`. Weigh the size
+    first — the namespace lands in that app's initial JS whole.
+  - **Adding a namespace**: the two `locales/*/<ns>.json` files, `locales/uz/schema.ts` (the
+    type union — `import type`, so it costs no bytes), and the role catalogs that need it.
+
+  `pnpm i18n:check` walks each role's module graph and fails when a reachable file uses a
+  namespace that role does not ship, so a raw key path cannot reach a screen through a green
+  gate. Two holes remain, both by design: a *fully* computed key (`t(item.labelKey)` built
+  from data) is invisible to it, and it validates values against **`uz` only** — a key missing
+  from `ru` ships silently and falls back at runtime, so keeping `ru` complete is on the
+  author (`catalogs.spec.ts` checks key parity, not that anything was translated).
+
   **The app ships `vue-i18n`'s full build on purpose** — do not "optimise" it to the
   runtime-only one. Measured on this catalog (2 437 messages): aliasing to the runtime build
   and precompiling with `@intlify/unplugin-vue-i18n` removes ~18 kB of message compiler and
   adds ~76 kB, because every message becomes a JIT AST node (`{"t":0,"b":{"t":2,…,"s":"…"}}`)
   instead of a string. Client initial JS went **327.7 kB → 386.3 kB raw** (gzip a wash at
   +0.5 kB). It also forces uz-Cyrl to be transliterated at build time — a runtime-only build
-  cannot compile the strings `transliterateMessages` produces. The lever that would actually
-  pay here is splitting the catalog so a role only ships the namespaces it renders; the
-  compiler is not.
+  cannot compile the strings `transliterateMessages` produces. Splitting the catalog per role
+  was the lever that paid: client initial JS **322.4 → 285.8 kB raw** (114.2 → 103.8 kB
+  gzip), admin **331.8 → 282.0 kB**, and the client's ru download **141 → 86 kB raw**. The
+  compiler is still not the lever.
 - **Heavy dependencies load on demand**: a library only some screens draw with is reached
   through a dynamic `import()`, not a static one — a static import welds it into whatever
   chunk the importer lands in, which for a shared component is every route that touches it.
