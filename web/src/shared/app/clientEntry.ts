@@ -8,7 +8,22 @@
  * requests live in `@/shared/stores/clientEntry`.
  */
 
+import { API_PREFIX } from '@/shared/api/client'
 import type { ClientBranchOption } from '@/shared/stores/cutting'
+
+/**
+ * The workshop's logo, addressed by its code rather than by a file id.
+ *
+ * The landing runs before there is a session, so it cannot use the
+ * authenticated file route. This narrow public route serves exactly one file
+ * per code — the workshop's own logo — and answers the link's 404 for every
+ * other case, including a workshop that has none, which is why the caller keeps
+ * the monogram as its fallback. Signed-in surfaces (Ustaxonalarim) stay on the
+ * authenticated path.
+ */
+export function publicWorkshopLogoUrl(code: string): string {
+  return `${API_PREFIX}/public/workshop-links/${encodeURIComponent(code)}/logo`
+}
 
 /** The scanned link, waiting for a session to apply it to. */
 const ENTRY_KEY = 'client.entry'

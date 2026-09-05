@@ -29,6 +29,7 @@ from app.modules.support.telegram_delivery import (
 
 if TYPE_CHECKING:
     from app.modules.support.files import (
+        FILE_CACHE_CONTROL,
         IMAGE_CONTENT_TYPES,
         RECEIPT_CONTENT_TYPES,
         FileStorage,
@@ -40,10 +41,13 @@ if TYPE_CHECKING:
         create_uploaded_file,
         file_storage,
         get_file_for_read,
+        get_stored_file,
         replace_attached_file,
+        serve_stored_file,
     )
 
 _FILE_EXPORTS = {
+    "FILE_CACHE_CONTROL",
     "IMAGE_CONTENT_TYPES",
     "RECEIPT_CONTENT_TYPES",
     "FileStorage",
@@ -55,7 +59,9 @@ _FILE_EXPORTS = {
     "create_uploaded_file",
     "file_storage",
     "get_file_for_read",
+    "get_stored_file",
     "replace_attached_file",
+    "serve_stored_file",
 }
 
 
@@ -68,6 +74,7 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "FILE_CACHE_CONTROL",
     "IMAGE_CONTENT_TYPES",
     "RECEIPT_CONTENT_TYPES",
     "FileStorage",
@@ -82,6 +89,7 @@ __all__ = [
     "deliver_client_telegram_message",
     "file_storage",
     "get_file_for_read",
+    "get_stored_file",
     "list_action_logs",
     "list_notifications",
     "list_status_change_logs",
@@ -95,5 +103,6 @@ __all__ = [
     "resolve_variant",
     "scrub_sensitive",
     "scrub_text",
+    "serve_stored_file",
     "unread_count",
 ]

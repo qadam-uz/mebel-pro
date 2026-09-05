@@ -550,9 +550,10 @@ avoid).
 ## UX — client app
 
 The client app's home (`/c`) is an **order-status-first dashboard**, with the cutting wizard
-one tap away (**New cutting** + **My drafts** + **My orders** all reachable from it). Branch is
-chosen at placement, against a specific cutting — defaulted from the draft's
-`preferred_branch_id` if set.
+one tap away (**New cutting** + **My drafts** + **My orders** all reachable from it). The
+order's branch is the one the draft already carries in its `preferred_branch_id` — chosen in
+the editor before any part is entered, seeded from the client's pin
+([`client-entry.md`](client-entry.md)); placement reads it rather than asking again.
 
 **The client track is four phases, and it is the same in both
 [production modes](#production-mode)** — the phase strip, the progress fraction, the
@@ -593,7 +594,9 @@ inbox rows written before that (`order.status_changed`) still render
   such order (number, branch, total, a pickup action into its detail, and a *N more ready* hint
   when several are waiting); the subtitle and a three-up count strip summarise **active
   orders**, **Tayyorlanmoqda** (`confirmed` + `cutting` + `edge_banding` — the track's second
-  phase, so the strip and the pills can never disagree), and **saved drafts**. Below, the
+  phase, so the strip and the pills can never disagree), and **saved drafts**. For a client
+  pinned to a workshop the subtitle is **replaced** by `{workshop} · {branch}` — the trust cue
+  outranks a count the strip already carries ([`client-entry.md`](client-entry.md)). Below, the
   **active orders** list shows each order as a row — number, branch, placed-at, a phase-progress
   bar with the current and next phase, the status pill, total, and a track/detail action — and a
   **continue** list opens drafts with a chosen result on the result stage and unfinished drafts
@@ -638,9 +641,9 @@ inbox rows written before that (`order.status_changed`) still render
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
   while `new`.
-- **Branches page** (`/c/branches`) — a passive directory (name, address, hours, contact);
-  materials are **not** listed here (browsed in the cutting editor's per-branch catalog
-  instead); not the start of the flow; no per-branch CTAs.
+- **Ustaxonalarim** (`/c/branches`) — the workshops the client actually deals with, their
+  branches' pickup and contact details, and the pin that scopes the app. It replaced the
+  platform-wide branch directory; see [`client-entry.md`](client-entry.md), which owns it.
 
 ## UX — workshop app
 

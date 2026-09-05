@@ -5,6 +5,7 @@ from app.modules.client_portal.entry import (
     apply_entry,
     my_workshops,
     resolve_workshop_link,
+    workshop_link_logo,
     workshop_link_throttle,
 )
 from app.modules.client_portal.service import (
@@ -31,5 +32,6 @@ __all__ = [
     "resolve_workshop_link",
     "update_client_profile",
     "visible_branch",
+    "workshop_link_logo",
     "workshop_link_throttle",
 ]

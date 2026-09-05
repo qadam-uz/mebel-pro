@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-08-31
 order: 80
 ---
 
@@ -349,6 +349,14 @@ shows a **"pick a workshop first"** gate (a `store`-icon empty state with a sing
 workshop** button) in place of the parts list, and a caption on the selector explains the
 list is built from the chosen workshop's catalog.
 
+**Which branches the picker offers depends on the client's pin**
+([`client-entry.md`](client-entry.md)). A client pinned to a workshop sees only that
+workshop's branches, under a **`{workshop} filiallari`** header, with no affordance of any
+kind toward another workshop — the only door to one is that workshop's own link. An unpinned
+client keeps the flat cross-workshop list described below. Either way an **existing draft
+keeps the branch it already has**, even a branch outside the pinned workshop: the pin scopes
+new choices, never the drawing's own data.
+
 ### Parts editor
 
 Rows are grouped visually by panel material in first-seen order, with a leading
@@ -404,7 +412,8 @@ and the order summary before checkout.
 Picking or changing the branch opens a single flat branch list — one row per branch, naming
 the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
 branches stay selectable, the row just flags why); a search field appears once the list is
-long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`.
+long — the same list, narrowed and re-headed, for a pinned client. One tap selects a branch;
+**Apply** sets the draft's `preferred_branch_id`.
 **Changing it never edits the parts list.** The picker reloads against the new branch; a row
 still holding the old branch's material is swapped through the ordinary material picker.
 

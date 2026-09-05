@@ -92,11 +92,22 @@ PANEL_FORMAT = {
 KROMKA_FORMAT = {"type": "kromka", "thickness_mm": "2", "tape_width_mm": 19}
 
 
+def _name_suffix() -> str:
+    """A random name suffix with no digits.
+
+    Names built here land in the decor `search_key`, and the picker's numeric
+    tokens also take a folded ILIKE arm ("0.5" folds to "05") — a hex suffix
+    that happens to contain the digits under test makes the o'lcham assertions
+    flake (one CI run in ~25). Letters only, same entropy source.
+    """
+    return uuid.uuid4().hex[:6].translate(str.maketrans("0123456789", "ghijklmnop"))
+
+
 async def _create_manufacturer(client: AsyncClient, access: str, name: str | None = None) -> str:
     created = await client.post(
         "/api/v1/platform/catalog/manufacturers",
         headers=_auth(access),
-        json={"name": name or f"Egger {uuid.uuid4().hex[:6]}", "country": "AT"},
+        json={"name": name or f"Egger {_name_suffix()}", "country": "AT"},
     )
     assert created.status_code == 201, created.text
     return str(created.json()["id"])
@@ -116,7 +127,7 @@ async def _create_decor(
     body: dict[str, object] = {
         "manufacturer_id": manufacturer_id,
         "code": code,
-        "name": name or f"Colour {uuid.uuid4().hex[:6]}",
+        "name": name or f"Colour {_name_suffix()}",
         "has_grain": has_grain,
     }
     if image_file_id is not None:
@@ -242,7 +253,7 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
     manufacturer_id, decor_id = await _create_catalog_decor(client, platform_access)
     second_manufacturer_id = await _create_manufacturer(
-        client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
+        client, platform_access, f"Kronospan {_name_suffix()}"
     )
     second_decor_id = await _create_decor(
         client,
@@ -1234,7 +1245,7 @@ async def test_branch_catalog_picker_keeps_attached_decors_and_reports_total(
     owner_headers = _auth(owner_access)
     manufacturer_id, first_decor_id = await _create_catalog_decor(client, platform_access)
     other_manufacturer_id = await _create_manufacturer(
-        client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
+        client, platform_access, f"Kronospan {_name_suffix()}"
     )
     second_panel = await _create_decor(
         client, platform_access, manufacturer_id=manufacturer_id, code="H3303"
@@ -1575,7 +1586,7 @@ async def test_manufacturer_facets_separate_what_is_offered_from_what_is_carried
     owner_headers = _auth(owner_access)
     carried_manufacturer, carried_decor = await _create_catalog_decor(client, platform_access)
     offered_only_manufacturer = await _create_manufacturer(
-        client, platform_access, f"Kronospan {uuid.uuid4().hex[:6]}"
+        client, platform_access, f"Kronospan {_name_suffix()}"
     )
     offered_only_decor = await _create_decor(
         client, platform_access, manufacturer_id=offered_only_manufacturer, code="U999"

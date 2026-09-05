@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Sequence
 
 from fastapi import status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +29,13 @@ from app.modules.client_portal.schemas import (
 from app.modules.client_portal.service import get_client_profile
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.sales.contracts import Order
-from app.modules.support.api import record_action
+from app.modules.support.api import (
+    FileStorage,
+    ImageVariant,
+    get_stored_file,
+    record_action,
+    serve_stored_file,
+)
 from app.modules.workshop.api import normalize_public_code
 from app.modules.workshop.contracts import Branch, Workshop
 
@@ -121,6 +128,42 @@ async def resolve_workshop_link(
         ],
         requested_branch_id=requested.id if requested is not None else None,
         branch_no_fallback=branch_no is not None and requested is None,
+    )
+
+
+async def workshop_link_logo(
+    db: AsyncSession,
+    *,
+    storage: FileStorage,
+    code: str,
+    if_none_match: str | None = None,
+) -> Response:
+    """The workshop's logo, for a landing that has no session yet.
+
+    The **code is the capability**, exactly as it is for the resolve: it names
+    one workshop, and the only file this route can ever reach is that
+    workshop's `logo_file_id`. No file id crosses the boundary, so nothing else
+    in the store becomes addressable — the general `/files/{id}` route stays
+    authenticated.
+
+    Every dead end answers the resolve's one 404: unknown code, blocked
+    workshop, no visible branch, and a workshop that simply has no logo. A
+    landing that gets nothing here falls back to the name monogram it already
+    drew before this route existed.
+    """
+    workshop, _, _ = await _resolve_link(db, code)
+    if workshop.logo_file_id is None:
+        raise _link_not_found()
+    row = await get_stored_file(db, file_id=workshop.logo_file_id)
+    if row is None:
+        raise _link_not_found()
+    # `sm` (160px) with the usual fallback to the original: the landing draws it
+    # at 56px, and this is the one request a signed-out scan makes for bytes.
+    return await serve_stored_file(
+        row=row,
+        storage=storage,
+        if_none_match=if_none_match,
+        size=ImageVariant.SM,
     )
 
 

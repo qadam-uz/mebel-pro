@@ -310,8 +310,9 @@ Telegram lives on the other device is one click away from the affordance they ne
 - **Client profile** (`/c/profile`) — `name` editable (prefilled from Telegram at
   registration, never re-synced); `phone` read-only (changing it would mean re-sharing a
   contact — out of scope in v1); order count; sessions list with a current marker; "log out" /
-  "log out everywhere". The model still has `preferred_branch_id`, but the profile UI to set
-  it is not currently surfaced.
+  "log out everywhere". The client's pinned workshop is **not** edited here — it is set by
+  following a workshop's link ([`client-entry.md`](client-entry.md)), never by a branch field
+  on a profile form.
 
 ## Workshop provisioning (superadmin app)
 
