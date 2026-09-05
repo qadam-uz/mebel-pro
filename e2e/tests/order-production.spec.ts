@@ -28,9 +28,6 @@ const ownerReadyPassword = "OwnerReady123";
 const passwordLabel = /^(Password|Parol)$/;
 const continueButton = /^(Continue|Kirish)$/;
 
-// The one panel format this spec's branch carries. `×` is U+00D7, as printed.
-const PANEL_FORMAT_LABEL = "900×600×18 mm";
-
 interface TokenResponse {
   access_token: string;
 }
@@ -306,40 +303,49 @@ async function chooseOption(
 }
 
 /**
- * Pick a material in the cutting picker. The list groups by dekor — photo +
- * identity once, formats as rows beneath — but selection is still one format,
- * one click.
+ * Pick a material in the client's decor-first picker (SPEC_CLIENT_UX_MVP §7.3).
+ * One row per DECOR; this branch carries the decor in a single format, so the
+ * decor row itself is the choice and no format list appears.
  */
-async function chooseMaterial(
-  page: Page,
-  dekorLabel: string,
-  formatLabel: string,
-) {
-  const dialog = page.getByRole("dialog", {
-    name: "Materialni almashtirish",
-  });
-  await expect(dialog.getByText(dekorLabel)).toBeVisible();
-  await dialog.getByRole("button", { name: formatLabel, exact: true }).click();
+async function chooseMaterial(page: Page, dekorLabel: string) {
+  const sheet = page.getByRole("dialog", { name: "Material tanlang" });
+  await sheet
+    .getByRole("button", { name: new RegExp(escapeRegExp(dekorLabel)) })
+    .click();
+  await expect(sheet).toBeHidden();
 }
 
-async function chooseEdgeBanding(page: Page, edgeName: string) {
-  // The compact row exposes one rectangular edge diagram that opens the picker.
+/**
+ * Band the top and bottom of the first part (§7.1).
+ *
+ * On the client the tape DECOR belongs to the material group and only the
+ * thickness is the side's: the row's kromka cell selects the row and opens the
+ * docked card, whose group line either already names the branch's tape in the
+ * board's colour or asks for one. No per-part tape list, no pattern pair.
+ */
+async function chooseEdgeBanding(page: Page) {
   await page.getByRole("button", { name: "Kromka tomonlari", exact: true }).click();
-  // A drawing with no tapes yet opens straight into the branch tape catalog;
-  // picking the tape returns to the banding panel with it armed as current.
-  const catalog = page.getByRole("dialog", { name: /Yana kromka qo'shish/ });
-  await catalog
-    .getByRole("button", { name: new RegExp(escapeRegExp(edgeName)) })
-    .click();
-  const dialog = page.getByRole("dialog", { name: /Kromka yopishtirish/ });
-  await expect(
-    dialog.getByText(new RegExp(escapeRegExp(edgeName))),
-  ).toBeVisible();
-  // Band top and bottom with the armed tape; edits apply live, so closing the
-  // dialog keeps them.
-  await dialog.getByRole("button", { name: /^Yuqori tomon/ }).click();
-  await dialog.getByRole("button", { name: /^Pastki tomon/ }).click();
-  await dialog.getByRole("button", { name: "Kromka oynasini yopish" }).click();
+  const panel = page.getByRole("region", { name: "Kromka" });
+  await expect(panel).toBeVisible();
+
+  // The gate: a board decor the branch has no matching tape for asks for a
+  // colour before any side can be banded.
+  const pickTape = panel.getByRole("button", {
+    name: /rangi mos lentani tanlang/,
+  });
+  if (await pickTape.isVisible()) {
+    await pickTape.click();
+    const sheet = page.getByRole("dialog", {
+      name: "Rangi mos kromkani tanlang",
+    });
+    await sheet.getByRole("radio").first().click();
+    await sheet.getByRole("button", { name: "Tanlash" }).click();
+    await expect(sheet).toBeHidden();
+  }
+  await expect(panel.getByText(/^Kromka:/)).toBeVisible();
+
+  await panel.getByRole("button", { name: /^Yuqori/ }).click();
+  await panel.getByRole("button", { name: /^Pastki/ }).click();
 }
 
 test("client places an order and workshop completes it through production queues", async ({
@@ -389,35 +395,37 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
   await branchesLoaded;
 
-  // The first editor visit opens the required branch picker automatically.
-  // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
+  // Decision 17: the editor never raises a branch picker of its own — the
+  // branch is settled before it opens. An un-pinned client who reaches
+  // `/c/cutting/new` anyway gets the recovery prompt.
+  await page.getByRole("button", { name: "Filial tanlash" }).click();
   await page
     .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
     .click();
-  await expect(
-    page.getByText(`Order Branch ${id} · Order Workshop ${id}`),
-  ).toBeVisible();
+  // Decision 16, the naming rule: a workshop with one branch is named by the
+  // workshop alone — a branch name is never shown on its own.
+  await expect(page.getByText(`Order Workshop ${id}`).first()).toBeVisible();
 
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
-  await page.getByRole("button", { name: "+ Material tanlash" }).click();
-  await chooseMaterial(page, panelDecor.label, PANEL_FORMAT_LABEL);
+  await page.getByRole("button", { name: "+ Material", exact: true }).click();
+  await chooseMaterial(page, panelDecor.label);
   await page.getByLabel("Uzunlik millimetr").fill("260");
   await page.getByLabel("Kenglik millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
-  await chooseEdgeBanding(page, edge.label);
-  await page.getByRole("button", { name: "Davom etish" }).click();
+  await chooseEdgeBanding(page);
+  await page.getByRole("button", { name: "Hisoblash" }).click();
 
   // First optimise persists the draft and hands off to the standalone result stage.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/);
   await expect(page.getByRole("heading", { name: "Kesish natijasi" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Buyurtmaga davom etish" })).toBeVisible();
-  await page.getByRole("link", { name: "Buyurtmaga davom etish" }).click();
+  await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
+  await page.getByRole("link", { name: "Buyurtma berish" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Buyurtmani tasdiqlash", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText(`Order Branch ${id}`).first()).toBeVisible();
+  await expect(page.getByText(`Order Workshop ${id}`).first()).toBeVisible();
   await expect(page.getByText("Jami").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Buyurtmani tasdiqlash" }),
