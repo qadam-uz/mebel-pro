@@ -81,6 +81,24 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   empty-body 500 from `:5173/api` that looks like a backend crash. Fix: run the backend with
   `--host '::'`, or point `API_PROXY_TARGET` at `http://127.0.0.1:8000`.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
+  A global class nothing references is invisible to every gate, so `main.css` accumulates
+  them: before adding one, check whether a utility does the job, and when you delete the last
+  call site delete the rule with it. Two names look dead and are not — the `mp-toast-*`
+  variants (built as `` `mp-toast-${tone}` ``) and `router-link-exact-active` (applied by
+  vue-router) — so grep for the **fragment**, not the whole class, before removing anything.
+- **Fonts**: the two Wix Madefor faces are **self-hosted**, not fetched from Google. The
+  `@font-face` rules live in `src/assets/fonts.css` (imported by `main.css`, and linked
+  directly by `landing/index.html`, which is styled on its own) and point at the OFL
+  `@fontsource-variable/*` packages; Vite emits content-hashed woff2 under `/assets/`, which
+  nginx and Caddy already serve `public, immutable`. Three things to keep if you touch it:
+  the families are declared under the names the design system uses (`Wix Madefor Text` /
+  `Wix Madefor Display`), **not** Fontsource's `… Variable` names; `cyrillic-ext` must stay,
+  because uz-Cyrl's Ғ/Қ/Ҳ live there; and `build.assetsInlineLimit` in `vite.config.ts`
+  excludes `.woff2` so the two small Cyrillic subsets are not base64'd into the
+  render-blocking stylesheet. Each `index.html` preloads the two `latin` files the default
+  locale paints — in a production build those hrefs resolve to the same hashed assets the CSS
+  uses, so it is one request each (in dev they resolve through different `node_modules` paths
+  and are fetched twice, which is a dev-only wart).
 - **Copy**: every user-facing string lives in `src/shared/i18n/locales/<locale>/<namespace>.json`
   and reaches the screen through **`$t('ns.section.key')`** in templates (global injection is on —
   no import), `useI18n()` in `<script setup>`, or `translate()` / `translatePlural()` from
@@ -95,6 +113,27 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   through a green gate), and it validates against **`uz` only** (a key missing from `ru`
   ships silently and falls back at runtime — keeping `ru` complete is on the author). Copy
   rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
+  **The app ships `vue-i18n`'s full build on purpose** — do not "optimise" it to the
+  runtime-only one. Measured on this catalog (2 437 messages): aliasing to the runtime build
+  and precompiling with `@intlify/unplugin-vue-i18n` removes ~18 kB of message compiler and
+  adds ~76 kB, because every message becomes a JIT AST node (`{"t":0,"b":{"t":2,…,"s":"…"}}`)
+  instead of a string. Client initial JS went **327.7 kB → 386.3 kB raw** (gzip a wash at
+  +0.5 kB). It also forces uz-Cyrl to be transliterated at build time — a runtime-only build
+  cannot compile the strings `transliterateMessages` produces. The lever that would actually
+  pay here is splitting the catalog so a role only ships the namespaces it renders; the
+  compiler is not.
+- **Heavy dependencies load on demand**: a library only some screens draw with is reached
+  through a dynamic `import()`, not a static one — a static import welds it into whatever
+  chunk the importer lands in, which for a shared component is every route that touches it.
+  Leaflet is the worked example: `BranchMap.vue` keeps `import type L from 'leaflet'` (erased
+  at build) and pulls the library, its stylesheet and its marker icon from
+  `branchMapLeaflet.ts` on mount. Two rules come with it — the placeholder must hold the
+  final height (the map frame is `h-64` and the loading state sits **over** it, because
+  Leaflet needs its host element in the DOM when it initialises), and a chunk that never
+  arrives needs a designed failure, not an empty box. One caveat before you convert another
+  one: Vitest does **not** resolve a first dynamic `import()` within `flushPromises()`, so a
+  spec that asserts on the rendered output of a lazily-loaded library fails on the cold load —
+  check the specs for the component before, not after.
 - **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`.
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/shared/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`. **E2E locators track UI copy** — changing labels/dialogs means grepping `e2e/tests/` (see root `AGENTS.md`).
 

@@ -227,8 +227,14 @@ handoff hex.
   `textarea.mp-input` reason fields stay regular. Buttons are 600.
 - **Labels are sentence case in grey**, at normal-to-semibold weight — never uppercase or
   wide-tracked.
-- **All three locales use the same two families** — Wix Madefor ships a real `cyrillic`
-  subset, so there is no per-locale font override.
+- **All three locales use the same two families** — Wix Madefor ships real Cyrillic coverage,
+  so there is no per-locale font override. Both faces are **self-hosted** from
+  `src/assets/fonts.css` (the OFL `@fontsource-variable/*` packages, one variable file per
+  subset covering 400–800); nothing is fetched from Google. Four subsets ship per family —
+  `latin`, `latin-ext`, `cyrillic` and `cyrillic-ext` — and the last is not optional: Uzbek
+  Cyrillic's Ғ, Қ and Ҳ (U+0492 / U+049A / U+04B2) live in `cyrillic-ext`, not `cyrillic`, so
+  dropping it puts the uz-Cyrl locale in a fallback face. `unicode-range` keeps a reader from
+  downloading the subsets their language never paints.
 
 ## Layout
 
