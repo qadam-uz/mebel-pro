@@ -20,6 +20,7 @@ from io import BytesIO
 from typing import Any
 
 import pytest
+from app.core.order_number import format_order_number
 from app.models.enums import CuttingResultSource, CuttingResultStatus
 from app.modules.cutting import pdf_document
 from app.modules.cutting.schemas import (
@@ -722,6 +723,27 @@ def _assert_within_columns(body: list[tuple[float, str, float]]) -> None:
         width = pdfmetrics.stringWidth(text, pdf_document._FONT_REGULAR, size)
         limit = right_x if x < right_x else pdf_document._MARGIN + pdf_document._CONTENT_W
         assert x + width <= limit, f"{text!r} overruns its column"
+
+
+def test_the_identity_block_prints_the_order_number_as_it_is_spoken(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The document is read next to the client's screen and the counter's list,
+    so it has to print the same handle they do — grouped, with the sign."""
+    body, _ = _identity_draw_calls(monkeypatch, pdf_document.PdfContext(order_number="482917"))
+
+    lines = [text for _, text, _ in body]
+    assert f"Buyurtma/chizma: {format_order_number('482917')}" in lines
+
+
+def test_a_legacy_order_number_is_printed_exactly_as_it_was_stored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing reformats history — `#26-14-0003` is still that order's name."""
+    body, _ = _identity_draw_calls(monkeypatch, pdf_document.PdfContext(order_number="#26-14-0003"))
+
+    lines = [text for _, text, _ in body]
+    assert "Buyurtma/chizma: #26-14-0003" in lines
 
 
 def test_branch_identity_keeps_both_columns_inside_their_own_width(

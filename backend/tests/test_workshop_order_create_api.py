@@ -1,5 +1,6 @@
 """Workshop staff creating cutting drafts + orders for walk-in clients."""
 
+import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -247,9 +248,8 @@ async def test_staff_creates_and_auto_confirms_order_for_walk_in(
     assert order["status"] == "confirmed"
     row = await db_session.get(Order, order_id)
     assert row is not None
-    # First order of this branch this year — `#26-1-0001` (sales.md).
-    branch_no = await db_session.scalar(select(Branch.branch_no).where(Branch.id == branch_id))
-    assert order["order_number"] == f"#{datetime.now(UTC).year % 100:02d}-{branch_no}-0001"
+    # One global handle, six random digits, no leading zero (sales.md).
+    assert re.fullmatch(r"[1-9]\d{5}", str(order["order_number"]))
     assert row.confirmed_at is not None
     assert row.client_id == uuid.UUID(client_id)
 

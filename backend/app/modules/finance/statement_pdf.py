@@ -29,6 +29,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from app.core.money import format_som
+from app.core.order_number import format_order_number
 from app.core.pdf import FONT_BOLD, FONT_REGULAR, register_pdf_fonts
 from app.modules.finance.schemas import DebtStatementResponse, DebtStatementRow
 
@@ -225,11 +226,14 @@ def _row_label(row: DebtStatementRow) -> str:
         return " · ".join(parts)
     if row.kind == "payment":
         if row.order_number:
-            return f"To'lov · {row.order_number}"
+            return f"To'lov · {format_order_number(row.order_number)}"
         detail = row.note or "to'lov"
         return f"Xarajat · {detail}"
     if row.kind == "order":
-        return f"Buyurtma {row.order_number or ''}".strip()
+        # Same handle the client reads off their own screen — a statement that
+        # printed the bare digits would not obviously be about the same order.
+        number = format_order_number(row.order_number) if row.order_number else ""
+        return f"Buyurtma {number}".strip()
     return f"Qarz tuzatish · {row.note or ''}".strip()
 
 

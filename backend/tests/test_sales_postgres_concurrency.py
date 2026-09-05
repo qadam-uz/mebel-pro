@@ -1,6 +1,7 @@
-"""Postgres-only: the advisory locks behind branch and order numbering."""
+"""Postgres-only: concurrent order numbering and the branch-number advisory lock."""
 
 import asyncio
+import itertools
 import os
 import uuid
 from datetime import UTC, datetime
@@ -11,8 +12,9 @@ from app.models import Base, import_all_models
 from app.models.enums import Currency, OrderStatus
 from app.modules.access.contracts import Client
 from app.modules.cutting.contracts import CuttingResult
+from app.modules.sales import service as sales_service
 from app.modules.sales.contracts import Order
-from app.modules.sales.service import _next_order_number
+from app.modules.sales.service import _insert_order
 from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch
 from sqlalchemy import func, select
@@ -32,6 +34,8 @@ pytestmark = pytest.mark.skipif(
     or not os.environ.get("DATABASE_URL", "").startswith("postgresql"),
     reason="set POSTGRES_CONCURRENCY=1 with a throwaway Postgres DATABASE_URL",
 )
+
+COLLIDING_NUMBER = "100001"
 
 
 async def _fresh_engine() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
@@ -55,12 +59,18 @@ async def _add_branch(db: AsyncSession, *, workshop_id: uuid.UUID, name: str) ->
     return branch
 
 
-async def test_postgres_parallel_orders_in_one_branch_get_distinct_numbers() -> None:
-    """Eight simultaneous orders in one branch produce 0001…0008, no duplicates.
+async def test_postgres_parallel_orders_survive_a_number_collision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eight simultaneous orders that all draw the same number still all land.
 
-    Without `pg_advisory_xact_lock` every transaction reads the same count and
-    mints the same number; `uq_orders_order_number` would then reject all but
-    one, failing real order placements.
+    The random number has no reservation and no lock — the retry on
+    `uq_orders_order_number` is the entire collision strategy, and it only
+    works if a duplicate-key failure costs one SAVEPOINT rather than the whole
+    transaction. Postgres is where that is true or false: it refuses every
+    later statement in an aborted transaction, which SQLite does not. Rigged so
+    that every task's *first* draw is the same number, so seven of the eight
+    must recover from a real unique violation raised by a concurrent commit.
     """
     engine, maker = await _fresh_engine()
     try:
@@ -84,47 +94,53 @@ async def test_postgres_parallel_orders_in_one_branch_get_distinct_numbers() -> 
             ]
             setup.add_all(results)
             await setup.commit()
-            workshop_id, branch_id, branch_no, buyer_id = (
-                workshop.id,
-                branch.id,
-                branch.branch_no,
-                buyer.id,
-            )
+            workshop_id, branch_id, buyer_id = workshop.id, branch.id, buyer.id
             result_ids = [result.id for result in results]
-        year = datetime.now(UTC).year % 100
+
+        drew_once: set[asyncio.Task[None] | None] = set()
+        fallbacks = itertools.count(200_001)
+
+        def _rigged_draw() -> str:
+            task = asyncio.current_task()
+            if task not in drew_once:
+                drew_once.add(task)
+                return COLLIDING_NUMBER
+            return str(next(fallbacks))
+
+        monkeypatch.setattr(sales_service, "_random_order_number", _rigged_draw)
 
         async def place(result_id: uuid.UUID) -> None:
-            # One session per request, mirroring get_session — the lock lives
-            # for the transaction, so it must span both number and insert.
+            # One session per request, mirroring get_session.
             async with maker() as session:
-                number = await _next_order_number(session, datetime.now(UTC), branch_no)
-                session.add(
-                    Order(
-                        order_number=number,
-                        client_id=buyer_id,
-                        workshop_id=workshop_id,
-                        branch_id=branch_id,
-                        cutting_result_id=result_id,
-                        status=OrderStatus.NEW,
-                        version=1,
-                        contact_name="Dilshod",
-                        contact_phone="+998901112233",
-                        subtotal_cutting_tiyin=0,
-                        subtotal_materials_tiyin=0,
-                        subtotal_edge_banding_tiyin=0,
-                        discount_tiyin=0,
-                        surcharge_tiyin=0,
-                        total_tiyin=0,
-                        currency=Currency.UZS,
-                    )
+                order = Order(
+                    order_number=sales_service._random_order_number(),
+                    client_id=buyer_id,
+                    workshop_id=workshop_id,
+                    branch_id=branch_id,
+                    cutting_result_id=result_id,
+                    status=OrderStatus.NEW,
+                    version=1,
+                    contact_name="Dilshod",
+                    contact_phone="+998901112233",
+                    subtotal_cutting_tiyin=0,
+                    subtotal_materials_tiyin=0,
+                    subtotal_edge_banding_tiyin=0,
+                    discount_tiyin=0,
+                    surcharge_tiyin=0,
+                    total_tiyin=0,
+                    currency=Currency.UZS,
                 )
+                await _insert_order(session, order)
                 await session.commit()
 
         await asyncio.gather(*(place(result_id) for result_id in result_ids))
 
         async with maker() as verify:
-            numbers = sorted((await verify.scalars(select(Order.order_number))).all())
-        assert numbers == [f"#{year:02d}-{branch_no}-{index:04d}" for index in range(1, 9)]
+            numbers = (await verify.scalars(select(Order.order_number))).all()
+        assert len(numbers) == 8
+        assert len(set(numbers)) == 8
+        # Exactly one task kept the contested number; the rest redrew.
+        assert COLLIDING_NUMBER in numbers
     finally:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)

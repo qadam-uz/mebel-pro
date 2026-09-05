@@ -409,7 +409,7 @@ async def test_material_page_reads_its_own_row_and_names_the_documents(
     db_session.add(buyer)
     await db_session.flush()
     order = Order(
-        order_number="#26-1-0003",
+        order_number="482917",
         client_id=buyer.id,
         workshop_id=workshop_id,
         branch_id=branch_id,
@@ -452,7 +452,7 @@ async def test_material_page_reads_its_own_row_and_names_the_documents(
     )
     assert movements.status_code == 200, movements.text
     consumed = [tx for tx in movements.json() if tx["type"] == "consume"]
-    assert [tx["order_number"] for tx in consumed] == ["#26-1-0003"]
+    assert [tx["order_number"] for tx in consumed] == ["482917"]
 
 
 async def test_material_page_refuses_a_reader_outside_the_material_s_branch(

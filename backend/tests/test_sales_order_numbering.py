@@ -1,19 +1,31 @@
-"""Order numbers (`#26-14-0003`) and the branch numbers they are built from."""
+"""Order numbers (`482917`) — how they are minted, displayed and searched."""
 
+import re
 import uuid
-from datetime import UTC, datetime
+from typing import Any
 
+import pytest
+from app.core.errors import APIError
+from app.core.order_number import (
+    NUMBER_SIGN,
+    THIN_SPACE,
+    format_order_number,
+    normalize_order_number_query,
+)
 from app.models.enums import AuthenticatedPrincipalType, Currency, OrderStatus
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client
+from app.modules.sales import service as sales_service
 from app.modules.sales.contracts import Order
-from app.modules.sales.service import _next_order_number
+from app.modules.sales.service import _insert_order, _random_order_number
 from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories import seed_workshop_with_owner
+
+GENERATED = re.compile(r"^[1-9]\d{5}$")
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -27,125 +39,160 @@ async def _buyer(db: AsyncSession) -> Client:
     return buyer
 
 
+def _new_order(*, number: str, branch: Branch, client_id: uuid.UUID) -> Order:
+    """A minimal order — only its number matters to these tests."""
+    fields: dict[str, Any] = {
+        "order_number": number,
+        "client_id": client_id,
+        "workshop_id": branch.workshop_id,
+        "branch_id": branch.id,
+        "cutting_result_id": uuid.uuid4(),
+        "status": OrderStatus.NEW,
+        "version": 1,
+        "contact_name": "Dilshod",
+        "contact_phone": "+998901112233",
+        "subtotal_cutting_tiyin": 0,
+        "subtotal_materials_tiyin": 0,
+        "subtotal_edge_banding_tiyin": 0,
+        "discount_tiyin": 0,
+        "surcharge_tiyin": 0,
+        "total_tiyin": 0,
+        "currency": Currency.UZS,
+    }
+    return Order(**fields)
+
+
 async def _order(db: AsyncSession, *, number: str, branch: Branch, client_id: uuid.UUID) -> Order:
-    """A minimal persisted order — only its number matters to these tests."""
-    order = Order(
-        order_number=number,
-        client_id=client_id,
-        workshop_id=branch.workshop_id,
-        branch_id=branch.id,
-        cutting_result_id=uuid.uuid4(),
-        status=OrderStatus.NEW,
-        version=1,
-        contact_name="Dilshod",
-        contact_phone="+998901112233",
-        subtotal_cutting_tiyin=0,
-        subtotal_materials_tiyin=0,
-        subtotal_edge_banding_tiyin=0,
-        discount_tiyin=0,
-        surcharge_tiyin=0,
-        total_tiyin=0,
-        currency=Currency.UZS,
-    )
+    order = _new_order(number=number, branch=branch, client_id=client_id)
     db.add(order)
     await db.flush()
     return order
 
 
-async def _branch(db: AsyncSession, *, workshop_id: uuid.UUID, branch_no: int) -> Branch:
-    branch = Branch(
-        workshop_id=workshop_id,
-        branch_no=branch_no,
-        name=f"Branch {branch_no}",
-        address="Tashkent",
-        phone="+998901111111",
-    )
-    db.add(branch)
-    await db.flush()
-    return branch
+def test_generated_numbers_are_six_digits_with_no_leading_zero() -> None:
+    """The number is dictated over the phone and typed on a numeric keypad."""
+    drawn = [_random_order_number() for _ in range(2000)]
+    assert all(GENERATED.match(number) for number in drawn)
+    assert all(100_000 <= int(number) <= 999_999 for number in drawn)
+    # 2000 draws out of 900 000 landing on a handful of values would mean a
+    # broken source, not bad luck.
+    assert len(set(drawn)) > 1900
 
 
-async def test_sequence_counts_per_branch_and_per_year(db_session: AsyncSession) -> None:
-    workshop, first, _ = await seed_workshop_with_owner(db_session)
-    fourteen = await _branch(db_session, workshop_id=workshop.id, branch_no=14)
-    buyer = await _buyer(db_session)
-    now = datetime(2026, 3, 1, tzinfo=UTC)
-
-    for expected in ("#26-14-0001", "#26-14-0002", "#26-14-0003"):
-        number = await _next_order_number(db_session, now, fourteen.branch_no)
-        assert number == expected
-        await _order(db_session, number=number, branch=fourteen, client_id=buyer.id)
-
-    # The year is in the number, so the sequence restarts with it.
-    assert (
-        await _next_order_number(db_session, datetime(2027, 1, 4, tzinfo=UTC), fourteen.branch_no)
-        == "#27-14-0001"
-    )
-    # The workshop's other branch counts from its own 1 and never collides.
-    assert await _next_order_number(db_session, now, first.branch_no) == "#26-1-0001"
-
-
-async def test_branch_1_is_not_counted_into_branch_14(db_session: AsyncSession) -> None:
-    """The trailing dash keeps `#26-1-` from matching `#26-14-0003`."""
-    workshop, one, _ = await seed_workshop_with_owner(db_session)
-    fourteen = await _branch(db_session, workshop_id=workshop.id, branch_no=14)
-    buyer = await _buyer(db_session)
-    now = datetime(2026, 3, 1, tzinfo=UTC)
-    assert one.branch_no == 1
-
-    for number in ("#26-14-0001", "#26-14-0002", "#26-14-0003"):
-        await _order(db_session, number=number, branch=fourteen, client_id=buyer.id)
-
-    assert await _next_order_number(db_session, now, one.branch_no) == "#26-1-0001"
-    await _order(db_session, number="#26-1-0001", branch=one, client_id=buyer.id)
-    assert await _next_order_number(db_session, now, fourteen.branch_no) == "#26-14-0004"
-
-
-async def test_legacy_numbers_do_not_shift_the_new_sequence(db_session: AsyncSession) -> None:
-    """`ORD-2026-…` orders keep their numbers and stay out of the new count."""
+async def test_insert_redraws_the_number_when_the_first_draw_is_taken(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The retry on `uq_orders_order_number` IS the collision strategy."""
     _, branch, _ = await seed_workshop_with_owner(db_session)
     buyer = await _buyer(db_session)
-    for number in ("ORD-2026-000015", "ORD-2026-000016"):
-        await _order(db_session, number=number, branch=branch, client_id=buyer.id)
+    await _order(db_session, number="482917", branch=branch, client_id=buyer.id)
 
-    now = datetime(2026, 3, 1, tzinfo=UTC)
-    assert (
-        await _next_order_number(db_session, now, branch.branch_no)
-        == f"#26-{branch.branch_no}-0001"
+    draws = iter(["482917", "555111"])
+    monkeypatch.setattr(sales_service, "_random_order_number", lambda: next(draws))
+    order = _new_order(number="482917", branch=branch, client_id=buyer.id)
+    await _insert_order(db_session, order)
+
+    assert order.order_number == "555111"
+    numbers = (await db_session.scalars(select(Order.order_number))).all()
+    assert sorted(numbers) == ["482917", "555111"]
+
+
+async def test_insert_gives_up_rather_than_reusing_a_number(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Five taken draws in a row is an error, never a duplicated handle."""
+    _, branch, _ = await seed_workshop_with_owner(db_session)
+    buyer = await _buyer(db_session)
+    await _order(db_session, number="482917", branch=branch, client_id=buyer.id)
+
+    monkeypatch.setattr(sales_service, "_random_order_number", lambda: "482917")
+    order = _new_order(number="482917", branch=branch, client_id=buyer.id)
+    with pytest.raises(APIError) as raised:
+        await _insert_order(db_session, order)
+    assert raised.value.code == "order_number_unavailable"
+
+    # The caller's transaction survived the failed attempts.
+    assert await db_session.scalar(select(Order.order_number)) == "482917"
+
+
+def test_display_groups_the_digits_and_leaves_legacy_numbers_alone() -> None:
+    assert format_order_number("482917") == f"{NUMBER_SIGN} 482{THIN_SPACE}917"
+    # Widening to seven digits must not move the grouping: it counts from the right.
+    assert format_order_number("4829175") == f"{NUMBER_SIGN} 4{THIN_SPACE}829{THIN_SPACE}175"
+    assert format_order_number("#26-14-0003") == "#26-14-0003"
+    assert format_order_number("ORD-2026-000123") == "ORD-2026-000123"
+
+
+def test_search_normalisation_strips_what_a_client_dictates() -> None:
+    typed_forms = (
+        format_order_number("482917"),
+        "482 917",
+        "482917",
+        "#482917",
+        " 482 917 ",
     )
+    for typed in typed_forms:
+        assert normalize_order_number_query(typed) == "482917", typed
+    # A legacy number keeps enough of itself to match on the raw text too.
+    assert normalize_order_number_query("#26-14-0003") == "26-14-0003"
 
 
 async def test_order_search_finds_both_number_eras(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    """As displayed, as stored, and every legacy shape it ever printed."""
     _, branch, owner = await seed_workshop_with_owner(db_session)
     owner.password_reset_required = False
     buyer = await _buyer(db_session)
-    current_number = f"#26-{branch.branch_no}-0001"
     await _order(db_session, number="ORD-2026-000015", branch=branch, client_id=buyer.id)
-    await _order(db_session, number=current_number, branch=branch, client_id=buyer.id)
+    await _order(db_session, number="482917", branch=branch, client_id=buyer.id)
+    await _order(db_session, number="#26-1-0003", branch=branch, client_id=buyer.id)
     tokens = await create_session(
         db_session,
         principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
         principal_id=owner.id,
     )
 
-    legacy = await client.get(
-        "/api/v1/workshop/orders",
-        headers=_auth(tokens.access_token),
-        params={"search": "2026-000015"},
-    )
-    assert legacy.status_code == 200, legacy.text
-    assert [row["order_number"] for row in legacy.json()] == ["ORD-2026-000015"]
+    async def _search(term: str) -> list[str]:
+        response = await client.get(
+            "/api/v1/workshop/orders",
+            headers=_auth(tokens.access_token),
+            params={"search": term},
+        )
+        assert response.status_code == 200, response.text
+        return [row["order_number"] for row in response.json()]
 
-    current = await client.get(
-        "/api/v1/workshop/orders",
-        headers=_auth(tokens.access_token),
-        params={"search": current_number[:-4]},
+    assert await _search("2026-000015") == ["ORD-2026-000015"]
+    assert await _search("#26-1-0003") == ["#26-1-0003"]
+    for typed in ("482917", "482 917", format_order_number("482917")):
+        assert await _search(typed) == ["482917"], typed
+
+
+async def test_client_order_search_normalises_the_same_way(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The client reads the number off their own screen and types it back."""
+    _, branch, _ = await seed_workshop_with_owner(db_session)
+    buyer = await _buyer(db_session)
+    await _order(db_session, number="482917", branch=branch, client_id=buyer.id)
+    await _order(db_session, number="311204", branch=branch, client_id=buyer.id)
+    tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.CLIENT,
+        principal_id=buyer.id,
     )
-    assert current.status_code == 200, current.text
-    assert [row["order_number"] for row in current.json()] == [current_number]
+
+    found = await client.get(
+        "/api/v1/client/orders",
+        headers=_auth(tokens.access_token),
+        params={"search": format_order_number("482917")},
+    )
+    assert found.status_code == 200, found.text
+    assert [row["order_number"] for row in found.json()] == ["482917"]
 
 
 async def test_created_branches_get_distinct_platform_wide_numbers(
@@ -184,7 +231,7 @@ async def test_branch_no_cannot_be_patched(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """It is baked into every order number the branch has ever printed."""
+    """It addresses the branch in every printed QR (`/w/{code}/{branch_no}`)."""
     _, branch, owner = await seed_workshop_with_owner(db_session)
     owner.password_reset_required = False
     original = branch.branch_no

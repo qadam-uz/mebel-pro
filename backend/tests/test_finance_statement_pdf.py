@@ -66,7 +66,7 @@ def test_a_payment_reduces_the_debt_column_on_both_sides() -> None:
     # stored sign is the mirror image, the column is the same one.
     client = _statement(
         [
-            _row("order", 10_000_000, 10_000_000, order_number="#26-1-0001"),
+            _row("order", 10_000_000, 10_000_000, order_number="482917"),
             _row("payment", -4_000_000, 6_000_000),
         ]
     )

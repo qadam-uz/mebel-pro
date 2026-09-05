@@ -25,6 +25,7 @@ from reportlab.pdfgen import canvas
 from app.core.material_label import edge_label as _edge_label
 from app.core.material_label import material_label as _material_label
 from app.core.money import format_som as _som
+from app.core.order_number import format_order_number
 from app.modules.cutting.rendering import (
     _FONT_BOLD,
     _FONT_REGULAR,
@@ -460,7 +461,7 @@ def _draw_sheet_title_block(
         f"List {group.start}" if group.start == group.end else f"List {group.start}–{group.end}"
     )
     count = len(group.panels)
-    order = context.order_number or f"chizma {_draft_short_id(result)}"
+    order = _order_label(context) or f"chizma {_draft_short_id(result)}"
     date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
     cont = " (davomi)" if not first_page else ""
     _draw_text(pdf, _MARGIN + 8, y - 16, f"Material: {material} · {dims}", 10, bold=True)
@@ -798,11 +799,23 @@ def _fallback(value: str | None) -> str:
     return value or "—"
 
 
+def _order_label(context: PdfContext) -> str | None:
+    """The order number as it is spoken and displayed — `№ 482 917`.
+
+    One writer for both places the document prints it, so the sheet-page head
+    and the summary can never disagree. Legacy numbers render as stored.
+    """
+    if not context.order_number:
+        return None
+    return format_order_number(context.order_number)
+
+
 def _order_or_draft_label(result: CuttingResultResponse, context: PdfContext) -> str:
     """An order-bound PDF keeps its order number; a still-draft PDF falls back
     to the draft's own name; only a nameless draft prints the bare short id."""
-    if context.order_number:
-        return context.order_number
+    order = _order_label(context)
+    if order:
+        return order
     if context.draft_name:
         return context.draft_name
     return f"chizma {_draft_short_id(result)}"

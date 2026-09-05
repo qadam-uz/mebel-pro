@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+import secrets
 import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -17,11 +18,13 @@ from typing import Any, cast
 
 from fastapi import status
 from sqlalchemy import Select, and_, delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import APIError
 from app.core.material_label import edge_label, material_label
+from app.core.order_number import normalize_order_number_query
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
     ActorType,
@@ -253,7 +256,7 @@ async def place_client_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now, branch.branch_no),
+        order_number=_random_order_number(),
         client_id=client.id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -275,8 +278,7 @@ async def place_client_order(
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
-    db.add(order)
-    await db.flush()
+    await _insert_order(db, order)
 
     await seed_preferred_branch_if_missing(db, client=client, branch_id=branch.id)
 
@@ -478,7 +480,7 @@ async def place_workshop_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now, branch.branch_no),
+        order_number=_random_order_number(),
         client_id=draft.client_id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -500,8 +502,7 @@ async def place_workshop_order(
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
-    db.add(order)
-    await db.flush()
+    await _insert_order(db, order)
 
     await _add_order_items(db, order=order, pricing=pricing)
 
@@ -4275,7 +4276,7 @@ def _apply_order_filters(
         # simply never match, which is what an OR of ilike already gives.
         query = query.where(
             or_(
-                Order.order_number.ilike(pattern),
+                *_order_number_conditions(normalized),
                 Order.contact_name.ilike(pattern),
                 Order.draft_name.ilike(pattern),
             )
@@ -4284,6 +4285,22 @@ def _apply_order_filters(
     if phone_condition is not None:
         query = query.where(phone_condition)
     return query
+
+
+def _order_number_conditions(search: str) -> list[ColumnElement[bool]]:
+    """Match an order number as typed *and* as dictated.
+
+    The number is displayed `№ 482 917`, so that is what gets read back to
+    staff and pasted into the box; the column stores `482917`. Stripping the
+    sign and the spaces is the whole normalisation. It is an extra OR term
+    rather than a replacement because the raw text is the only thing a legacy
+    number (`#26-14-0003`) can match on.
+    """
+    conditions: list[ColumnElement[bool]] = [Order.order_number.ilike(f"%{search.lower()}%")]
+    normalized = normalize_order_number_query(search)
+    if normalized and normalized != search:
+        conditions.append(Order.order_number.ilike(f"%{normalized.lower()}%"))
+    return conditions
 
 
 def _phone_digits_condition(value: str | None) -> ColumnElement[bool] | None:
@@ -4312,7 +4329,7 @@ def _order_search_condition(search: str | None) -> ColumnElement[bool] | None:
         return None
     pattern = f"%{normalized.lower()}%"
     conditions: list[ColumnElement[bool]] = [
-        Order.order_number.ilike(pattern),
+        *_order_number_conditions(normalized),
         Order.contact_name.ilike(pattern),
         # Same reason as the list filter: at the counter the client is as likely
         # to name the drawing as the order number.
@@ -4599,27 +4616,61 @@ def _bump_order(order: Order) -> None:
     order.updated_at = datetime.now(UTC)
 
 
-async def _next_order_number(db: AsyncSession, now: datetime, branch_no: int) -> str:
-    """`#26-14-0003` — 2-digit year, branch number, per-branch/per-year sequence.
+ORDER_NUMBER_ATTEMPTS = 5
 
-    The sequence is scoped to one branch so a workshop's numbers have no holes:
-    branch 14's third order of 2026 is `#26-14-0003` no matter how busy the rest
-    of the platform is. The trailing dash in the prefix is load-bearing — without
-    it `#26-1-` would also match branch 14's numbers.
 
-    Counting rows is only safe because orders are never deleted (architecture.md);
-    the advisory lock is what makes concurrent creation in the same branch safe.
-    Orders placed before this format keep their legacy `ORD-2026-000123` numbers
-    and are excluded by the prefix (sales.md).
+def _random_order_number() -> str:
+    """`482917` — six random decimal digits, `100000`-`999999` (sales.md).
+
+    One platform-wide number, not a per-branch-per-year sequence: nobody needs
+    "the branch's Nth order this year" — that is a finance-report question, not
+    an identifier. Random rather than sequential because a global sequence lets
+    every workshop (and every client) read the platform's volume off the gaps
+    between their own numbers.
+
+    Six digits are short enough to dictate over the phone and type on a numeric
+    keypad; the collision space is 900 000, which at the operating envelope in
+    architecture.md makes a retry on `uq_orders_order_number` the whole
+    collision strategy — no reservation table, no sequence. Orders placed
+    before this format keep their legacy numbers untouched.
     """
-    prefix = f"#{now.year % 100:02d}-{branch_no}-"
-    bind = db.get_bind()
-    if bind.dialect.name == "postgresql":
-        await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"orders:{prefix}"))))
-    count = await db.scalar(
-        select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
+    return str(secrets.randbelow(900_000) + 100_000)
+
+
+def _is_order_number_conflict(exc: IntegrityError) -> bool:
+    """True only for a duplicate `order_number` — every other integrity error
+    is a real bug and must not be swallowed by the retry loop. Postgres names
+    the constraint; SQLite names the column."""
+    message = str(exc.orig)
+    return "uq_orders_order_number" in message or "orders.order_number" in message
+
+
+async def _insert_order(db: AsyncSession, order: Order) -> None:
+    """Insert `order`, redrawing its number if the draw was already taken.
+
+    Each attempt runs inside its own SAVEPOINT so a duplicate-key failure costs
+    the attempt and not the caller's transaction — Postgres would otherwise
+    refuse every later statement. Five draws against 900 000 numbers put the
+    give-up odds far below anything this platform can produce; if it ever does,
+    the client sees a plain error rather than a wrong number.
+    """
+    for attempt in range(ORDER_NUMBER_ATTEMPTS):
+        if attempt:
+            order.order_number = _random_order_number()
+        try:
+            async with db.begin_nested():
+                db.add(order)
+                await db.flush()
+        except IntegrityError as exc:
+            if not _is_order_number_conflict(exc):
+                raise
+            continue
+        return
+    raise APIError(
+        "order_number_unavailable",
+        "Could not allocate an order number",
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
     )
-    return f"{prefix}{int(count or 0) + 1:04d}"
 
 
 def _pre_discount_total(order: Order) -> int:
