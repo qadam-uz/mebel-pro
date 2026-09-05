@@ -11,7 +11,7 @@ import {
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
-import { translate } from '@/shared/i18n'
+import { translate, translatePlural } from '@/shared/i18n'
 import { metres } from '@/shared/stores/cutting'
 import type {
   CuttingOffcut,
@@ -393,7 +393,7 @@ export function clientResultFigures(result: CuttingResult): ClientResultFigure[]
     {
       key: 'sheets',
       label: translate('cutting.result.summarySheets'),
-      value: `${totals.sheets} ${translate('cutting.unit.sheet')}`,
+      value: `${totals.sheets} ${translatePlural('cutting.unit.sheet', totals.sheets)}`,
     },
     {
       key: 'edge',

@@ -1,8 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
+import { DEFAULT_LOCALE, setLocale } from '@/shared/i18n'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import {
   useCuttingStore,
@@ -339,5 +340,101 @@ describe('CuttingResultsSection own material', () => {
 
     const opener = wrapper.findAll('button').find((b) => b.text() === "O'zim olib kelaman")
     expect(opener).toBeDefined()
+  })
+})
+
+/**
+ * The receipt prints «N лист» three times over — the material headline, the
+ * multiplication under it, and the cutting service. All three used to call
+ * `$t('cutting.unit.sheet')` with no count, so vue-i18n never reached the
+ * plural rule and every Russian line read «2 лист». One line per Russian class
+ * (1 → one, 2 → few, 5 → many) proves all three forms are now reachable.
+ */
+describe('CuttingResultsSection — Russian agrees the sheet unit with its count', () => {
+  const RU_QUOTE = {
+    panels_used: 8,
+    subtotal_cutting_tiyin: 24_000_000,
+    material_lines: [
+      {
+        material_id: PANEL_A,
+        material_name: 'LDSP Egger H1334 · Sanoma · 2750×1830×18 mm',
+        panels_used: 1,
+        own_panels: 0,
+        unit_price_tiyin: 30_000_000,
+        line_total_tiyin: 30_000_000,
+      },
+      {
+        material_id: PANEL_B,
+        material_name: 'LDSP Kronospan W980 · Oq · 2800×2070×16 mm',
+        panels_used: 2,
+        own_panels: 0,
+        unit_price_tiyin: 42_500_000,
+        line_total_tiyin: 85_000_000,
+      },
+      {
+        material_id: 'panel-c',
+        material_name: 'MDF Oq · 2800×2070×16 mm',
+        panels_used: 5,
+        own_panels: 0,
+        unit_price_tiyin: 20_000_000,
+        line_total_tiyin: 100_000_000,
+      },
+    ],
+    edge_lines: [],
+  }
+
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  it('inflects the headline, the multiplication and the service line', async () => {
+    setActivePinia(createPinia())
+    await setLocale('ru')
+    const wrapper = mountSection({ quote: RU_QUOTE as never })
+    await flushPromises()
+
+    const text = wrapper.text().replace(/ /g, ' ')
+    // Material headlines: «— N лист/листа/листов».
+    expect(text).toContain('— 1 лист')
+    expect(text).toContain('— 2 листа')
+    expect(text).toContain('— 5 листов')
+    // The multiplication under each of them carries the same agreement.
+    expect(text).toContain('1 лист × 300 000')
+    expect(text).toContain('2 листа × 425 000')
+    expect(text).toContain('5 листов × 200 000')
+    // And the cutting service, which counts the whole layout.
+    expect(text).toContain('8 листов × 30 000')
+    // The first form must not leak onto a count that is not «one».
+    expect(text).not.toContain('2 лист ')
+    expect(text).not.toContain('5 лист ')
+  })
+
+  it('leaves Uzbek on its single form at every count', async () => {
+    setActivePinia(createPinia())
+    await setLocale('uz')
+    const wrapper = mountSection({ quote: RU_QUOTE as never })
+    await flushPromises()
+
+    const text = wrapper.text().replace(/ /g, ' ')
+    expect(text).toContain('— 1 list')
+    expect(text).toContain('— 2 list')
+    expect(text).toContain('— 5 list')
+    expect(text).toContain('8 list × 30 000')
+  })
+
+  // uz-Cyrl is derived from uz, so it must show the same one form — Cyrillic
+  // script, not Russian grammar.
+  it('gives uz-Cyrl the same single transliterated form', async () => {
+    setActivePinia(createPinia())
+    await setLocale('uz-Cyrl')
+    const wrapper = mountSection({ quote: RU_QUOTE as never })
+    await flushPromises()
+
+    const text = wrapper.text().replace(/ /g, ' ')
+    expect(text).toContain('— 1 лист')
+    expect(text).toContain('— 2 лист')
+    expect(text).toContain('— 5 лист')
+    expect(text).not.toContain('листа')
+    expect(text).not.toContain('листов')
   })
 })

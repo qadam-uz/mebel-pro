@@ -155,7 +155,7 @@ const rotationAllowed = computed(() => props.part?.follow_grain === false)
             @input="emit('update:quantity', toNumber(($event.target as HTMLInputElement).value))"
           />
           <span class="mt-1 block text-center text-[12.5px] text-ink-muted">
-            {{ $t('cutting.unit.piece') }}
+            {{ $t('cutting.unit.piece', part.quantity) }}
           </span>
         </label>
       </div>
