@@ -352,6 +352,16 @@ off-scale values.
   adjustment takes a **signed quantity with a required leading + or −** ("-2" decreases,
   "+5" increases; inputmode stays text so mobile keyboards carry the signs). Structural
   validation stays with the submit-path parsers.
+- **Saved images** — every stored image is drawn by `AuthFileImage`, which fetches it
+  authenticated and asks the API for a **rendition**, not the file: `sm` (160 px) for
+  anything in a table, list, grid, row or swatch — the default, so a list gets it by saying
+  nothing — `md` (640 px) for an upload preview or a printed sheet, and the `original` only
+  where the whole picture is the point. A lightbox opens on the `sm` its row already drew
+  (in the browser cache, so it paints in the same frame) and upgrades to the original behind
+  it via `upgrade-to`. The rule matters because breaking it is invisible locally: an
+  operator's decor photo is 2160 px and 1.5 MB, a catalog page holds fifty, and the swatch is
+  34 px. `imageRenditions.spec.ts` pins the inventory of every call site that asks for
+  anything larger than `sm`.
 - **Image upload** — the shared preview primitive: framed preview, native file input
   triggered by labelled buttons, upload/error state in the field, a remove action when an
   image is set.
