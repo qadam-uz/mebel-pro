@@ -22,6 +22,7 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import {
   formatDate,
   formatDateTime,
+  formatOrderNumber,
   formatQuantityInput,
   formatStockQuantity,
   formatStockUnit,
@@ -624,7 +625,7 @@ watch(branchMaterialId, load, { immediate: true })
                       :to="rolePath(`/workshop/orders/${row.order_id}`)"
                       class="nm no-underline hover:underline"
                     >
-                      {{ row.order_number ?? row.order_id.slice(0, 8) }}
+                      {{ formatOrderNumber(row.order_number) || row.order_id.slice(0, 8) }}
                     </RouterLink>
                     <span v-else class="muted">—</span>
                   </td>

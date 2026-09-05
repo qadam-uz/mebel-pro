@@ -93,11 +93,8 @@
     "clientSubtitle": "Buyurtma o'zgarishlari va ustaxonadan xabarlar.",
     "readFilterLabel": "Holat",
     "clientFilterAll": "Hammasi",
-    "clientFilterAllMeta": "barcha xabarlar",
     "clientFilterUnread": "O'qilmagan",
-    "clientFilterUnreadMeta": "hali ochilmagan",
     "clientFilterRead": "O'qilgan",
-    "clientFilterReadMeta": "ko'rilgan xabarlar",
     "emptyUnreadBody": "O'qilmagan bildirishnoma yo'q — hammasini ko'rib chiqdingiz.",
     "emptyReadBody": "O'qilgan bildirishnoma yo'q.",
     "emptyClientBody": "Hozircha bildirishnoma yo'q — buyurtma holati o'zgarsa shu yerda ko'rinadi."

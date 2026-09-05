@@ -228,6 +228,29 @@ describe('role route matrix', () => {
     }
   })
 
+  // Spec §2: the focused flows own their whole viewport — no header and, on the
+  // client, no bottom tab bar. They stay behind the auth guard, which is why
+  // this is `meta.chromeless` and not `layout: 'auth'`.
+  it('marks the client editor, result stage and confirmation chromeless', () => {
+    const chromeless = clientRoutes
+      .filter((route) => route.meta?.chromeless === true)
+      .map((route) => route.path)
+
+    expect(chromeless).toEqual([
+      '/c/orders/new/:draft_id',
+      '/c/cutting/new',
+      '/c/cutting/:id',
+      '/c/cutting/:id/result',
+    ])
+    // Chromeless is not a way around the auth guard.
+    for (const route of clientRoutes.filter((r) => r.meta?.chromeless === true)) {
+      expect(route.meta?.public).toBeUndefined()
+      expect(route.meta?.layout).toBeUndefined()
+    }
+    // Every ordinary client page keeps the shell.
+    expect(clientRoutes.find((route) => route.path === '/c')?.meta?.chromeless).toBeUndefined()
+  })
+
   it('renders the client-link sheets without the shell', () => {
     const printRoutes = workshopRoutes.filter((route) => route.path.endsWith('/client-link'))
 
@@ -265,6 +288,11 @@ describe('role route matrix', () => {
       '/c/cutting/:id',
       '/c/cutting/:id/result',
       '/c/branches',
+      // A related workshop's own profile and its branch price list (spec §6) —
+      // reachable only for workshops `/client/my-workshops` returns, which is
+      // what keeps "no cross-workshop storefront" true.
+      '/c/workshops/:workshopId',
+      '/c/workshops/:workshopId/catalog',
       '/c/notifications',
       '/:pathMatch(.*)*',
     ])
@@ -549,6 +577,58 @@ describe('role route matrix', () => {
       const normalized = normalizeRoleRoutes(workshopRoutes, '/workshop', '/')
       const guard = normalized.find((r) => r.path === '/workshop/orders/new/cutting')?.beforeEnter
       expect(await runGuard(guard)).toEqual({ path: '/workshop/orders/new' })
+    })
+
+    // Spec §2.2: a drawing only ever starts from a workshop, and the editor has
+    // no branch state of its own — so a pin-less `/c/cutting/new` is answered by
+    // Ustaxonalarim before any editor screen renders.
+    describe('the client editor needs a pinned branch', () => {
+      async function newDraftGuard(me: Partial<MeResponse> | null, base = '/') {
+        setActivePinia(createPinia())
+        const { useAuthStore } = await import('@/shared/stores/auth')
+        useAuthStore().me = me as MeResponse | null
+        const normalized = normalizeRoleRoutes(clientRoutes, '/client', base)
+        return await runGuard(normalized.find((r) => r.path === '/c/cutting/new')?.beforeEnter)
+      }
+
+      it('redirects an un-pinned client to Ustaxonalarim', async () => {
+        expect(await newDraftGuard({ pinned_workshop_name: null })).toBe('/c/branches')
+      })
+
+      // The resolved NAME is the signal, not `preferred_branch_id`: a blocked
+      // workshop keeps the stored id and resolves to no names, and such a client
+      // must read as un-pinned here exactly as home reads them.
+      it('redirects when the pinned workshop resolves to no name', async () => {
+        expect(
+          await newDraftGuard({
+            preferred_branch_id: 'branch-1',
+            pinned_workshop_name: null,
+          }),
+        ).toBe('/c/branches')
+      })
+
+      it('lets a pinned client through', async () => {
+        expect(
+          await newDraftGuard({
+            preferred_branch_id: 'branch-1',
+            pinned_workshop_name: 'Mebel Master',
+          }),
+        ).toBe(true)
+      })
+
+      // No principal in hand yet: the editor decides, rather than the guard
+      // bouncing a client who may well be pinned.
+      it('lets the editor decide when there is no principal', async () => {
+        expect(await newDraftGuard(null)).toBe(true)
+      })
+
+      // The client's own paths carry no `/client` prefix — the dev mount lives
+      // in the history base — so the target is already base-free and survives
+      // the dev mount unchanged. Pinned here because the workshop guards beside
+      // it do need the stripping, and the difference is easy to "fix" wrongly.
+      it('leaves its target alone under the dev mount', async () => {
+        expect(await newDraftGuard({ pinned_workshop_name: null }, '/client/')).toBe('/c/branches')
+      })
     })
 
     it('normalizes every guard in an array and passes non-redirect verdicts through', async () => {

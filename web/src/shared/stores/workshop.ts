@@ -88,9 +88,10 @@ export interface ManagedBranch {
   // Read-only, carried on every branch read so the branch screen can print
   // `/w/{code}/{branch_no}` without a second request.
   workshop_public_code: string
-  // Platform-wide branch number, assigned at creation and immutable — it is the
-  // middle segment of every order number the branch prints, `#26-1-0003`
-  // (QAD-146). Read-only: it is never sent back in a create or patch payload.
+  // Platform-wide branch number, assigned at creation and immutable — the last
+  // segment of the branch's own QR link, `/w/{code}/{branch_no}` (QAD-146).
+  // Read-only: it is never sent back in a create or patch payload. Order
+  // numbers do not carry it (sales.md — six random platform-wide digits).
   branch_no: number
   name: string
   address: string
@@ -255,7 +256,7 @@ export interface StockTransaction {
   unit_price_tiyin: number | null
   total_price_tiyin: number | null
   order_id: string | null
-  // The order's own `#26-1-0003` number — a consume/restore row's context has to
+  // The order's own number — a consume/restore row's context has to
   // be a document the reader recognises, not an id prefix.
   order_number: string | null
   supplier_id: string | null

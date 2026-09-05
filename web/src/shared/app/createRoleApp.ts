@@ -271,7 +271,10 @@ export async function mountRoleApp(
   const router = createRouter({
     history: createWebHistory(historyBase),
     routes: normalizeRoleRoutes(routes, localBase, historyBase),
-    scrollBehavior: () => ({ top: 0 }),
+    // A push starts at the top; `history.back()` returns to where the list was
+    // left (spec §2). Without the saved position, backing out of an order
+    // detail dropped the client at the top of a long list every time.
+    scrollBehavior: (_to, _from, savedPosition) => savedPosition ?? { top: 0 },
   })
   const auth = useAuthStore(pinia)
 

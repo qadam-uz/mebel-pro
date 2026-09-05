@@ -18,7 +18,8 @@
     "materials": "{n} материал | {n} материала | {n} материалов",
     "panels": "{n} лист | {n} листа | {n} листов",
     "drafts": "{n} раскрой | {n} раскроя | {n} раскроев",
-    "count": "{n} шт."
+    "count": "{n} шт.",
+    "sheets": "{n} лист"
   },
   "draft": {
     "untitled": "Раскрой без названия"
@@ -76,7 +77,14 @@
     "allDrafts": "Все раскрои",
     "emptyDraftsTitle": "Сохранённых раскроев нет",
     "emptyDraftsBody": "Начните новый.",
-    "moreDrafts": "Ещё {n} сохранённый раскрой | Ещё {n} сохранённых раскроя | Ещё {n} сохранённых раскроев"
+    "moreDrafts": "Ещё {n} сохранённый раскрой | Ещё {n} сохранённых раскроя | Ещё {n} сохранённых раскроев",
+    "yourWorkshop": "Ваша мастерская",
+    "newDrawing": "Новый раскрой",
+    "pickWorkshopTitle": "Выберите свою мастерскую",
+    "pickWorkshopBody": "Подключитесь по ссылке или QR-коду мастерской либо выберите из списка.",
+    "pickWorkshop": "Выбрать мастерскую",
+    "continueDrafts": "Продолжить",
+    "allDraftsCount": "Все раскрои ({n})"
   },
   "orders": {
     "title": "Мои заказы",
@@ -98,7 +106,19 @@
     "loadMore": "Показать ещё",
     "cancelTitle": "Отменить заказ",
     "cancelMessage": "Заказ будет отменён. Действие необратимо.",
-    "cancelReasonDefault": "Клиент отменил заказ до подтверждения"
+    "cancelReasonDefault": "Клиент отменил заказ до подтверждения",
+    "filter": {
+      "label": "Фильтр по статусу",
+      "all": "Все",
+      "active": "Активные",
+      "ready": "Готовые",
+      "completed": "Завершённые",
+      "cancelled": "Отменённые"
+    },
+    "searchToggle": "Открыть поиск",
+    "searchClose": "Закрыть поиск",
+    "emptyFilteredTitle": "По этому фильтру заказов нет",
+    "emptyFilteredHint": "Выберите другой статус или сбросьте фильтры."
   },
   "orderDetail": {
     "back": "Заказы",
@@ -145,7 +165,9 @@
     "paymentNote": "Оплата принимается в мастерской. При расхождении по оплате обратитесь в мастерскую.",
     "paymentLockedTitle": "Данные об оплате пока закрыты",
     "paymentLockedBody": "Данные об оплате откроются, когда заказ будет готов.",
-    "history": "История статусов"
+    "history": "История статусов",
+    "workshopTitle": "Мастерская",
+    "priceNote": "Оплата принимается в мастерской; цена зафиксирована при оформлении заказа."
   },
   "orderNew": {
     "back": "Вернуться к результату",
@@ -188,7 +210,6 @@
     "nameHint": "Взято из вашего имени в Telegram — можно изменить",
     "editName": "Изменить имя",
     "phoneHint": "Используется для входа · изменить нельзя",
-    "orderCount": "Количество заказов",
     "updated": "Профиль обновлён.",
     "sessions": "Активные сессии",
     "logoutEverywhere": "Выйти везде",
@@ -198,7 +219,9 @@
     "logoutMessage": "Вы выйдете из кабинета клиента.",
     "logoutConfirm": "Выйти",
     "logoutEverywhereTitle": "Выйти на всех устройствах",
-    "logoutEverywhereMessage": "Вы выйдете со всех устройств."
+    "logoutEverywhereMessage": "Вы выйдете со всех устройств.",
+    "language": "Язык",
+    "notifications": "Уведомления"
   },
   "login": {
     "expired": "Сессия истекла. Войдите снова, чтобы продолжить.",
@@ -245,7 +268,7 @@
     "orderReady": "Заказ готов",
     "orderCancelled": "Заказ отменён",
     "orderCompleted": "Заказ выдан",
-    "orderNumber": "Заказ № {number}",
+    "orderNumber": "Заказ {number}",
     "material": "Материал: {name}"
   },
   "error": {
@@ -278,7 +301,8 @@
     "login_token_rate_limited": "Слишком много попыток. Повторите через {seconds} с.",
     "login_code_rate_limited": "Слишком много попыток. Повторите через {seconds} с.",
     "login_token_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин.",
-    "login_code_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин."
+    "login_code_rate_limited_minutes": "Слишком много попыток. Повторите через {minutes} мин.",
+    "client_catalog_load_failed": "Не удалось загрузить каталог."
   },
   "entry": {
     "greeting": "{workshop} приглашает вас",
@@ -291,7 +315,8 @@
     "busyTitle": "Ссылка сейчас не открылась",
     "busyBody": "Слишком много запросов. Повторите через несколько секунд.",
     "openApp": "Открыть приложение",
-    "applyFailed": "Не удалось подключиться к мастерской. Отсканируйте QR-код заново."
+    "applyFailed": "Не удалось подключиться к мастерской. Отсканируйте QR-код заново.",
+    "branchCount": "{n} филиала · {names}"
   },
   "workshops": {
     "title": "Мои мастерские",
@@ -305,5 +330,34 @@
     "loadFailed": "Не удалось загрузить мастерские",
     "emptyTitle": "Мастерская ещё не подключена",
     "emptyBody": "Войдите по ссылке или QR-коду вашей мастерской — каталог и цены будут её."
+  },
+  "workshop": {
+    "branches": "Филиалы",
+    "catalog": "Каталог",
+    "newDrawing": "Новый раскрой",
+    "viewOnMap": "Посмотреть на карте",
+    "primary": "Основной",
+    "makePrimary": "Сделать основным",
+    "madePrimaryToast": "{name} сделан основным",
+    "notFoundTitle": "Мастерская не найдена",
+    "notFoundBody": "Эта мастерская к вам не подключена. Войдите по ссылке или QR-коду."
+  },
+  "catalog": {
+    "searchLabel": "Поиск материала",
+    "searchPlaceholder": "Название или код материала",
+    "clearSearch": "Очистить поиск",
+    "typeFilter": "Тип материала",
+    "imageTitle": "{material}",
+    "formatCount": "{n} формата",
+    "grain": "С текстурой",
+    "perSheet": "/ лист",
+    "perMetre": "/ м",
+    "priceScope": "Прайс {workshop} · {branch}. Цены действуют в этом филиале.",
+    "loadFailed": "Не удалось загрузить каталог",
+    "emptySearch": "Ничего не найдено",
+    "emptySearchBody": "Попробуйте другое название или код.",
+    "emptyBranch": "Этот филиал ещё не завёл каталог",
+    "emptyBranchBody": "Выберите другой филиал или свяжитесь с мастерской.",
+    "priceOnRequest": "Цена по запросу"
   }
 }

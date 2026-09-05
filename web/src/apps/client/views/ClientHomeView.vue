@@ -6,95 +6,118 @@ import { RouterLink, useRouter } from 'vue-router'
 import {
   activeClientStatuses,
   clientGreetingName,
-  draftDisplayName,
-  clientHomeSubtitle,
-  clientNextPhaseLabel,
-  clientPhaseIndex,
-  clientPhaseProgress,
   clientStatusLabel,
   clientStatusPillClass,
+  draftDisplayName,
+  formatPhone,
   formatRelativeDate,
+  isClientPinned,
+  workshopBranchName,
 } from '@/shared/app/clientUi'
 import { takeEntryToast } from '@/shared/app/clientEntry'
 import { useRolePath } from '@/shared/app/paths'
 import Icon from '@/shared/components/AppIcon.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatTiyin } from '@/shared/formatters'
+import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
+/**
+ * Home — "what needs attention now" (spec §3).
+ *
+ * Greeting, the **Ustaxonangiz** card with the page's one primary action under
+ * it, the ready banner, at most four active orders and at most three drafts.
+ * The count strip and the per-order progress bars are gone: the counts
+ * overlapped (Tayyorlanmoqda ⊂ Faol) and were not tappable, and a bar with only
+ * four positions said less than the status pill beside it.
+ */
 const { t } = useI18n()
 const router = useRouter()
 const rolePath = useRolePath()
 const auth = useAuthStore()
 const cutting = useCuttingStore()
+const entry = useClientEntryStore()
 const orders = useOrdersStore()
 const toast = useToast()
+
+const ACTIVE_ORDER_LIMIT = 4
+const RECENT_DRAFT_LIMIT = 3
 
 const activeOrders = computed(() =>
   orders.clientOrders.filter((order) => activeClientStatuses.includes(order.status)),
 )
+const visibleActiveOrders = computed(() => activeOrders.value.slice(0, ACTIVE_ORDER_LIMIT))
 const readyOrders = computed(() => activeOrders.value.filter((order) => order.status === 'ready'))
 const primaryReady = computed(() => readyOrders.value[0] ?? null)
-// The count strip's second tile is the client track's phase-2 bucket, not the
-// workshop's saw queue: `confirmed`, `cutting` and `edge_banding` are one client
-// phase, so an approved order counts here the moment it is approved (orders.md).
-const productionCount = computed(
-  () => activeOrders.value.filter((order) => clientPhaseIndex(order.status) === 1).length,
-)
-const RECENT_DRAFT_LIMIT = 4
 
 const recentDrafts = computed(() =>
   [...cutting.drafts]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, RECENT_DRAFT_LIMIT),
 )
-// The home list is capped at RECENT_DRAFT_LIMIT; without a trailing marker the
-// list's end reads as "that's all I have". Count what the cap hides.
-const hiddenDraftCount = computed(() =>
-  Math.max(0, cutting.drafts.length - recentDrafts.value.length),
-)
 
 const greetName = computed(() => clientGreetingName(auth.me))
 const heading = computed(() =>
   greetName.value ? t('client.home.greeting', { name: greetName.value }) : t('client.home.title'),
 )
-const subtitle = computed(() =>
-  clientHomeSubtitle({
-    ready: readyOrders.value.length,
-    active: activeOrders.value.length,
-    drafts: cutting.drafts.length,
-  }),
-)
-// The pinned context joins the counts line rather than replacing it (owner
-// decision 2026-09-02, spec §3.4): where the app is scoped and what is waiting
-// answer two different questions, and the counts line was the one the client
-// came for. An un-pinned client's header is unchanged. Both names come from
-// `/auth/me`, so the line follows a re-pin without a second request.
-const pinnedContext = computed(() => {
-  const me = auth.me
-  if (!me?.pinned_workshop_name) return null
-  return me.pinned_branch_name
-    ? `${me.pinned_workshop_name} · ${me.pinned_branch_name}`
-    : me.pinned_workshop_name
+
+const isPinned = computed(() => isClientPinned(auth.me))
+
+/**
+ * The pinned branch, resolved against Ustaxonalarim.
+ *
+ * `/auth/me` carries the two *names*, which is enough to title the card; the
+ * address, the phone and the workshop id — the card links to that workshop's
+ * profile — come from `my-workshops`, which the shell has already loaded. Until
+ * it lands the card renders from the names alone rather than holding the page.
+ */
+const pinnedBranch = computed(() => {
+  for (const workshop of entry.workshops) {
+    const branch = workshop.branches.find((item) => item.is_pinned)
+    if (branch) return { workshop, branch }
+  }
+  return null
 })
-// Nothing active and nothing saved → a single focused start state instead of a wall of zeros.
-const isFirstRun = computed(() => activeOrders.value.length === 0 && cutting.drafts.length === 0)
+
+/** Decision 16: one branch → the workshop name alone; several → «W · B». */
+const workshopCardName = computed(() => {
+  const resolved = pinnedBranch.value
+  if (resolved) {
+    return workshopBranchName(
+      resolved.workshop.name,
+      resolved.branch.name,
+      resolved.workshop.branches.length,
+    )
+  }
+  return workshopBranchName(auth.me?.pinned_workshop_name, auth.me?.pinned_branch_name)
+})
+const workshopInitial = computed(() =>
+  (workshopCardName.value.trim().slice(0, 1) || 'M').toUpperCase(),
+)
+const workshopProfileTo = computed(() => {
+  const id = pinnedBranch.value?.workshop.workshop_id
+  return rolePath(id ? `/c/workshops/${id}` : '/c/branches')
+})
+/** A pill beside a workshop name reads as an order status, so only a closed
+ *  branch earns one (§3 item 5). */
+const branchClosed = computed(() => pinnedBranch.value?.branch.status === 'temporarily_closed')
 
 const pageLoading = computed(() => cutting.loading || orders.loading)
 const pageError = computed(() => cutting.error ?? orders.error)
 const traceId = computed(() => cutting.traceId ?? orders.traceId)
+/** Pinned, nothing in flight and nothing saved — the start prompt (§3 item 6). */
+const isFirstRun = computed(
+  () => isPinned.value && activeOrders.value.length === 0 && cutting.drafts.length === 0,
+)
 
 function newCutting() {
-  // Open the editor unsaved — the draft is created on the first optimise
+  // Opened unsaved — the draft is created on the first optimise
   // (docs/ref/features/cutting.md). Nothing is persisted here.
   void router.push(rolePath('/c/cutting/new'))
-}
-
-function openOrder(id: string) {
-  void router.push(rolePath(`/c/orders/${id}`))
 }
 
 // Always the parts editor, never straight to the result — same rule as the
@@ -104,7 +127,9 @@ function openDraft(draft: CuttingDraft) {
 }
 
 async function reloadHome() {
-  await Promise.all([orders.loadClientOrders(), cutting.loadDrafts()])
+  // The card's address, phone and workshop id come from Ustaxonalarim; the
+  // shell primes it, and asking again here costs nothing when it is in hand.
+  await Promise.all([orders.loadClientOrders(), cutting.loadDrafts(), entry.ensureMyWorkshops()])
 }
 
 function chosenResult(draft: CuttingDraft) {
@@ -123,18 +148,26 @@ function draftPanels(draft: CuttingDraft) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
 }
 
+function draftMeta(draft: CuttingDraft) {
+  const parts = draftParts(draft)
+  const panels = draftPanels(draft)
+  return [
+    `${parts} ${t('client.unit.part')}`,
+    `${panels || '—'} ${t('client.unit.sheet')}`,
+    formatRelativeDate(draft.updated_at),
+  ].join(' · ')
+}
+
 const draftTitle = draftDisplayName
 
-function currentAction(order: OrderSummary) {
-  if (order.status === 'new') return t('client.common.detail')
-  if (order.status === 'ready') return t('client.common.pickUp')
-  return t('client.common.track')
+function orderAriaLabel(order: OrderSummary) {
+  return `${formatOrderNumber(order.order_number)} — ${clientStatusLabel(order.status)}`
 }
 
 onMounted(() => {
   // One-time: the connected line names the workshop the client just entered.
   // Parked by the entry apply and read-and-cleared here, so a plain home load
-  // never repeats it and a re-scan truthfully shows it again (spec §3.4/§8).
+  // never repeats it and a re-scan truthfully shows it again (spec §2.2/§8).
   const connectedTo = takeEntryToast()
   if (connectedTo) toast.success(t('client.entry.connected', { workshop: connectedTo }))
   void reloadHome()
@@ -143,53 +176,149 @@ onMounted(() => {
 
 <template>
   <section>
-    <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="font-display text-[26px] font-semibold leading-tight text-ink">{{ heading }}</h1>
-        <!-- Pinned: the workshop · branch the app is scoped to, linking to
-             Ustaxonalarim. It sits above the loading/error gate because it is
-             read off the principal, not off this page's two lists — and above
-             the counts line, which keeps its place beneath rather than being
-             replaced by it. -->
-        <RouterLink
-          v-if="pinnedContext"
-          :to="rolePath('/c/branches')"
-          class="mt-1 inline-block text-sm font-semibold text-accent-deep"
-        >
-          {{ pinnedContext }}
-        </RouterLink>
-        <p v-if="!pageLoading && !pageError && !isFirstRun" class="mt-1 text-sm text-ink-soft">
-          {{ subtitle }}
-        </p>
-      </div>
-      <!-- First-run shows a centred CTA in the empty state, so the header button
-           would be redundant; it appears only once the dashboard has content and
-           there's no other persistent "new draft" affordance. -->
-      <button
-        v-if="!isFirstRun"
-        type="button"
-        class="mp-button mp-button-primary"
-        @click="newCutting"
-      >
-        <Icon name="plus" class="size-[18px]" /> {{ $t('client.home.newCutting') }}
-      </button>
-    </div>
+    <!-- The greeting alone: the pinned line under it read like a staff badge,
+         and the counts line beside it went with the count strip (§3 item 1). -->
+    <h1
+      class="mb-2.5 font-display text-[22px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink md:mb-4 md:text-[26px]"
+    >
+      {{ heading }}
+    </h1>
 
+    <!-- The card and its action are read off the principal, not off this page's
+         two lists, so they stay put while those load or fail. -->
+    <template v-if="isPinned">
+      <!-- The label is a card caption on phones and a section heading on
+           desktop — the same word in the shape each layout has room for. -->
+      <div class="client-section-title hidden md:flex">
+        <h2>{{ $t('client.home.yourWorkshop') }}</h2>
+      </div>
+      <RouterLink
+        :to="workshopProfileTo"
+        class="client-card client-card-link block p-3 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:p-3.5 md:p-5"
+      >
+        <div
+          class="text-[12.5px] font-bold leading-[1.2] tracking-[0.01em] text-ink-muted md:hidden"
+        >
+          {{ $t('client.home.yourWorkshop') }}
+        </div>
+        <div class="mt-2 flex items-center gap-3 md:mt-0 md:gap-4">
+          <AuthFileImage
+            v-if="pinnedBranch?.workshop.logo_file_id"
+            :file-id="pinnedBranch.workshop.logo_file_id"
+            :alt="workshopCardName"
+            size="sm"
+            class="size-11 shrink-0 rounded-[14px] border border-hairline object-contain md:size-14 md:rounded-2xl"
+          />
+          <span
+            v-else
+            class="grid size-11 shrink-0 place-items-center rounded-[14px] bg-accent-soft font-display text-lg font-bold text-accent-strong md:size-14 md:rounded-2xl md:text-[22px]"
+            aria-hidden="true"
+          >
+            {{ workshopInitial }}
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5 md:gap-[3px]">
+            <span class="flex min-w-0 flex-wrap items-center gap-2">
+              <span
+                class="min-w-0 truncate text-[15px] font-bold leading-[1.3] text-ink md:font-display md:text-[19px] md:tracking-[-0.02em]"
+              >
+                {{ workshopCardName }}
+              </span>
+              <span v-if="branchClosed" class="client-pill client-pill-info">
+                {{ $t('client.workshops.closed') }}
+              </span>
+            </span>
+            <span
+              v-if="pinnedBranch"
+              class="text-[12.5px] leading-[1.35] text-ink-muted md:text-sm md:leading-[1.45]"
+            >
+              {{ pinnedBranch.branch.address }}
+            </span>
+            <!-- Tap-to-call sits inside a card that is itself a link: the
+                 anchor wins the tap on its own 44px row, the card takes the
+                 rest. -->
+            <a
+              v-if="pinnedBranch"
+              class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2 md:min-h-9 md:text-sm"
+              :href="`tel:${pinnedBranch.branch.phone}`"
+              @click.stop
+            >
+              {{ formatPhone(pinnedBranch.branch.phone) }}
+            </a>
+          </span>
+          <Icon name="chevron-right" class="size-[18px] shrink-0 text-ink-muted md:size-5" />
+        </div>
+      </RouterLink>
+
+      <!-- Outside the card, because a card that is a link must not hold a
+           second tap target (UX review 2026-09-05). -->
+      <div class="mb-3 mt-2.5 md:mb-[22px] md:mt-3.5 md:flex md:justify-end">
+        <button
+          type="button"
+          class="mp-button mp-button-primary min-h-[46px] w-full md:min-h-11 md:w-auto"
+          @click="newCutting"
+        >
+          <Icon name="plus" class="size-[18px]" />
+          {{ $t('client.home.newDrawing') }}
+        </button>
+      </div>
+    </template>
+
+    <!-- Un-pinned: no card, and no «Yangi chizma» anywhere on the page — a
+         drawing needs a branch, so the one action opens Ustaxonalarim (§2.2). -->
+    <template v-else>
+      <div class="client-card flex items-start gap-3 p-3.5 md:p-5">
+        <span
+          class="grid size-10 shrink-0 place-items-center rounded-[10px] bg-sunk text-ink-muted"
+          aria-hidden="true"
+        >
+          <Icon name="store" class="size-5" />
+        </span>
+        <span class="min-w-0 flex-1">
+          <b class="block text-sm font-bold leading-[1.35] text-ink md:text-base">
+            {{ $t('client.home.pickWorkshopTitle') }}
+          </b>
+          <span class="mt-[3px] block text-[12.5px] leading-[1.45] text-ink-muted md:text-sm">
+            {{ $t('client.home.pickWorkshopBody') }}
+          </span>
+        </span>
+      </div>
+      <div class="mb-4 mt-3 md:mb-[22px] md:flex md:justify-end">
+        <RouterLink
+          :to="rolePath('/c/branches')"
+          class="mp-button mp-button-primary min-h-[46px] w-full md:min-h-11 md:w-auto"
+        >
+          <Icon name="store" class="size-[17px]" />
+          {{ $t('client.home.pickWorkshop') }}
+        </RouterLink>
+      </div>
+    </template>
+
+    <!-- Loading and error cover the two lists only; the card above is already
+         on screen and must not blink. -->
     <div
-      v-if="pageLoading"
-      class="grid grid-cols-3 gap-px overflow-hidden rounded-[14px] bg-hairline"
+      v-if="pageLoading && orders.clientOrders.length === 0"
+      class="grid gap-3"
       aria-live="polite"
     >
       <span class="sr-only">{{ $t('client.common.loading') }}</span>
-      <div
-        v-for="item in 3"
-        :key="item"
-        class="flex items-center gap-2.5 bg-elevated p-3 sm:gap-3 sm:p-4"
-      >
-        <div class="client-skeleton size-10 shrink-0"></div>
-        <div class="min-w-0 flex-1">
-          <div class="client-skeleton h-5 w-8"></div>
-          <div class="client-skeleton mt-2 h-3 w-full max-w-20"></div>
+      <div class="flex items-center justify-between gap-3 border-b border-divider pb-2">
+        <div class="client-skeleton h-[18px] w-[132px]"></div>
+        <div class="client-skeleton h-[13px] w-16"></div>
+      </div>
+      <div class="client-card px-3.5">
+        <div
+          v-for="item in 3"
+          :key="item"
+          class="flex items-center justify-between gap-3 border-b border-divider py-3 last:border-b-0"
+        >
+          <div class="min-w-0 flex-1">
+            <div class="client-skeleton h-3.5 w-24"></div>
+            <div class="client-skeleton mt-1.5 h-3 w-32"></div>
+          </div>
+          <div class="shrink-0 text-right">
+            <div class="client-skeleton ml-auto h-[19px] w-[88px] rounded-full"></div>
+            <div class="client-skeleton ml-auto mt-1.5 h-3 w-[72px]"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -201,278 +330,159 @@ onMounted(() => {
       @retry="reloadHome"
     />
 
-    <div v-else-if="isFirstRun" class="client-empty">
-      <div class="client-empty-icon"><Icon name="scissors" /></div>
-      <h3>{{ $t('client.home.firstRunTitle') }}</h3>
-      <p>{{ $t('client.home.firstRunBody') }}</p>
-      <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-        {{ $t('client.common.newDraft') }}
-      </button>
-    </div>
-
     <template v-else>
-      <div
+      <!-- Information, not an action: «Olib ketdi» is the workshop's mark at
+           the counter, so the whole banner is simply a link to the order. -->
+      <RouterLink
         v-if="primaryReady"
-        class="mb-5 flex flex-col gap-4 rounded-[14px] border border-accent-tint bg-accent-soft p-5 sm:flex-row sm:items-center sm:gap-5"
+        :to="rolePath(`/c/orders/${primaryReady.id}`)"
+        class="mb-3 block rounded-[14px] border border-accent-tint bg-accent-soft p-3 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 md:mb-[22px] md:p-5"
       >
-        <span
-          class="grid size-12 shrink-0 place-items-center rounded-[14px] border border-accent-tint bg-elevated text-accent"
-        >
-          <Icon name="check" />
-        </span>
-        <div class="min-w-0 flex-1">
-          <div class="text-[12.5px] font-semibold text-accent-strong">
-            {{ $t('client.home.readyTitle') }}
-          </div>
-          <div class="mt-0.5 text-lg font-bold text-ink">
-            {{ primaryReady.order_number }}
-          </div>
-          <div class="mt-0.5 text-sm text-ink-muted">
-            {{ primaryReady.branch_name }}
-            <template v-if="readyOrders.length > 1">
-              · {{ $t('client.home.readyMore', readyOrders.length - 1) }}</template
+        <span class="flex items-center gap-3 md:gap-5">
+          <span
+            class="grid size-[38px] shrink-0 place-items-center rounded-[11px] border border-accent-tint bg-elevated text-accent md:size-12 md:rounded-[14px]"
+            aria-hidden="true"
+          >
+            <Icon name="check" class="size-5 md:size-6" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span
+              class="block text-[12.5px] font-bold leading-[1.2] text-accent-strong md:font-semibold"
             >
+              {{ $t('client.home.readyTitle') }}
+            </span>
+            <span class="mt-0.5 block text-base font-bold leading-[1.25] text-ink md:text-lg">
+              {{ formatOrderNumber(primaryReady.order_number) }}
+            </span>
+            <span class="mt-0.5 hidden text-sm text-ink-muted md:block">
+              {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+              <template v-if="readyOrders.length > 1">
+                · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
+              </template>
+            </span>
+          </span>
+          <span class="hidden self-stretch border-l border-accent-tint md:block"></span>
+          <span class="shrink-0 text-right">
+            <span class="block text-[12.5px] font-bold leading-[1.2] text-ink-muted">
+              {{ $t('client.home.totalPrice') }}
+            </span>
+            <span class="mt-0.5 block text-[15px] font-bold leading-[1.25] text-ink md:text-base">
+              {{ formatTiyin(primaryReady.total_tiyin) }}
+            </span>
+          </span>
+          <Icon name="chevron-right" class="size-[18px] shrink-0 text-accent-strong md:size-5" />
+        </span>
+        <span class="mt-2 block truncate text-[12.5px] text-ink-muted md:hidden">
+          {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+          <template v-if="readyOrders.length > 1">
+            · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
+          </template>
+        </span>
+      </RouterLink>
+
+      <!-- Side by side on desktop, stacked on phones. An empty section is
+           omitted rather than filled with a zero state: the card and its action
+           above already carry the page. -->
+      <div class="md:grid md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:items-start md:gap-6">
+        <section v-if="visibleActiveOrders.length > 0" class="mb-5 md:mb-0">
+          <div class="client-section-title">
+            <h2>{{ $t('client.home.activeOrders') }}</h2>
+            <RouterLink
+              :to="rolePath('/c/orders?status=active')"
+              class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
+            >
+              {{ $t('client.common.viewAll') }} →
+            </RouterLink>
           </div>
-        </div>
-        <div class="hidden self-stretch border-l border-accent-tint sm:block"></div>
-        <div class="sm:text-right">
-          <div class="text-[11px] font-bold text-ink-muted">
-            {{ $t('client.home.totalPrice') }}
-          </div>
-          <div class="mt-0.5 text-base font-bold text-ink">
-            {{ formatTiyin(primaryReady.total_tiyin) }}
-          </div>
-        </div>
-        <button
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openOrder(primaryReady.id)"
-        >
-          <Icon name="box" class="size-[18px]" /> {{ $t('client.common.pickUp') }}
-        </button>
-      </div>
 
-      <div
-        class="mb-6 grid grid-cols-3 overflow-hidden rounded-[14px] border border-hairline bg-elevated shadow-[0_1px_2px_color-mix(in_srgb,var(--color-ink)_4%,transparent)]"
-      >
-        <RouterLink
-          :to="rolePath('/c/orders')"
-          class="flex items-center gap-2.5 border-r border-hairline p-3 no-underline sm:gap-3 sm:p-4"
-        >
-          <span
-            class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
-          >
-            <Icon name="box" />
-          </span>
-          <span>
-            <span class="block text-[22px] font-bold leading-none text-ink">{{
-              activeOrders.length
-            }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
-              $t('client.home.statActiveOrders')
-            }}</span>
-          </span>
-        </RouterLink>
-        <RouterLink
-          :to="rolePath('/c/orders')"
-          class="flex items-center gap-2.5 border-r border-hairline p-3 no-underline sm:gap-3 sm:p-4"
-        >
-          <span
-            class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
-          >
-            <Icon name="layers" />
-          </span>
-          <span>
-            <span class="block text-[22px] font-bold leading-none text-ink">{{
-              productionCount
-            }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
-              $t('client.home.statProduction')
-            }}</span>
-          </span>
-        </RouterLink>
-        <RouterLink
-          :to="rolePath('/c/cutting/drafts')"
-          class="flex items-center gap-2.5 p-3 no-underline sm:gap-3 sm:p-4"
-        >
-          <span
-            class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
-          >
-            <Icon name="scissors" />
-          </span>
-          <span>
-            <span class="block text-[22px] font-bold leading-none text-ink">{{
-              cutting.drafts.length
-            }}</span>
-            <span class="mt-1 block text-xs font-semibold text-ink-muted">{{
-              $t('client.home.statDrafts')
-            }}</span>
-          </span>
-        </RouterLink>
-      </div>
-
-      <section class="mb-6">
-        <div class="client-section-title">
-          <h2>{{ $t('client.home.activeOrders') }}</h2>
-          <RouterLink
-            :to="rolePath('/c/orders')"
-            class="text-sm font-bold text-ink-soft no-underline hover:text-ink"
-          >
-            {{ $t('client.common.viewAll') }} →
-          </RouterLink>
-        </div>
-
-        <div v-if="activeOrders.length === 0" class="client-empty">
-          <div class="client-empty-icon"><Icon name="box" /></div>
-          <h3>{{ $t('client.home.emptyOrdersTitle') }}</h3>
-          <p>{{ $t('client.home.emptyOrdersBody') }}</p>
-          <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            {{ $t('client.common.newDraft') }}
-          </button>
-        </div>
-
-        <div v-else class="grid gap-3">
-          <!-- "Ready for pickup" is marked with a signal RING, not a border:
-               `.client-card` is shadow-only, so a bare `border-signal` sets a
-               colour on a zero-width border and paints nothing. A ring is drawn
-               as a box-shadow, and the ring utility re-declares `box-shadow`
-               from the utilities layer — which would drop the card's own
-               `--shadow-card` — so the two shadow utilities come along to put the
-               elevation (and the hover lift) back. The status pill still carries
-               the word; the ring is emphasis, never the only signal. -->
-          <article
-            v-for="order in activeOrders"
-            :key="order.id"
-            class="client-card client-card-link grid cursor-pointer gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto] sm:items-center sm:gap-5"
-            :class="
-              order.status === 'ready' ? 'shadow-card ring-1 ring-signal hover:shadow-lifted' : ''
-            "
-            role="link"
-            tabindex="0"
-            :aria-label="`${order.order_number} — ${order.branch_name}`"
-            @click="openOrder(order.id)"
-            @keydown.enter="openOrder(order.id)"
-          >
-            <div class="min-w-0">
-              <div class="text-base font-bold text-ink">{{ order.order_number }}</div>
-              <div class="mt-1 text-sm text-ink-muted">
-                <b class="font-semibold text-ink">{{ order.branch_name }}</b> ·
-                {{ formatRelativeDate(order.created_at) }}
-              </div>
-            </div>
-
-            <div class="min-w-0">
-              <div class="h-1.5 overflow-hidden rounded-full bg-hairline">
-                <span
-                  class="block h-full rounded-full bg-accent"
-                  :style="{ width: `${clientPhaseProgress(order.status)}%` }"
-                ></span>
-              </div>
-              <div class="mt-1.5 text-xs text-ink-muted">
-                <template v-if="clientNextPhaseLabel(order.status)"
-                  >{{ $t('client.home.nextPhase') }}
-                  <b class="text-ink">{{ clientNextPhaseLabel(order.status) }}</b></template
-                >
-                <template v-else
-                  >{{ $t('client.home.currentPhase') }}
-                  <b class="text-ink">{{ clientStatusLabel(order.status) }}</b></template
-                >
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4">
-              <span :class="clientStatusPillClass(order.status)">
+          <div class="client-card">
+            <RouterLink
+              v-for="order in visibleActiveOrders"
+              :key="order.id"
+              :to="rolePath(`/c/orders/${order.id}`)"
+              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-divider px-3.5 py-[7px] no-underline last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:grid-cols-[130px_minmax(0,1fr)_auto_auto] md:gap-x-[18px] md:px-5 md:py-3.5"
+              :aria-label="orderAriaLabel(order)"
+            >
+              <!-- One row on desktop (number · name · pill · total); two on a
+                 phone, where 390px has no room for four columns. -->
+              <span class="row-start-1 text-sm font-bold leading-[1.35] text-ink md:text-[15px]">
+                {{ formatOrderNumber(order.order_number) }}
+              </span>
+              <span
+                :class="clientStatusPillClass(order.status)"
+                class="row-start-1 justify-self-end md:col-start-3"
+              >
                 {{ clientStatusLabel(order.status) }}
               </span>
-              <span class="text-sm font-bold text-ink">{{ formatTiyin(order.total_tiyin) }}</span>
-              <RouterLink
-                :to="rolePath(`/c/orders/${order.id}`)"
-                class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-                @click.stop
+              <span
+                class="row-start-2 min-w-0 truncate text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:text-sm"
               >
-                {{ currentAction(order) }}
-              </RouterLink>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section>
-        <div class="client-section-title">
-          <h2>{{ $t('client.home.drafts') }}</h2>
-          <RouterLink
-            :to="rolePath('/c/cutting/drafts')"
-            class="text-sm font-bold text-ink-soft no-underline hover:text-ink"
-          >
-            {{ $t('client.home.allDrafts')
-            }}<template v-if="cutting.drafts.length"> ({{ cutting.drafts.length }})</template>
-            →
-          </RouterLink>
-        </div>
-
-        <div v-if="recentDrafts.length === 0" class="client-empty">
-          <div class="client-empty-icon"><Icon name="scissors" /></div>
-          <h3>{{ $t('client.home.emptyDraftsTitle') }}</h3>
-          <p>{{ $t('client.home.emptyDraftsBody') }}</p>
-          <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            {{ $t('client.common.newDraft') }}
-          </button>
-        </div>
-
-        <div v-else class="grid gap-3">
-          <article
-            v-for="draft in recentDrafts"
-            :key="draft.id"
-            class="client-card client-card-link flex cursor-pointer items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-            role="link"
-            tabindex="0"
-            :aria-label="draftTitle(draft)"
-            @click="openDraft(draft)"
-            @keydown.enter="openDraft(draft)"
-          >
-            <span
-              class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
-            >
-              <Icon name="scissors" />
-            </span>
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-bold text-ink">
-                {{ draftTitle(draft) }}
-              </div>
-              <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
-                <span
-                  ><b class="text-ink">{{ draftParts(draft) }}</b>
-                  {{ $t('client.unit.part', draftParts(draft)) }}</span
-                >
-                <span
-                  ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
-                  {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
-                >
-                <span>{{ formatRelativeDate(draft.updated_at) }}</span>
-              </div>
-            </div>
-            <RouterLink
-              :to="rolePath(`/c/cutting/${draft.id}`)"
-              class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
-              @click.stop
-            >
-              {{ $t('client.common.continue') }} →
+                {{ order.draft_name || '' }}
+              </span>
+              <span
+                class="row-start-2 justify-self-end whitespace-nowrap text-[13px] font-bold leading-[1.3] text-ink md:col-start-4 md:row-start-1 md:min-w-[112px] md:text-right md:text-[15px]"
+              >
+                {{ formatTiyin(order.total_tiyin) }}
+              </span>
             </RouterLink>
-            <span class="shrink-0 font-bold text-accent sm:hidden" aria-hidden="true">→</span>
-          </article>
+          </div>
+        </section>
 
-          <!-- Marks the cut, not the end of the data: a dashed row reads as a
-               continuation rather than another draft card. -->
-          <RouterLink
-            v-if="hiddenDraftCount > 0"
-            :to="rolePath('/c/cutting/drafts')"
-            class="flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-dashed border-hairline-strong p-3 text-sm font-bold text-ink-soft no-underline transition hover:border-accent hover:bg-sunk focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-          >
-            {{ $t('client.home.moreDrafts', hiddenDraftCount) }}
-            <span aria-hidden="true">→</span>
-          </RouterLink>
-        </div>
-      </section>
+        <section v-if="recentDrafts.length > 0">
+          <div class="client-section-title">
+            <h2>{{ $t('client.home.continueDrafts') }}</h2>
+            <RouterLink
+              :to="rolePath('/c/cutting/drafts')"
+              class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
+            >
+              {{ $t('client.home.allDraftsCount', { n: cutting.drafts.length }) }} →
+            </RouterLink>
+          </div>
+
+          <div class="client-card">
+            <button
+              v-for="draft in recentDrafts"
+              :key="draft.id"
+              type="button"
+              class="flex w-full items-center gap-3 border-b border-divider px-3.5 py-[7px] text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:px-5 md:py-3.5"
+              @click="openDraft(draft)"
+            >
+              <span
+                class="grid size-8 shrink-0 place-items-center rounded-[10px] bg-sunk text-ink-soft md:size-10 md:rounded-[11px]"
+                aria-hidden="true"
+              >
+                <Icon name="scissors" class="size-[17px] md:size-5" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span
+                  class="block truncate text-[13.5px] font-bold leading-[1.3] text-ink md:text-[15px] md:font-semibold"
+                >
+                  {{ draftTitle(draft) }}
+                </span>
+                <span
+                  class="block truncate text-[12.5px] leading-[1.3] text-ink-muted md:text-[13px]"
+                >
+                  {{ draftMeta(draft) }}
+                </span>
+              </span>
+              <span
+                class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-[12.5px] md:inline-flex"
+              >
+                {{ $t('client.common.continue') }} →
+              </span>
+              <Icon name="chevron-right" class="size-4 shrink-0 text-ink-muted md:hidden" />
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- First run: the card and its action are above, so the prompt carries
+           no second button (§3 item 6). -->
+      <div v-if="isFirstRun" class="client-empty">
+        <div class="client-empty-icon"><Icon name="scissors" /></div>
+        <h3>{{ $t('client.home.firstRunTitle') }}</h3>
+        <p>{{ $t('client.home.firstRunBody') }}</p>
+      </div>
     </template>
   </section>
 </template>

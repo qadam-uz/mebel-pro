@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import { branchScopeHint, branchScopeOf } from '@/shared/app/branchScope'
+import { formatOrderNumber } from '@/shared/formatters'
 import {
   persistStoredContext,
   readStoredContext,
@@ -907,7 +908,7 @@ onBeforeUnmount(() => {
                   @click="closeWorkshopSearch"
                 >
                   <span>
-                    <strong>{{ order.order_number }}</strong>
+                    <strong>{{ formatOrderNumber(order.order_number) }}</strong>
                     <small>{{ order.client_name }} · {{ order.branch_name }}</small>
                   </span>
                   <em>{{ workshopStatusUz(order.status) }}</em>

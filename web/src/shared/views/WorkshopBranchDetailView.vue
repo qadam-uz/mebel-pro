@@ -46,14 +46,6 @@ const toast = useToast()
 const { t } = useI18n()
 const { notifyProgress } = useOnboardingContinuation()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
-// Order numbers read `#<2-digit year>-<branch_no>-<per-year sequence>`
-// (docs/ref/entities/sales.md). Showing the live prefix turns the branch number
-// from a bare integer into the thing the owner actually reads off a cutting map.
-const orderNumberPrefix = computed(() => {
-  const branch = workshop.selectedBranch
-  if (!branch) return ''
-  return `#${String(new Date().getFullYear() % 100).padStart(2, '0')}-${branch.branch_no}-…`
-})
 const loading = ref(false)
 const pageError = ref<string | null>(null)
 const pageTraceId = ref<string | null>(null)
@@ -401,8 +393,10 @@ onMounted(refreshBranch)
         <h1>
           {{ workshop.selectedBranch?.name ?? $t('workshopAdmin.branchDetail.fallbackName') }}
         </h1>
-        <!-- The branch number is printed on every order and cutting map that
-             leaves the building; this is the only place it can be looked up. -->
+        <!-- The branch number is the last segment of the branch's own QR link
+             (`/w/{code}/{branch_no}`); this is the only place it can be looked
+             up. It no longer appears in order numbers — those are six random
+             platform-wide digits (docs/ref/entities/sales.md). -->
         <i18n-t
           v-if="workshop.selectedBranch"
           keypath="workshopAdmin.branchDetail.numberHint"
@@ -412,9 +406,6 @@ onMounted(refreshBranch)
         >
           <template #no>
             <span class="id">{{ workshop.selectedBranch.branch_no }}</span>
-          </template>
-          <template #prefix>
-            <span class="id">{{ orderNumberPrefix }}</span>
           </template>
         </i18n-t>
       </div>

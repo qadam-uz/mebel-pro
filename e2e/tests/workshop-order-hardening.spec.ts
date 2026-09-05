@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
   continueButton,
   expectOk,
+  orderNumberText,
   ownerReadyPassword,
   passwordLabel,
   phoneFor,
@@ -77,7 +78,7 @@ test('owner applies a discount and it persists after reload', async ({ page, req
 
   await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
-  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByRole('heading', { name: orderNumberText(placed.order.order_number) })).toBeVisible()
 
   // Discount lives behind the header overflow menu now, in a modal. The fixed
   // value is entered in so'm and stored as tiyin (1 000 so'm = 100 000 tiyin),
@@ -95,7 +96,7 @@ test('owner applies a discount and it persists after reload', async ({ page, req
   await expect(page.getByText('E2E discount persists')).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByRole('heading', { name: orderNumberText(placed.order.order_number) })).toBeVisible()
   await expect(page.getByText('E2E discount persists')).toBeVisible()
 })
 
@@ -115,7 +116,7 @@ test('owner applies a surcharge and it persists after reload', async ({
 
   await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
-  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByRole('heading', { name: orderNumberText(placed.order.order_number) })).toBeVisible()
 
   await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: "Ustama qo'shish" }).click()
@@ -131,7 +132,7 @@ test('owner applies a surcharge and it persists after reload', async ({
   await expect(page.getByText('E2E rush surcharge')).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByRole('heading', { name: orderNumberText(placed.order.order_number) })).toBeVisible()
   await expect(page.getByText('E2E rush surcharge')).toBeVisible()
 })
 
@@ -156,7 +157,9 @@ test('owner records order income and standalone expense', async ({ page, request
   await incomePanel
     .getByRole('combobox', { name: 'Buyurtma', exact: true })
     .fill(placed.order.order_number)
-  await page.getByRole('option', { name: new RegExp(placed.order.order_number) }).click()
+  await page
+    .getByRole('option', { name: new RegExp(orderNumberText(placed.order.order_number)) })
+    .click()
   // QAD-123: picking an order seeds the amount with its remaining balance, and
   // refilling it moved out of the old balance panel onto the amount field as a
   // "Qoldiq" suffix button.

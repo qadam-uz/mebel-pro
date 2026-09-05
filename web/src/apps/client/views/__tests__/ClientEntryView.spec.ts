@@ -189,7 +189,7 @@ describe('ClientEntryView — the workshop logo', () => {
   })
 })
 
-describe('ClientEntryView — the branch choice (§3.2)', () => {
+describe('ClientEntryView — a multi-branch workshop link (§2.2)', () => {
   const multi = () =>
     linkPayload({
       branches: [
@@ -199,43 +199,59 @@ describe('ClientEntryView — the branch choice (§3.2)', () => {
           branch_no: 2,
           name: 'Yunusobod',
           status: 'temporarily_closed',
-          closed_reason: 'Ta’mirlash ishlari',
+          closed_reason: 'Ta\u2019mirlash ishlari',
         }),
       ],
     })
 
-  it('asks which branch, listing only that workshop, closed ones included', async () => {
+  // Decision 15: entry never asks which counter, so it names none either. The
+  // count and the names are recognition, not a choice.
+  it('names the counters without offering a choice', async () => {
     vi.mocked(api.get).mockResolvedValue(multi())
 
     const view = await mountEntry()
 
-    expect(view.text()).toContain('Qaysi filialdan olib ketasiz?')
-    expect(view.text()).toContain('Chilonzor')
-    expect(view.text()).toContain('Yunusobod')
-    // A temporarily closed branch renders its reason and stays choosable.
-    expect(view.text()).toContain('Ta’mirlash ishlari')
-    const closed = view.findAll('button').find((node) => node.text().includes('Yunusobod'))
-    expect(closed?.attributes('disabled')).toBeUndefined()
-    // Nothing is parked until a branch is actually chosen.
-    expect(readClientEntry()).toBeNull()
-  })
-
-  it('parks the chosen branch on one tap when signed out', async () => {
-    vi.mocked(api.get).mockResolvedValue(multi())
-    const view = await mountEntry()
-
-    await view
-      .findAll('button')
-      .find((node) => node.text().includes('Yunusobod'))
-      ?.trigger('click')
-    await flushPromises()
-
-    expect(readClientEntry()).toEqual({ code: 'ABCD2345', branch_id: 'branch-2' })
+    expect(view.text()).toContain('2 ta filial')
+    expect(view.text()).toContain('Chilonzor, Yunusobod')
+    expect(view.text()).not.toContain('Qaysi filialdan olib ketasiz?')
     expect(view.text()).toContain('Kirish')
   })
 
-  it('shows the choice a branch link fell back from (§8)', async () => {
-    // The printed QR named a branch_no that is gone; the code still resolves.
+  // Every entry records the workshop so it lands on Ustaxonalarim; only the
+  // branch is left unset, which is what home reads as "un-pinned".
+  it('parks the workshop with no branch when signed out', async () => {
+    vi.mocked(api.get).mockResolvedValue(multi())
+
+    await mountEntry()
+
+    expect(readClientEntry()).toEqual({ code: 'ABCD2345', branch_id: null })
+  })
+
+  it('records the workshop but moves no pin when signed in', async () => {
+    signIn()
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/public/workshop-links') ? multi() : clientMe(),
+    )
+    vi.mocked(api.post).mockResolvedValue({
+      workshop_id: 'workshop-1',
+      workshop_name: 'Mebel Master',
+      branch_id: null,
+      branch_name: null,
+    })
+
+    await mountEntry()
+    await flushPromises()
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/client/entry',
+      { code: 'ABCD2345', branch_id: null },
+      expect.anything(),
+    )
+  })
+
+  // The printed QR outlives a branch reshuffle: the code still resolves, and
+  // the landing falls back to the workshop-level behaviour rather than dying.
+  it('falls back to the workshop-level entry when branch_no no longer resolves', async () => {
     vi.mocked(api.get).mockResolvedValue(
       linkPayload({
         branches: multi().branches,
@@ -246,7 +262,8 @@ describe('ClientEntryView — the branch choice (§3.2)', () => {
 
     const view = await mountEntry('/w/ABCD2345/7')
 
-    expect(view.text()).toContain('Qaysi filialdan olib ketasiz?')
+    expect(view.text()).toContain('2 ta filial')
+    expect(readClientEntry()).toEqual({ code: 'ABCD2345', branch_id: null })
   })
 })
 

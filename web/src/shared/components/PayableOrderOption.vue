@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { workshopStatusUz } from '@/shared/app/workshopUi'
-import { formatDate, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import type { PayableOrder } from '@/shared/stores/finance'
 
 // One row of the order-payment picker. The balance is what the operator is
@@ -19,7 +19,7 @@ defineProps<{ order: PayableOrder | undefined }>()
            screen it drops to its own full-width line instead of being clipped
            to five characters beside the order number. -->
       <span class="flex flex-wrap items-baseline gap-x-2">
-        <b class="text-[12px] text-ink">{{ order.order_number }}</b>
+        <b class="text-[12px] text-ink">{{ formatOrderNumber(order.order_number) }}</b>
         <span class="min-w-0 grow basis-28 truncate font-bold">{{ order.contact_name }}</span>
       </span>
       <span class="mt-0.5 block text-[11px] leading-tight text-ink-muted">

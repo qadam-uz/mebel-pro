@@ -18,7 +18,8 @@
     "materials": "{n} material",
     "panels": "{n} panel",
     "drafts": "{n} chizma",
-    "count": "{n} ta"
+    "count": "{n} ta",
+    "sheets": "{n} list"
   },
   "draft": {
     "untitled": "Nomsiz chizma"
@@ -76,7 +77,14 @@
     "allDrafts": "Barcha chizmalar",
     "emptyDraftsTitle": "Saqlangan chizma yo'q",
     "emptyDraftsBody": "Yangisini boshlang.",
-    "moreDrafts": "Yana {n} ta saqlangan chizma"
+    "moreDrafts": "Yana {n} ta saqlangan chizma",
+    "yourWorkshop": "Ustaxonangiz",
+    "newDrawing": "Yangi chizma",
+    "pickWorkshopTitle": "Ustaxonangizni tanlang",
+    "pickWorkshopBody": "Ustaxona sizga bergan havola yoki QR orqali ulaning yoki ro'yxatdan tanlang.",
+    "pickWorkshop": "Ustaxona tanlang",
+    "continueDrafts": "Davom ettirish",
+    "allDraftsCount": "Barcha chizmalar ({n})"
   },
   "orders": {
     "title": "Mening buyurtmalarim",
@@ -98,7 +106,19 @@
     "loadMore": "Yana ko'rsatish",
     "cancelTitle": "Buyurtmani bekor qilish",
     "cancelMessage": "Buyurtma bekor qilinadi. Bu amal qaytarilmaydi.",
-    "cancelReasonDefault": "Mijoz buyurtmani tasdiqlashdan oldin bekor qildi"
+    "cancelReasonDefault": "Mijoz buyurtmani tasdiqlashdan oldin bekor qildi",
+    "filter": {
+      "label": "Holat bo'yicha filtr",
+      "all": "Hammasi",
+      "active": "Faol",
+      "ready": "Tayyor",
+      "completed": "Yakunlangan",
+      "cancelled": "Bekor"
+    },
+    "searchToggle": "Qidirishni ochish",
+    "searchClose": "Qidirishni yopish",
+    "emptyFilteredTitle": "Bu filtr bo'yicha buyurtma yo'q",
+    "emptyFilteredHint": "Boshqa holatni tanlang yoki filtrlarni tozalang."
   },
   "orderDetail": {
     "back": "Buyurtmalar",
@@ -145,7 +165,9 @@
     "paymentNote": "To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa — to'lov bo'yicha ustaxonaga murojaat qiling.",
     "paymentLockedTitle": "To'lov ma'lumotlari hali yopiq",
     "paymentLockedBody": "To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.",
-    "history": "Holatlar tarixi"
+    "history": "Holatlar tarixi",
+    "workshopTitle": "Ustaxona",
+    "priceNote": "To'lov ustaxonada qabul qilinadi; narx buyurtma berilganda belgilangan."
   },
   "orderNew": {
     "back": "Natijaga qaytish",
@@ -188,7 +210,6 @@
     "nameHint": "Telegramdagi ismingizdan olindi — o'zgartirsangiz bo'ladi",
     "editName": "Ismni o'zgartirish",
     "phoneHint": "Kirish uchun ishlatiladi · o'zgartirib bo'lmaydi",
-    "orderCount": "Buyurtmalar soni",
     "updated": "Profil yangilandi.",
     "sessions": "Faol sessiyalar",
     "logoutEverywhere": "Hammasini chiqarish",
@@ -198,7 +219,9 @@
     "logoutMessage": "Mijoz kabinetidan chiqasiz.",
     "logoutConfirm": "Chiqish",
     "logoutEverywhereTitle": "Hammasi chiqsin",
-    "logoutEverywhereMessage": "Barcha qurilmalardan chiqasiz."
+    "logoutEverywhereMessage": "Barcha qurilmalardan chiqasiz.",
+    "language": "Til",
+    "notifications": "Bildirishnomalar"
   },
   "login": {
     "expired": "Sessiya tugadi. Davom etish uchun qaytadan kiring.",
@@ -245,7 +268,7 @@
     "orderReady": "Buyurtma tayyor",
     "orderCancelled": "Buyurtma bekor qilindi",
     "orderCompleted": "Buyurtma topshirildi",
-    "orderNumber": "Buyurtma № {number}",
+    "orderNumber": "Buyurtma {number}",
     "material": "Material: {name}"
   },
   "error": {
@@ -278,7 +301,8 @@
     "login_token_rate_limited": "Juda ko'p urinish. {seconds} soniyadan keyin qayta urinib ko'ring.",
     "login_code_rate_limited": "Juda ko'p urinish. {seconds} soniyadan keyin qayta urinib ko'ring.",
     "login_token_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring.",
-    "login_code_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring."
+    "login_code_rate_limited_minutes": "Juda ko'p urinish. {minutes} daqiqadan keyin qayta urinib ko'ring.",
+    "client_catalog_load_failed": "Katalogni yuklab bo'lmadi."
   },
   "entry": {
     "greeting": "{workshop} sizni taklif qilmoqda",
@@ -291,7 +315,8 @@
     "busyTitle": "Havola hozir ochilmadi",
     "busyBody": "So'rovlar ko'payib ketdi. Bir necha soniyadan keyin qayta urinib ko'ring.",
     "openApp": "Ilovani ochish",
-    "applyFailed": "Ustaxonaga ulanib bo'lmadi. QR kodni qaytadan skanerlang."
+    "applyFailed": "Ustaxonaga ulanib bo'lmadi. QR kodni qaytadan skanerlang.",
+    "branchCount": "{n} ta filial · {names}"
   },
   "workshops": {
     "title": "Ustaxonalarim",
@@ -305,5 +330,34 @@
     "loadFailed": "Ustaxonalarni yuklab bo'lmadi",
     "emptyTitle": "Hali ustaxona ulanmagan",
     "emptyBody": "Ustaxonangiz bergan havola yoki QR kod orqali kiring — katalog va narxlar o'sha ustaxonaniki bo'ladi."
+  },
+  "workshop": {
+    "branches": "Filiallar",
+    "catalog": "Katalog",
+    "newDrawing": "Yangi chizma",
+    "viewOnMap": "Xaritada ko'rish",
+    "primary": "Asosiy",
+    "makePrimary": "Asosiy qilish",
+    "madePrimaryToast": "{name} asosiy qilindi",
+    "notFoundTitle": "Ustaxona topilmadi",
+    "notFoundBody": "Bu ustaxona sizga ulanmagan. Havola yoki QR kod orqali kiring."
+  },
+  "catalog": {
+    "searchLabel": "Material qidirish",
+    "searchPlaceholder": "Material nomi yoki kodi",
+    "clearSearch": "Qidiruvni tozalash",
+    "typeFilter": "Material turi",
+    "imageTitle": "{material}",
+    "formatCount": "{n} ta format",
+    "grain": "Teksturali",
+    "perSheet": "/ list",
+    "perMetre": "/ m",
+    "priceScope": "{workshop} · {branch} narxnomasi. Narxlar shu filialda amal qiladi.",
+    "loadFailed": "Katalogni yuklab bo'lmadi",
+    "emptySearch": "Hech narsa topilmadi",
+    "emptySearchBody": "Boshqa nom yoki kod bilan qidiring.",
+    "emptyBranch": "Bu filial hali katalog kiritmagan",
+    "emptyBranchBody": "Boshqa filialni tanlang yoki ustaxona bilan bog'laning.",
+    "priceOnRequest": "Narx kelishiladi"
   }
 }

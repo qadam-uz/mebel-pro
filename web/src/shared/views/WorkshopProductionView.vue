@@ -14,7 +14,7 @@ import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatRelative } from '@/shared/formatters'
+import { formatOrderNumber, formatRelative } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOrdersStore } from '@/shared/stores/orders'
 import {
@@ -137,7 +137,7 @@ const completeDialogTitle = computed(() =>
 const completeDialogMessage = computed(() => {
   const job = pendingComplete.value
   if (!job) return ''
-  const intro = `${job.order_number} · ${jobMeta(job)}`
+  const intro = `${formatOrderNumber(job.order_number)} · ${jobMeta(job)}`
   if (station.value === 'banding' || !job.has_banding) {
     return t('finance.complete.toReady', { job: intro })
   }
@@ -168,10 +168,10 @@ async function confirmComplete() {
     toast.success(
       next
         ? t('finance.toast.jobFinishedNext', {
-            order: job.order_number,
-            next: next.order_number,
+            order: formatOrderNumber(job.order_number),
+            next: formatOrderNumber(next.order_number),
           })
-        : t('finance.toast.jobFinished', { order: job.order_number }),
+        : t('finance.toast.jobFinished', { order: formatOrderNumber(job.order_number) }),
     )
     await refresh()
   } catch {
@@ -264,7 +264,7 @@ watch(
           <article v-for="job in currentJobs" :key="job.id" class="prod-hero">
             <span class="prod-hero-eyebrow">{{ $t('finance.queue.current') }}</span>
             <div class="flex items-baseline justify-between gap-3">
-              <h4>{{ job.order_number }}</h4>
+              <h4>{{ formatOrderNumber(job.order_number) }}</h4>
               <span class="text-xs text-ink-muted">{{ startedLabel(job) }}</span>
             </div>
             <div class="meta">
@@ -304,7 +304,7 @@ watch(
         <template v-else>
           <article v-for="job in queuedJobs" :key="job.id" class="prod-card">
             <div class="flex items-baseline justify-between gap-3">
-              <h4>{{ job.order_number }}</h4>
+              <h4>{{ formatOrderNumber(job.order_number) }}</h4>
               <span class="text-xs text-ink-muted">{{ queuedLabel(job) }}</span>
             </div>
             <div class="meta">
@@ -348,7 +348,9 @@ watch(
         <div class="card p-3">
           <div v-for="job in completedToday" :key="job.id" class="prod-done-row">
             <span class="font-extrabold text-success" aria-hidden="true">✓</span>
-            <span class="text-[13px] font-bold text-ink">{{ job.order_number }}</span>
+            <span class="text-[13px] font-bold text-ink">{{
+              formatOrderNumber(job.order_number)
+            }}</span>
             <span class="truncate">{{ jobMeta(job) }}</span>
             <span class="when">{{ completedLabel(job) }}</span>
           </div>

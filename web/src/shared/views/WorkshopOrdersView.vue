@@ -28,7 +28,7 @@ import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatRelative, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatOrderNumber, formatRelative, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import {
@@ -386,7 +386,7 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
 }
 
 function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
-  const named = { order: order.order_number }
+  const named = { order: formatOrderNumber(order.order_number) }
   if (action.kind === 'approve') {
     return {
       title: t('orders.confirm.approveTitle'),
@@ -437,7 +437,7 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
     return {
       title: t('orders.confirm.revertTitle'),
       message: t('orders.confirm.revertOrderMessage', {
-        order: order.order_number,
+        order: formatOrderNumber(order.order_number),
         target: revertTargetLabelForOrder(order),
       }),
       confirmLabel: t('orders.confirm.revertAction'),
@@ -447,7 +447,9 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
   if (action.kind === 'cancel') {
     return {
       title: t('orders.confirm.cancelTitle'),
-      message: t('orders.confirm.cancelOrderMessage', { order: order.order_number }),
+      message: t('orders.confirm.cancelOrderMessage', {
+        order: formatOrderNumber(order.order_number),
+      }),
       confirmLabel: t('orders.action.cancel'),
       danger: true,
     }
@@ -877,13 +879,15 @@ onBeforeUnmount(() => {
               class="block text-inherit no-underline"
               role="link"
               tabindex="0"
-              :aria-label="$t('orders.list.cardLink', { order: order.order_number })"
+              :aria-label="
+                $t('orders.list.cardLink', { order: formatOrderNumber(order.order_number) })
+              "
               @click="openOrder(order.id)"
               @keydown.enter="openOrder(order.id)"
               @keydown.space.prevent="openOrder(order.id)"
             >
               <span class="top">
-                <span class="id">{{ order.order_number }}</span>
+                <span class="id">{{ formatOrderNumber(order.order_number) }}</span>
                 <span class="amt">{{ formatTiyin(order.total_tiyin) }}</span>
               </span>
               <span class="who">{{ order.contact_name }}</span>
@@ -930,7 +934,9 @@ onBeforeUnmount(() => {
               <span
                 v-if="assignmentChips(order).length > 0 || edgerMissing(order)"
                 class="worker-chips mt-3"
-                :aria-label="$t('orders.list.assigneesLabel', { order: order.order_number })"
+                :aria-label="
+                  $t('orders.list.assigneesLabel', { order: formatOrderNumber(order.order_number) })
+                "
               >
                 <span
                   v-for="chip in assignmentChips(order)"
@@ -977,12 +983,12 @@ onBeforeUnmount(() => {
                 :key="order.id"
                 class="clickable"
                 tabindex="0"
-                :aria-label="`${order.order_number} — ${order.contact_name}`"
+                :aria-label="`${formatOrderNumber(order.order_number)} — ${order.contact_name}`"
                 @click="openOrder(order.id)"
                 @keydown.enter="openOrder(order.id)"
                 @keydown.space.prevent="openOrder(order.id)"
               >
-                <td class="id">{{ order.order_number }}</td>
+                <td class="id">{{ formatOrderNumber(order.order_number) }}</td>
                 <td class="nm">
                   {{ order.contact_name }}<small>{{ order.contact_phone }}</small>
                 </td>

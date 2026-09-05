@@ -217,9 +217,14 @@ describe('client UI helpers', () => {
       ),
     ).toBe('Custom')
 
-    // body: denormalized order_number is surfaced when there is no prose body
+    // body: denormalized order_number is surfaced when there is no prose body,
+    // through the display formatter — the `№` is the formatter's, never copy's
+    // (spec §1.3), and a legacy number renders exactly as it was minted.
     expect(clientNotificationBody(notification({ payload: { order_number: 'A-1023' } }))).toBe(
-      'Buyurtma № A-1023',
+      'Buyurtma A-1023',
+    )
+    expect(clientNotificationBody(notification({ payload: { order_number: '482917' } }))).toBe(
+      `Buyurtma №\u2009482\u2009917`,
     )
     // an explicit body wins over the order-number fallback
     expect(

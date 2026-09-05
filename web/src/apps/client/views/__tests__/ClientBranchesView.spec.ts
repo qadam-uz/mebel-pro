@@ -17,6 +17,12 @@ const { api } = await import('@/shared/api/client')
 const routes = [
   { path: '/c/branches', name: 'client-branches', component: ClientBranchesView },
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
+  { path: '/c/workshops/:workshopId', name: 'client-workshop', component: { template: '<div />' } },
+  {
+    path: '/c/workshops/:workshopId/catalog',
+    name: 'client-workshop-catalog',
+    component: { template: '<div />' },
+  },
 ]
 
 function branch(overrides: Record<string, unknown> = {}) {
@@ -63,6 +69,11 @@ async function mountPage() {
   return wrapper
 }
 
+/** The outline star button — the row's "pin this branch" affordance (§6.1). */
+function pinButtons(view: VueWrapper) {
+  return view.findAll('button[aria-label="Asosiy qilish"]')
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.mocked(api.get).mockReset()
@@ -75,7 +86,7 @@ afterEach(() => {
 })
 
 describe('Ustaxonalarim', () => {
-  it('groups by workshop and badges the pinned one', async () => {
+  it('lists one card per related workshop, with pickup information per branch', async () => {
     vi.mocked(api.get).mockResolvedValue([
       workshop({ is_pinned: true, branches: [branch({ is_pinned: true })] }),
       workshop({
@@ -89,55 +100,32 @@ describe('Ustaxonalarim', () => {
     const view = await mountPage()
 
     expect(api.get).toHaveBeenCalledWith('/client/my-workshops', expect.anything())
-    expect(view.text()).toContain('Ustaxonalarim')
     expect(view.text()).toContain('Mebel Master')
     expect(view.text()).toContain('Yog’och Pro')
-    // Exactly one Asosiy badge, on the pinned workshop.
-    expect(view.text().match(/Asosiy(?! qilish)/g)).toHaveLength(1)
-    // Pickup and contact information, and nothing that leads to a catalog.
     expect(view.text()).toContain('Chilonzor 12')
     expect(view.find('a[href="tel:+998901234567"]').exists()).toBe(true)
   })
 
-  it('offers Asosiy qilish only on workshops that are not the pin', async () => {
+  // The pin is a BRANCH (decisions 6, 15): a filled star marks the pinned row,
+  // every other row carries the outline star button — and there is exactly one
+  // of each across the whole page, however many workshops are listed.
+  it('marks the pinned branch with a filled star and offers the button on the rest', async () => {
     vi.mocked(api.get).mockResolvedValue([
-      workshop({ is_pinned: true }),
+      workshop({ is_pinned: true, branches: [branch({ is_pinned: true })] }),
       workshop({ workshop_id: 'workshop-2', name: 'Yog’och Pro', public_code: 'EFGH6789' }),
     ])
 
     const view = await mountPage()
 
-    const pinButtons = view.findAll('button').filter((node) => node.text() === 'Asosiy qilish')
-    expect(pinButtons).toHaveLength(1)
+    expect(view.findAll('[aria-label="Asosiy"]')).toHaveLength(1)
+    expect(pinButtons(view)).toHaveLength(1)
+    // No «Asosiy» pill and no «Asosiy qilish» text label — the star says it.
+    expect(view.text()).not.toContain('Asosiy qilish')
   })
 
-  it('pins a single-branch workshop straight through the entry endpoint', async () => {
-    vi.mocked(api.get).mockResolvedValue([
-      workshop({ workshop_id: 'workshop-2', name: 'Yog’och Pro', public_code: 'EFGH6789' }),
-    ])
-    vi.mocked(api.post).mockResolvedValue({
-      workshop_id: 'workshop-2',
-      workshop_name: 'Yog’och Pro',
-      branch_id: 'branch-1',
-      branch_name: 'Chilonzor',
-    })
-
-    const view = await mountPage()
-    await view
-      .findAll('button')
-      .find((node) => node.text() === 'Asosiy qilish')
-      ?.trigger('click')
-    await flushPromises()
-
-    // The code — never a bare branch id — is what names the workshop.
-    expect(api.post).toHaveBeenCalledWith(
-      '/client/entry',
-      { code: 'EFGH6789', branch_id: 'branch-1' },
-      expect.anything(),
-    )
-  })
-
-  it('asks which branch when the workshop has several', async () => {
+  // No branch-choice step anywhere any more (§2.2): the row IS the branch, so
+  // the star pins that one directly through the audited entry endpoint.
+  it('pins the branch of the row whose star is tapped', async () => {
     vi.mocked(api.get).mockResolvedValue([
       workshop({
         branches: [branch(), branch({ id: 'branch-2', name: 'Yunusobod', address: 'Yunusobod 8' })],
@@ -151,19 +139,35 @@ describe('Ustaxonalarim', () => {
     })
 
     const view = await mountPage()
-    await view
-      .findAll('button')
-      .find((node) => node.text() === 'Asosiy qilish')
-      ?.trigger('click')
+    await pinButtons(view).at(1)?.trigger('click')
     await flushPromises()
 
-    expect(view.text()).toContain('Qaysi filialdan olib ketasiz?')
+    // The code — never a bare branch id — is what names the workshop.
+    expect(api.post).toHaveBeenCalledWith(
+      '/client/entry',
+      { code: 'ABCD2345', branch_id: 'branch-2' },
+      expect.anything(),
+    )
+    expect(view.text()).not.toContain('Qaysi filialdan olib ketasiz?')
+  })
 
-    const choice = view
-      .findAll('button')
-      .filter((node) => node.text().includes('Yunusobod'))
-      .at(-1)
-    await choice?.trigger('click')
+  // Decision 17: the editor has no branch state, so the move has to land first.
+  it('re-pins before opening the editor from a non-pinned branch', async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      workshop({
+        branches: [branch({ is_pinned: true }), branch({ id: 'branch-2', name: 'Yunusobod' })],
+      }),
+    ])
+    vi.mocked(api.post).mockResolvedValue({
+      workshop_id: 'workshop-1',
+      workshop_name: 'Mebel Master',
+      branch_id: 'branch-2',
+      branch_name: 'Yunusobod',
+    })
+
+    const view = await mountPage()
+    const draw = view.findAll('button').filter((node) => node.text() === 'Yangi chizma')
+    await draw.at(1)?.trigger('click')
     await flushPromises()
 
     expect(api.post).toHaveBeenCalledWith(
@@ -171,6 +175,32 @@ describe('Ustaxonalarim', () => {
       { code: 'ABCD2345', branch_id: 'branch-2' },
       expect.anything(),
     )
+    expect(router.currentRoute.value.path).toBe('/c/cutting/new')
+  })
+
+  it('starts the editor without a write when the branch is already the pin', async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      workshop({ is_pinned: true, branches: [branch({ is_pinned: true })] }),
+    ])
+
+    const view = await mountPage()
+    await view
+      .findAll('button')
+      .find((node) => node.text() === 'Yangi chizma')
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(api.post).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/c/cutting/new')
+  })
+
+  it('links each branch to that branch of the workshop catalog', async () => {
+    vi.mocked(api.get).mockResolvedValue([workshop()])
+
+    const view = await mountPage()
+
+    const catalog = view.findAll('a').find((node) => node.text() === 'Katalog')
+    expect(catalog?.attributes('href')).toBe('/c/workshops/workshop-1/catalog?branch=branch-1')
   })
 
   it('shows a temporarily closed branch with its reason', async () => {
@@ -186,15 +216,16 @@ describe('Ustaxonalarim', () => {
     expect(view.text()).toContain('Ta’mirlash ishlari')
   })
 
-  it('invites through a workshop link when nothing is connected yet', async () => {
+  // Nothing on this page can invent a workshop, so the empty state explains the
+  // one way in (a link or a QR) and offers no action that would dead-end.
+  it('explains the workshop link when nothing is connected yet', async () => {
     vi.mocked(api.get).mockResolvedValue([])
 
     const view = await mountPage()
 
     expect(view.text()).toContain('Hali ustaxona ulanmagan')
     expect(view.text()).toContain('Ustaxonangiz bergan havola yoki QR kod orqali kiring')
-    // The organic path stays open.
-    expect(view.text()).toContain('Yangi chizma')
+    expect(view.text()).not.toContain('Yangi chizma')
   })
 
   it('names the failure and retries', async () => {

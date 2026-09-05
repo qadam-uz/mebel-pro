@@ -79,11 +79,22 @@ describe('stored client entry', () => {
     window.localStorage.setItem('client.entry', 'not json')
     expect(readClientEntry()).toBeNull()
 
-    window.localStorage.setItem('client.entry', JSON.stringify({ code: 'ABCD2345' }))
-    expect(readClientEntry()).toBeNull()
-
     window.localStorage.setItem('client.entry', JSON.stringify({ code: '', branch_id: '' }))
     expect(readClientEntry()).toBeNull()
+
+    window.localStorage.setItem('client.entry', JSON.stringify({ code: 'ABCD2345', branch_id: 7 }))
+    expect(readClientEntry()).toBeNull()
+  })
+
+  // A branchless entry is a real one (spec §2.2): a multi-branch workshop link
+  // records the workshop and pins nothing, and that has to survive the login
+  // round-trip exactly as a branch QR does.
+  it('keeps an entry that names no branch', () => {
+    storeClientEntry({ code: 'ABCD2345', branch_id: null })
+    expect(readClientEntry()).toEqual({ code: 'ABCD2345', branch_id: null })
+
+    window.localStorage.setItem('client.entry', JSON.stringify({ code: 'ABCD2345' }))
+    expect(readClientEntry()).toEqual({ code: 'ABCD2345', branch_id: null })
   })
 
   it('degrades to an un-pinned login when storage refuses', () => {
