@@ -1213,6 +1213,10 @@ async function confirmDeleteDraft() {
     // it back.
     draftDeleted = true
     recoveryWriter.cancel()
+    // The queued server save too: the `router.push` below runs the route-leave
+    // guard, whose flush would PATCH the draft that no longer exists — and the
+    // guard refuses to navigate on a failed save, stranding the user here.
+    autosave.cancel()
     clearDraftRecovery()
     await router.push(rolePath(adapter.paths.drafts))
   } catch (errorValue) {
@@ -2311,6 +2315,9 @@ onBeforeRouteLeave(async () => {
     // each other indefinitely.
     return true
   }
+  // The delete already cancelled both writers; there is nothing left to save,
+  // and an error status left over from before it must not hold the exit.
+  if (draftDeleted) return true
   // Synchronously, before the awaited server save: leaving inside the debounce
   // window must not drop the last keystroke even if that save then fails.
   flushDraftRecovery()

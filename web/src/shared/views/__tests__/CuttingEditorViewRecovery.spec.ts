@@ -228,4 +228,27 @@ describe('CuttingEditorView draft recovery', () => {
     await flushPromises()
     expect(window.localStorage.getItem(RECOVERY_KEY)).toBeNull()
   })
+
+  it('does not save a deleted drawing on the way out', async () => {
+    const { wrapper, router, cutting, updateDraft } = await mountEditor()
+    vi.spyOn(cutting, 'deleteDraft').mockResolvedValue()
+    // The draft no longer exists server-side, so a PATCH against it 404s — and
+    // the route-leave guard refuses to navigate on a failed save, which would
+    // strand the user on the drawing they just deleted.
+    updateDraft.mockRejectedValue(new Error('draft not found'))
+
+    // Delete inside the 700ms autosave window: the edit is still queued.
+    await type(wrapper, 2)
+    await wrapper.get('[aria-label="Chizmani o\'chirish"]').trigger('click')
+    await wrapper.get('[data-test="confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(updateDraft).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/c/cutting/drafts')
+
+    // Nor does the queued save resurface after the debounce would have elapsed.
+    vi.advanceTimersByTime(2000)
+    await flushPromises()
+    expect(updateDraft).not.toHaveBeenCalled()
+  })
 })

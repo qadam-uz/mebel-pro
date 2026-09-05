@@ -119,4 +119,15 @@ describe('createAutosaveController', () => {
     await vi.runAllTimersAsync()
     expect(persist).not.toHaveBeenCalled()
   })
+
+  it('cancel() leaves nothing for a later flush() to save', async () => {
+    // The editor cancels on a deleted draft and then navigates, which runs the
+    // route-leave flush: that flush must not resurrect the abandoned edit.
+    const { controller, persist } = setup()
+    controller.schedule()
+    controller.cancel()
+    await controller.flush()
+    await vi.runAllTimersAsync()
+    expect(persist).not.toHaveBeenCalled()
+  })
 })
