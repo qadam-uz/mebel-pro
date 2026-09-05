@@ -27,6 +27,7 @@ Current build state (rationale in [`docs/architecture.md`](../docs/architecture.
 ```bash
 pnpm dev                     # Vite dev server, :5173, /api proxied → :8000
 pnpm build                   # vue-tsc --build && vite build  → dist/
+pnpm preview                 # serves dist/ on :4173, /api proxied → :8000 like dev
 pnpm test [src/path]         # Vitest once; single file/dir first while iterating
 pnpm i18n:check              # literal t()/$t() keys resolve, and each role ships what it renders (see Copy)
 pnpm lint / pnpm format      # autofix variants; *:check variants are the CI/pre-push form
