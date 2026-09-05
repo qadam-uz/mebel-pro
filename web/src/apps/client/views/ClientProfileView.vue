@@ -142,7 +142,11 @@ onMounted(reloadProfile)
       </RouterLink>
 
       <section class="client-card">
-        <div class="client-card-h">
+        <!-- `justify-end` on phones: the heading beside this button is
+             `sr-only` there, so a `space-between` row would drop «Chiqib
+             ketish» to the left edge, where it reads as the card's first
+             field rather than its action. -->
+        <div class="client-card-h max-md:justify-end">
           <!-- §2, one title per screen: on phones the compact header already
                says «Profil», so the card's own heading is read but not shown.
                The head row stays — it carries «Chiqib ketish». -->
