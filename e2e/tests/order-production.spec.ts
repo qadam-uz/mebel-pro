@@ -18,6 +18,7 @@ import {
   escapeRegExp,
   expectOk,
   loginClient,
+  orderNumberPattern,
   panelNumbers,
   setBranchProductionMode,
   workshopLinkFor,
@@ -467,7 +468,7 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
   const workshopOrderRow = workshopPage.getByRole("row", {
-    name: new RegExp(orderNumber as string),
+    name: orderNumberPattern(orderNumber as string),
   });
   // The table row itself opens the order detail (status actions now live only
   // on the detail page); click the order-number cell to navigate.
@@ -587,7 +588,7 @@ test("client places an order and workshop completes it through production queues
   // completed status always means the client took the order.
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
   // The card itself is the link now — no per-card button (spec §4).
-  await page.getByRole("link", { name: new RegExp(orderNumber as string) }).click();
+  await page.getByRole("link", { name: orderNumberPattern(orderNumber as string) }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
 });

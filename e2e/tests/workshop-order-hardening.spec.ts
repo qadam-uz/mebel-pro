@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
   continueButton,
   expectOk,
+  orderNumberPattern,
   orderNumberText,
   ownerReadyPassword,
   passwordLabel,
@@ -158,7 +159,7 @@ test('owner records order income and standalone expense', async ({ page, request
     .getByRole('combobox', { name: 'Buyurtma', exact: true })
     .fill(placed.order.order_number)
   await page
-    .getByRole('option', { name: new RegExp(orderNumberText(placed.order.order_number)) })
+    .getByRole('option', { name: orderNumberPattern(placed.order.order_number) })
     .click()
   // QAD-123: picking an order seeds the amount with its remaining balance, and
   // refilling it moved out of the old balance panel onto the amount field as a

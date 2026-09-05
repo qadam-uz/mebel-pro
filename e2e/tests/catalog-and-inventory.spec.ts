@@ -1092,7 +1092,26 @@ test('client browses Ustaxonalarim without prices or stock details', async ({ pa
   await page.goto(`/client/w/${public_code}/${branch_no}`)
   await expect(page).toHaveURL(/\/client\/c\/?$/)
 
+  // The desktop nav item and the phone tab share one live target: with exactly
+  // one related workshop there is nothing to choose, so it opens that
+  // workshop's profile; two or more and it opens Ustaxonalarim. This client
+  // entered one workshop, so following the item lands on the profile.
   await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
+  await expect(page).toHaveURL(/\/client\/c\/workshops\/[0-9a-f-]+$/)
+  await expect(
+    page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),
+  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Filiallar' })).toBeVisible()
+  // The profile is pickup and contact information too: the branch row's only
+  // door to prices is «Katalog», and the page previews none of it.
+  await expect(page.getByRole('link', { name: 'Katalog' }).first()).toBeVisible()
+  await expect(page.getByText(material.label)).toHaveCount(0)
+  await expect(page.getByText(dekor.label)).toHaveCount(0)
+  await expect(page.getByText(/UZS\s*2[, ]500/)).toHaveCount(0)
+
+  // Ustaxonalarim itself — the target the same item takes once a client has
+  // more than one workshop — renders the same rows inside a card per workshop.
+  await page.goto('/client/c/branches')
   await expect(page.getByRole('heading', { name: /Ustaxonalar/ })).toBeVisible()
   // The card is a <section> (the branch rows are a list inside it, so the head
   // is a link and the card is not).

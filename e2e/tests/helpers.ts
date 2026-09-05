@@ -129,6 +129,21 @@ export function orderNumberText(raw: string) {
   return `\u2116${thin}${[head, rest.slice(0, 3), rest.slice(3)].filter(Boolean).join(thin)}`;
 }
 
+/**
+ * The same number as a **pattern**, for `getByRole(..., { name: ... })`.
+ *
+ * Playwright normalises whitespace in an accessible name before matching, so
+ * the U+2009 thin spaces `orderNumberText` prints are collapsed to plain
+ * spaces on the page side. A *string* name is normalised on both sides and
+ * matches fine; a `RegExp` is applied to the normalised name as written, so a
+ * literal thin space in the pattern can never match. Hence `\s` between the
+ * groups. Accepts either the raw digits or the already-rendered `\u2116 ddd ddd`.
+ */
+export function orderNumberPattern(textOrRaw: string) {
+  const rendered = orderNumberText(textOrRaw);
+  return new RegExp(escapeRegExp(rendered).replace(/\s+/g, "\\s+"));
+}
+
 export function runId(testInfo: { workerIndex: number }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
     .toString(36)

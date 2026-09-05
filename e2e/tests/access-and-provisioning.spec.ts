@@ -349,12 +349,12 @@ test("owner manages branches from a simple system table and detail view", async 
   await expect(
     page.getByRole("heading", { name: `Branch ${id}` }),
   ).toBeVisible();
-  // The detail header spells out what the number means, so a deep link to one
-  // branch is enough to decode a printed order number.
-  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+  // Order numbers are global random six digits now, so the branch number only
+  // addresses the client link: the detail header spells out that it is the tail
+  // of the branch's own QR/entry URL.
   await expect(
     page.getByText(
-      new RegExp(`Filial raqami\\s*${branchNo}.*#${yy}-${branchNo}-`),
+      new RegExp(`Filial raqami\\s*${branchNo}.*QR havolasi shu raqam bilan`),
     ),
   ).toBeVisible();
   await expect(
