@@ -60,6 +60,13 @@ const materialCount = computed(
   () => new Set((result.value?.parts_snapshot ?? []).map((part) => part.material_id)).size,
 )
 
+/** Decision 23, in the card's own shape: the workshop stays the title and the
+ *  branch becomes a second line only where there is more than one to tell
+ *  apart. The count is the payload's, so the card and the orders list can
+ *  never disagree about what this workshop is called. */
+const showBranchName = computed(
+  () => (order.value?.workshop_branch_count ?? 0) > 1 && Boolean(order.value?.branch_name),
+)
 const mapUrl = computed(() =>
   yandexMapUrl(order.value?.branch_latitude, order.value?.branch_longitude),
 )
@@ -307,7 +314,14 @@ onMounted(() => {
           </div>
           <div class="px-4 py-3.5 md:px-5 md:py-[18px]">
             <div class="text-[15px] font-semibold text-ink">{{ order.workshop_name }}</div>
-            <div class="mt-0.5 text-sm font-semibold text-ink-soft">{{ order.branch_name }}</div>
+            <!-- The branch is a second line only when the workshop has more
+                 than one counter (decision 23). To a one-branch workshop's
+                 client the branch name is noise — the workshop *is* the
+                 counter — and a repeated line under the name read as a
+                 second, different place. -->
+            <div v-if="showBranchName" class="mt-0.5 text-sm font-semibold text-ink-soft">
+              {{ order.branch_name }}
+            </div>
             <p class="mt-[5px] text-[13px] leading-[1.45] text-ink-muted">
               {{ order.branch_address }}
             </p>

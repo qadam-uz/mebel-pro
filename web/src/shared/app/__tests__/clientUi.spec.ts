@@ -17,6 +17,7 @@ import {
   clientStatusLabel,
   clientStatusPillClass,
   formatPercent,
+  workshopBranchName,
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
@@ -161,6 +162,41 @@ describe('client UI helpers', () => {
     expect(formatPercent(null)).toBe('-')
     expect(formatPercent('')).toBe('-')
     expect(formatPercent('abc')).toBe('-')
+  })
+
+  // The system-wide naming rule (decision 16), which decision 23 put on the
+  // orders card and the order detail. A branch name is never shown alone, and a
+  // one-branch workshop never shows one at all — to that client the workshop
+  // *is* the counter.
+  describe('workshopBranchName', () => {
+    it('names a one-branch workshop by itself', () => {
+      expect(workshopBranchName('Mebel Master', 'Chilonzor filiali', 1)).toBe('Mebel Master')
+    })
+
+    it('joins workshop and branch once there are several', () => {
+      expect(workshopBranchName('Mebel Master', 'Chilonzor filiali', 3)).toBe(
+        'Mebel Master \u00b7 Chilonzor filiali',
+      )
+    })
+
+    it('joins when the count is unknown — the safe answer for a caller without one', () => {
+      expect(workshopBranchName('Mebel Master', 'Chilonzor filiali')).toBe(
+        'Mebel Master \u00b7 Chilonzor filiali',
+      )
+    })
+
+    it('falls back to whichever name it has, never to an empty separator', () => {
+      expect(workshopBranchName('Mebel Master', null, 4)).toBe('Mebel Master')
+      expect(workshopBranchName('Mebel Master', '   ', 4)).toBe('Mebel Master')
+      // A branch alone is not a name the rule produces, but a caller with only
+      // that must still render something rather than a bare middot.
+      expect(workshopBranchName(null, 'Chilonzor filiali', 4)).toBe('Chilonzor filiali')
+      expect(workshopBranchName(null, null)).toBe('')
+    })
+
+    it('never shows a branch name for a count of one, whatever the branch is', () => {
+      expect(workshopBranchName('Mebel Master', 'Bosh filial', 1)).not.toContain('Bosh filial')
+    })
   })
 
   it('maps client error codes to Uzbek copy, never leaking raw codes', () => {

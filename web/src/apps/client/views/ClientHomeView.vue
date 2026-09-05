@@ -94,6 +94,17 @@ const workshopCardName = computed(() => {
   }
   return workshopBranchName(auth.me?.pinned_workshop_name, auth.me?.pinned_branch_name)
 })
+/** The ready banner names the counter by the same rule the card does — one
+ *  branch and the workshop's own name is the whole answer (decision 23). */
+const readyWhere = computed(() =>
+  primaryReady.value
+    ? workshopBranchName(
+        primaryReady.value.workshop_name,
+        primaryReady.value.branch_name,
+        primaryReady.value.workshop_branch_count,
+      )
+    : '',
+)
 const workshopInitial = computed(() =>
   (workshopCardName.value.trim().slice(0, 1) || 'M').toUpperCase(),
 )
@@ -361,7 +372,7 @@ onMounted(() => {
               {{ formatOrderNumber(primaryReady.order_number) }}
             </span>
             <span class="mt-0.5 hidden text-sm text-ink-muted md:block">
-              {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+              {{ readyWhere }}
               <template v-if="readyOrders.length > 1">
                 · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
               </template>
@@ -379,7 +390,7 @@ onMounted(() => {
           <Icon name="chevron-right" class="size-[18px] shrink-0 text-accent-strong md:size-5" />
         </span>
         <span class="mt-2 block truncate text-[12.5px] text-ink-muted md:hidden">
-          {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+          {{ readyWhere }}
           <template v-if="readyOrders.length > 1">
             · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
           </template>

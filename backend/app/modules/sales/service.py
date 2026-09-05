@@ -55,6 +55,7 @@ from app.modules.catalog.contracts import (
     Manufacturer,
     is_tape,
 )
+from app.modules.client_portal.api import visible_branch_counts
 from app.modules.cutting.api import (
     PdfPriceRow,
     PdfPricing,
@@ -2804,6 +2805,11 @@ async def _order_summary_responses(
         demands_by_order[order.id] = demands
         demanded_branch_material_ids.update(demands)
 
+    # One grouped count for the whole page, not one per row: the naming rule
+    # needs it on every card and these orders usually share a handful of
+    # workshops.
+    branch_counts = await visible_branch_counts(db, list(workshop_ids))
+
     stock_by_branch_material: dict[uuid.UUID, StockItem] = {}
     materials: dict[uuid.UUID, MaterialTriple] = {}
     if demanded_branch_material_ids:
@@ -2844,6 +2850,7 @@ async def _order_summary_responses(
                     client=client,
                     branch=branch,
                     workshop=workshop,
+                    workshop_branch_count=branch_counts.get(workshop.id, 0),
                     items=items,
                     result=result,
                     stock_warnings=_stock_warnings_from_demands(
@@ -2919,6 +2926,7 @@ def _order_summary_base(
     client: Client,
     branch: Branch,
     workshop: Workshop,
+    workshop_branch_count: int,
     items: Sequence[OrderItem],
     result: CuttingResult | None,
     stock_warnings: list[OrderStockWarning],
@@ -2933,6 +2941,7 @@ def _order_summary_base(
         "contact_phone": order.contact_phone,
         "workshop_id": order.workshop_id,
         "workshop_name": workshop.name,
+        "workshop_branch_count": workshop_branch_count,
         "branch_id": order.branch_id,
         "branch_name": branch.name,
         "branch_address": branch.address,
@@ -3010,11 +3019,13 @@ async def _order_response(
     ).all()
     warnings = await _stock_warnings(db, order)
     result = await db.get(CuttingResult, order.cutting_result_id)
+    branch_counts = await visible_branch_counts(db, [order.workshop_id])
     base = _order_summary_base(
         order=order,
         client=client,
         branch=branch,
         workshop=workshop,
+        workshop_branch_count=branch_counts.get(order.workshop_id, 0),
         items=items,
         result=result,
         stock_warnings=warnings,

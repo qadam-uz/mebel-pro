@@ -385,6 +385,55 @@ async def test_placing_an_order_pins_its_branch_and_a_later_order_moves_the_pin(
     assert client_row.preferred_branch_id == second_branch_id
 
 
+async def test_client_order_payloads_carry_the_workshop_branch_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The naming rule needs a number, not a guess.
+
+    A workshop with one visible branch is shown by its own name and the branch
+    name never appears; several and it is «{Workshop} · {Branch}». The web has
+    two names and no way to tell the two cases apart, so the count travels —
+    counted with the same visibility predicate Ustaxonalarim uses, which is why
+    an `inactive` branch does not move it.
+    """
+
+    order, client_access, _, workshop_id, _, _ = await _placed_order(
+        client, db_session, login="count_owner"
+    )
+    order_id = str(order["id"])
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+
+    assert listed.status_code == 200
+    assert detail.status_code == 200
+    assert [row["workshop_branch_count"] for row in listed.json()] == [1]
+    assert detail.json()["workshop_branch_count"] == 1
+
+    for name, status in (("Chilonzor", "active"), ("Sergeli", "inactive")):
+        db_session.add(
+            Branch(
+                workshop_id=workshop_id,
+                branch_no=await next_branch_no(db_session),
+                name=name,
+                address=f"Tashkent, {name}",
+                phone="+998901111111",
+                status=status,
+            )
+        )
+    await db_session.flush()
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+
+    # Two visible counters, not three: the inactive one is invisible to the
+    # client everywhere else too, so it cannot be what makes their order card
+    # start naming a branch.
+    assert [row["workshop_branch_count"] for row in listed.json()] == [2]
+    assert detail.json()["workshop_branch_count"] == 2
+
+
 async def test_client_order_detail_gates_settlement_until_ready(
     client: AsyncClient,
     db_session: AsyncSession,

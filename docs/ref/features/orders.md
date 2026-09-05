@@ -677,8 +677,10 @@ inbox rows written before that (`order.status_changed`) still render
   input (drawing names are searchable too, so the field stays plain text). **The card is the
   link**: left column `№ 482 917` in bold, the draft name as the headline **only when there is
   one** (an untitled drawing shows no headline — a grey "Nomsiz chizma" placeholder was the
-  worst thing on the card), the `created_via_workshop` pill after it, then
-  `{workshop} · {branch}` and `{n} detal · {m} list · {sana}` as two short lines. Right column,
+  worst thing on the card), the `created_via_workshop` pill after it, then the workshop by the
+  **naming rule** ([`client-entry.md`](client-entry.md)) — its own name alone when it has one
+  visible branch, `{workshop} · {branch}` when it has several — and
+  `{n} detal · {m} list · {sana}` as two short lines. Right column,
   top-aligned: the status pill and the **frozen total** beneath it — shown from placement, never
   "price after confirm", since pricing is frozen at creation. No button of any kind, and no
   cancel: cancelling lives on the detail page alone. A filter change keeps the old rows visible
@@ -688,9 +690,10 @@ inbox rows written before that (`order.status_changed`) still render
   the draft name under it when there is one, the status pill, the total right-aligned under a
   *jami narx* caption, and — only while `new` — a **Bekor qilish** outline-danger action with
   its reason dialog. On phones a full-width **Chizmani PDF ochish** follows the card; desktop
-  keeps the PDF link in the Chizma tab head. **Ustaxona card**: workshop and branch by the
-  naming rule, address, **Xaritada ko'rish** when the branch has coordinates, phone (a
-  cancelled order shows the cancel banner and no Ustaxona card). **Narx card**: one receipt —
+  keeps the PDF link in the Chizma tab head. **Ustaxona card**: the workshop name as the title,
+  the branch on a second line **only when the workshop has more than one visible branch** (the
+  same naming rule), the address, **Xaritada ko'rish** when the branch has coordinates, and
+  every published phone (a cancelled order shows the cancel banner and no Ustaxona card). **Narx card**: one receipt —
   Kesish xizmati, Material, Kromka, any Ustama / Chegirma, then **Jami**; at `ready` and
   `completed` two further rows, **To'langan** and **Qoldiq**, with Qoldiq set larger than Jami
   because it is what the client pays at the counter, and one line saying payment is taken at

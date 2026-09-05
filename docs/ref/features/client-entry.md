@@ -49,7 +49,12 @@ find that shop in a list of strangers.
   its branch name never appears. A workshop with **several** is named
   **«{Workshop} · {Branch}»**, always in that order. A branch name is never shown alone.
   Address and phone are always the branch's. One rule, so the same shop reads the same way on
-  home, in the editor, on an order and in a notification.
+  home, in the editor, on an order and in a notification. **The branch count is what decides,
+  and it travels in the payload** — the client's order list and detail carry
+  `workshop_branch_count`, counted with the same visibility predicate Ustaxonalarim uses — so a
+  screen holding two names never has to guess which case it is in. Guessing was the old
+  behaviour and it always guessed "several", which is how a one-counter workshop's client ended
+  up reading a branch name on every order card.
 - **The marketplace is a later phase**, and a deliberate one: public workshop cards and open
   price comparison start only when the platform itself brings the demand that would justify
   them. Nothing here builds it early; nothing here makes it harder. Until then it stays an

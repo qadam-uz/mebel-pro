@@ -3,7 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { clientErrorLabel, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import {
+  clientErrorLabel,
+  isUzPhone,
+  normalizeUzPhone,
+  workshopBranchName,
+} from '@/shared/app/clientUi'
 import {
   buildBillRows,
   canPlaceBlocker,
@@ -230,9 +235,14 @@ onMounted(async () => {
               {{ $t('client.orderNew.quoteFailed') }}
             </p>
             <!-- Workshop and branch read as one name — "Mebel Master · Yunusobod
-                 filiali" — because that is how the client says it out loud. -->
+                 filiali" — because that is how the client says it out loud.
+                 Through the naming rule, so a workshop with a single counter is
+                 named by itself (decision 23); the quote carries no branch
+                 count, and the joined form is the right answer without one. -->
             <div v-else class="grid gap-2">
-              <div class="client-row-name">{{ quote.workshop_name }} · {{ quote.branch_name }}</div>
+              <div class="client-row-name">
+                {{ workshopBranchName(quote.workshop_name, quote.branch_name) }}
+              </div>
               <BranchContact
                 :address="quote.branch_address"
                 :phone="quote.branch_phone"

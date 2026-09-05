@@ -271,6 +271,39 @@ async def apply_entry(
     )
 
 
+async def visible_branch_counts(
+    db: AsyncSession,
+    workshop_ids: Sequence[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """How many branches each of these workshops shows a client.
+
+    The system-wide naming rule turns on this one number: a workshop with a
+    single visible branch is named by itself and its branch name never appears;
+    a workshop with several is «{Workshop} · {Branch}» (client-entry.md). Every
+    surface that names a workshop therefore has to count branches the same way
+    Ustaxonalarim does, or an order card and the branch list disagree about what
+    the same workshop is called — which is why the count travels in the payload
+    rather than being guessed client-side, and why it is computed here, beside
+    the predicate, rather than re-expressed in the caller.
+
+    Workshops with no visible branch are simply absent from the mapping.
+    """
+
+    if not workshop_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(Branch.workshop_id, func.count(Branch.id))
+            .where(
+                Branch.workshop_id.in_(workshop_ids),
+                Branch.status.in_(VISIBLE_BRANCH_STATUSES),
+            )
+            .group_by(Branch.workshop_id)
+        )
+    ).all()
+    return {workshop_id: int(count) for workshop_id, count in rows}
+
+
 async def my_workshops(
     db: AsyncSession,
     *,
