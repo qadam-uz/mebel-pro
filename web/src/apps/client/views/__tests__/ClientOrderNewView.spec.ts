@@ -175,6 +175,17 @@ describe('ClientOrderNewView — Uzbek numbers only (§7.7)', () => {
     expect(field.classes()).toContain('border-danger')
   })
 
+  it('states the problem once — beside the field, not also under the button', async () => {
+    const { wrapper } = await mountConfirmation('+79261234567')
+    await phoneField(wrapper).trigger('blur')
+
+    // The disabled-CTA reason line carries every other blocker, but not this
+    // one: the field is already saying it, which is where an error belongs.
+    const text = wrapper.text()
+    expect(text.match(/O'zbekiston raqami kerak/g) ?? []).toHaveLength(1)
+    expect(text).not.toContain('Telefon +998XXXXXXXXX shaklida')
+  })
+
   it('keeps the submit disabled while the number is foreign', async () => {
     const { wrapper, create } = await mountConfirmation('+79261234567')
 

@@ -56,20 +56,6 @@ const draftName = computed(() => draft.value?.name?.trim() || '')
 // used to carry is gone — the rail's part count is the summary now.
 const billRows = computed(() => (quote.value ? buildBillRows(quote.value) : []))
 
-const blocker = computed(() =>
-  canPlaceBlocker({
-    hasQuote: Boolean(quote.value),
-    name: contactName.value,
-    phone: contactPhone.value,
-  }),
-)
-const canPlace = computed(() => blocker.value === null)
-// Shown under the CTA whenever it's disabled — unless a load/submit error is
-// already explaining itself there, which would just repeat the point.
-const reasonLine = computed(() =>
-  !canPlace.value && !localError.value ? canPlaceBlockerLabel(blocker.value) : null,
-)
-
 /**
  * §7.7: **the phone must be an Uzbek number** (`+998` + 9 digits).
  *
@@ -92,6 +78,23 @@ const phoneRejected = computed(
   () =>
     phoneTouched.value && contactPhone.value.trim().length > 0 && !isUzPhone(contactPhone.value),
 )
+
+const blocker = computed(() =>
+  canPlaceBlocker({
+    hasQuote: Boolean(quote.value),
+    name: contactName.value,
+    phone: contactPhone.value,
+  }),
+)
+const canPlace = computed(() => blocker.value === null)
+// Shown under the CTA whenever it is disabled — unless a load/submit error is
+// already explaining itself there, or the rejected phone field is already
+// carrying the same message beside itself, which is where an error belongs.
+const reasonLine = computed(() => {
+  if (canPlace.value || localError.value) return null
+  if (blocker.value === 'phone' && phoneRejected.value) return null
+  return canPlaceBlockerLabel(blocker.value)
+})
 
 async function loadQuote() {
   if (!branchId.value) return
