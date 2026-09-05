@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 80
 ---
 
@@ -384,9 +384,12 @@ draft name, named by the system-wide rule — the workshop alone when it has one
 `{Workshop} · {Branch}` when it has several. There is no picker, no **O'zgartirish**, and no
 way to compare branches from inside a drawing: the branch decides the catalog, the prices and
 the kerf, so changing it mid-drawing changes the drawing's meaning rather than a preference.
-A client with no pin reaching `/c/cutting/new` directly is **redirected to Ustaxonalarim
-before any editor renders** — the editor has no branch and no way to ask for one. An existing
-draft always carries its own branch, including one outside the client's current pin.
+The branch a **Yangi chizma** button started from travels in the URL (`?branch=…`, validated
+against the client's own visible branches) and outranks the pin for that drawing; it does not
+move the pin ([`client-entry.md`](client-entry.md)). A client reaching `/c/cutting/new` with
+neither a usable branch in the URL nor a pin is **redirected to Ustaxonalarim before any
+editor renders** — the editor has no branch and no way to ask for one. An existing draft
+always carries its own branch, including one outside the client's current pin.
 
 *Why this replaced a picker.* Until 2026-09 the editor opened a flat cross-workshop branch
 list (narrowed to the pinned workshop's branches under a `{workshop} filiallari` header), and

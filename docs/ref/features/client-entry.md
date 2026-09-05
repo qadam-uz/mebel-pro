@@ -2,7 +2,7 @@
 title: Client entry & workshop links
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 25
 ---
 
@@ -106,21 +106,36 @@ Applying an entry writes **two things**, and they answer two different questions
 
 **Certainty is the whole rule for the pin.** A branch link names its counter; a one-branch
 workshop has only one counter to name; a multi-branch link names none, and nothing may guess
-which counter the client stood at — so that client is asked on Ustaxonalarim instead, where
-each branch row's **Yangi chizma** pins as it starts. The earlier "pin the workshop now, the
-branch later" state is gone with the workshop-level pin it needed.
+which counter the client stood at — so that client draws from Ustaxonalarim instead, where
+each branch row's **Yangi chizma** opens the editor at that branch, and the order placed from
+it settles the pin. The earlier "pin the workshop now, the branch later" state is gone with
+the workshop-level pin it needed.
 
-- **Entry is the one path that writes the pin.** The client sends the code and the branch
-  together; the server re-resolves the code, cross-checks that the branch belongs to it and
-  is visible, then sets the pin, audited like any other client profile write. A refusal
-  leaves the previous pin untouched. A bare branch id can never pin — the **code is the
-  capability** that names the workshop.
-- **Latest choice wins**, with no confirmation friction: entering a door means walking through
-  it. Re-following the same link is idempotent. Besides a link, the pin moves through
-  **Asosiy qilish** on a branch row and through **Yangi chizma** on a non-pinned branch row;
-  the editor itself never re-pins.
-- **The pin seeds, it does not enforce.** New cutting drafts take their branch from it, and a
-  drawing keeps its own branch for life — nothing written in the editor reaches the profile.
+**Three paths write the pin**, and every one of them is the client saying where they collect:
+
+| Path | What it means |
+| --- | --- |
+| A **link entry that names a branch** | the client is standing at that counter, or followed its own QR |
+| **Asosiy qilish** on a branch row | an explicit choice, made on the row itself |
+| **Placing an order** | the strongest statement there is — the order's branch becomes the pin |
+
+- **Following a link is the one path a *client request* can pin through.** The client sends
+  the code and the branch together; the server re-resolves the code, cross-checks that the
+  branch belongs to it and is visible, then sets the pin, audited like any other client
+  profile write. A refusal leaves the previous pin untouched. A bare branch id can never
+  pin — the **code is the capability** that names the workshop. **Asosiy qilish** is the same
+  operation with the same guard, which is why the star sends a code too. The order path needs
+  no guard of its own: the order was already placed at that branch.
+- **Latest wins**, with no confirmation friction: entering a door means walking through it,
+  and ordering from a counter means that counter is now yours. Re-following the same link is
+  idempotent.
+- **«Yangi chizma» never pins** (owner, 2026-09-06: *"shunchaki bosib ko'rishi ham mumkin"* —
+  they may just be having a look). It opens the editor at that branch by carrying the branch
+  in the URL, and the drawing keeps it; the pin only follows if an order is placed from it.
+  Nor does the editor itself ever pin.
+- **The pin seeds, it does not enforce.** New cutting drafts take their branch from it unless
+  the URL named another visible branch, and a drawing keeps its own branch for life — nothing
+  written in the editor reaches the profile.
 - **A blocked workshop unpins in effect.** The session read that carries the pinned workshop
   and branch names returns them as null while the workshop is `blocked`, and that pair is the
   app's whole "is pinned" signal — so scoping silently stops applying rather than trapping the
@@ -154,14 +169,15 @@ and the pin narrows what the app *offers*, never what data it can render.
   the desktop nav's **Ustaxona**, one label and one target for both — opens that workshop's
   profile directly when the client deals with exactly one workshop, and Ustaxonalarim (the
   page, which keeps its own name) when there are several or the list has not loaded yet.
-- **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → **there is no
-  drawing action anywhere**: home's card is replaced by the **Ustaxona tanlang** prompt into
-  Ustaxonalarim, and a direct URL to the new-drawing route is redirected there before any
-  editor renders. A drawing needs a branch, and Ustaxonalarim is where a branch is chosen.
+- **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → **home offers
+  no drawing action**: its card is replaced by the **Ustaxona tanlang** prompt into
+  Ustaxonalarim, where every branch row's **Yangi chizma** still works. A direct URL to the
+  new-drawing route that names no branch is redirected to Ustaxonalarim before any editor
+  renders. A drawing needs a branch, and Ustaxonalarim is where an un-pinned client finds one.
 - **A drawing only ever starts from a workshop** — the pin, or a branch row's **Yangi
-  chizma**. The editor holds no workshop or branch state of its own, so *"which branch will
-  you collect from?"* is answered by the button that started the drawing and never asked
-  again ([`cutting.md`](cutting.md)).
+  chizma**, which hands the editor that branch in the URL. The editor holds no workshop or
+  branch state of its own, so *"which branch will you collect from?"* is answered by the
+  button that started the drawing and never asked again ([`cutting.md`](cutting.md)).
 - **An existing draft keeps its own branch** even when that branch is outside the current pin,
   and still renders normally. The pin scopes *new* choices; it never rewrites data or hides a
   drawing the client already made.
@@ -200,7 +216,8 @@ flowchart TD
 workshop-level link with several branches, and it was the wrong moment: the client has not
 drawn anything, does not yet know what they are collecting, and the question only matters when
 a drawing starts. It is now answered by the per-branch **Yangi chizma** buttons on
-Ustaxonalarim and the workshop profile, which pin as they open the editor.
+Ustaxonalarim and the workshop profile — and even they only open the editor at that branch;
+the answer is not written down as a pin until an order is placed.
 
 ### Landing (`/w/…`)
 
@@ -256,7 +273,8 @@ and **Xaritada ko'rish** when the branch has coordinates; then two small buttons
 The mark is a **star**: the pinned row carries a filled one, labelled *Asosiy*; every other row
 carries an outline star **button**, *Asosiy qilish*, which pins that branch in place — the star
 fills, the previous empties, a toast names it, and nothing navigates. **Yangi chizma** on a
-non-pinned row re-pins as it opens the editor. There is no «Asosiy» pill and no
+non-pinned row writes nothing at all — it opens the editor at that branch and leaves the star
+where it is until an order is placed. There is no «Asosiy» pill and no
 «Asosiy qilish» text button: a star is the affordance people already know for this, and it
 fits on a row that also has to hold two buttons on a phone.
 
@@ -323,6 +341,13 @@ the Telegram bot uses for its links.
   `preferred_branch_id` is left alone and revives on unblock.
 - **Entry while a draft is open elsewhere** → the pin changes; the open draft keeps its
   branch. No draft is ever re-branched implicitly.
+- **Order placed at a branch other than the pin** (a drawing started with **Yangi chizma** on
+  another row) → the pin moves to the order's branch, and home names that branch as
+  **Ustaxonangiz** from then on. The client is not asked to confirm: they just collected a
+  decision's worth of evidence about where they collect.
+- **Un-pinned client with a hand-edited branch in the URL** → an id outside the client's own
+  visible branches is ignored; the editor falls back to the pin, and with no pin either it
+  redirects to Ustaxonalarim like any other pin-less arrival.
 - **Same link followed twice** → idempotent; the toast shows again, nothing else changes.
 - **Two tabs, two links, one login** → the last applied entry wins, and both toasts
   truthfully name what they connected.
