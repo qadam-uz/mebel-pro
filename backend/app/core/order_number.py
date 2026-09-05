@@ -14,7 +14,8 @@ import re
 
 # U+2009 THIN SPACE, written as an escape so the separator stays visible to a
 # reader of this file. Narrow enough that the six digits still read as one
-# number, wide enough to break them into two speakable halves.
+# number, wide enough to break them into two speakable halves. It is the *only*
+# separator the rendered number uses — see `format_order_number`.
 THIN_SPACE = "\u2009"
 
 # U+2116 NUMERO SIGN, the prefix every rendered number carries. It is not copy
@@ -32,13 +33,18 @@ _QUERY_NOISE = re.compile(rf"[\s{NUMBER_SIGN}#]")
 
 
 def format_order_number(raw: str) -> str:
-    """`482917` -> the number sign, `482`, a thin space, `917`.
+    """`482917` -> the number sign, a thin space, `482`, a thin space, `917`.
+
+    One separator rule, thin space everywhere — after the sign and between the
+    groups — so this and `formatOrderNumber` in `web/src/shared/formatters.ts`
+    emit byte-identical strings. The vendored DejaVu pair carries U+2009, so the
+    cutting PDF and the akt sverka print it at its true 0.2 em rather than a box.
 
     Every legacy shape passes through unchanged — nothing reformats history.
     """
     if not _GENERATED_NUMBER.match(raw):
         return raw
-    return f"{NUMBER_SIGN} {group_digits(raw)}"
+    return f"{NUMBER_SIGN}{THIN_SPACE}{group_digits(raw)}"
 
 
 def group_digits(digits: str) -> str:

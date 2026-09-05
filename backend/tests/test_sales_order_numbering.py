@@ -118,9 +118,15 @@ async def test_insert_gives_up_rather_than_reusing_a_number(
 
 
 def test_display_groups_the_digits_and_leaves_legacy_numbers_alone() -> None:
-    assert format_order_number("482917") == f"{NUMBER_SIGN} 482{THIN_SPACE}917"
+    # One separator rule: a thin space after the sign as well as between the
+    # groups, so the backend and `formatOrderNumber` on the web agree byte for byte.
+    assert format_order_number("482917") == f"{NUMBER_SIGN}{THIN_SPACE}482{THIN_SPACE}917"
+    assert " " not in format_order_number("482917")
     # Widening to seven digits must not move the grouping: it counts from the right.
-    assert format_order_number("4829175") == f"{NUMBER_SIGN} 4{THIN_SPACE}829{THIN_SPACE}175"
+    assert (
+        format_order_number("4829175")
+        == f"{NUMBER_SIGN}{THIN_SPACE}4{THIN_SPACE}829{THIN_SPACE}175"
+    )
     assert format_order_number("#26-14-0003") == "#26-14-0003"
     assert format_order_number("ORD-2026-000123") == "ORD-2026-000123"
 

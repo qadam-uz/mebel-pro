@@ -57,11 +57,13 @@ with `order_number_unavailable` rather than issuing a wrong number. Revisit at r
 100 000 live orders, where a birthday-style collision stops being rare: widen to seven
 digits, and nothing else moves, because the display groups from the right.
 
-*Display.* Rendered everywhere as the numero sign, then groups of three from the right, thin
-space separated: **`№ 482 917`**. The prefix is not copy — it is emitted in every locale, by
+*Display.* Rendered everywhere as the numero sign, then groups of three from the right,
+**U+2009 thin space separated — after the sign as well as between the groups**, one rule and
+no other separator: **`№ 482 917`**. The prefix is not copy — it is emitted in every locale, by
 `format_order_number` on the backend (which the cutting PDF also uses) and `formatOrderNumber`
-on the web. Search normalises the query by stripping `№`, `#` and whitespace, so `№ 482 917`,
-`482 917` and `482917` are one number said three ways.
+on the web; the two emit byte-identical strings, and the vendored DejaVu pair carries U+2009 so
+the PDF prints the thin space rather than a box. Search normalises the query by stripping `№`,
+`#` and whitespace, so `№ 482 917`, `482 917` and `482917` are one number said three ways.
 
 *Legacy era:* orders placed before this format keep their `#26-14-0003` and `ORD-2026-000123`
 numbers **exactly as stored** — clients hold screenshots and printed cutting maps of them, and

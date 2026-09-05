@@ -122,7 +122,10 @@ const THIN_SPACE = ' '
  * reformatted, and a number that is not a bare 6–7 digit run is left alone.
  *
  * Every surface that prints `order_number` goes through this; there is no
- * exception (spec §1.3).
+ * exception (spec §1.3). One separator rule, thin space everywhere — after the
+ * sign and between the groups — matching `format_order_number` in
+ * `backend/app/core/order_number.py` byte for byte, so a number read off the
+ * screen and one printed on the cutting PDF are the same string.
  */
 export function formatOrderNumber(raw: string | null | undefined): string {
   const value = (raw ?? '').trim()
