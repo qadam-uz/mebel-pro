@@ -71,17 +71,26 @@ class WorkshopLinkResponse(APIModel):
 
 class ClientEntryRequest(BaseModel):
     """Applying a scanned link. The code — never a bare branch id — is the
-    capability that names the workshop; the server re-resolves both."""
+    capability that names the workshop; the server re-resolves both.
+
+    `branch_id` is present only when the link itself named a branch
+    (`/w/{code}/{branch_no}`). Left out, the server pins the workshop's single
+    visible branch if it has one and pins nothing otherwise — it never guesses
+    which counter of a multi-branch workshop the client stood at.
+    """
 
     code: str
-    branch_id: uuid.UUID
+    branch_id: uuid.UUID | None = None
 
 
 class ClientEntryResponse(APIModel):
+    """What the entry wrote. The branch pair is null when the link left the
+    branch undecided — the workshop is on Ustaxonalarim either way."""
+
     workshop_id: uuid.UUID
     workshop_name: str
-    branch_id: uuid.UUID
-    branch_name: str
+    branch_id: uuid.UUID | None
+    branch_name: str | None
 
 
 class ClientWorkshopBranch(APIModel):
@@ -90,6 +99,10 @@ class ClientWorkshopBranch(APIModel):
     name: str
     address: str
     phone: str
+    # For the «Xaritada ko'rish» link; null on a branch nobody has placed on
+    # the map yet, and the link is then simply absent.
+    latitude: Decimal | None
+    longitude: Decimal | None
     status: BranchStatus
     closed_reason: str | None
     is_pinned: bool

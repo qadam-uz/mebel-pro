@@ -60,6 +60,7 @@ MODULE_SCHEMA_FILES = {
 MODULE_MODEL_FILES = {
     "access": {"models.py"},
     "catalog": {"models.py"},
+    "client_portal": {"models.py"},
     "cutting": {"models.py"},
     "finance": {"models.py"},
     "inventory": {"models.py"},

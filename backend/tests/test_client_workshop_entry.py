@@ -7,6 +7,8 @@ workshop, and "my workshops" is derived from what the client actually did.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from app.models.enums import (
@@ -17,6 +19,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client
+from app.modules.client_portal.contracts import ClientWorkshopEntry
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.sales.contracts import Order
 from app.modules.support.api import FILE_CACHE_CONTROL, InMemoryFileStorage
@@ -66,6 +69,8 @@ async def _add_branch(
     name: str,
     status: BranchStatus = BranchStatus.ACTIVE,
     closed_reason: str | None = None,
+    latitude: Decimal | None = None,
+    longitude: Decimal | None = None,
 ) -> Branch:
     branch = Branch(
         workshop_id=workshop.id,
@@ -75,10 +80,26 @@ async def _add_branch(
         phone="+998901111111",
         status=status,
         closed_reason=closed_reason,
+        latitude=latitude,
+        longitude=longitude,
     )
     db.add(branch)
     await db.flush()
     return branch
+
+
+def _aware(moment: datetime) -> datetime:
+    """SQLite hands timestamps back without their zone; Postgres keeps it."""
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
+async def _entries(db: AsyncSession, *, client_id: uuid.UUID) -> list[ClientWorkshopEntry]:
+    rows = await db.scalars(
+        select(ClientWorkshopEntry)
+        .where(ClientWorkshopEntry.client_id == client_id)
+        .order_by(ClientWorkshopEntry.last_entered_at)
+    )
+    return list(rows.all())
 
 
 async def _seed_order(db: AsyncSession, *, client_row: Client, branch: Branch) -> Order:
@@ -553,6 +574,84 @@ async def test_entry_pins_the_branch_the_link_named(
         select(func.count()).select_from(ActionLog).where(ActionLog.action == "client.entry.apply")
     )
     assert audited == 1
+    # The relationship is stored, not only pinned — this is what keeps the
+    # workshop on Ustaxonalarim after the pin moves elsewhere.
+    entries = await _entries(db_session, client_id=client_row.id)
+    assert [row.workshop_id for row in entries] == [workshop.id]
+
+
+async def test_a_one_branch_workshop_link_pins_its_only_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """`/w/{code}` with nothing to choose between is as certain as a branch QR."""
+    workshop, branch, _ = await seed_workshop_with_owner(db_session, login="single_branch")
+    client_row, token = await _client_token(db_session)
+
+    response = await client.post(
+        "/api/v1/client/entry",
+        headers=_auth(token),
+        json={"code": workshop.public_code},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["branch_id"] == str(branch.id)
+    assert client_row.preferred_branch_id == branch.id
+
+
+async def test_a_multi_branch_workshop_link_records_the_entry_without_pinning(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Nothing may guess which counter the client stood at.
+
+    The workshop still joins Ustaxonalarim — that is what the entry row is for
+    — and the client is asked there which branch is theirs.
+    """
+    workshop, _, _ = await seed_workshop_with_owner(db_session, login="multi_branch")
+    await _add_branch(db_session, workshop=workshop, name="Chilonzor")
+    other, other_branch, _ = await seed_workshop_with_owner(db_session, login="multi_other")
+    client_row, token = await _client_token(db_session, preferred_branch_id=other_branch.id)
+
+    response = await client.post(
+        "/api/v1/client/entry",
+        headers=_auth(token),
+        json={"code": workshop.public_code},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["branch_id"] is None
+    assert response.json()["branch_name"] is None
+    assert response.json()["workshop_id"] == str(workshop.id)
+    # An existing pin is left exactly where it was, not cleared.
+    assert client_row.preferred_branch_id == other_branch.id
+    listed = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+    assert {row["workshop_id"] for row in listed.json()} == {str(workshop.id), str(other.id)}
+
+
+async def test_re_entering_stamps_the_same_row_instead_of_adding_one(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """One row per client per workshop — the table records relationships."""
+    workshop, branch, _ = await seed_workshop_with_owner(db_session, login="restamp_owner")
+    client_row, token = await _client_token(db_session)
+    payload = {"code": workshop.public_code, "branch_id": str(branch.id)}
+
+    first = await client.post("/api/v1/client/entry", headers=_auth(token), json=payload)
+    assert first.status_code == 200
+    (before,) = await _entries(db_session, client_id=client_row.id)
+    # Age the row so "the stamp moved" is an assertion, not a coin flip on the
+    # clock's resolution.
+    before.last_entered_at = datetime.now(UTC) - timedelta(days=10)
+    await db_session.flush()
+
+    second = await client.post("/api/v1/client/entry", headers=_auth(token), json=payload)
+    assert second.status_code == 200
+
+    entries = await _entries(db_session, client_id=client_row.id)
+    assert len(entries) == 1
+    assert _aware(entries[0].last_entered_at) > datetime.now(UTC) - timedelta(minutes=1)
 
 
 async def test_entry_is_idempotent_and_last_write_wins(
@@ -763,6 +862,124 @@ async def test_my_workshops_puts_the_pinned_workshop_first(
     assert response.status_code == 200
     assert [row["name"] for row in response.json()] == ["Zulfiya Mebel", "Alfa Mebel"]
     assert [row["is_pinned"] for row in response.json()] == [True, False]
+
+
+async def test_my_workshops_keeps_a_workshop_the_client_only_entered(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A scan with no drawing after it used to leave no trace at all.
+
+    The entry row is the relationship: the workshop stays on the page with no
+    pin and no history behind it.
+    """
+    workshop, _, _ = await seed_workshop_with_owner(db_session, login="entered_only")
+    await _add_branch(db_session, workshop=workshop, name="Chilonzor")
+    _, token = await _client_token(db_session)
+
+    entered = await client.post(
+        "/api/v1/client/entry",
+        headers=_auth(token),
+        json={"code": workshop.public_code},
+    )
+    assert entered.status_code == 200, entered.text
+    listed = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+
+    assert listed.status_code == 200
+    body = listed.json()
+    assert [row["workshop_id"] for row in body] == [str(workshop.id)]
+    assert body[0]["is_pinned"] is False
+
+
+async def test_my_workshops_orders_the_unpinned_by_most_recent_dealing(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Entry stamp, order and drawing answer one question between them: how
+    recently did these two deal with each other. Newest first."""
+    stale, _, _ = await seed_workshop_with_owner(db_session, login="rank_stale")
+    stale.name = "Alfa Mebel"
+    ordered, ordered_branch, _ = await seed_workshop_with_owner(db_session, login="rank_ordered")
+    ordered.name = "Beta Mebel"
+    recent, _, _ = await seed_workshop_with_owner(db_session, login="rank_recent")
+    recent.name = "Gamma Mebel"
+    await db_session.flush()
+    client_row, token = await _client_token(db_session)
+
+    now = datetime.now(UTC)
+    order = await _seed_order(db_session, client_row=client_row, branch=ordered_branch)
+    order.created_at = now - timedelta(days=2)
+    db_session.add_all(
+        [
+            ClientWorkshopEntry(
+                client_id=client_row.id,
+                workshop_id=stale.id,
+                last_entered_at=now - timedelta(days=30),
+            ),
+            ClientWorkshopEntry(
+                client_id=client_row.id,
+                workshop_id=recent.id,
+                last_entered_at=now - timedelta(hours=1),
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    response = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+
+    assert response.status_code == 200
+    # Alphabetical order would be exactly the reverse, so this can only pass on
+    # the activity key.
+    assert [row["name"] for row in response.json()] == [
+        "Gamma Mebel",
+        "Beta Mebel",
+        "Alfa Mebel",
+    ]
+
+
+async def test_my_workshops_carries_branch_coordinates_for_the_map_link(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """«Xaritada ko'rish» renders only where a branch has been placed."""
+    workshop, plotted, _ = await seed_workshop_with_owner(db_session, login="coords_owner")
+    plotted.latitude = Decimal("41.31150000")
+    plotted.longitude = Decimal("69.27970000")
+    unplotted = await _add_branch(db_session, workshop=workshop, name="Zangiota")
+    await db_session.flush()
+    _, token = await _client_token(db_session, preferred_branch_id=plotted.id)
+
+    response = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+
+    assert response.status_code == 200
+    branches = {row["id"]: row for row in response.json()[0]["branches"]}
+    assert float(branches[str(plotted.id)]["latitude"]) == pytest.approx(41.3115)
+    assert float(branches[str(plotted.id)]["longitude"]) == pytest.approx(69.2797)
+    assert branches[str(unplotted.id)]["latitude"] is None
+    assert branches[str(unplotted.id)]["longitude"] is None
+
+
+async def test_making_another_branch_primary_repins_without_a_fresh_scan(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The star on a branch row — the only re-pin that is not a link entry."""
+    workshop, first, _ = await seed_workshop_with_owner(db_session, login="star_owner")
+    second = await _add_branch(db_session, workshop=workshop, name="Yunusobod")
+    client_row, token = await _client_token(db_session, preferred_branch_id=first.id)
+
+    response = await client.patch(
+        "/api/v1/client/profile",
+        headers=_auth(token),
+        json={"preferred_branch_id": str(second.id)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["preferred_branch_id"] == str(second.id)
+    assert client_row.preferred_branch_id == second.id
+    listed = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+    pinned = [row["id"] for row in listed.json()[0]["branches"] if row["is_pinned"]]
+    assert pinned == [str(second.id)]
 
 
 async def test_my_workshops_excludes_a_blocked_workshop(

@@ -5,6 +5,7 @@ from app.models.base import Base
 _MODEL_MODULES = (
     "app.modules.access.models",
     "app.modules.catalog.models",
+    "app.modules.client_portal.models",
     "app.modules.cutting.models",
     "app.modules.finance.models",
     "app.modules.inventory.models",
