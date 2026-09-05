@@ -12,9 +12,15 @@ Current build state (rationale in [`docs/architecture.md`](../docs/architecture.
   redirect to `/landing/`.
 - **Three role SPAs** — `web/client/index.html`, `web/workshop/index.html`,
   `web/admin/index.html`, each mounting `src/apps/<role>/main.ts` with routes in
-  `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/` (api client, stores,
-  components, composables, views, i18n, app helpers). File inventories drift — `ls` before
-  trusting a list.
+  `src/apps/<role>/routes.ts` and its own chrome in `src/apps/<role>/<Role>Shell.vue`.
+  `main.ts` hands `mountRoleApp` that shell plus whatever else only this role needs, as
+  `RoleAppOptions` — `onBoot` (after Pinia, before the router), `onRevalidate` (after a 403)
+  and `onAfterNavigate`; the bootstrap itself branches on no role. **A role shell must not
+  import another role's store or components**: the three SPAs share one chunk, so a single
+  cross-role import lands that role's code in all three initial loads. Shared code lives
+  under `src/shared/` (api client, stores, components, composables, i18n, app helpers) plus
+  the views more than one role routes to; a view only one role reaches lives in
+  `src/apps/<role>/views/`. File inventories drift — `ls` before trusting a list.
 
 ## Commands
 
@@ -42,9 +48,10 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
 - **SFCs**: `<script setup lang="ts">` + Composition API only. No Options API, no class components.
 - **Imports**: use the `@/` alias for anything under `src/` (e.g. `@/shared/stores/orders`). Relative imports only within a feature folder.
 - **Routing**: register routes in the owning role file under `src/apps/<role>/routes.ts`.
-  Route-level components currently live in `src/shared/views/`; move toward role-owned
-  views as feature modules mature. Lazy-load (`() => import(...)`) everything except the
-  initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
+  A route component one role reaches lives in `src/apps/<role>/views/`; `src/shared/views/`
+  is only for screens two or more roles route to (the cutting editor and result, the drafts
+  list, the 404) — grep the three `routes.ts` before putting one there. Lazy-load
+  (`() => import(...)`) everything except the initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
   production is host-routed. Inside a role route file, write **absolute production paths**

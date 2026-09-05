@@ -1,4 +1,7 @@
-import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
+import {
+  adminNotificationDestination,
+  adminNotificationTitle,
+} from '@/shared/app/adminNotifications'
 import {
   clientNotificationBody,
   clientNotificationIconName,
@@ -12,8 +15,8 @@ import type { NotificationItem } from '@/shared/stores/notifications'
  * (`NotificationsMenu`) and the full page (`ClientNotificationsView`) both render
  * through these helpers, so the same notification presents identically in both
  * surfaces instead of each component re-deriving title/body/icon/destination with
- * slightly different coverage. Per-role copy still lives in `clientUi`/`adminUi`;
- * this module only routes by role.
+ * slightly different coverage. Per-role copy still lives in `clientUi` /
+ * `adminNotifications`; this module only routes by role.
  */
 export function notificationTitle(item: NotificationItem, role: RoleKey): string {
   if (role === 'admin') return adminNotificationTitle(item)

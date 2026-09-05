@@ -8,7 +8,7 @@ export const clientRoutes: RouteRecordRaw[] = [
   {
     path: '/auth/login',
     name: 'client-login',
-    component: () => import('@/shared/views/ClientLoginView.vue'),
+    component: () => import('@/apps/client/views/ClientLoginView.vue'),
     meta: { layout: 'auth', titleKey: 'routes.login' },
   },
   // The workshop link a QR opens. `meta.public` is what keeps the auth guard
@@ -19,43 +19,43 @@ export const clientRoutes: RouteRecordRaw[] = [
   {
     path: '/w/:code',
     name: 'client-entry',
-    component: () => import('@/shared/views/ClientEntryView.vue'),
+    component: () => import('@/apps/client/views/ClientEntryView.vue'),
     meta: { layout: 'auth', public: true, titleKey: 'routes.entry' },
   },
   {
     path: '/w/:code/:branchNo',
     name: 'client-entry-branch',
-    component: () => import('@/shared/views/ClientEntryView.vue'),
+    component: () => import('@/apps/client/views/ClientEntryView.vue'),
     meta: { layout: 'auth', public: true, titleKey: 'routes.entry' },
   },
   {
     path: '/c',
     name: 'client-home',
-    component: () => import('@/shared/views/ClientHomeView.vue'),
+    component: () => import('@/apps/client/views/ClientHomeView.vue'),
     meta: { titleKey: 'routes.clientHome' },
   },
   {
     path: '/c/profile',
     name: 'client-profile',
-    component: () => import('@/shared/views/ClientProfileView.vue'),
+    component: () => import('@/apps/client/views/ClientProfileView.vue'),
     meta: { titleKey: 'routes.profile' },
   },
   {
     path: '/c/orders',
     name: 'client-orders',
-    component: () => import('@/shared/views/ClientOrdersView.vue'),
+    component: () => import('@/apps/client/views/ClientOrdersView.vue'),
     meta: { titleKey: 'routes.orders' },
   },
   {
     path: '/c/orders/new/:draft_id',
     name: 'client-order-new',
-    component: () => import('@/shared/views/ClientOrderNewView.vue'),
+    component: () => import('@/apps/client/views/ClientOrderNewView.vue'),
     meta: { titleKey: 'routes.placeOrder' },
   },
   {
     path: '/c/orders/:order_id',
     name: 'client-order-detail',
-    component: () => import('@/shared/views/ClientOrderDetailView.vue'),
+    component: () => import('@/apps/client/views/ClientOrderDetailView.vue'),
     meta: { titleKey: 'routes.orderDetail' },
   },
   {
@@ -89,13 +89,13 @@ export const clientRoutes: RouteRecordRaw[] = [
     // path stay; the platform-wide directory that used to live here is gone.
     path: '/c/branches',
     name: 'client-branches',
-    component: () => import('@/shared/views/ClientBranchesView.vue'),
+    component: () => import('@/apps/client/views/ClientBranchesView.vue'),
     meta: { titleKey: 'routes.workshops' },
   },
   {
     path: '/c/notifications',
     name: 'client-notifications',
-    component: () => import('@/shared/views/ClientNotificationsView.vue'),
+    component: () => import('@/apps/client/views/ClientNotificationsView.vue'),
     meta: { titleKey: 'routes.notifications' },
   },
   {

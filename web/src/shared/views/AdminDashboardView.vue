@@ -7,11 +7,11 @@ import {
   adminDate,
   adminDateTime,
   adminErrorMessage,
-  adminJobNameLabel,
   errorStatusLabel,
   errorStatusTone,
   workshopStatusLabel,
 } from '@/shared/app/adminUi'
+import { adminJobNameLabel } from '@/shared/app/adminNotifications'
 import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'

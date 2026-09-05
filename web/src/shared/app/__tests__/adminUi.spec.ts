@@ -6,17 +6,19 @@ import {
   adminEntityLabel,
   adminInitials,
   adminJobLogText,
-  adminJobNameLabel,
   adminJobScheduleLabel,
   adminNavMetrics,
-  adminNotificationDestination,
-  adminNotificationTitle,
   adminStatusTransitionLabel,
   auditActionFields,
   auditStatusFields,
-  groupedNav,
   matchesNeedle,
 } from '@/shared/app/adminUi'
+import {
+  adminJobNameLabel,
+  adminNotificationDestination,
+  adminNotificationTitle,
+} from '@/shared/app/adminNotifications'
+import { groupedNav } from '@/shared/app/shellChrome'
 import type { NavItem } from '@/shared/app/roleConfig'
 import type { ActionLog, StatusChangeLog } from '@/shared/stores/admin'
 import type { NotificationItem } from '@/shared/stores/notifications'

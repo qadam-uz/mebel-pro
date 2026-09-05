@@ -2,13 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { adminDateTime, adminErrorMessage, dropdownOption } from '@/shared/app/adminUi'
 import {
-  adminDateTime,
-  adminErrorMessage,
   adminNotificationDestination,
   adminNotificationTitle,
-  dropdownOption,
-} from '@/shared/app/adminUi'
+} from '@/shared/app/adminNotifications'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'

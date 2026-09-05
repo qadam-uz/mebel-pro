@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/shared/api/client'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
-import ClientBranchesView from '@/shared/views/ClientBranchesView.vue'
+import ClientBranchesView from '@/apps/client/views/ClientBranchesView.vue'
 
 vi.mock('@/shared/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/shared/api/client')>('@/shared/api/client')

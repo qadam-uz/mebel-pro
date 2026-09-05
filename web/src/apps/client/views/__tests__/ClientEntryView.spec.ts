@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/shared/api/client'
 import { readClientEntry, takeEntryToast } from '@/shared/app/clientEntry'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
-import ClientEntryView from '@/shared/views/ClientEntryView.vue'
+import ClientEntryView from '@/apps/client/views/ClientEntryView.vue'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 
 vi.mock('@/shared/api/client', async () => {

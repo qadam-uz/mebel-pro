@@ -1,5 +1,6 @@
 import { decorTypeLabel as sharedDecorTurLabel } from '@/shared/app/materialLabel'
-import type { DropdownOption, NavGroupId, NavItem } from '@/shared/app/roleConfig'
+import { fallbackDisplayLabel } from '@/shared/app/adminNotifications'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import type {
   ActionLog,
   ErrorRecordStatus,
@@ -10,7 +11,6 @@ import type {
   StatusChangeLog,
   WorkshopSummary,
 } from '@/shared/stores/admin'
-import type { NotificationItem } from '@/shared/stores/notifications'
 
 // AB-51: pure audit-filter helpers, extracted so the substring-match predicate
 // is unit-testable without mounting the view.
@@ -79,23 +79,6 @@ export function adminNavMetrics(input: {
     ],
     ['/admin/platform/users', { key: 'operators', value: input.operators }],
   ])
-}
-
-/** Groups by the stable `NavGroupId`, not by the rendered label — grouping on
- *  display text would split or merge sections the moment a locale changed. The
- *  caller resolves `nav.group.<id>` for the heading. */
-export function groupedNav(items: NavItem[]) {
-  const groups: Array<{ id: NavGroupId; items: NavItem[] }> = []
-  for (const item of items) {
-    const id = item.group ?? 'platform'
-    let group = groups.find((current) => current.id === id)
-    if (!group) {
-      group = { id, items: [] }
-      groups.push(group)
-    }
-    group.items.push(item)
-  }
-  return groups
 }
 
 export function workshopStatusTone(status: WorkshopSummary['status']) {
@@ -193,19 +176,11 @@ const ADMIN_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Bekor qilingan',
 }
 
-const ADMIN_JOB_LABELS: Record<string, string> = {
-  'cleanup-expired-sessions': "Muddati o'tgan sessiyalarni tozalash",
-}
-
 const ADMIN_JOB_SCHEDULE_LABELS: Record<string, string> = {
   hourly: 'Har soatda',
   daily: 'Har kuni',
   weekly: 'Har hafta',
   manual: "Qo'lda",
-}
-
-function fallbackDisplayLabel(value: string) {
-  return value.replace(/_/g, ' ').replace(/-/g, ' ')
 }
 
 export function adminEntityLabel(value: string | null | undefined) {
@@ -228,11 +203,6 @@ export function adminStatusTransitionLabel(
   toStatus: string | null | undefined,
 ) {
   return `${adminStatusValueLabel(fromStatus)} -> ${adminStatusValueLabel(toStatus)}`
-}
-
-export function adminJobNameLabel(value: string | null | undefined) {
-  if (!value) return '-'
-  return ADMIN_JOB_LABELS[value] ?? fallbackDisplayLabel(value)
 }
 
 export function adminJobScheduleLabel(value: string | null | undefined) {
@@ -277,49 +247,6 @@ export function adminDateTime(value: string | null | undefined) {
 
 function padDatePart(value: number) {
   return String(value).padStart(2, '0')
-}
-
-function notificationPayloadText(item: NotificationItem, key: string) {
-  const value = item.payload[key]
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-export function adminNotificationTitle(item: NotificationItem) {
-  const summary = item.payload.summary
-  if (typeof summary === 'string' && summary.trim()) return summary
-  const jobName = notificationPayloadText(item, 'job_name')
-  const errorCode =
-    notificationPayloadText(item, 'error_code') ?? notificationPayloadText(item, 'code')
-  if (item.event_code.includes('job')) {
-    return jobName
-      ? `Fon vazifa muvaffaqiyatsiz: ${adminJobNameLabel(jobName)}`
-      : `Fon vazifa muvaffaqiyatsiz: ${item.event_code}`
-  }
-  if (item.event_code.includes('error')) {
-    return errorCode ? `Xato ko'payishi: ${errorCode}` : `Xato ko'payishi: ${item.event_code}`
-  }
-  return item.event_code
-}
-
-export function adminNotificationDestination(item: NotificationItem) {
-  if (item.entity_type === 'workshop' && item.entity_id) return `/admin/workshops/${item.entity_id}`
-  if (item.entity_type === 'error_record' && item.entity_id) {
-    return `/admin/platform/errors?record=${encodeURIComponent(item.entity_id)}`
-  }
-  const jobName = notificationPayloadText(item, 'job_name')
-  if (item.event_code.includes('job')) {
-    return jobName
-      ? `/admin/platform/jobs?job=${encodeURIComponent(jobName)}`
-      : '/admin/platform/jobs'
-  }
-  const errorCode =
-    notificationPayloadText(item, 'error_code') ?? notificationPayloadText(item, 'code')
-  if (item.event_code.includes('error')) {
-    return errorCode
-      ? `/admin/platform/errors?code=${encodeURIComponent(errorCode)}`
-      : '/admin/platform/errors'
-  }
-  return '/admin/notifications'
 }
 
 /**

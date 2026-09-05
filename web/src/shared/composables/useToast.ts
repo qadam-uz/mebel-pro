@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 
 // Shared, app-wide toast queue (CB-14). The state is module-level so any
-// component can raise a toast and the single <ToastHost> in AppShell renders it
+// component can raise a toast and the single <ToastHost> each role shell mounts
+// renders it
 // — toasts survive route navigation (e.g. a "placed" toast shown as the order
 // wizard redirects to the order page).
 

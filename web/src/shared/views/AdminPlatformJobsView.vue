@@ -6,11 +6,11 @@ import {
   adminDateTime,
   adminErrorMessage,
   adminJobLogText,
-  adminJobNameLabel,
   adminJobScheduleLabel,
   jobStatusLabel,
   jobStatusTone,
 } from '@/shared/app/adminUi'
+import { adminJobNameLabel } from '@/shared/app/adminNotifications'
 import { apiErrorCode } from '@/shared/api/client'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'

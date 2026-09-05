@@ -281,7 +281,7 @@ export type EdgeSide = (typeof EDGE_SIDES)[number]
 export const useCuttingStore = defineStore('cutting', () => {
   // Role scope (default 'client' — the client SPA needs zero configuration).
   // The workshop SPA calls configureScope('workshop') once at bootstrap
-  // (createRoleApp), before any view runs.
+  // (the `onBoot` hook in `apps/workshop/main.ts`), before any view runs.
   const scope = ref<CuttingScope>('client')
   // Workshop-only: the resolved walk-in client the current draft belongs to.
   const walkInClient = ref<CuttingWalkInClient | null>(null)

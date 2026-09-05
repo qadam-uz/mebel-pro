@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/shared/api/client'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
-import ClientLoginView from '@/shared/views/ClientLoginView.vue'
+import ClientLoginView from '@/apps/client/views/ClientLoginView.vue'
 import { useAuthStore, type ClientLoginPoll, type MeResponse } from '@/shared/stores/auth'
 
 const loginRoutes = [

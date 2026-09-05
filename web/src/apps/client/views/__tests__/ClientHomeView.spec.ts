@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueEntryToast, takeEntryToast } from '@/shared/app/clientEntry'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
 import { useToast } from '@/shared/composables/useToast'
-import ClientHomeView from '@/shared/views/ClientHomeView.vue'
+import ClientHomeView from '@/apps/client/views/ClientHomeView.vue'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 
 vi.mock('@/shared/api/client', async () => {
