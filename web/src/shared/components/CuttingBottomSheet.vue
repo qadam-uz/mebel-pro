@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
 
 import { nextStableId } from '@/shared/app/listboxNav'
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import Icon from '@/shared/components/AppIcon.vue'
 
@@ -21,6 +22,14 @@ import Icon from '@/shared/components/AppIcon.vue'
  * `--app-vh`, never `100dvh`: the desktop root paints at `zoom: 90%`, so a raw
  * viewport unit would resolve against the unzoomed viewport and paint 90% of
  * the screen (web/AGENTS.md, "Measuring under the root zoom").
+ *
+ * **A third frame, opt-in: `anchor`.** From `md` up a caller that hands over the
+ * control which opened it gets a `SearchCombobox`-shaped panel placed against
+ * that control instead of a centred modal — the frame §7.3 asks for on the
+ * material picker. It is a popover, not a dialog: no scrim, no scroll lock, no
+ * Tab trap; Escape and an outside click close it, focus returns to the trigger,
+ * and it repositions on scroll (capture phase, so an inner scroller is heard —
+ * web/AGENTS.md) and on resize. Below `md`, and with no anchor, nothing changes.
  */
 const props = withDefaults(
   defineProps<{
@@ -30,23 +39,180 @@ const props = withDefaults(
     maxWidth?: string
     /** Inset from the top of the viewport on phones, so the page shows through. */
     sheetTopClass?: string
+    /** The control that opened this — turns on the anchored frame at `md`. */
+    anchor?: HTMLElement | null
   }>(),
-  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3' },
+  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3', anchor: null },
 )
 
 const emit = defineEmits<{ close: [] }>()
 
 const panelRef = ref<HTMLElement | null>(null)
-const openRef = computed(() => props.open)
 const id = nextStableId('mp-sheet')
-const trap = useFocusTrap(panelRef, openRef, () => emit('close'))
+
+// `md` is the client's own phone/desktop split (§2) and is below the 769px the
+// root zoom starts at, so the raw number matches the `md:` utility.
+const wide = ref(
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(min-width: 768px)').matches
+    : false,
+)
+let mediaQuery: MediaQueryList | null = null
+function onMediaChange(event: MediaQueryListEvent) {
+  wide.value = event.matches
+}
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  mediaQuery = window.matchMedia('(min-width: 768px)')
+  mediaQuery.addEventListener('change', onMediaChange)
+}
+
+const anchored = computed(() => Boolean(props.anchor) && wide.value)
+// The modal/sheet frame keeps the trap; the anchored popover manages its own
+// focus below, so the trap must not also lock the body behind it.
+const trapOpen = computed(() => props.open && !anchored.value)
+const trap = useFocusTrap(panelRef, trapOpen, () => emit('close'))
+
+const PANEL_GUTTER = 8
+const PANEL_MIN_WIDTH = 420
+const PANEL_MAX_HEIGHT = 460
+const panelStyle = ref<CSSProperties>({})
+
+function updatePanelPosition() {
+  const trigger = props.anchor
+  if (!trigger) return
+  const rect = overlayRect(trigger)
+  const { width: viewportWidth, height: viewportHeight } = overlayViewport()
+  const width = Math.min(
+    Math.max(rect.width, PANEL_MIN_WIDTH),
+    Math.max(200, viewportWidth - PANEL_GUTTER * 2),
+  )
+  const below = viewportHeight - rect.bottom - PANEL_GUTTER - 4
+  const above = rect.top - PANEL_GUTTER - 4
+  const openUp = below < PANEL_MAX_HEIGHT && above > below
+  const maxHeight = Math.max(220, Math.min(openUp ? above : below, PANEL_MAX_HEIGHT))
+  const left = Math.min(
+    Math.max(rect.left, PANEL_GUTTER),
+    Math.max(PANEL_GUTTER, viewportWidth - width - PANEL_GUTTER),
+  )
+  const top = openUp
+    ? Math.max(PANEL_GUTTER, rect.top - maxHeight - 4)
+    : Math.min(rect.bottom + 4, viewportHeight - PANEL_GUTTER)
+  panelStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${width}px`,
+    maxHeight: `${maxHeight}px`,
+  }
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented) return
+  event.preventDefault()
+  emit('close')
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (panelRef.value?.contains(target)) return
+  if (props.anchor?.contains(target)) return
+  emit('close')
+}
+
+function stopAnchoredListeners() {
+  document.removeEventListener('keydown', onDocumentKeydown)
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+  window.removeEventListener('resize', updatePanelPosition)
+  // Capture phase: a `scroll` event does not bubble, so a listener bound in the
+  // bubble phase never hears the column the trigger actually scrolls in.
+  document.removeEventListener('scroll', updatePanelPosition, true)
+}
+
+let anchoredTrigger: HTMLElement | null = null
+
+watch(
+  () => props.open && anchored.value,
+  async (isOpen) => {
+    if (!isOpen) {
+      stopAnchoredListeners()
+      if (anchoredTrigger) {
+        anchoredTrigger.focus()
+        anchoredTrigger = null
+      }
+      return
+    }
+    anchoredTrigger = props.anchor ?? null
+    document.addEventListener('keydown', onDocumentKeydown)
+    document.addEventListener('pointerdown', onDocumentPointerDown, true)
+    window.addEventListener('resize', updatePanelPosition)
+    document.addEventListener('scroll', updatePanelPosition, true)
+    await nextTick()
+    updatePanelPosition()
+    // The search field first — a combobox's caret belongs in its query box, not
+    // on the close button that happens to come first in the DOM.
+    const panel = panelRef.value
+    ;(
+      panel?.querySelector<HTMLElement>('input') ??
+      panel?.querySelector<HTMLElement>('button') ??
+      panel
+    )?.focus()
+  },
+  { flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  stopAnchoredListeners()
+  mediaQuery?.removeEventListener('change', onMediaChange)
+})
 </script>
 
 <template>
   <Teleport to="body">
+    <!-- The anchored frame (`md` and up, with a trigger): a popover, so no
+         scrim, and z-[90] — the layer `SearchCombobox`'s own panel uses. -->
+    <section
+      v-if="open && anchored"
+      :id="id"
+      ref="panelRef"
+      role="dialog"
+      :aria-labelledby="`${id}-title`"
+      tabindex="-1"
+      class="fixed z-[90] grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
+      :style="panelStyle"
+    >
+      <header
+        class="row-start-1 flex items-start justify-between gap-3 border-b border-hairline px-4 py-3"
+      >
+        <div class="min-w-0">
+          <h2 :id="`${id}-title`" class="text-[13.5px] font-bold text-ink">{{ title }}</h2>
+          <p v-if="$slots.subtitle" class="mt-0.5 text-[12.5px] font-semibold text-ink-muted">
+            <slot name="subtitle"></slot>
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-1.5">
+          <slot name="head-actions"></slot>
+          <button
+            type="button"
+            class="mp-action-icon-button size-8 min-h-0 text-ink-muted hover:bg-sunk hover:text-ink"
+            :aria-label="$t('shell.action.close')"
+            @click="emit('close')"
+          >
+            <Icon name="x" class="size-4" />
+          </button>
+        </div>
+      </header>
+      <div class="row-start-2 grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        <div v-if="$slots.pinned"><slot name="pinned"></slot></div>
+        <div class="mp-scroll min-h-0 overflow-y-auto px-4 py-3"><slot></slot></div>
+      </div>
+      <div v-if="$slots.foot" class="row-start-3 border-t border-hairline bg-elevated px-4 py-3">
+        <slot name="foot"></slot>
+      </div>
+    </section>
+
     <!-- z-[80] is the app modal layer, shared with AppModal — a ConfirmDialog
          raised from inside one still lands above at z-[85]. -->
-    <div v-if="open" class="fixed inset-0 z-[80] sm:grid sm:place-items-center sm:p-4">
+    <div v-else-if="open" class="fixed inset-0 z-[80] sm:grid sm:place-items-center sm:p-4">
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true" @click="emit('close')"></div>
       <section
         :id="id"

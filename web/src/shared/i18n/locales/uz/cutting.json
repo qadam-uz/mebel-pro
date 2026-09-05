@@ -58,8 +58,6 @@
     "unassigned": "Material tanlanmagan",
     "pick": "Material tanlang",
     "replaceTitle": "Materialni almashtirish",
-    "forPart": "«{name}» detali uchun",
-    "forPartGeneric": "Detal uchun",
     "forGroup": "Ushbu guruhdagi {n} detal uchun",
     "forSelection": "Tanlangan {n} ta detal uchun",
     "grained": "Teksturali material",

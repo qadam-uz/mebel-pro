@@ -1310,11 +1310,9 @@ function onPanelEdgesChange(payload: {
   rememberEdgeMaterial(part, payload.rememberedMaterialId)
 }
 
-type MaterialPickerTarget =
-  | { type: 'part'; partRef: string }
-  | { type: 'group'; key: string }
-  | { type: 'bulk' }
-  | { type: 'new' }
+// No per-part target: a row's material is the group's, and changing one row
+// alone is what the group head (or a bulk selection) is for.
+type MaterialPickerTarget = { type: 'group'; key: string } | { type: 'bulk' } | { type: 'new' }
 const materialPickerTarget = ref<MaterialPickerTarget | null>(null)
 
 function toggleSelect(partRef: string) {
@@ -1343,16 +1341,30 @@ function openBulkEdge() {
   edgePickerInitialSide.value = null
   edgeReturnFocus = null
 }
-function openBulkMaterial() {
+/**
+ * §7.3: on a desktop the client picker is a panel anchored to the control that
+ * opened it, so every trigger hands over its own element. Null on the phone
+ * path (and for a keyboard activation with no element) simply means the sheet.
+ */
+const materialPickerAnchor = ref<HTMLElement | null>(null)
+function anchorFrom(event?: Event) {
+  materialPickerAnchor.value =
+    event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
+
+function openBulkMaterial(event?: Event) {
   if (selectedParts.value.length === 0) return
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'bulk' }
 }
 
-function openNewMaterial() {
+function openNewMaterial(event?: Event) {
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'new' }
 }
 
-function openGroupMaterial(group: { key: string }) {
+function openGroupMaterial(group: { key: string }, event?: Event) {
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'group', key: group.key }
 }
 
@@ -1361,10 +1373,6 @@ function addGroupRow(group: { materialId: string | null; parts: Array<{ part: Cu
   const last = group.parts[group.parts.length - 1]?.part ?? null
   const lastIndex = last ? parts.value.findIndex((part) => part.part_ref === last.part_ref) : -1
   addRow(group.materialId, last, lastIndex)
-}
-
-function openPartMaterial(part: CuttingPart) {
-  materialPickerTarget.value = { type: 'part', partRef: part.part_ref }
 }
 
 function closeMaterialPicker() {
@@ -1484,9 +1492,6 @@ const materialPickerGroups = computed<MaterialPickerGroup[]>(() => {
 const materialPickerCurrentId = computed(() => {
   const target = materialPickerTarget.value
   if (!target) return null
-  if (target.type === 'part') {
-    return parts.value.find((part) => part.part_ref === target.partRef)?.material_id ?? null
-  }
   if (target.type === 'group') {
     const group = groupedParts.value.find((item) => item.key === target.key)
     return group?.materialId ?? null
@@ -1498,13 +1503,6 @@ const materialPickerCurrentId = computed(() => {
 const materialPickerSubtitle = computed(() => {
   const target = materialPickerTarget.value
   if (!target) return ''
-  if (target.type === 'part') {
-    const index = parts.value.findIndex((part) => part.part_ref === target.partRef)
-    const part = parts.value[index]
-    return part
-      ? t('cutting.material.forPart', { name: partDisplayName(part, index) })
-      : t('cutting.material.forPartGeneric')
-  }
   if (target.type === 'group') {
     const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
     return t('cutting.material.forGroup', { n: count }, count)
@@ -1521,9 +1519,6 @@ function applyMaterialPicker(materialId: string) {
     const existing = groupedParts.value.find((group) => group.materialId === materialId)
     if (existing) addGroupRow(existing)
     else addRow(materialId, null)
-  } else if (target.type === 'part') {
-    const part = parts.value.find((item) => item.part_ref === target.partRef)
-    if (part) part.material_id = materialId
   } else if (target.type === 'group') {
     const group = groupedParts.value.find((item) => item.key === target.key)
     if (!group) return
@@ -2635,7 +2630,7 @@ onBeforeRouteLeave(async () => {
                   <button
                     type="button"
                     class="text-accent-strong hover:underline"
-                    @click="openBulkMaterial"
+                    @click="openBulkMaterial($event)"
                   >
                     {{ $t('cutting.editor.bulkChangeMaterial') }}
                   </button>
@@ -2676,7 +2671,7 @@ onBeforeRouteLeave(async () => {
                       <button
                         type="button"
                         class="mp-button mp-button-primary"
-                        @click="openNewMaterial"
+                        @click="openNewMaterial($event)"
                       >
                         {{
                           isClientEditor
@@ -2821,7 +2816,7 @@ onBeforeRouteLeave(async () => {
                                 type="button"
                                 class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
                                 :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                                @click.stop="openGroupMaterial(group)"
+                                @click.stop="openGroupMaterial(group, $event)"
                               >
                                 {{ group.label }}
                               </button>
@@ -3018,7 +3013,6 @@ onBeforeRouteLeave(async () => {
                         @apply-edge-number="
                           (side, number) => applyEdgeNumberToPartSide(part, side, number)
                         "
-                        @open-material-picker="openPartMaterial(part)"
                       />
                     </div>
                   </section>
@@ -3040,7 +3034,7 @@ onBeforeRouteLeave(async () => {
                       :class="
                         inOrderWizard ? 'h-10 min-h-10 rounded-[11px] px-4 text-[13.5px]' : ''
                       "
-                      @click="openNewMaterial"
+                      @click="openNewMaterial($event)"
                     >
                       <Icon name="plus" class="size-4" />
                       <!-- §7.0 fixes the client's label to «+ Material» on both
@@ -3386,6 +3380,7 @@ onBeforeRouteLeave(async () => {
       :current-id="materialPickerCurrentId"
       :search="materialPickerSearch"
       :caption="materialCatalogCaption"
+      :anchor="materialPickerAnchor"
       @close="closeMaterialPicker"
       @update:search="materialPickerSearch = $event"
       @pick="applyMaterialPicker"

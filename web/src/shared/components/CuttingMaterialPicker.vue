@@ -20,19 +20,35 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
  * format's, never the decor's**, so it is printed on the row exactly when the
  * row names one concrete format, and on the format rows otherwise.
  *
+ * **Two frames, one list** (§7.3): a full-height sheet on phones, and from `md`
+ * up a `SearchCombobox`-shaped panel anchored to the control that opened it —
+ * search field on top, decor rows under it, placed from the trigger and
+ * teleported to `<body>` like every other popover here. A centred modal was the
+ * wrong frame on a desktop: changing one group's board is a picker on a row,
+ * not a decision that earns a scrim over the whole drawing.
+ *
  * The workshop keeps its own picker in `CuttingEditorView` — this component is
  * mounted on the client path only.
  */
-const props = defineProps<{
-  open: boolean
-  materials: ClientCatalogMaterialOption[]
-  loading: boolean
-  /** The format currently on the part/group, so its row reads as chosen. */
-  currentId: string | null
-  search: string
-  /** `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` */
-  caption: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    materials: ClientCatalogMaterialOption[]
+    loading: boolean
+    /** The format currently on the part/group, so its row reads as chosen. */
+    currentId: string | null
+    search: string
+    /** `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` */
+    caption: string
+    /**
+     * The control that opened the picker. With one, `md` and up renders the
+     * anchored panel and focus returns here on close; without one (or on a
+     * phone) the sheet is the frame.
+     */
+    anchor?: HTMLElement | null
+  }>(),
+  { anchor: null },
+)
 
 const emit = defineEmits<{
   close: []
@@ -134,6 +150,7 @@ function rowIsCurrent(row: DecorRow) {
     :open="open"
     :title="$t('cutting.material.pick')"
     max-width="sm:max-w-[560px]"
+    :anchor="anchor"
     @close="emit('close')"
   >
     <template #pinned>
@@ -166,10 +183,13 @@ function rowIsCurrent(row: DecorRow) {
     </p>
 
     <div v-else class="grid gap-2">
+      <!-- `min-w-0`: a grid item's `min-width: auto` is its min-content size —
+           thumbnail + longest word + the nowrap price — which is wider than the
+           anchored panel, so without it the rows hang off its right edge. -->
       <div
         v-for="row in rows"
         :key="row.key"
-        class="rounded-xl border transition"
+        class="min-w-0 rounded-xl border transition"
         :class="
           rowIsCurrent(row) ? 'border-accent-tint bg-accent-soft' : 'border-hairline bg-elevated'
         "
