@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 30
 ---
 
@@ -58,13 +58,24 @@ cancel-and-reorder while `new`.
 ## Production mode
 
 How much of production a branch actually operates is a **branch setting** —
-`production_mode`, owner-only, alongside kerf and the edge overhang
-([`workshop.md`](workshop.md)):
+`production_mode`, a shop-floor property like kerf and the edge overhang
+([`workshop.md`](workshop.md#branches)):
 
 | Mode | What the branch runs |
 |---|---|
-| **`simple`** — the default | production is **one tap**: a `manage_orders` admin marks the order **Tayyor** when the job is done, and **Olib ketdi** when the client takes it. No assignment, no start taps, no station queues, no worker account required. |
-| **`full`** — the owner opts in | the per-stage choreography below: assign a cutter and an edger, the worker starts each job, each stage is completed at its own station. |
+| **`simple`** — the default, and the only mode the current plan offers | production is **one tap**: a `manage_orders` admin marks the order **Tayyor** when the job is done, and **Olib ketdi** when the client takes it. No assignment, no start taps, no station queues, no worker account required. |
+| **`full`** — implemented, not offered | the per-stage choreography below: assign a cutter and an edger, the worker starts each job, each stage is completed at its own station. |
+
+**Only simple mode is on sale.** The product's first plan is named **Start** and includes
+simple mode only, so **every branch runs `simple`** — the owner-facing switch on the branch
+form was removed on **2026-09-05** ([`workshop.md`](workshop.md#branches)) and nothing else in
+the app can change the mode. Full mode is not deleted: the gating, the per-stage endpoints,
+the station screens, and every mode-aware surface described here stay exactly as written, and
+`production_mode` stays on the branch API so the demo seed and the E2E suite can put a branch
+on `full` and exercise the pipeline. It returns to owners with a future plan, which **adds**
+full mode rather than replacing simple — the plan is a package name, the mode is a mechanism,
+which is why the enum stays `simple | full`. Read the rest of this section as the mechanism
+that is in the code; read the `full` rows as dormant until that plan ships.
 
 **Why simple is the default.** In the shops we visited the floor runs on paper — the saw
 operator and the bander never touch a screen; the admin is the only person at one. The
@@ -73,9 +84,9 @@ the warehouse — the module the shops themselves named as their pain — silent
 them. Simple mode buys the warehouse back at the price of one honest tap. **The paper stays
 the floor interface**: the system runs up to the printed cutting map and resumes when the
 admin says the job is done. Nothing in simple mode may require a worker account, an
-assignment, or a start tap. Every branch is `simple` unless its owner says otherwise —
-including branches that predate the setting; `full` is the opt-in for a shop that genuinely
-staffs two stations and wants the queues.
+assignment, or a start tap. Every branch is `simple`, including branches that predate the
+setting; `full` is what a shop that genuinely staffs two stations and wants the queues will
+opt into once a plan offers it.
 
 **Simple mode is a collapse, not a fork.** The six-status spine below stays authoritative in
 both modes, and so does every effect it drives — stock, stamps, events, audit, reports. One
@@ -306,8 +317,9 @@ counterparts are in [The simple-mode collapse](#the-simple-mode-collapse).
   resolved the other way.** The field visits met that revisit condition and then some: the
   shops were not leaning on on-behalf, they were not tapping at all. Folding start into
   assign would have kept a choreography nobody performs; instead the whole choreography
-  became opt-in and [simple mode](#production-mode) is the default. Full mode keeps the
-  split, unchanged, for the shops that do staff two stations.
+  became opt-in and [simple mode](#production-mode) is the default — and since 2026-09-05 it
+  is not on offer at all, the Start plan carrying simple mode only. Full mode keeps the
+  split, unchanged, for the shops that do staff two stations when a plan reaches them.
 - **The worker starts the job.** **Start cutting** (`confirmed → cutting`) and **Start
   banding** (a stamp within `edge_banding`, no status change) are one-tap actions by the
   assigned worker — or `manage_orders` on-behalf. "In production" therefore means a

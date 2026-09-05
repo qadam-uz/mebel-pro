@@ -201,10 +201,7 @@
     "statusSaveFailed": "Статус не сохранён",
     "statusSaving": "Изменение",
     "statusSubmit": "Изменить статус",
-    "statusChanged": "Статус филиала изменён.",
-    "productionMode": "Режим производства",
-    "productionModeSimple": "Простой — заказ закрывается одной кнопкой «Готов»",
-    "productionModeFull": "Полный — назначение мастера, старт и поэтапный контроль"
+    "statusChanged": "Статус филиала изменён."
   },
   "staff": {
     "title": "Список сотрудников",

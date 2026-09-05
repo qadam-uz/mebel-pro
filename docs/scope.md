@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 20
 ---
 
@@ -32,10 +32,9 @@ an integration (payments, refunds), that's a considered substitution.
   print-ready cutting map.
 - **Orders** — orders from a finalized cutting result — placed by the client, or by workshop
   staff on behalf of a walk-in client — with **frozen pricing** and a small production workflow
-  (verify → cut → band → ready → collected, pickup-only) that each branch either taps stage by
-  stage or collapses into one **Tayyor** action, operator revert, and
-  reasoned cancellation. The order tracks production only — it moves no money and holds no
-  stock.
+  (verify → cut → band → ready → collected, pickup-only) that a branch collapses into one
+  **Tayyor** action, operator revert, and reasoned cancellation. The order tracks production
+  only — it moves no money and holds no stock.
 - **Finance & accounting** — a workshop money ledger: income (incl. order payments) and
   expenses (incl. staff salary) recorded by hand, worker-production reports the accountant
   uses to compute pay, and revenue / expense / net reporting by branch and period — enough
@@ -58,6 +57,14 @@ an integration (payments, refunds), that's a considered substitution.
 - **Delivery fulfilment** — v1 is **pickup-only**. The delivery model (address capture,
   fixed-fee zones, driver flow, distance-based pricing, the `process_delivery` grant) is
   designed but gated out of v1.
+- **Per-stage production on the floor** — worker assignment, the two start taps, and the
+  Kesish / Krom station screens are implemented, but the product's first plan (**Start**)
+  includes **simple mode only**: every branch closes an order with one **Tayyor** tap, and the
+  owner-facing mode switch was removed on 2026-09-05. That choreography returns with a future
+  plan, which adds full mode rather than replacing simple
+  ([`ref/features/orders.md`](ref/features/orders.md#production-mode) owns the decision). No
+  billing or subscription mechanics are built — "Start" is a package name with no entity,
+  column, or gate behind it.
 - **Delegating workshop-wide controls to non-owner staff** — owner-only in v1.
 - **Inter-branch stock transfers** — each branch's stock is independent in v1 (arrivals and
   adjustments only); there is no branch-to-branch transfer. Moving material is booked by hand
