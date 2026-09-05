@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  ref,
+  watch,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -28,6 +37,7 @@ import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import { formatOrderNumber } from '@/shared/formatters'
 import {
   deriveEdgeRegistry,
+  edgeAssignmentSignature,
   edgeRegistryKey,
   groupCuttingParts,
   isGeometryNeutralEdit,
@@ -53,7 +63,6 @@ import AppModal from '@/shared/components/AppModal.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
-import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
 import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
 import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
 import CuttingMaterialPicker from '@/shared/components/CuttingMaterialPicker.vue'
@@ -62,7 +71,6 @@ import CuttingPartSheet from '@/shared/components/CuttingPartSheet.vue'
 import CuttingTapePicker from '@/shared/components/CuttingTapePicker.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
-import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
@@ -79,6 +87,29 @@ import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cutting
 import { overlayRect } from '@/shared/app/overlayGeometry'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { OrderDetail } from '@/shared/stores/orders'
+
+/**
+ * The two workshop-only modals, split out of this view's chunk.
+ *
+ * Between them they are ~1900 lines — a fifth of what the editor used to make
+ * every role download — and the client opens neither: §7.6 took file import off
+ * the client editor, and §7.5 docks kromka in a side panel instead of raising
+ * the picker modal. Both are mounted behind `v-if="!isClientEditor"`, so in the
+ * client SPA the loader is never called and the bytes are never fetched.
+ *
+ * No `loadingComponent`, deliberately. In the workshop the gate is true from
+ * the first render, so the chunk is already in flight while the editor paints
+ * and a click lands on a component that is long since resolved — a spinner
+ * there could only flash. If the network is slow enough that it hasn't arrived,
+ * the open state is held in `importWizardOpen` / `edgePickerPart` and the modal
+ * appears the moment it does.
+ */
+const CuttingImportWizard = defineAsyncComponent(
+  () => import('@/shared/components/CuttingImportWizard.vue'),
+)
+const CuttingEdgePickerModal = defineAsyncComponent(
+  () => import('@/shared/components/CuttingEdgePickerModal.vue'),
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -373,6 +404,22 @@ function partsSignature(list: CuttingPart[] = parts.value) {
     ]),
   )
 }
+/**
+ * The same signature for a RESULT's frozen snapshot, computed once per snapshot.
+ *
+ * `currentChosenResult` is read by the primary CTA, so it re-runs on every
+ * keystroke — and it compared two freshly stringified lists each time, one of
+ * which is a server payload that cannot have changed. The array identity is the
+ * cache key: a new payload is a new array, and a re-used one is byte-identical.
+ */
+const snapshotSignatures = new WeakMap<object, string>()
+function snapshotSignature(snapshot: CuttingPart[]): string {
+  const cached = snapshotSignatures.get(snapshot)
+  if (cached !== undefined) return cached
+  const signature = partsSignature(snapshot)
+  snapshotSignatures.set(snapshot, signature)
+  return signature
+}
 // A result is actionable only when the draft explicitly chooses it and it was
 // calculated for the exact parts currently visible in the editor. This rejects
 // stale ids and preserved MAP layouts after a geometry edit, while allowing an
@@ -383,7 +430,7 @@ const currentChosenResult = computed(() => {
   const result = currentDraft.results.find((item) => item.id === currentDraft.chosen_result_id)
   if (!result || result.status === 'invalidated' || !Array.isArray(result.parts_snapshot))
     return null
-  return partsSignature(result.parts_snapshot) === partsSignature() ? result : null
+  return snapshotSignature(result.parts_snapshot) === partsSignature() ? result : null
 })
 const hasCurrentChosenResult = computed(() => currentChosenResult.value !== null)
 // docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
@@ -473,12 +520,33 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
   }
 }
 
+/**
+ * Catalog lookup by id, indexed rather than scanned.
+ *
+ * These two are the most-called functions on the screen — row validation, the
+ * size/fit check, the group label, the source chip and the swatch all resolve a
+ * material, once per row, inside computeds that re-run on every keystroke. As a
+ * `find()` over a branch catalog of a few hundred rows that made a single
+ * character cost O(parts × catalog); the index turns it into O(parts) and is
+ * rebuilt only when the catalog itself is (re)loaded.
+ *
+ * First occurrence wins, which is what `find()` returned — ids are unique, but
+ * the tie-break should not change silently if that ever stops being true.
+ */
+function indexById(options: readonly ClientCatalogMaterialOption[]) {
+  const index = new Map<string, ClientCatalogMaterialOption>()
+  for (const material of options) if (!index.has(material.id)) index.set(material.id, material)
+  return index
+}
+const panelsById = computed(() => indexById(cutting.panelOptions))
+const edgesById = computed(() => indexById(cutting.edgeOptions))
+
 function materialById(id: string | null | undefined) {
-  return cutting.panelOptions.find((material) => material.id === id) ?? null
+  return (id ? panelsById.value.get(id) : null) ?? null
 }
 
 function edgeById(id: string | null | undefined) {
-  return cutting.edgeOptions.find((material) => material.id === id) ?? null
+  return (id ? edgesById.value.get(id) : null) ?? null
 }
 
 // ── The client's group tape (§7.1) ──────────────────────────────────────────
@@ -771,14 +839,24 @@ watch(errorCount, (count) => {
   if (count === 0) errorFilterEnabled.value = false
 })
 
-watch(
-  parts,
-  (rows) => {
-    syncEdgeAssignments(edgeAssignments.value, rows)
-    edgeAssignments.value = new Map(edgeAssignments.value)
-  },
-  { deep: true, immediate: true },
-)
+/**
+ * Re-number the tape registry from the parts as they stand. Idempotent: running
+ * it twice on an unchanged drawing produces the same numbers, which is what lets
+ * both callers below fire without coordinating.
+ */
+function refreshEdgeAssignments() {
+  syncEdgeAssignments(edgeAssignments.value, parts.value)
+  edgeAssignments.value = new Map(edgeAssignments.value)
+}
+// Watch the registry's actual input, not the whole parts array. This used to be
+// `watch(parts, …, { deep: true })`, which re-walked every row and allocated a
+// fresh Map on each keystroke in a length / width / soni / name field — up to
+// 300 rows of work per character, for a result that could not have changed.
+// `edgeAssignmentSignature` reads only `part.edge_*`, so the computed below is
+// not even a subscriber of the geometry fields: a geometry edit invalidates
+// nothing here. Add / remove / reorder / re-band still all move the signature.
+const edgeAssignmentInput = computed(() => edgeAssignmentSignature(parts.value))
+watch(edgeAssignmentInput, refreshEdgeAssignments, { immediate: true })
 
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
@@ -2005,6 +2083,12 @@ watch(
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
         )
         hydratedDraftId = value.id
+        // Re-number here rather than leaving it to the signature watch: a draft
+        // that happens to band the same tapes in the same order as the one on
+        // screen has the same signature, so the watch would not fire — and the
+        // Map we just emptied would stay empty. The watch handles every other
+        // path; this one resets the map, so it owns the refill.
+        refreshEdgeAssignments()
       })
       // Normalization diverged from the server copy — persist it (debounced;
       // optimise flushes first) instead of marking the draft already-saved.
@@ -3257,7 +3341,10 @@ onBeforeRouteLeave(async () => {
       @confirm="resolveImportedLayoutWarning(true)"
     />
 
+    <!-- Workshop-only mount (§7.5): the client edits kromka in the docked panel
+         and never raises this modal, so the client SPA never loads its chunk. -->
     <CuttingEdgePickerModal
+      v-if="!isClientEditor"
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"

@@ -175,6 +175,27 @@ function usedEdgeKeys(parts: CuttingPart[]): string[] {
   return keys
 }
 
+/**
+ * The **entire** input `syncEdgeAssignments` reads out of `parts`, as one
+ * string: the ordered, de-duplicated list of banded tape keys.
+ *
+ * The editor watches this instead of watching `parts` deeply. Two properties
+ * make that safe, and both are load-bearing:
+ *
+ * - **Complete** — `syncEdgeAssignments` reads nothing but `usedEdgeKeys(parts)`,
+ *   so two parts lists with the same signature always produce the same
+ *   assignments from the same starting map.
+ * - **Cheap to track** — it touches only `part.edge_*`, so a computed built on
+ *   it is not a subscriber of `length_mm` / `width_mm` / `quantity` / `name`.
+ *   Typing in a geometry field cannot invalidate it, which is the point: a deep
+ *   watch re-walked all 300 rows and rebuilt the Map on every keystroke.
+ *
+ * Keep the two functions together — a field added to the sync must be added here.
+ */
+export function edgeAssignmentSignature(parts: CuttingPart[]): string {
+  return usedEdgeKeys(parts).join(',')
+}
+
 export function syncEdgeAssignments(assignments: Map<string, number>, parts: CuttingPart[]): void {
   const liveKeys = usedEdgeKeys(parts)
   const liveKeySet = new Set(liveKeys)
