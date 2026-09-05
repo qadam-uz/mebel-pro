@@ -346,7 +346,9 @@ def test_render_pdf_smoke_uses_a4_portrait_and_summary_plus_sheet_pages() -> Non
     pdf = pdf_document.render_cutting_pdf(
         result,
         pdf_document.PdfContext(
-            order_number="MP-1",
+            # A real minted number, so the render path actually embeds the two
+            # glyphs the formatter emits (the number sign and the thin space).
+            order_number="482917",
             client_name="Ali",
             branch_name="Yunusobod",
             generated_at=datetime(2026, 7, 12, tzinfo=UTC),
