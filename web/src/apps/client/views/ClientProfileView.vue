@@ -32,7 +32,9 @@ const {
   logoutEverywhere,
 } = useSessions()
 
-const clientName = ref('')
+// Seeded from the store so a return visit renders the field filled instead of
+// empty for the length of the revalidating read.
+const clientName = ref(profileStore.profile?.name ?? '')
 const message = ref<string | null>(null)
 const error = ref<string | null>(null)
 const profileLoading = ref(false)
@@ -91,7 +93,13 @@ onMounted(reloadProfile)
 
 <template>
   <section>
-    <div v-if="profileLoading" class="grid max-w-[760px] gap-5" aria-live="polite">
+    <!-- Cold read only: the profile is already in the store on a return visit,
+         so the page paints while it revalidates (client audit 2026-09-03). -->
+    <div
+      v-if="profileLoading && !profileStore.profile"
+      class="grid max-w-[760px] gap-5"
+      aria-live="polite"
+    >
       <div class="client-card p-5">
         <div class="client-skeleton h-4 w-1/4"></div>
         <div class="client-skeleton mt-3 h-10 w-2/3"></div>
@@ -100,7 +108,7 @@ onMounted(reloadProfile)
       <div class="client-card p-5"><div class="client-skeleton h-20 w-full"></div></div>
     </div>
 
-    <div v-else-if="profileError" class="client-error">
+    <div v-else-if="profileError && !profileStore.profile" class="client-error">
       <div class="client-error-icon"><Icon name="alert" /></div>
       <h3>{{ $t('client.profile.loadFailedTitle') }}</h3>
       <p>{{ $t('client.profile.loadFailedBody') }}</p>

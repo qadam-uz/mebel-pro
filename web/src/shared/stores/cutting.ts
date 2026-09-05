@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, isAbortError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import { materialOptionLabel } from '@/shared/app/materialLabel'
@@ -371,7 +371,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   // drives client-side filtering — so reuse a recent result instead of re-fetching
   // an identical payload. Keyed by the full query; ~30s freshness like branch-options.
   const materialsCache = new Map<string, { at: number; items: ClientCatalogMaterialOption[] }>()
+  // `loading` covers the DRAFT reads (loadDraft, loadWorkshopDrafts); the
+  // client's saved-drawings list has its own flag so home's list refresh and the
+  // editor's draft read can never switch each other's skeleton off (CT-2).
   const loading = ref(false)
+  const draftsLoading = ref(false)
   const saving = ref(false)
   const optimizing = ref(false)
   const materialsLoading = ref(false)
@@ -391,16 +395,36 @@ export const useCuttingStore = defineStore('cutting', () => {
     traceId.value = captured.traceId
   }
 
+  // Stale-while-revalidate (client audit 2026-09-03): the drafts in hand are
+  // NOT cleared while a refresh is in flight, so home and the drawings list
+  // paint their cards immediately on a return visit and swap the rows in when
+  // the answer lands. One AbortController per list: a newer call aborts the
+  // older, and the loser's rejection is dropped rather than painted as an error
+  // — an aborted request is this store cancelling itself, not a failure.
+  let draftsRequest: AbortController | null = null
+
   async function loadDrafts() {
-    loading.value = true
+    draftsRequest?.abort()
+    const controller = new AbortController()
+    draftsRequest = controller
+    draftsLoading.value = true
     error.value = null
     traceId.value = null
     try {
-      drafts.value = await api.get<CuttingDraft[]>(scopedPath('/cutting-drafts'), authInit())
+      drafts.value = await api.get<CuttingDraft[]>(scopedPath('/cutting-drafts'), {
+        ...authInit(),
+        signal: controller.signal,
+      })
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, 'cutting_drafts_load_failed')
     } finally {
-      loading.value = false
+      // Only the newest call owns the flag; an aborted one must not switch the
+      // skeleton off under the request that replaced it.
+      if (draftsRequest === controller) {
+        draftsRequest = null
+        draftsLoading.value = false
+      }
     }
   }
 
@@ -452,20 +476,35 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
+  let draftRequest: AbortController | null = null
+
   async function loadDraft(id: string) {
+    draftRequest?.abort()
+    const controller = new AbortController()
+    draftRequest = controller
     loading.value = true
     error.value = null
     traceId.value = null
-    currentDraft.value = null
+    // Re-reading the draft already in hand keeps it on screen while it
+    // revalidates; moving to a different one clears first, so no view can ever
+    // read one draft's parts under another draft's id.
+    if (currentDraft.value?.id !== id) currentDraft.value = null
     try {
-      currentDraft.value = await api.get<CuttingDraft>(
-        scopedPath(`/cutting-drafts/${id}`),
-        authInit(),
-      )
+      currentDraft.value = await api.get<CuttingDraft>(scopedPath(`/cutting-drafts/${id}`), {
+        ...authInit(),
+        signal: controller.signal,
+      })
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, 'cutting_draft_load_failed')
+      // A failed read leaves nothing trustworthy behind: the editor's error
+      // state is the whole screen, and a stale draft under it would be edited.
+      currentDraft.value = null
     } finally {
-      loading.value = false
+      if (draftRequest === controller) {
+        draftRequest = null
+        loading.value = false
+      }
     }
   }
 
@@ -672,6 +711,12 @@ export const useCuttingStore = defineStore('cutting', () => {
   function reset() {
     // `scope` deliberately survives reset: it's app identity fixed at
     // bootstrap, not session state. The walk-in client IS session state.
+    // In-flight reads are cancelled first — reset is a sign-out, and a late
+    // answer must not repopulate the store the next session then inherits.
+    draftsRequest?.abort()
+    draftsRequest = null
+    draftRequest?.abort()
+    draftRequest = null
     walkInClient.value = null
     drafts.value = []
     workshopDrafts.value = []
@@ -681,6 +726,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     edgeOptions.value = []
     materialsCache.clear()
     loading.value = false
+    draftsLoading.value = false
     saving.value = false
     optimizing.value = false
     materialsLoading.value = false
@@ -709,6 +755,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     panelOptions,
     edgeOptions,
     loading,
+    draftsLoading,
     saving,
     optimizing,
     materialsLoading,

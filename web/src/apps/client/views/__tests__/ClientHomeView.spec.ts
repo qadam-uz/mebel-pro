@@ -71,6 +71,21 @@ function withActiveOrders(count: number) {
   )
 }
 
+/** Saved drawings and no orders — the other half the dashboard renders off. */
+function withSavedDrafts(count: number) {
+  const drafts = Array.from({ length: count }, (_, index) => ({
+    id: `draft-${index + 1}`,
+    name: `Chizma ${String.fromCharCode(65 + index)}`,
+    parts_snapshot: [],
+    results: [],
+    chosen_result_id: null,
+    updated_at: '2026-09-01T10:00:00Z',
+  }))
+  vi.mocked(api.get).mockImplementation(async (path: string) =>
+    path.startsWith('/client/cutting-drafts') ? drafts : [],
+  )
+}
+
 let router: Router
 let wrapper: VueWrapper | null = null
 
@@ -174,6 +189,41 @@ describe('ClientHomeView — the Ustaxonangiz card (§3)', () => {
     expect(view.findAll('a[href^="/c/orders/order-"]')).toHaveLength(4)
     expect(view.text()).not.toContain('Keyingi:')
     expect(view.text()).not.toContain('Joriy:')
+  })
+})
+
+/**
+ * Stale-while-revalidate (client audit 2026-09-03). Home is the tab the client
+ * returns to constantly; it used to blank to a skeleton on every return, so the
+ * skeleton-vs-content decision is the behaviour worth pinning.
+ */
+describe('ClientHomeView — returning to a home that already has data', () => {
+  // The skeleton used to be gated on the ORDERS list alone, so a client with
+  // saved drawings and no open order got a full skeleton over drawings the
+  // store was already holding — on every single return to this tab.
+  it('paints the drawings straight away and revalidates behind them', async () => {
+    withSavedDrafts(2)
+    await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+    expect(wrapper!.text()).toContain('Chizma A')
+
+    wrapper?.unmount()
+    wrapper = null
+    // The second visit's reads never answer, so whatever is on screen now is
+    // what the client would look at for the whole of a slow refresh.
+    vi.mocked(api.get).mockImplementation(() => new Promise(() => {}))
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.text()).toContain('Chizma A')
+    expect(view.find('.client-skeleton').exists()).toBe(false)
+  })
+
+  it('still shows the skeleton on a cold home, with nothing cached', async () => {
+    vi.mocked(api.get).mockImplementation(() => new Promise(() => {}))
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.find('.client-skeleton').exists()).toBe(true)
   })
 })
 

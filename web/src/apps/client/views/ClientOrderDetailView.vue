@@ -172,7 +172,11 @@ onMounted(() => {
       <span>{{ $t('client.orderDetail.placedBanner') }}</span>
     </div>
 
-    <div v-if="orders.loading && !order" class="client-card p-5" aria-live="polite">
+    <!-- `detailLoading`, not `loading`: the latter is shared with the orders
+         list, whose in-flight page used to switch this skeleton off and flash
+         the not-found state. Re-opening an order the store still holds paints
+         it at once and revalidates underneath (client audit 2026-09-03). -->
+    <div v-if="orders.detailLoading && !order" class="client-card p-5" aria-live="polite">
       <span class="sr-only">{{ $t('client.common.loading') }}</span>
       <div class="client-skeleton h-7 w-1/2"></div>
       <div class="client-skeleton mt-3 h-4 w-1/4"></div>
