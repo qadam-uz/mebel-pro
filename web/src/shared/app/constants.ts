@@ -8,6 +8,20 @@
 /** Autosave debounce window for the cutting editor. */
 export const AUTOSAVE_DEBOUNCE_MS = 700
 
+/**
+ * Debounce window for the editor's `localStorage` draft-recovery snapshot.
+ *
+ * The snapshot re-serialises every part in the drawing (~60 kB of JSON at 300
+ * rows), so writing it per keystroke burns that on every character. Debouncing
+ * trades it for a crash window: a tab killed within 300 ms of the last keystroke
+ * recovers to the state before it. Kept well under `AUTOSAVE_DEBOUNCE_MS` so the
+ * recovery layer still lands ahead of the server save it backs up, and paired
+ * with synchronous flushes on every exit the editor can see (unload, pagehide,
+ * tab hidden, route leave, unmount, and just before each save request), which
+ * leaves only an unannounced process kill inside the window.
+ */
+export const DRAFT_RECOVERY_DEBOUNCE_MS = 300
+
 /** Search-input debounce for list views (orders, branches). */
 export const SEARCH_DEBOUNCE_MS = 250
 
