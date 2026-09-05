@@ -25,7 +25,7 @@ import WorkshopLinkCard from '@/shared/components/WorkshopLinkCard.vue'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { parseSomToTiyin } from '@/shared/formatters'
-import { useWorkshopStore, type ProductionMode } from '@/shared/stores/workshop'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 type BranchField =
   | 'name'
@@ -74,10 +74,6 @@ const branchForm = reactive({
   edgeTrimMm: '',
   edgeOverhangMm: '',
   ownMaterialAllowed: false,
-  // A shop-floor property like kerf and overhang, and owner-only for the same
-  // reason: it decides which production surface this branch's orders offer
-  // (orders.md). Read at action time — switching migrates no order.
-  productionMode: 'simple' as ProductionMode,
 })
 const additionalPhones = ref<string[]>([])
 // The map picker owns the pin; the form only carries what it reports back.
@@ -165,12 +161,6 @@ const statusFieldOrder: StatusField[] = ['reason']
 const statusFieldIds: Record<StatusField, string> = {
   reason: 'branch-status-reason',
 }
-// Each mode explained in one line — the owner is choosing a floor process, not
-// a flag, so the label has to say what the screens will do.
-const productionModeOptions = computed<Array<{ value: ProductionMode; label: string }>>(() => [
-  { value: 'simple', label: t('workshopAdmin.branchDetail.productionModeSimple') },
-  { value: 'full', label: t('workshopAdmin.branchDetail.productionModeFull') },
-])
 const statusOptions = computed(() => [
   {
     value: 'active',
@@ -262,7 +252,6 @@ function syncForms() {
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
   branchForm.edgeOverhangMm = String(branch.edge_overhang_mm)
   branchForm.ownMaterialAllowed = branch.own_material_allowed
-  branchForm.productionMode = branch.production_mode
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
   // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
@@ -310,7 +299,6 @@ async function saveBranch() {
       edge_trim_mm: edgeTrimMmValue.value,
       edge_overhang_mm: edgeOverhangMmValue.value,
       own_material_allowed: branchForm.ownMaterialAllowed,
-      production_mode: branchForm.productionMode,
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: cuttingRateTiyin.value,
@@ -693,32 +681,6 @@ onMounted(refreshBranch)
             <p id="branch-detail-edge-overhang-mm-hint" class="mt-2 text-xs text-ink-muted">
               {{ $t('workshopAdmin.branchDetail.edgeOverhangHint') }}
             </p>
-          </fieldset>
-          <!-- How this branch's floor runs. Owner-only, like kerf and overhang,
-               and read at action time: switching migrates no order — an order
-               caught mid-spine is simply finished by «Tayyor» (orders.md). -->
-          <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">
-              {{ $t('workshopAdmin.branchDetail.productionMode') }}
-            </legend>
-            <div class="grid gap-1" role="radiogroup">
-              <label
-                v-for="option in productionModeOptions"
-                :key="option.value"
-                class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink-soft"
-                :for="`branch-detail-production-mode-${option.value}`"
-              >
-                <input
-                  :id="`branch-detail-production-mode-${option.value}`"
-                  v-model="branchForm.productionMode"
-                  type="radio"
-                  name="branch-detail-production-mode"
-                  :value="option.value"
-                  class="size-4 accent-accent"
-                />
-                <span>{{ option.label }}</span>
-              </label>
-            </div>
           </fieldset>
           <!-- Its own group: this is not a saw property but a policy about what
                the shop takes in at the door, and it changes what the client is
