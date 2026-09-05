@@ -1,18 +1,32 @@
-// The app's single i18n instance, shared by all three SPAs.
+// The app's single i18n instance — one per SPA, since each role mounts its own.
 //
 // Three locales, two catalogs: `uz` (Latin) is written by hand and `ru` is its
 // translation, while `uz-Cyrl` is derived from `uz` at load time — see
 // `transliterate.ts` for why the Cyrillic script is not a third file.
 //
-// `uz` ships in the entry chunk because it is both the default locale and the
-// source `uz-Cyrl` is built from; `ru` is a dynamic import, so an Uzbek user
-// never downloads it.
+// The *messages* are not compiled in here. A role installs its own catalog at
+// bootstrap (`installCatalog`, called by `mountRoleApp` with
+// `shared/i18n/catalogs/<role>.ts`), so a SPA carries the namespaces it renders
+// and no others — the whole catalog is ~145 kB of the client's initial JS, and
+// three of its namespaces are workshop-only. `uz` still ships in the entry
+// chunk, because it is both the default locale and the source `uz-Cyrl` is
+// derived from; `ru` stays a dynamic import per role, so an Uzbek user never
+// downloads it.
 
 import { createI18n } from 'vue-i18n'
 
-import { transliterateMessages } from '@/shared/i18n/transliterate'
+import { transliterateMessages, type MessageTree } from '@/shared/i18n/transliterate'
 import cyrillicOverrides from '@/shared/i18n/overrides/uz-Cyrl.json'
-import { uz, type MessageSchema } from '@/shared/i18n/locales/uz'
+import type { MessageSchema, RoleMessages } from '@/shared/i18n/locales/uz/schema'
+
+export type { MessageSchema, Namespace, RoleMessages } from '@/shared/i18n/locales/uz/schema'
+
+/** One role's slice of the catalog: the uz namespaces it renders, plus the
+ *  loader for the ru translation of exactly those. */
+export interface RoleCatalog {
+  uz: RoleMessages
+  loadRu: () => Promise<RoleMessages>
+}
 
 export const LOCALES = ['uz', 'uz-Cyrl', 'ru'] as const
 export type Locale = (typeof LOCALES)[number]
@@ -79,19 +93,25 @@ export function russianPluralIndex(
   return index
 }
 
-// Declaring the uz catalog as *the* message schema is what makes `t('a.b.c')`
-// a compile-time check: a key that no locale file defines fails `vue-tsc`
-// rather than rendering its own path into the UI.
+// Declaring the *whole* uz catalog as the message schema is what makes
+// `t('a.b.c')` a compile-time check: a key that no locale file defines fails
+// `vue-tsc` rather than rendering its own path into the UI. It stays the union
+// of all fourteen namespaces even though a role ships a subset — narrowing the
+// type per role would mean a per-role `t`, and every shared component would
+// have to be written against a generic one. The subset is enforced at runtime
+// instead, by `pnpm i18n:check` (which walks each role's module graph) and by
+// `catalogs.spec.ts`.
 declare module 'vue-i18n' {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- an interface is the only shape a module augmentation can take
   export interface DefineLocaleMessage extends MessageSchema {}
 }
 
 // All three locales are declared up front so `i18n.global.locale` accepts the
-// whole union; `uz-Cyrl` and `ru` start empty and are filled by `loadMessages`.
-// Until then `fallbackLocale` serves Uzbek, which is also what a half-finished
-// ru catalog should do.
-const messages = { uz, 'uz-Cyrl': {}, ru: {} } as Record<Locale, MessageSchema>
+// whole union. All three start *empty*: `installCatalog` fills `uz` at
+// bootstrap, and `loadMessages` fills the other two on demand. Until then
+// `fallbackLocale` serves Uzbek, which is also what a half-finished ru catalog
+// should do.
+const messages = { uz: {}, 'uz-Cyrl': {}, ru: {} } as Record<Locale, MessageSchema>
 
 export const i18n = createI18n({
   legacy: false,
@@ -110,15 +130,40 @@ export const i18n = createI18n({
   fallbackWarn: false,
 })
 
-const loaded = new Set<Locale>([DEFAULT_LOCALE])
+// The catalog the running app was booted with. Empty until a role installs
+// one — an unmounted i18n resolves nothing, which is what a missing
+// `installCatalog` should look like rather than a half-populated UI.
+let catalog: RoleCatalog = { uz: {}, loadRu: async () => ({}) }
+const loaded = new Set<Locale>()
+
+/** Called once per SPA, before the first paint: `mountRoleApp` passes the role
+ *  catalog from `shared/i18n/catalogs/`. Tests install one too — `test-setup`
+ *  installs the full catalog so any component can be mounted in isolation.
+ *
+ *  Installing a second catalog replaces the first outright, including the
+ *  locales derived from it, so a spec can swap roles without leaking the
+ *  previous role's namespaces into the next one's assertions. */
+export function installCatalog(next: RoleCatalog): void {
+  catalog = next
+  loaded.clear()
+  // The messages `vue-i18n` was created with are the schema's shape; a role's
+  // subset satisfies the same `t()` calls at runtime and is the whole point of
+  // the split, so the cast is where the union type meets the shipped payload.
+  i18n.global.setLocaleMessage(DEFAULT_LOCALE, catalog.uz as MessageSchema)
+  i18n.global.setLocaleMessage('uz-Cyrl', {} as MessageSchema)
+  i18n.global.setLocaleMessage('ru', {} as MessageSchema)
+  loaded.add(DEFAULT_LOCALE)
+}
 
 async function loadMessages(locale: Locale): Promise<void> {
   if (loaded.has(locale)) return
   if (locale === 'uz-Cyrl') {
-    i18n.global.setLocaleMessage('uz-Cyrl', transliterateMessages(uz, cyrillicOverrides))
+    // Derived from the role's uz subset, so the Cyrillic catalog carries
+    // exactly the namespaces the Latin one does.
+    const cyrillic = transliterateMessages(catalog.uz as MessageTree, cyrillicOverrides)
+    i18n.global.setLocaleMessage('uz-Cyrl', cyrillic as unknown as MessageSchema)
   } else {
-    const { ru } = await import('@/shared/i18n/locales/ru')
-    i18n.global.setLocaleMessage('ru', ru)
+    i18n.global.setLocaleMessage('ru', (await catalog.loadRu()) as MessageSchema)
   }
   loaded.add(locale)
 }

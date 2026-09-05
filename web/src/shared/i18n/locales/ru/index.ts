@@ -1,5 +1,7 @@
-// The ru catalog — a translation of `../uz`, which owns the key inventory.
-// Loaded on demand: an Uzbek user never downloads it.
+// The **whole** ru catalog — a translation of `../uz`, which owns the key
+// inventory. Like its uz counterpart this is the all-namespaces object the
+// catalog specs compare against; the app loads a role's ru subset from
+// `shared/i18n/catalogs/<role>.ru.ts` instead.
 
 import catalog from './catalog.json'
 import client from './client.json'
@@ -16,7 +18,7 @@ import routes from './routes.json'
 import shell from './shell.json'
 import workshopAdmin from './workshopAdmin.json'
 
-import type { MessageSchema } from '@/shared/i18n/locales/uz'
+import type { MessageSchema } from '@/shared/i18n/locales/uz/schema'
 
 export const ru: MessageSchema = {
   catalog,
