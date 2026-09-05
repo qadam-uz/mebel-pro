@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 10
 ---
 
@@ -99,7 +99,7 @@ branch per order. Uses the client app.
 | `telegram_user_id` | bigint? | **unique when set** — the Telegram account that signs in as this client; linked by the bot's contact step, relinked when a new account proves the same phone; `null` on a staff-created row until first bot sign-in. Private-chat id equals user id, so bot messages are sent to it directly |
 | `telegram_unreachable_at` | timestamp? | set when a bot send bounces with 403 (client blocked the bot); cleared on the next `/start` or successful send; while set, Telegram delivery is skipped — the inbox is unaffected |
 | `name` | text | required; the client's display name (1–80 chars) — prefilled from the Telegram profile at registration, client-editable, never re-synced; how the workshop addresses them |
-| `preferred_branch_id` | UUID? | the **pin**: the branch, and through it the workshop, the client app is scoped to ([`client-entry.md`](../features/client-entry.md)). Seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches it. Written by exactly one operation — applying a workshop-link entry, which cross-checks the branch against the link's code before it writes — and by no profile form; the client app surfaces it as **Asosiy**, never as a bare branch field |
+| `preferred_branch_id` | UUID? | the **pin**: the branch, and through it the workshop, the client app is scoped to ([`client-entry.md`](../features/client-entry.md)). Seeds the `preferred_branch_id` of every new cutting draft this client opens; a draft's own branch never writes back here. Written by exactly one operation — applying a workshop-link entry, which cross-checks the branch against the link's code before it writes — and by no profile form. Every UI path that re-pins (the star's «Asosiy qilish», a branch row's «Yangi chizma») goes through that same operation, and it is **left untouched** when the link does not settle a branch. Surfaced as the **Asosiy** star on a branch row, never as a bare branch field |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
@@ -121,11 +121,36 @@ created only by a successful first bot registration or by workshop staff resolvi
 staff (`account_blocked` on both paths);
 `preferred_branch_id`, when set, references a branch that was visible (`active` or
 `temporarily_closed`) at the moment it was pinned; the field is **not** scope-enforced (a
-branch later going `inactive` doesn't clear it — the branch-scoped catalog simply comes back
-empty and the editor asks for a different branch; see
-[`cutting.md`](../features/cutting.md)). It is likewise never cleared when its workshop is
-`blocked`: the session read reports the pinned workshop and branch **names as null** instead,
-so the app stops scoping while the row survives to revive on unblock.
+branch later going `inactive` doesn't clear it — the workshop's other branches stay listed and
+startable; see [`client-entry.md`](../features/client-entry.md)). It is likewise never cleared
+when its workshop is `blocked`: the session read reports the pinned workshop and branch
+**names as null** instead, so the app stops scoping while the row survives to revive on unblock.
+
+The session read (`/auth/me`) carries **`pinned_workshop_name`** and **`pinned_branch_name`**
+resolved from this field, both null when un-pinned or when the workshop is `blocked`. That
+pair is the client app's entire "is pinned" signal — one predicate, so home's card, the
+new-drawing guard and the editor can never disagree about it.
+
+## Client workshop entry
+
+One workshop this client has walked into through a link, and when they last did. Written on
+**every** entry, whether or not the link settled a branch to pin
+([`client-entry.md`](../features/client-entry.md#what-entry-writes)); this is the stored half
+of Ustaxonalarim.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `client_id` | UUID | required |
+| `workshop_id` | UUID | required |
+| `last_entered_at` | timestamp | the last time this client came through this workshop's door. Separate from `updated_at`, which a schema backfill would also move; this column means one thing, and Ustaxonalarim orders by it |
+| `created_at` / `updated_at` | timestamp | |
+
+Invariants: `(client_id, workshop_id)` unique (DB, `uq_client_workshop_entries_pair`) — **the
+pair is the identity**, upserted, so the table stays the size of the relationships it records
+rather than of the scans that made them; one index on `(client_id, last_entered_at)`, which is
+the only way the table is ever read. A row is never deleted by entry: a workshop leaves the
+client's list by being `blocked`, which is a read-time exclusion.
 
 ## Telegram login token
 

@@ -14,11 +14,14 @@ import {
   databaseUrl,
   edgeNumbers,
   devConfirmLogin,
+  enterViaWorkshopLink,
   escapeRegExp,
   expectOk,
   loginClient,
+  orderNumberPattern,
   panelNumbers,
   setBranchProductionMode,
+  workshopLinkFor,
   type BranchMaterialResponse,
 } from "./helpers";
 
@@ -27,9 +30,6 @@ const adminPassword = "AdminPass123";
 const ownerReadyPassword = "OwnerReady123";
 const passwordLabel = /^(Password|Parol)$/;
 const continueButton = /^(Continue|Kirish)$/;
-
-// The one panel format this spec's branch carries. `×` is U+00D7, as printed.
-const PANEL_FORMAT_LABEL = "900×600×18 mm";
 
 interface TokenResponse {
   access_token: string;
@@ -306,40 +306,49 @@ async function chooseOption(
 }
 
 /**
- * Pick a material in the cutting picker. The list groups by dekor — photo +
- * identity once, formats as rows beneath — but selection is still one format,
- * one click.
+ * Pick a material in the client's decor-first picker (SPEC_CLIENT_UX_MVP §7.3).
+ * One row per DECOR; this branch carries the decor in a single format, so the
+ * decor row itself is the choice and no format list appears.
  */
-async function chooseMaterial(
-  page: Page,
-  dekorLabel: string,
-  formatLabel: string,
-) {
-  const dialog = page.getByRole("dialog", {
-    name: "Materialni almashtirish",
-  });
-  await expect(dialog.getByText(dekorLabel)).toBeVisible();
-  await dialog.getByRole("button", { name: formatLabel, exact: true }).click();
+async function chooseMaterial(page: Page, dekorLabel: string) {
+  const sheet = page.getByRole("dialog", { name: "Material tanlang" });
+  await sheet
+    .getByRole("button", { name: new RegExp(escapeRegExp(dekorLabel)) })
+    .click();
+  await expect(sheet).toBeHidden();
 }
 
-async function chooseEdgeBanding(page: Page, edgeName: string) {
-  // The compact row exposes one rectangular edge diagram that opens the picker.
+/**
+ * Band the top and bottom of the first part (§7.1).
+ *
+ * On the client the tape DECOR belongs to the material group and only the
+ * thickness is the side's: the row's kromka cell selects the row and opens the
+ * docked card, whose group line either already names the branch's tape in the
+ * board's colour or asks for one. No per-part tape list, no pattern pair.
+ */
+async function chooseEdgeBanding(page: Page) {
   await page.getByRole("button", { name: "Kromka tomonlari", exact: true }).click();
-  // A drawing with no tapes yet opens straight into the branch tape catalog;
-  // picking the tape returns to the banding panel with it armed as current.
-  const catalog = page.getByRole("dialog", { name: /Yana kromka qo'shish/ });
-  await catalog
-    .getByRole("button", { name: new RegExp(escapeRegExp(edgeName)) })
-    .click();
-  const dialog = page.getByRole("dialog", { name: /Kromka yopishtirish/ });
-  await expect(
-    dialog.getByText(new RegExp(escapeRegExp(edgeName))),
-  ).toBeVisible();
-  // Band top and bottom with the armed tape; edits apply live, so closing the
-  // dialog keeps them.
-  await dialog.getByRole("button", { name: /^Yuqori tomon/ }).click();
-  await dialog.getByRole("button", { name: /^Pastki tomon/ }).click();
-  await dialog.getByRole("button", { name: "Kromka oynasini yopish" }).click();
+  const panel = page.getByRole("region", { name: "Kromka" });
+  await expect(panel).toBeVisible();
+
+  // The gate: a board decor the branch has no matching tape for asks for a
+  // colour before any side can be banded.
+  const pickTape = panel.getByRole("button", {
+    name: /rangi mos lentani tanlang/,
+  });
+  if (await pickTape.isVisible()) {
+    await pickTape.click();
+    const sheet = page.getByRole("dialog", {
+      name: "Rangi mos kromkani tanlang",
+    });
+    await sheet.getByRole("radio").first().click();
+    await sheet.getByRole("button", { name: "Tanlash" }).click();
+    await expect(sheet).toBeHidden();
+  }
+  await expect(panel.getByText(/^Kromka:/)).toBeVisible();
+
+  await panel.getByRole("button", { name: /^Yuqori/ }).click();
+  await panel.getByRole("button", { name: /^Pastki/ }).click();
 }
 
 test("client places an order and workshop completes it through production queues", async ({
@@ -371,15 +380,26 @@ test("client places an order and workshop completes it through production queues
   await stockIn(request, ownerAccess, branchId, panel.id, 5);
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
 
-  await loginClient(page, clientPhone, `Order Client ${id}`);
+  // A drawing only ever starts from a workshop (§2.2), so the client enters
+  // through the counter QR — that is what writes the pin. `loginClient` alone
+  // leaves the client un-pinned, and `/c/cutting/new` then redirects to
+  // Ustaxonalarim before any editor renders.
+  const workshopLink = await workshopLinkFor(request, ownerAccess, branchId);
+  await enterViaWorkshopLink(
+    page,
+    workshopLink,
+    clientPhone,
+    `Order Client ${id}`,
+  );
+
   const branchesLoaded = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
       response.url().includes("/api/v1/client/branch-options") &&
       response.ok(),
   );
-  // Fresh DB → empty home (first-run), so the create CTA is the centred
-  // "Yangi chizma" in the empty state; the header button only shows with content.
+  // Pinned home: «Yangi chizma» under the Ustaxonangiz card opens the editor
+  // already scoped to the pinned branch.
   await page.getByRole("button", { name: "Yangi chizma" }).click();
   // CB-defer-draft: the editor opens unsaved at `/cutting/new`; the persisted
   // draft (with an id in the URL) is created only on the first optimise below.
@@ -389,35 +409,32 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
   await branchesLoaded;
 
-  // The first editor visit opens the required branch picker automatically.
-  // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
-  await page
-    .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
-    .click();
-  await expect(
-    page.getByText(`Order Branch ${id} · Order Workshop ${id}`),
-  ).toBeVisible();
+  // Decision 17: the editor never raises a branch picker of its own — the
+  // branch is settled before it opens. Decision 16, the naming rule: a workshop
+  // with one branch is named by the workshop alone — a branch name is never
+  // shown on its own.
+  await expect(page.getByText(`Order Workshop ${id}`).first()).toBeVisible();
 
   // A new compact entry starts by selecting its material; that selection creates
   // the first editable row in the material group.
-  await page.getByRole("button", { name: "+ Material tanlash" }).click();
-  await chooseMaterial(page, panelDecor.label, PANEL_FORMAT_LABEL);
+  await page.getByRole("button", { name: "+ Material", exact: true }).click();
+  await chooseMaterial(page, panelDecor.label);
   await page.getByLabel("Uzunlik millimetr").fill("260");
   await page.getByLabel("Kenglik millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
-  await chooseEdgeBanding(page, edge.label);
-  await page.getByRole("button", { name: "Davom etish" }).click();
+  await chooseEdgeBanding(page);
+  await page.getByRole("button", { name: "Hisoblash" }).click();
 
   // First optimise persists the draft and hands off to the standalone result stage.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/);
   await expect(page.getByRole("heading", { name: "Kesish natijasi" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Buyurtmaga davom etish" })).toBeVisible();
-  await page.getByRole("link", { name: "Buyurtmaga davom etish" }).click();
+  await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
+  await page.getByRole("link", { name: "Buyurtma berish" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Buyurtmani tasdiqlash", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText(`Order Branch ${id}`).first()).toBeVisible();
+  await expect(page.getByText(`Order Workshop ${id}`).first()).toBeVisible();
   await expect(page.getByText("Jami").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Buyurtmani tasdiqlash" }),
@@ -425,8 +442,10 @@ test("client places an order and workshop completes it through production queues
   await page.getByRole("button", { name: "Buyurtmani tasdiqlash" }).click();
 
   await expect(page.getByText("Buyurtma berildi")).toBeVisible();
-  // `#26-14-0003` — year, branch number, per-branch sequence (sales.md).
-  const numberPattern = /#\d{2}-\d+-\d{4}/;
+  // Six random platform-wide digits, printed as `№ 482 917` (sales.md).
+  // The workshop app shows the same formatted string, so the one scraped
+  // here is what every later locator matches on both sides.
+  const numberPattern = /\u2116\u2009\d{3}\u2009\d{3}/;
   const orderText = await page.getByText(numberPattern).first().textContent();
   const orderNumber = orderText?.match(numberPattern)?.[0];
   expect(orderNumber).toBeTruthy();
@@ -449,7 +468,7 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
   const workshopOrderRow = workshopPage.getByRole("row", {
-    name: new RegExp(orderNumber as string),
+    name: orderNumberPattern(orderNumber as string),
   });
   // The table row itself opens the order detail (status actions now live only
   // on the detail page); click the order-number cell to navigate.
@@ -568,7 +587,8 @@ test("client places an order and workshop completes it through production queues
   // one reads «Olib ketildi» whichever way the workshop ran the floor — the
   // completed status always means the client took the order.
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
-  await page.getByRole("link", { name: "Tafsilot" }).click();
+  // The card itself is the link now — no per-card button (spec §4).
+  await page.getByRole("link", { name: orderNumberPattern(orderNumber as string) }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
   await expect(page.getByText("Olib ketildi", { exact: true }).first()).toBeVisible();
 });

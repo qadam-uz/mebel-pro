@@ -12,17 +12,24 @@ Current build state (rationale in [`docs/architecture.md`](../docs/architecture.
   redirect to `/landing/`.
 - **Three role SPAs** — `web/client/index.html`, `web/workshop/index.html`,
   `web/admin/index.html`, each mounting `src/apps/<role>/main.ts` with routes in
-  `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/` (api client, stores,
-  components, composables, views, i18n, app helpers). File inventories drift — `ls` before
-  trusting a list.
+  `src/apps/<role>/routes.ts` and its own chrome in `src/apps/<role>/<Role>Shell.vue`.
+  `main.ts` hands `mountRoleApp` that shell plus whatever else only this role needs, as
+  `RoleAppOptions` — `onBoot` (after Pinia, before the router), `onRevalidate` (after a 403)
+  and `onAfterNavigate`; the bootstrap itself branches on no role. **A role shell must not
+  import another role's store or components**: the three SPAs share one chunk, so a single
+  cross-role import lands that role's code in all three initial loads. Shared code lives
+  under `src/shared/` (api client, stores, components, composables, i18n, app helpers) plus
+  the views more than one role routes to; a view only one role reaches lives in
+  `src/apps/<role>/views/`. File inventories drift — `ls` before trusting a list.
 
 ## Commands
 
 ```bash
 pnpm dev                     # Vite dev server, :5173, /api proxied → :8000
 pnpm build                   # vue-tsc --build && vite build  → dist/
+pnpm preview                 # serves dist/ on :4173, /api proxied → :8000 like dev
 pnpm test [src/path]         # Vitest once; single file/dir first while iterating
-pnpm i18n:check              # every LITERAL t()/$t() key resolves in the uz catalog (see Copy)
+pnpm i18n:check              # literal t()/$t() keys resolve, and each role ships what it renders (see Copy)
 pnpm lint / pnpm format      # autofix variants; *:check variants are the CI/pre-push form
 ```
 
@@ -42,9 +49,15 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
 - **SFCs**: `<script setup lang="ts">` + Composition API only. No Options API, no class components.
 - **Imports**: use the `@/` alias for anything under `src/` (e.g. `@/shared/stores/orders`). Relative imports only within a feature folder.
 - **Routing**: register routes in the owning role file under `src/apps/<role>/routes.ts`.
-  Route-level components currently live in `src/shared/views/`; move toward role-owned
-  views as feature modules mature. Lazy-load (`() => import(...)`) everything except the
-  initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
+  A route component one role reaches lives in `src/apps/<role>/views/`; `src/shared/views/`
+  is only for screens two or more roles route to (the cutting editor and result, the drafts
+  list, the 404) — grep the three `routes.ts` before putting one there. Lazy-load
+  (`() => import(...)`) everything except the initial route. Keep the `:pathMatch(.*)*` 404
+  route last. **`meta.chromeless: true`** renders a signed-in route with no shell around it —
+  no header, and on the client no bottom tab bar (the cutting editor, the result stage, the
+  order confirmation; each carries its own back affordance). It is not `layout: 'auth'`, which
+  also turns the auth guard off, nor `layout: 'print'`, which is a document rather than a
+  screen; shells ask `isChromelessRoute(route.meta)`, never the layout alone. For links inside shared
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
   production is host-routed. Inside a role route file, write **absolute production paths**
@@ -69,20 +82,80 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   empty-body 500 from `:5173/api` that looks like a backend crash. Fix: run the backend with
   `--host '::'`, or point `API_PROXY_TARGET` at `http://127.0.0.1:8000`.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
+  A global class nothing references is invisible to every gate, so `main.css` accumulates
+  them: before adding one, check whether a utility does the job, and when you delete the last
+  call site delete the rule with it. Two names look dead and are not — the `mp-toast-*`
+  variants (built as `` `mp-toast-${tone}` ``) and `router-link-exact-active` (applied by
+  vue-router) — so grep for the **fragment**, not the whole class, before removing anything.
+- **Fonts**: the two Wix Madefor faces are **self-hosted**, not fetched from Google. The
+  `@font-face` rules live in `src/assets/fonts.css` (imported by `main.css`, and linked
+  directly by `landing/index.html`, which is styled on its own) and point at the OFL
+  `@fontsource-variable/*` packages; Vite emits content-hashed woff2 under `/assets/`, which
+  nginx and Caddy already serve `public, immutable`. Three things to keep if you touch it:
+  the families are declared under the names the design system uses (`Wix Madefor Text` /
+  `Wix Madefor Display`), **not** Fontsource's `… Variable` names; `cyrillic-ext` must stay,
+  because uz-Cyrl's Ғ/Қ/Ҳ live there; and `build.assetsInlineLimit` in `vite.config.ts`
+  excludes `.woff2` so the two small Cyrillic subsets are not base64'd into the
+  render-blocking stylesheet. Each `index.html` preloads the two `latin` files the default
+  locale paints — in a production build those hrefs resolve to the same hashed assets the CSS
+  uses, so it is one request each (in dev they resolve through different `node_modules` paths
+  and are fetched twice, which is a dev-only wart).
 - **Copy**: every user-facing string lives in `src/shared/i18n/locales/<locale>/<namespace>.json`
   and reaches the screen through **`$t('ns.section.key')`** in templates (global injection is on —
   no import), `useI18n()` in `<script setup>`, or `translate()` / `translatePlural()` from
   `@/shared/i18n` in plain modules. Two catalogs are maintained: **`uz`** is the source, **`ru`**
   its translation with the same key set; **`uz-Cyrl`** is derived from `uz` by
   `i18n/transliterate.ts` and is never hand-written — a word the rules get wrong goes in
-  `i18n/overrides/uz-Cyrl.json`. Adding a namespace means adding its file to *both* locale
-  `index.ts` files. A module-level `const LABELS = {...}` of copy is a bug: it freezes at
-  whatever locale was active when the module first evaluated — export a function instead.
-  Two holes in `pnpm i18n:check`, both by design: it only sees **literal** keys (a
-  `t(item.labelKey)` or built-up key is skipped — rename such a key and the raw path renders
-  through a green gate), and it validates against **`uz` only** (a key missing from `ru`
-  ships silently and falls back at runtime — keeping `ru` complete is on the author). Copy
-  rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
+  `i18n/overrides/uz-Cyrl.json`. A module-level `const LABELS = {...}` of copy is a bug: it
+  freezes at whatever locale was active when the module first evaluated — export a function
+  instead. Copy rules and the term glossary are in [`DESIGN.md`](./DESIGN.md).
+
+  **A role SPA ships only the namespaces it renders.** `i18n/catalogs/<role>.ts` assembles
+  that role's uz messages from explicit `locales/uz/<ns>.json` imports and points `loadRu` at
+  `<role>.ru.ts`, the matching ru list; `mountRoleApp` installs it (`installCatalog`) before
+  the first paint, and uz-Cyrl is transliterated from whatever uz the role installed. Today:
+  client 11 namespaces (no `finance`, `inventory`, `workshopAdmin`), admin 10 (also no
+  `orders`), workshop all 14. `locales/{uz,ru}/index.ts` are the all-namespaces catalogs —
+  only the specs and `test-setup.ts` may import them; from app code they put every namespace
+  back into that role's bundle, which `pnpm i18n:check` refuses.
+  - **Adding a key** to a namespace a role already ships: edit `locales/uz/<ns>.json` and
+    `locales/ru/<ns>.json`. Nothing else.
+  - **Making a role render a namespace it does not ship** (a shared component that starts
+    using one counts, and binds it to *every* role that renders that component): add the
+    import + property to `i18n/catalogs/<role>.ts` **and** `<role>.ru.ts`. Weigh the size
+    first — the namespace lands in that app's initial JS whole.
+  - **Adding a namespace**: the two `locales/*/<ns>.json` files, `locales/uz/schema.ts` (the
+    type union — `import type`, so it costs no bytes), and the role catalogs that need it.
+
+  `pnpm i18n:check` walks each role's module graph and fails when a reachable file uses a
+  namespace that role does not ship, so a raw key path cannot reach a screen through a green
+  gate. Two holes remain, both by design: a *fully* computed key (`t(item.labelKey)` built
+  from data) is invisible to it, and it validates values against **`uz` only** — a key missing
+  from `ru` ships silently and falls back at runtime, so keeping `ru` complete is on the
+  author (`catalogs.spec.ts` checks key parity, not that anything was translated).
+
+  **The app ships `vue-i18n`'s full build on purpose** — do not "optimise" it to the
+  runtime-only one. Measured on this catalog (2 437 messages): aliasing to the runtime build
+  and precompiling with `@intlify/unplugin-vue-i18n` removes ~18 kB of message compiler and
+  adds ~76 kB, because every message becomes a JIT AST node (`{"t":0,"b":{"t":2,…,"s":"…"}}`)
+  instead of a string. Client initial JS went **327.7 kB → 386.3 kB raw** (gzip a wash at
+  +0.5 kB). It also forces uz-Cyrl to be transliterated at build time — a runtime-only build
+  cannot compile the strings `transliterateMessages` produces. Splitting the catalog per role
+  was the lever that paid: client initial JS **322.4 → 285.8 kB raw** (114.2 → 103.8 kB
+  gzip), admin **331.8 → 282.0 kB**, and the client's ru download **141 → 86 kB raw**. The
+  compiler is still not the lever.
+- **Heavy dependencies load on demand**: a library only some screens draw with is reached
+  through a dynamic `import()`, not a static one — a static import welds it into whatever
+  chunk the importer lands in, which for a shared component is every route that touches it.
+  Leaflet is the worked example: `BranchMap.vue` keeps `import type L from 'leaflet'` (erased
+  at build) and pulls the library, its stylesheet and its marker icon from
+  `branchMapLeaflet.ts` on mount. Two rules come with it — the placeholder must hold the
+  final height (the map frame is `h-64` and the loading state sits **over** it, because
+  Leaflet needs its host element in the DOM when it initialises), and a chunk that never
+  arrives needs a designed failure, not an empty box. One caveat before you convert another
+  one: Vitest does **not** resolve a first dynamic `import()` within `flushPromises()`, so a
+  spec that asserts on the rendered output of a lazily-loaded library fails on the cold load —
+  check the specs for the component before, not after.
 - **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`.
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/shared/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`. **E2E locators track UI copy** — changing labels/dialogs means grepping `e2e/tests/` (see root `AGENTS.md`).
 

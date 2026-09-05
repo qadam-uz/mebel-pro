@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import FormSelect from '@/shared/components/FormSelect.vue'
+import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
 import { formatRelativeDate } from '@/shared/app/clientUi'
 import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
@@ -31,23 +31,23 @@ function goBack() {
   else router.push(rolePath('/c'))
 }
 
+// The same chip row Buyurtmalar uses (UX review 2026-09-05): three mutually
+// exclusive choices, all visible, no popover to open for a one-word answer.
 const filterOptions = computed(() => [
-  {
-    value: 'all',
-    label: t('shell.notifications.clientFilterAll'),
-    meta: t('shell.notifications.clientFilterAllMeta'),
-  },
-  {
-    value: 'unread',
-    label: t('shell.notifications.clientFilterUnread'),
-    meta: t('shell.notifications.clientFilterUnreadMeta'),
-  },
-  {
-    value: 'read',
-    label: t('shell.notifications.clientFilterRead'),
-    meta: t('shell.notifications.clientFilterReadMeta'),
-  },
+  { value: 'all', label: t('shell.notifications.clientFilterAll') },
+  { value: 'unread', label: t('shell.notifications.clientFilterUnread') },
+  { value: 'read', label: t('shell.notifications.clientFilterRead') },
 ])
+
+/**
+ * Stale-while-revalidate: the skeleton is for a cold feed only. Re-opening the
+ * page — or flipping the chip row — keeps the rows in hand under a dim while
+ * the refresh lands, instead of blanking the list on every visit (client audit
+ * 2026-09-03). Gated on the store's raw items, not `visibleItems`: the read/
+ * unread split is applied client-side, and an empty *filter* result is an empty
+ * state, never a skeleton.
+ */
+const showSkeleton = computed(() => notifications.loading && notifications.items.length === 0)
 
 const visibleItems = computed(() =>
   notifications.items.filter((item) => {
@@ -132,7 +132,9 @@ onMounted(() => {
   <section>
     <button type="button" class="client-back" @click="goBack">{{ $t('shell.action.back') }}</button>
 
-    <div class="client-page-head">
+    <!-- §2: one title per phone screen — the compact header names this page,
+         so the body opens on the sub-line. Desktop keeps its H1. -->
+    <div class="client-page-head hidden md:flex">
       <div>
         <h1>{{ $t('shell.notifications.title') }}</h1>
         <p class="sub">{{ $t('shell.notifications.clientSubtitle') }}</p>
@@ -141,17 +143,26 @@ onMounted(() => {
         {{ $t('shell.notifications.markAll') }}
       </button>
     </div>
+    <p class="mb-3 mt-2.5 text-[13px] leading-[1.45] text-ink-soft md:hidden">
+      {{ $t('shell.notifications.clientSubtitle') }}
+    </p>
+    <button
+      type="button"
+      class="mp-button mp-button-outline mb-3 w-full md:hidden"
+      @click="markAllRead"
+    >
+      {{ $t('shell.notifications.markAll') }}
+    </button>
 
-    <div class="mb-4 max-w-60">
-      <FormSelect
-        v-model="readFilter"
-        :label="$t('shell.notifications.readFilterLabel')"
-        :options="filterOptions"
-      />
-    </div>
+    <ClientChipFilter
+      v-model="readFilter"
+      class="mb-3 md:mb-4"
+      :label="$t('shell.notifications.readFilterLabel')"
+      :options="filterOptions"
+    />
 
     <div class="max-w-[760px]">
-      <div v-if="notifications.loading" class="grid gap-2" aria-live="polite">
+      <div v-if="showSkeleton" class="grid gap-2" aria-live="polite">
         <div
           v-for="item in 5"
           :key="item"
@@ -166,8 +177,10 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Only when there is nothing else to show: a refresh that fails behind
+           a feed already on screen leaves the feed there. -->
       <ClientErrorState
-        v-else-if="notifications.error"
+        v-else-if="notifications.error && notifications.items.length === 0"
         :title="$t('shell.notifications.loadFailedTitle')"
         :message="$t('shell.notifications.loadFailedClientBody')"
         :trace-id="notifications.traceId"
@@ -182,7 +195,11 @@ onMounted(() => {
         <p v-else>{{ $t('shell.notifications.emptyClientBody') }}</p>
       </div>
 
-      <div v-else class="grid gap-2">
+      <div
+        v-else
+        class="grid gap-2 transition-opacity"
+        :class="notifications.loading ? 'opacity-60' : ''"
+      >
         <!-- The unread edge is a ring, and the ring utility re-declares
              `box-shadow` from the utilities layer — which would drop the card's
              own `--shadow-card` — so the two shadow utilities come along to put

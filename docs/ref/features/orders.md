@@ -561,15 +561,27 @@ avoid).
 
 ## UX — client app
 
-The client app's home (`/c`) is an **order-status-first dashboard**, with the cutting wizard
-one tap away (**New cutting** + **My drafts** + **My orders** all reachable from it). The
-order's branch is the one the draft already carries in its `preferred_branch_id` — chosen in
-the editor before any part is entered, seeded from the client's pin
-([`client-entry.md`](client-entry.md)); placement reads it rather than asking again.
+The client app is **phone-first**: below `md` a five-tab bottom bar (Bosh sahifa · Chizmalar ·
+Buyurtmalar · Ustaxona · Profil) replaces the desktop header nav, and the focused screens —
+the cutting editor, the result stage, the order confirmation, the entry landing, login — carry
+no shell chrome at all, because each already has its own way back.
+
+Home (`/c`) leads with **what needs attention now**, and on every list here **the row or card
+is the link** — no per-row **Batafsil** or **Kuzatish** button, and no second tap target
+inside a card that is one. The order's branch is the one the draft already carries in its
+`preferred_branch_id` — settled before the editor opened, from the client's pin or the branch
+row the drawing was started from ([`client-entry.md`](client-entry.md)); placement reads it
+rather than asking again.
+
+Order numbers print through the formatter everywhere — `№ 482 917`, or a legacy number
+verbatim ([`sales.md`](../entities/sales.md)).
 
 **The client track is four phases, and it is the same in both
-[production modes](#production-mode)** — the phase strip, the progress fraction, the
-next-phase label, the status pills, and the dashboard counts all run off it:
+[production modes](#production-mode)** — the status pills, the orders-list filter chips and
+the four client notifications all run off it. It is a **vocabulary**, not a widget: the phase
+strip, the progress fraction and the next-phase line that used to render it were removed from
+the client screens in 2026-09 (a bar that jumps between two of four positions measured
+nothing the pill did not already say), while the phases themselves are unchanged.
 
 | Phase | Internal statuses | Sub-line |
 |---|---|---|
@@ -601,61 +613,85 @@ inbox rows written before that (`order.status_changed`) still render
 ([`notifications.md`](notifications.md)). A revision still notifies separately
 (`order.updated`, see [Revising a placed order](#revising-a-placed-order)).
 
-- **Home dashboard** (`/c`) — greets the client by first name and leads with whatever most
-  needs attention. When an order is `ready`, a **ready-for-pickup** banner surfaces the first
-  such order (number, branch, total, a pickup action into its detail, and a *N more ready* hint
-  when several are waiting); the subtitle and a three-up count strip summarise **active
-  orders**, **Tayyorlanmoqda** (`confirmed` + `cutting` + `edge_banding` — the track's second
-  phase, so the strip and the pills can never disagree), and **saved drafts**. For a client
-  pinned to a workshop the subtitle is **replaced** by `{workshop} · {branch}` — the trust cue
-  outranks a count the strip already carries ([`client-entry.md`](client-entry.md)). Below, the
-  **active orders** list shows each order as a row — number, branch, placed-at, a phase-progress
-  bar with the current and next phase, the status pill, total, and a track/detail action — and a
-  **continue** list opens drafts with a chosen result on the result stage and unfinished drafts
-  in the editor. A client with nothing
-  active and no saved drafts sees a single first-run start prompt instead of empty sections;
-  New cutting is always one action away in the header.
+- **Home dashboard** (`/c`) — `Salom, {ism}` alone on the greeting row, then, in order: the
+  **Ustaxonangiz** card (the client's pinned branch — logo, name, address, tap-to-call phone,
+  a pill only when the branch is `temporarily_closed`; the card body links to the workshop
+  profile, [`client-entry.md`](client-entry.md) owns it), the page's one primary
+  **+ Yangi chizma** directly under the card and outside it, a **ready-for-pickup** banner for
+  the first `ready` order (number, branch, total, a *yana N ta tayyor* hint — and **no
+  action**, because «Olib ketdi» is the workshop's mark at the counter, so the banner informs
+  and links), **Faol buyurtmalar** (at most four rows, `Barchasi →` to the filtered list) and
+  **Davom ettirish** (at most three drafts; a chosen result opens the result stage, otherwise
+  the editor). Empty sections are omitted rather than shown empty, and a pinned client with
+  nothing active and no drafts gets one first-run prompt under the card.
+  **Un-pinned** — no card, no drawing action anywhere on the page: the **Ustaxona tanlang**
+  prompt takes the card's place and opens Ustaxonalarim, because a drawing needs a branch.
+
+  *What went, and why.* The pinned line under the greeting read like a staff badge — the
+  client is not the workshop's employee — and the three-up count strip beside it overlapped
+  itself (Tayyorlanmoqda ⊂ Faol) while being untappable; the per-row progress bars measured
+  two of four positions. All three were removed on 2026-09-03/04, and the trust cue they
+  carried moved into the Ustaxonangiz card, which is a thing the client can actually use.
+
 - **Cutting wizard** — see [`cutting.md`](cutting.md). Entry point and where the client
   spends most of their time.
-- **Order confirmation** (`/c/orders/new/:draftId`) — opens from the cutting result's
-  **Place order with this cutting** button. The branch was already chosen before detail entry;
-  this stage never lists or compares branches. It pre-checks that the draft still has a chosen
-  result and preferred branch, quotes only that branch, then renders one scrollable page with a
-  sticky cutting summary (parts, panels, consumed edge metres, waste, total):
+- **Order confirmation** (`/c/orders/new/:draftId`) — opens from the cutting result's order
+  button. The branch was settled before the drawing opened; this stage never lists or compares
+  branches. It pre-checks that the draft still has a chosen result and preferred branch, quotes
+  only that branch, and renders one page: the **Ustaxona** block as read-only pickup context, a
+  **Mijoz** card, and the price summary with the drawing's four figures (Detallar · Listlar ·
+  Kromka · Foydali qoldiq — [`cutting.md`](cutting.md)) under it.
 
-  - **Pickup** — the chosen branch, address, today's hours, and phone as read-only context. A
-    client who needs another branch returns to the detail editor, where changing the branch also
-    exposes material-carrying conflicts at their source.
-  - **Checkout** — two sections:
-     - **Contact** — phone and name, prefilled from the client's profile, editable
-       inline, then frozen onto the order as the workshop-facing contact snapshot. It
-       has a non-dismissible note: *"This is shared with the workshop so they can call
-       you about your order."* and a reset-to-profile link per field.
-     - **Review** — the final price breakdown + pickup branch (address + hours) +
-       contact. A primary **Place order** button; an Edit link returns to the relevant
-       field.
+  - **Mijoz** — **Ism** and **Telefon**, prefilled from the profile and editable inline, under
+    a muted label-style line, *"Ustaxona siz bilan bog'lanishi uchun"*, rather than an info
+    banner; the values are frozen onto the order as the workshop-facing contact snapshot and
+    the profile is not overwritten until the order is placed. There is no reset-to-profile
+    action — two fields already carry the profile's values, and a link to re-fetch what is
+    already in the box was a control for a problem nobody had.
+  - **The phone must be an Uzbek number** (`+998` + 9 digits). A Telegram sign-up can bring in
+    a foreign number, and a workshop that cannot dial its client cannot serve them, so a
+    foreign number is rejected on blur and on submit with *"O'zbekiston raqami kerak:
+    +998 XX XXX XX XX"* and the confirm button stays disabled until it is fixed.
+  - **Own material is not offered here** — nor anywhere else in the client app in the MVP
+    ([`cutting.md`](cutting.md#parts-and-materials)).
 
   A closed branch, incomplete branch pricing, or material-carrying failure blocks confirmation
   with the branch-specific reason and a retry/back-to-details path; it never falls back to a
   comparison list. The client does not choose a payment plan and pays nothing online — payment is
   recorded by the workshop's accountant at the counter ([`finance.md`](finance.md)). On
-  success → `/c/orders/:id` with a banner: *"Order placed — the workshop will review and
-  call you."*
+  success → `/c/orders/:id` with a banner: *"Buyurtma berildi — ustaxona ko'rib chiqib siz
+  bilan bog'lanadi."*
 
-- **My orders** (`/c/orders`) — status dropdown (All / Active / Completed / Cancelled),
-  search by order number, cards (order #, branch, date, status badge, the **frozen
-  total** — shown from placement, never "price after confirm" since pricing is frozen at
-  creation — primary action "Track", which opens the order detail). Empty: "No orders
-  yet — start from a cutting."
-- **Order detail** (`/c/orders/:id`) — header (order #, branch, status badge, times).
-  The client-facing status is the **four-phase track** below. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
-  (the SVG + a button opening the PDF in a new tab), **Finance**
-  (visible **only at `ready` and `completed`** — total, recorded so far, balance;
-  read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
-  while `new`.
-- **Ustaxonalarim** (`/c/branches`) — the workshops the client actually deals with, their
-  branches' pickup and contact details, and the pin that scopes the app. It replaced the
-  platform-wide branch directory; see [`client-entry.md`](client-entry.md), which owns it.
+- **My orders** (`/c/orders`) — a segmented chip row (**Hammasi · Faol · Tayyor ·
+  Yakunlangan · Bekor**) mirrored into `?status=`, so the home's `Barchasi →` and the browser
+  back button both land on the right filter, plus a search icon-button that expands into the
+  input (drawing names are searchable too, so the field stays plain text). **The card is the
+  link**: left column `№ 482 917` in bold, the draft name as the headline **only when there is
+  one** (an untitled drawing shows no headline — a grey "Nomsiz chizma" placeholder was the
+  worst thing on the card), the `created_via_workshop` pill after it, then
+  `{workshop} · {branch}` and `{n} detal · {m} list · {sana}` as two short lines. Right column,
+  top-aligned: the status pill and the **frozen total** beneath it — shown from placement, never
+  "price after confirm", since pricing is frozen at creation. No button of any kind, and no
+  cancel: cancelling lives on the detail page alone. A filter change keeps the old rows visible
+  at reduced opacity while the new page loads instead of blanking the list. Empty: *"Buyurtma
+  yo'q"*; filtered-empty offers to clear the filters.
+- **Order detail** (`/c/orders/:id`) — four blocks, top to bottom. **Header card**: the number,
+  the draft name under it when there is one, the status pill, the total right-aligned under a
+  *jami narx* caption, and — only while `new` — a **Bekor qilish** outline-danger action with
+  its reason dialog. On phones a full-width **Chizmani PDF ochish** follows the card; desktop
+  keeps the PDF link in the Chizma tab head. **Ustaxona card**: workshop and branch by the
+  naming rule, address, **Xaritada ko'rish** when the branch has coordinates, phone (a
+  cancelled order shows the cancel banner and no Ustaxona card). **Narx card**: one receipt —
+  Kesish xizmati, Material, Kromka, any Ustama / Chegirma, then **Jami**; at `ready` and
+  `completed` two further rows, **To'langan** and **Qoldiq**, with Qoldiq set larger than Jami
+  because it is what the client pays at the counter, and one line saying payment is taken at
+  the workshop. Before `ready` there are no payment rows. Then **Detallar** alone on phones,
+  **Detallar | Chizma** as tabs on desktop. **No dates, no phase track, no phase text, no
+  Tarix and no To'lov tab** — the page answers what this costs, where to collect it and what is
+  in it; a timeline of statuses the client was already notified about answered none of those.
+- **Ustaxonalarim** (`/c/branches`) and the **workshop profile** (`/c/workshops/:id`) — the
+  workshops the client actually deals with, their branches' pickup and contact details, the pin,
+  and each branch's read-only catalog. See [`client-entry.md`](client-entry.md), which owns them.
 
 ## UX — workshop app
 

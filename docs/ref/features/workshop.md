@@ -102,11 +102,13 @@ After platform provisioning creates the first branch, branch operations are **ow
   duplicate it or each other.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material catalog is built up.
-- **Read the branch number** — creation assigns a permanent `branch_no` that becomes the middle
-  segment of every order number and cutting map the branch prints
-  ([`sales.md`](../entities/sales.md)). It is shown, never edited: an owner holding a printed
-  `#26-1-0003` has to be able to find out which branch the `1` is, and the number is the only
-  part of that document that identifies one.
+- **Read the branch number** — creation assigns a permanent `branch_no`. It addresses the
+  branch's own client link and printed QR (`/w/{code}/{branch_no}`,
+  [`client-entry.md`](client-entry.md)), and it is the middle segment of every **legacy**
+  order number the branch printed before numbers went global
+  ([`sales.md`](../entities/sales.md)). It is shown, never edited: printed QR codes must not
+  rot, and an owner holding a paper `#26-1-0003` still has to be able to find out which branch
+  the `1` is.
 - **The production mode is not an owner control.** A branch is born `simple` and stays there:
   the current plan (**Start**) offers simple mode only, and the radio group that used to sit
   with the cutting settings was removed on 2026-09-05. The branch closes an order with one
@@ -137,10 +139,13 @@ Visibility for read operations:
   "No branches yet — add one to start taking orders."
 - **Branch create dialog** — modal form: name, primary phone, address, an add/remove list for
   the additional phones (capped at three, with the cap explained when reached).
-- **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number together
-  with the order-number prefix it produces (`#26-1-…`), so one branch page is enough to decode a
-  printed document. Below it, an owner-only editable branch form: branch contact, pricing
-  (entered in so'm), cutting settings (kerf + edge trim, in mm), edge settings (the
+- **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number, so one
+  branch page is enough to decode a printed legacy document (`#26-1-…`) or a branch QR.
+  Below it, an owner-only editable branch form: branch contact, **the location** — a map the
+  owner clicks to place the branch's pin, on OpenStreetMap tiles so there is no API key and
+  nothing to configure per deployment; the saved pair is what renders a client's **Xaritada
+  ko'rish** link, which opens Yandex Maps, since that is what people here navigate with —
+  pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), edge settings (the
   glue-and-trim overhang, in mm), material settings (whether the branch takes a client's own
   sheets), and status controls. It does not duplicate materials, stock, staff, or order
   management; those stay in their own sidebar sections. Edge settings are their own group

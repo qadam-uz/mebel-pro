@@ -3,30 +3,25 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
+import { branchScopeHint, branchScopeOf } from '@/shared/app/branchScope'
+import { formatOrderNumber } from '@/shared/formatters'
 import {
   persistStoredContext,
   readStoredContext,
   workshopContextStorageKey,
 } from '@/shared/app/contextStorage'
+import { decorTypeLabel } from '@/shared/app/materialLabel'
 import { useRolePath } from '@/shared/app/paths'
 import { roleMessageKey, useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
-import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
-import { branchScopeHint, branchScopeOf } from '@/shared/app/branchScope'
-import { decorTypeLabel } from '@/shared/app/materialLabel'
-import {
-  adminInitials,
-  adminNavMetrics,
-  groupedNav,
-  iconPath as adminIconPath,
-} from '@/shared/app/adminUi'
+import { groupedNav, iconPath, isChromelessLayout } from '@/shared/app/shellChrome'
+import { workshopNavItems } from '@/shared/app/workshopNav'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   grantSummary,
   initials,
   workshopStatusUz,
   workshopTenantName,
 } from '@/shared/app/workshopUi'
-import { workshopNavItems } from '@/shared/app/workshopNav'
-import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import ActionMenu from '@/shared/components/ActionMenu.vue'
 import BrandMark from '@/shared/components/BrandMark.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
@@ -34,9 +29,9 @@ import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import ToastHost from '@/shared/components/ToastHost.vue'
+import { useMobileNav } from '@/shared/composables/useMobileNav'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOnboardingStore } from '@/shared/stores/onboarding'
 import { useOrdersStore } from '@/shared/stores/orders'
@@ -51,7 +46,6 @@ const onboarding = useOnboardingStore()
 const orders = useOrdersStore()
 const production = useProductionStore()
 const workshopSearch = useWorkshopSearchStore()
-const admin = useAdminStore()
 const permissions = useWorkshopPermissions()
 const route = useRoute()
 const router = useRouter()
@@ -88,56 +82,44 @@ async function onAccountMenuSelect(index: number) {
 }
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
-const mobileNavOpen = ref(false)
-const mobileTriggerRef = ref<HTMLButtonElement | null>(null)
-const drawerPanelRef = ref<HTMLElement | null>(null)
 const workshopSearchRootRef = ref<HTMLElement | null>(null)
 const workshopSearchInputRef = ref<HTMLInputElement | null>(null)
 const workshopSearchQuery = ref('')
 const workshopSearchOpen = ref(false)
-const docsMenuOpen = ref(false)
-let previousMobileFocus: HTMLElement | null = null
 let workshopSearchTimer: number | undefined
-const isAuthRoute = computed(() => route.meta.layout === 'auth')
-// Two layouts render without the shell, for different reasons: `auth` is the
-// signed-out card (and the public workshop-link landing), `print` is a document
-// that leaves the building — a sidebar and a topbar have no place on paper.
-// Everything that asks "is there chrome around me?" asks this, not `isAuthRoute`.
-const isChromeless = computed(() => isAuthRoute.value || route.meta.layout === 'print')
+const {
+  mobileNavOpen,
+  mobileTriggerRef,
+  drawerPanelRef,
+  openMobileNav,
+  closeMobileNav,
+  onDrawerKeydown,
+} = useMobileNav({
+  // The search panel is a teleported overlay of the topbar the drawer covers;
+  // leaving it open would float it over the scrim with nothing behind it.
+  onBeforeOpen: () => closeWorkshopSearch(),
+})
+const isChromeless = computed(() => isChromelessLayout(route.meta.layout))
 // The order-drawing flow builds one document start to finish; a topbar field
 // offering to jump to a different order is the one thing those screens are not
 // for. Declared per route so a new screen in the flow opts in where it is
 // defined, not in a path list here.
 const showWorkshopSearch = computed(() => route.meta.hideSearch !== true)
 const canLoadWorkshopContext = computed(
-  () =>
-    config.role === 'workshop' &&
-    auth.isAllowedFor('workshop') &&
-    auth.me?.password_reset_required === false,
+  () => auth.isAllowedFor('workshop') && auth.me?.password_reset_required === false,
 )
 const contextStorageKey = computed(() =>
-  config.role === 'workshop' && auth.me
-    ? workshopContextStorageKey(auth.me.principal_id, auth.me.session_id)
-    : null,
+  auth.me ? workshopContextStorageKey(auth.me.principal_id, auth.me.session_id) : null,
 )
-const tenantLabel = computed(() => {
-  // Settings first so an owner's rename shows without a reload; `me` is the
-  // source everyone else has, because `/workshop/settings` is owner-only and
-  // staff used to fall through to the generic label (QAD-168).
-  if (config.role === 'workshop') {
-    return workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? roleText('tenant')
-  }
-  if (config.role === 'client' && auth.isAllowedFor('client')) return auth.displayName
-  return roleText('tenant')
-})
+// Settings first so an owner's rename shows without a reload; `me` is the
+// source everyone else has, because `/workshop/settings` is owner-only and
+// staff used to fall through to the generic label (QAD-168).
+const tenantLabel = computed(
+  () => workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? roleText('tenant'),
+)
 const tenantMeta = computed(() => {
   if (!auth.me) return roleText('tenantMeta')
-  if (config.role === 'workshop') {
-    return auth.me.is_owner ? t('shell.tenant.ownerMeta') : grantSummary(false, auth.me.grants)
-  }
-  if (config.role === 'client') return auth.me.phone ?? auth.displayName
-  if (config.role === 'admin') return auth.displayName
-  return roleText('tenantMeta')
+  return auth.me.is_owner ? t('shell.tenant.ownerMeta') : grantSummary(false, auth.me.grants)
 })
 // The sidebar's user button reads the ROLE: the grant summary lost its own render
 // site when the branch picker took the card above it, and a role is the more
@@ -163,12 +145,7 @@ const tenantInitial = computed(() =>
   (tenantLabel.value.trim().slice(0, 1) || roleText('label')[0]).toUpperCase(),
 )
 const workshopUserInitials = computed(() => initials(auth.displayName, 'MP'))
-const adminOperatorInitials = computed(() => adminInitials(auth.displayName, 'N'))
-const clientInitial = computed(() =>
-  (auth.displayName.trim().slice(0, 1) || auth.me?.phone?.slice(-1) || 'M').toUpperCase(),
-)
 const dropdownOptions = computed(() => {
-  if (config.role !== 'workshop') return config.dropdownOptions
   if (workshop.branches.length === 0) {
     return [
       {
@@ -187,15 +164,14 @@ const dropdownOptions = computed(() => {
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   }))
 })
-const visibleNav = computed<NavItem[]>(() => {
-  if (config.role !== 'workshop') return config.nav
-  return workshopNavItems({
+const visibleNav = computed<NavItem[]>(() =>
+  workshopNavItems({
     isOwner: auth.me?.is_owner === true,
     branches: workshop.branches,
     selectedBranchId: selectedContext.value,
     path: rolePath,
-  })
-})
+  }),
+)
 const selectedWorkshopBranch = computed(() =>
   workshop.branches.find((branch) => branch.id === selectedContext.value),
 )
@@ -203,9 +179,7 @@ const selectedWorkshopBranch = computed(() =>
 // single branch (or none) the context auto-pins to it, so the sidebar renders the
 // same card as an inert block — same geometry, no chevron — rather than changing
 // the column's shape between workshops.
-const showBranchSwitcher = computed(
-  () => config.role === 'workshop' && workshop.branches.length > 1,
-)
+const showBranchSwitcher = computed(() => workshop.branches.length > 1)
 // The branch card's second line. Reads the option list, not `workshop.branches`,
 // so the zero-branch case shows "Filial yo'q" instead of going blank.
 const selectedBranchLabel = computed(
@@ -254,8 +228,6 @@ const workshopSearchResultCount = computed(
     workshopSearch.results.stock.length,
 )
 const hasWorkshopSearchQuery = computed(() => workshopSearchQuery.value.trim().length >= 2)
-// One grouping for both sidebars — they only ever differed in the fallback for
-// an item with no group, and no item ships without one.
 const navGroups = computed(() => groupedNav(visibleNav.value))
 // Sidebar `+N` badge on Buyurtmalar (QAD-156): a live count of orders still in
 // NEW for the selected branch, so staff notice an arrival without being on the
@@ -265,7 +237,7 @@ const canSeeOrdersNav = computed(() =>
   visibleNav.value.some((item) => item.to === ordersNavPath.value),
 )
 const newOrderBadge = computed(() => {
-  if (config.role !== 'workshop' || !canSeeOrdersNav.value || orders.newOrderCount < 1) return null
+  if (!canSeeOrdersNav.value || orders.newOrderCount < 1) return null
   return orders.newOrderCount > 99 ? '99+' : String(orders.newOrderCount)
 })
 // Kesish / Krom carry a plain number: how many jobs wait in the signed-in user's
@@ -279,7 +251,7 @@ const canSeeProductionNav = computed(() =>
 )
 const productionNavCounts = computed(() => {
   const counts = new Map<string, number>()
-  if (config.role !== 'workshop' || !canSeeProductionNav.value) return counts
+  if (!canSeeProductionNav.value) return counts
   const cutting = production.queues.cutting?.jobs.length ?? 0
   const banding = production.queues.banding?.jobs.length ?? 0
   if (cutting > 0) counts.set(cuttingNavPath.value, cutting)
@@ -306,141 +278,11 @@ function navAriaLabel(item: NavItem) {
 // renders as a disabled button with the reason — never a link, because a link
 // that bounces off the route guard is a dead end that looks live.
 const canCreateOrder = computed(() => {
-  if (config.role !== 'workshop') return false
   const branch = selectedWorkshopBranch.value
   return (
     !!branch && branch.status === 'active' && permissions.canOnBranch(p.manageOrders, branch.id)
   )
 })
-const adminMetrics = computed(() =>
-  adminNavMetrics({
-    workshops: admin.workshops.length,
-    manufacturers: admin.manufacturers.length,
-    decors: admin.decors.length,
-    failedJobs: admin.jobs.filter((job) => job.definition.last_result === 'failed').length,
-    openErrors: admin.errors.filter((error) => error.status === 'open').length,
-    operators: admin.platformUsers.filter((user) => user.status === 'active').length,
-  }),
-)
-const adminDocsLinks = [
-  { label: 'Docs', href: '/docs' },
-  { label: 'API docs', href: '/api-docs' },
-  { label: 'ReDoc', href: '/api-redoc' },
-]
-// Password-reset gate (access-management.md): a fresh operator is pinned to the
-// profile until they change their temp password. Surface it loudly and lock the
-// nav so clicks don't silently bounce.
-const passwordResetRequired = computed(() => auth.me?.password_reset_required === true)
-
-function onAdminNavClick(event: MouseEvent) {
-  if (passwordResetRequired.value) {
-    event.preventDefault()
-    event.stopPropagation()
-    return
-  }
-  closeMobileNav()
-}
-
-function iconPath(name: string | undefined) {
-  const paths: Record<string, string> = {
-    dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-5H4v5Z"/>',
-    home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
-    orders: '<path d="M6 3h9l3 3v15H6V3Z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 15h6"/>',
-    scissors:
-      '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l10 10M8 16 18 6"/>',
-    layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/>',
-    box: '<path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
-    grid: '<path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/>',
-    chart: '<path d="M4 19V5"/><path d="M4 19h17"/><path d="M8 16v-5M13 16V8M18 16v-9"/>',
-    wallet:
-      '<path d="M4 7h15a2 2 0 0 1 2 2v9H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h13"/><path d="M17 12h4v4h-4a2 2 0 0 1 0-4Z"/>',
-    scale:
-      '<path d="M12 3v18"/><path d="M8 21h8"/><path d="M5 7h14"/><path d="m5 7-2.5 5a2.9 2.9 0 0 0 5 0L5 7Z"/><path d="m19 7-2.5 5a2.9 2.9 0 0 0 5 0L19 7Z"/>',
-    store: '<path d="M4 10h16l-1-5H5l-1 5Z"/><path d="M6 10v10h12V10"/><path d="M9 20v-6h6v6"/>',
-    users:
-      '<path d="M16 20v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M20 20v-2a3 3 0 0 0-3-3"/><path d="M4 20v-2a3 3 0 0 1 3-3"/>',
-    settings:
-      '<path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2m-5.7-3.7 1.4-1.4m8.6-8.6 1.4-1.4m0 11.4-1.4-1.4M7.7 7.7 6.3 6.3"/>',
-    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
-    close: '<path d="m6 6 12 12M18 6 6 18"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    'chevron-right': '<path d="m9 18 6-6-6-6"/>',
-    'chevron-down': '<path d="m6 9 6 6 6-6"/>',
-  }
-  return paths[name ?? 'dashboard'] ?? paths.dashboard
-}
-
-function drawerFocusable() {
-  return Array.from(
-    drawerPanelRef.value?.querySelectorAll<HTMLElement>(
-      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-    ) ?? [],
-  ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0)
-}
-
-function openMobileNav() {
-  previousMobileFocus =
-    document.activeElement instanceof HTMLElement ? document.activeElement : mobileTriggerRef.value
-  // The search panel is a teleported overlay of the topbar the drawer covers;
-  // leaving it open would float it over the scrim with nothing behind it.
-  closeWorkshopSearch()
-  mobileNavOpen.value = true
-}
-
-function closeMobileNav() {
-  if (!mobileNavOpen.value) return
-  mobileNavOpen.value = false
-}
-
-function onDrawerKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeMobileNav()
-    return
-  }
-  if (event.key !== 'Tab') return
-
-  const focusable = drawerFocusable()
-  if (focusable.length === 0) {
-    event.preventDefault()
-    drawerPanelRef.value?.focus()
-    return
-  }
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-/** A popover the drawer hosts, teleported to `<body>` and therefore outside the
- *  drawer's own subtree. */
-function isDrawerOverlay(node: Node | null) {
-  if (!(node instanceof Element)) return false
-  return Boolean(node.closest('[role="listbox"], [role="menu"], .mp-action-menu'))
-}
-
-// The keydown trap above only sees events inside the drawer, and the drawer now
-// hosts two controls whose panels teleport to `<body>`: the branch picker and
-// the account menu. `ProjectDropdown` closes its listbox on Tab WITHOUT
-// returning focus, so the browser resumed the tab order from `<body>` and walked
-// straight out of an `aria-modal` dialog into the page behind it. A focusin
-// guard catches that no matter how focus left — Tab, Shift+Tab, or a
-// programmatic move — because it tests where focus LANDED rather than which key
-// produced it.
-function onDocumentFocusIn(event: FocusEvent) {
-  if (!mobileNavOpen.value) return
-  const target = event.target
-  if (!(target instanceof Node)) return
-  if (drawerPanelRef.value?.contains(target) || isDrawerOverlay(target)) return
-  const focusable = drawerFocusable()
-  if (focusable.length > 0) focusable[0].focus()
-  else drawerPanelRef.value?.focus()
-}
 
 function searchDestination(path: string, query = workshopSearchQuery.value) {
   const trimmed = query.trim()
@@ -454,7 +296,7 @@ function closeWorkshopSearch() {
 }
 
 function focusWorkshopSearch() {
-  if (config.role !== 'workshop' || isChromeless.value || !showWorkshopSearch.value) return
+  if (isChromeless.value || !showWorkshopSearch.value) return
   // The search field lives in the topbar, which the drawer covers. Honouring ⌘K
   // there would move focus outside an `aria-modal` dialog — and the drawer's own
   // focus guard would immediately pull it back, leaving the keypress looking
@@ -515,14 +357,14 @@ async function submitWorkshopSearch() {
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
-  if (config.role !== 'workshop' || !workshopSearchOpen.value) return
+  if (!workshopSearchOpen.value) return
   const target = event.target
   if (target instanceof Node && workshopSearchRootRef.value?.contains(target)) return
   closeWorkshopSearch()
 }
 
 function onGlobalKeydown(event: KeyboardEvent) {
-  if (config.role !== 'workshop' || isChromeless.value) return
+  if (isChromeless.value) return
   if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return
   event.preventDefault()
   focusWorkshopSearch()
@@ -536,7 +378,7 @@ function browserStorage() {
 // user — shell mount, a branch switch, the tab coming back into view, and every
 // order mutation (that last one lives in the orders store).
 function reloadNewOrderCount() {
-  if (config.role !== 'workshop' || !canLoadWorkshopContext.value || !canSeeOrdersNav.value) return
+  if (!canLoadWorkshopContext.value || !canSeeOrdersNav.value) return
   void orders.loadNewOrderCount(selectedWorkshopBranch.value?.id ?? null)
 }
 
@@ -560,7 +402,7 @@ const onStationPage = computed(
 )
 
 function reloadProductionCounts(force = false) {
-  if (config.role !== 'workshop' || !canLoadWorkshopContext.value || !canSeeProductionNav.value) {
+  if (!canLoadWorkshopContext.value || !canSeeProductionNav.value) {
     return
   }
   if (onStationPage.value) {
@@ -570,9 +412,9 @@ function reloadProductionCounts(force = false) {
     requestedProductionBranch = undefined
     return
   }
-  // Keyed by principal as well as branch: `AppShell` is never remounted across a
-  // logout, so a plain branch key would tell the next user's identical branch
-  // that the question had already been asked.
+  // Keyed by principal as well as branch: `WorkshopShell` is never remounted
+  // across a logout, so a plain branch key would tell the next user's identical
+  // branch that the question had already been asked.
   const key = `${auth.me?.principal_id ?? ''}:${selectedWorkshopBranch.value?.id ?? ''}`
   if (!force && requestedProductionBranch === key) return
   requestedProductionBranch = key
@@ -610,7 +452,7 @@ watch(
 watch(
   selectedContext,
   (value) => {
-    if (config.role === 'workshop') workshop.setSelectedBranchContext(value)
+    workshop.setSelectedBranchContext(value)
     const storage = browserStorage()
     if (!storage || !contextStorageKey.value) return
     persistStoredContext(storage, contextStorageKey.value, value, dropdownOptions.value)
@@ -621,7 +463,7 @@ watch(
 watch(
   () => workshop.selectedBranchContext,
   (value) => {
-    if (config.role !== 'workshop' || !value || selectedContext.value === value) return
+    if (!value || selectedContext.value === value) return
     if (!dropdownOptions.value.some((option) => option.value === value)) return
     selectedContext.value = value
   },
@@ -643,7 +485,6 @@ watch(
   () => route.fullPath,
   () => {
     closeMobileNav()
-    docsMenuOpen.value = false
     closeWorkshopSearch()
   },
 )
@@ -658,27 +499,8 @@ watch(
     canSearchUsers,
   ],
   () => {
-    if (config.role !== 'workshop') return
     queueWorkshopSearch()
   },
-)
-
-watch(
-  mobileNavOpen,
-  async (open) => {
-    if (open) {
-      lockBodyScroll()
-      await nextTick()
-      const first = drawerFocusable()[0]
-      if (first) first.focus()
-      else drawerPanelRef.value?.focus()
-      return
-    }
-    unlockBodyScroll()
-    previousMobileFocus?.focus()
-    previousMobileFocus = null
-  },
-  { flush: 'post' },
 )
 
 // The branch (or the right to see orders at all) only settles once the branch
@@ -718,7 +540,6 @@ onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('keydown', onGlobalKeydown)
   document.addEventListener('visibilitychange', onVisibilityChange)
-  document.addEventListener('focusin', onDocumentFocusIn)
 })
 
 onBeforeUnmount(() => {
@@ -726,9 +547,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onGlobalKeydown)
   document.removeEventListener('visibilitychange', onVisibilityChange)
-  document.removeEventListener('focusin', onDocumentFocusIn)
-  if (mobileNavOpen.value) unlockBodyScroll()
-  previousMobileFocus = null
 })
 </script>
 
@@ -737,48 +555,7 @@ onBeforeUnmount(() => {
     <RouterView />
   </div>
 
-  <div v-else-if="config.role === 'client'" class="min-h-[var(--app-vh)] bg-bg text-ink">
-    <header class="client-header">
-      <div class="client-container client-header-row">
-        <RouterLink
-          :to="config.homePath"
-          class="client-brand"
-          :aria-label="$t('shell.a11y.clientHome')"
-        >
-          <BrandMark :size="32" />
-          <span class="client-brand-name">{{ config.productLabel }}</span>
-        </RouterLink>
-
-        <nav class="client-nav" :aria-label="$t('shell.a11y.mainNav')">
-          <RouterLink v-for="item in visibleNav" :key="item.to" :to="item.to">
-            <span class="client-nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
-            </span>
-            {{ t(item.labelKey) }}
-          </RouterLink>
-        </nav>
-
-        <div class="client-actions">
-          <LocaleSwitcher />
-          <NotificationsMenu />
-          <RouterLink
-            :to="config.profilePath"
-            class="client-user-pill"
-            :aria-label="$t('shell.a11y.clientProfile', { name: auth.displayName })"
-          >
-            <span class="client-user-avatar" aria-hidden="true">{{ clientInitial }}</span>
-            <span class="client-user-name text-sm font-bold text-ink">{{ auth.displayName }}</span>
-          </RouterLink>
-        </div>
-      </div>
-    </header>
-
-    <main class="client-container client-page">
-      <RouterView />
-    </main>
-  </div>
-
-  <div v-else-if="config.role === 'workshop'" class="workshop-app">
+  <div v-else class="workshop-app">
     <aside class="workshop-sidebar" :aria-label="$t('shell.a11y.workshopNav')">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
         <!-- The mark is markup, not the favicon: a graphite tile with two Display
@@ -1131,7 +908,7 @@ onBeforeUnmount(() => {
                   @click="closeWorkshopSearch"
                 >
                   <span>
-                    <strong>{{ order.order_number }}</strong>
+                    <strong>{{ formatOrderNumber(order.order_number) }}</strong>
                     <small>{{ order.client_name }} · {{ order.branch_name }}</small>
                   </span>
                   <em>{{ workshopStatusUz(order.status) }}</em>
@@ -1263,230 +1040,6 @@ onBeforeUnmount(() => {
         <RouterView />
       </section>
       <OnboardingSpotlight />
-    </main>
-  </div>
-
-  <div v-else class="admin-app">
-    <a class="admin-skip-link" href="#admin-content">{{ $t('shell.admin.skipLink') }}</a>
-    <aside class="admin-sidebar" :aria-label="$t('shell.a11y.platformNav')">
-      <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
-        <BrandMark :size="30" />
-        <span class="admin-brand-copy">
-          <span class="admin-brand-name">{{ config.productLabel }}</span>
-          <span class="admin-brand-role">{{ roleText('label') }}</span>
-        </span>
-      </RouterLink>
-
-      <div class="admin-tenant">
-        <span class="admin-tenant-avatar" aria-hidden="true">PL</span>
-        <span class="min-w-0">
-          <span class="admin-tenant-name">{{ tenantLabel }}</span>
-          <span class="admin-tenant-meta">{{
-            $t('shell.admin.tenantMeta', { n: admin.workshops.length }, admin.workshops.length)
-          }}</span>
-        </span>
-      </div>
-
-      <nav
-        class="admin-nav"
-        :class="{ 'is-locked': passwordResetRequired }"
-        :aria-label="$t('shell.a11y.mainNav')"
-      >
-        <section v-for="group in navGroups" :key="group.id" class="admin-nav-group">
-          <div class="admin-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
-          <RouterLink
-            v-for="item in group.items"
-            :key="item.to"
-            :to="item.to"
-            class="admin-nav-item"
-            active-class="on"
-            :tabindex="passwordResetRequired ? -1 : undefined"
-            :aria-disabled="passwordResetRequired ? 'true' : undefined"
-            @click="onAdminNavClick"
-          >
-            <span class="admin-nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
-            </span>
-            <span>{{ t(item.labelKey) }}</span>
-            <span
-              v-if="adminMetrics.get(item.to)"
-              class="admin-nav-count"
-              :class="{ danger: adminMetrics.get(item.to)?.danger }"
-            >
-              {{ adminMetrics.get(item.to)?.value }}
-            </span>
-          </RouterLink>
-        </section>
-
-        <section class="admin-nav-group">
-          <div class="admin-nav-label">{{ $t('shell.admin.reference') }}</div>
-          <button
-            type="button"
-            class="admin-nav-item"
-            :disabled="passwordResetRequired"
-            :aria-expanded="docsMenuOpen"
-            @click="docsMenuOpen = !docsMenuOpen"
-          >
-            <span class="admin-nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" v-html="adminIconPath('book')"></svg>
-            </span>
-            <span>{{ $t('shell.admin.docsAndApi') }}</span>
-            <span class="admin-nav-count">
-              <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('external')"></svg>
-            </span>
-          </button>
-          <div v-if="docsMenuOpen" class="admin-doc-menu">
-            <a
-              v-for="link in adminDocsLinks"
-              :key="link.href"
-              :href="link.href"
-              target="_blank"
-              rel="noopener"
-            >
-              {{ link.label }}
-            </a>
-          </div>
-        </section>
-      </nav>
-
-      <RouterLink :to="config.profilePath" class="admin-user-card" @click="closeMobileNav">
-        <span class="admin-user-avatar" aria-hidden="true">{{ adminOperatorInitials }}</span>
-        <span class="min-w-0">
-          <span class="admin-user-name">{{ auth.displayName }}</span>
-          <span class="admin-user-meta">{{ $t('shell.admin.operatorRole') }}</span>
-        </span>
-      </RouterLink>
-    </aside>
-
-    <div
-      v-if="mobileNavOpen"
-      class="admin-drawer"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="admin-mobile-drawer-title"
-      @keydown="onDrawerKeydown"
-    >
-      <button
-        class="admin-drawer-scrim"
-        type="button"
-        :aria-label="$t('shell.a11y.closeMenu')"
-        @click="closeMobileNav"
-      ></button>
-      <div ref="drawerPanelRef" class="admin-drawer-panel" tabindex="-1">
-        <div class="admin-drawer-head">
-          <!-- Was a hardcoded, untranslated literal in a face the system no longer
-               has. The platform sidebar's own brand block instead. -->
-          <span class="admin-brand">
-            <BrandMark :size="30" />
-            <span class="admin-brand-copy">
-              <span id="admin-mobile-drawer-title" class="admin-brand-name">
-                {{ config.productLabel }}
-              </span>
-              <span class="admin-brand-role">{{ roleText('label') }}</span>
-            </span>
-          </span>
-          <button
-            class="admin-icon-button"
-            type="button"
-            :aria-label="$t('shell.a11y.closeMenu')"
-            @click="closeMobileNav"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('close')"></svg>
-          </button>
-        </div>
-        <nav
-          class="admin-nav"
-          :class="{ 'is-locked': passwordResetRequired }"
-          :aria-label="$t('shell.a11y.mobileNav')"
-        >
-          <section v-for="group in navGroups" :key="`m-${group.id}`" class="admin-nav-group">
-            <div class="admin-nav-label">{{ t(`nav.group.${group.id}`) }}</div>
-            <RouterLink
-              v-for="item in group.items"
-              :key="`m-${item.to}`"
-              :to="item.to"
-              class="admin-nav-item"
-              active-class="on"
-              :tabindex="passwordResetRequired ? -1 : undefined"
-              :aria-disabled="passwordResetRequired ? 'true' : undefined"
-              @click="onAdminNavClick"
-            >
-              <span class="admin-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
-              </span>
-              <span>{{ t(item.labelKey) }}</span>
-            </RouterLink>
-          </section>
-          <section class="admin-nav-group">
-            <div class="admin-nav-label">{{ $t('shell.admin.reference') }}</div>
-            <a
-              v-for="link in adminDocsLinks"
-              :key="`m-doc-${link.href}`"
-              class="admin-nav-item"
-              :href="link.href"
-              target="_blank"
-              rel="noopener"
-              :tabindex="passwordResetRequired ? -1 : undefined"
-              :aria-disabled="passwordResetRequired ? 'true' : undefined"
-              @click="onAdminNavClick"
-            >
-              <span class="admin-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" v-html="adminIconPath('book')"></svg>
-              </span>
-              <span>{{ link.label }}</span>
-            </a>
-          </section>
-        </nav>
-      </div>
-    </div>
-
-    <main id="admin-content" class="admin-main" tabindex="-1">
-      <div v-if="passwordResetRequired" class="admin-reset-gate" role="alert">
-        <svg
-          class="admin-reset-gate-ic"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          v-html="adminIconPath('lock')"
-        ></svg>
-        <div class="admin-reset-gate-body">
-          <strong>{{ $t('shell.admin.resetTitle') }}</strong>
-          <span>{{ $t('shell.admin.resetBody') }}</span>
-        </div>
-        <RouterLink :to="config.profilePath" class="admin-reset-gate-cta">
-          {{ $t('shell.admin.resetCta') }}
-        </RouterLink>
-      </div>
-
-      <header class="admin-topbar">
-        <button
-          ref="mobileTriggerRef"
-          class="admin-mobile-button"
-          type="button"
-          :disabled="passwordResetRequired"
-          @click="openMobileNav"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
-          {{ $t('shell.a11y.menu') }}
-        </button>
-
-        <div class="admin-top-actions">
-          <NotificationsMenu v-if="!passwordResetRequired" />
-          <RouterLink
-            v-if="config.primaryActionTo"
-            :to="config.primaryActionTo"
-            class="admin-primary-action"
-            :tabindex="passwordResetRequired ? -1 : undefined"
-            :aria-disabled="passwordResetRequired ? 'true' : undefined"
-            @click="onAdminNavClick"
-          >
-            {{ roleText('primaryAction') }}
-          </RouterLink>
-        </div>
-      </header>
-
-      <section class="admin-page">
-        <RouterView />
-      </section>
     </main>
   </div>
 

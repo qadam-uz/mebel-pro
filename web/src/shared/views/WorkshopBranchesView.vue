@@ -280,9 +280,9 @@ onMounted(() => {
           <table class="tbl">
             <thead>
               <tr>
-                <!-- The number printed in the middle of this branch's order
-                     numbers (#26-1-0003). First and mono so an owner holding a
-                     cutting map can scan straight down it. -->
+                <!-- The branch's platform-wide number — the last segment of its
+                     own QR link. First and mono so an owner reading a printed
+                     link can scan straight down it. -->
                 <th>{{ $t('workshopAdmin.branches.colNumber') }}</th>
                 <th>{{ $t('workshopAdmin.branches.colBranch') }}</th>
                 <th>{{ $t('workshopAdmin.branches.colAddress') }}</th>

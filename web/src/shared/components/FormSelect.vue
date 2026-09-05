@@ -16,6 +16,11 @@ const props = withDefaults(
     error?: string | null
     disabled?: boolean
     required?: boolean
+    // Visually hide the label (it stays the control's accessible name) for a
+    // host whose own row already says what the choice is — the client
+    // catalog's branch switcher sits inside the head line beside the
+    // workshop name. Mirrors SegmentedControl's prop of the same name.
+    hideLabel?: boolean
   }>(),
   {
     // No literal default: a prop default is evaluated once, at module load, so
@@ -24,6 +29,7 @@ const props = withDefaults(
     error: null,
     disabled: false,
     required: false,
+    hideLabel: false,
   },
 )
 
@@ -147,7 +153,7 @@ onBeforeUnmount(() => {
   <div class="min-w-0">
     <label
       :id="`${internalId}-label`"
-      class="form-select-label mb-1 block text-sm font-bold text-ink"
+      :class="hideLabel ? 'sr-only' : 'form-select-label mb-1 block text-sm font-bold text-ink'"
       :for="controlId"
     >
       {{ label }}

@@ -68,7 +68,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
       key: 'cutting',
       label: translate('client.common.cuttingService'),
       detail: translate('client.orderNew.billCuttingDetail', {
-        panels: translatePlural('client.unit.panels', quote.panels_used),
+        panels: translatePlural('client.unit.sheets', quote.panels_used),
         price: formatTiyin(quote.cutting_rate_tiyin),
       }),
       amount_tiyin: quote.panels_used * quote.cutting_rate_tiyin,
@@ -78,7 +78,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
     rows.push({
       key: `material:${line.material_id}`,
       label: line.material_name,
-      detail: translatePlural('client.unit.panels', line.panels_used),
+      detail: translatePlural('client.unit.sheets', line.panels_used),
       amount_tiyin: line.line_total_tiyin,
     })
   }
@@ -89,7 +89,10 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
       // shows a "Kromka" figure (total banded length), a different meaning of
       // the same word. Money and metres must never share an unqualified label.
       label: translate('client.orderNew.billEdge', { material: line.material_name }),
-      detail: metres(line.consumed_mm),
+      // `line_total_tiyin` is the tape AND the banding labour, so the detail
+      // says so — §7.4's «… · 5,15 m · material + xizmat». Without it the
+      // metres read as the whole basis of a figure they only half explain.
+      detail: `${metres(line.consumed_mm)} · ${translate('client.orderNew.billEdgeBasis')}`,
       amount_tiyin: line.line_total_tiyin,
     })
   }

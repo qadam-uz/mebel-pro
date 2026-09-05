@@ -164,13 +164,14 @@
       "aria": "Filial joylashuvi xaritasi",
       "hint": "Filial joyini xaritada bosib belgilang. Nishonni sudrab aniqlashtirish mumkin.",
       "clear": "Joyni olib tashlash",
-      "label": "Joylashuv"
+      "label": "Joylashuv",
+      "failed": "Xaritani yuklab bo'lmadi. Sahifani yangilang."
     }
   },
   "branchDetail": {
     "back": "← Filiallar",
     "fallbackName": "Filial",
-    "numberHint": "Filial raqami {no} — bu filial buyurtmalari {prefix} bilan boshlanadi.",
+    "numberHint": "Filial raqami {no} — filialning QR havolasi shu raqam bilan tugaydi.",
     "loadFailed": "Filialni yuklab bo'lmadi",
     "inactiveBody": "bu filial yangi buyurtma qabul qilmaydi.",
     "infoTitle": "Filial ma'lumotlari",
@@ -353,14 +354,6 @@
     "logoutAllMessage": "Barcha qurilmalardan chiqasiz.",
     "logoutAllConfirm": "Hammasini chiqarish",
     "logoutAllBusy": "Chiqilmoqda"
-  },
-  "branchRow": {
-    "closed": "vaqtincha yopiq",
-    "active": "faol",
-    "cuttingService": "Kesish xizmati: {amount}",
-    "materials": "Materiallar: {amount}",
-    "edgeBanding": "Kromka yopishtirish: {amount}",
-    "unit": "so'm · {n} list"
   },
   "phones": {
     "legend": "Qo'shimcha telefonlar",

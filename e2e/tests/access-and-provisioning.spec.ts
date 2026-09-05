@@ -310,9 +310,11 @@ test("owner manages branches from a simple system table and detail view", async 
   await page.getByRole("button", { name: continueButton }).click();
   await expect(page.getByRole("heading", { name: "Asosiy" })).toBeVisible();
 
-  // QAD-176: `branch_no` is the middle segment of every order number and
-  // cutting map this branch prints (`#26-1-0003`); the owner must be able to
-  // look it up somewhere, and these two screens are that somewhere.
+  // QAD-176: `branch_no` addresses this branch in its own client link and
+  // printed QR (`/w/{code}/{branch_no}`), and it is still the middle segment of
+  // the legacy numbers it printed before order numbers went platform-wide
+  // (`#26-1-0003`, sales.md). The owner must be able to look it up somewhere,
+  // and these two screens are that somewhere.
   const branchNo = String(setup.branch.branch_no);
 
   await page.goto("/workshop/branches");
@@ -347,12 +349,12 @@ test("owner manages branches from a simple system table and detail view", async 
   await expect(
     page.getByRole("heading", { name: `Branch ${id}` }),
   ).toBeVisible();
-  // The detail header spells out what the number means, so a deep link to one
-  // branch is enough to decode a printed order number.
-  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+  // Order numbers are global random six digits now, so the branch number only
+  // addresses the client link: the detail header spells out that it is the tail
+  // of the branch's own QR/entry URL.
   await expect(
     page.getByText(
-      new RegExp(`Filial raqami\\s*${branchNo}.*#${yy}-${branchNo}-`),
+      new RegExp(`Filial raqami\\s*${branchNo}.*QR havolasi shu raqam bilan`),
     ),
   ).toBeVisible();
   await expect(

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { formatPhone } from '@/shared/app/clientUi'
@@ -26,6 +27,7 @@ const rolePath = useRolePath()
 const config = useRoleConfig()
 const auth = useAuthStore()
 const entry = useClientEntryStore()
+const { t } = useI18n()
 
 const code = computed(() => String(route.params.code ?? ''))
 const branchNo = computed(() => {
@@ -35,26 +37,42 @@ const branchNo = computed(() => {
   return Number.isInteger(parsed) ? parsed : null
 })
 
-/** The branch this entry will pin, once one is settled on. */
-const selectedBranchId = ref<string | null>(null)
 const applying = ref(false)
 const applyFailed = ref(false)
 
 const link = computed(() => entry.link)
 const branches = computed(() => link.value?.branches ?? [])
+
 /**
- * The choice step (§3.2) is for a workshop-level link with several branches —
- * and for a branch link whose `branch_no` no longer resolves, which falls back
- * to exactly that behaviour rather than dying on a printed QR (§8).
+ * The branch this entry pins — or `null`, which is a real outcome (§2.2, and
+ * decision 15).
+ *
+ * A branch QR names one. A workshop link to a one-branch workshop means that
+ * counter. A workshop link to a **multi-branch** workshop pins nothing: entry
+ * never asks which counter, so it must not name one either. The workshop is
+ * still recorded, so it lands on Ustaxonalarim, and home then shows «Ustaxona
+ * tanlang». A printed branch QR whose `branch_no` no longer resolves falls back
+ * to the same workshop-level behaviour rather than dying (§8).
  */
-const needsChoice = computed(() => {
-  if (!link.value) return false
-  if (link.value.requested_branch_id) return false
-  return branches.value.length > 1
+const settledBranchId = computed<string | null>(() => {
+  const resolved = link.value
+  if (!resolved) return null
+  if (resolved.requested_branch_id) return resolved.requested_branch_id
+  return branches.value.length === 1 ? (branches.value[0]?.id ?? null) : null
 })
-const resolvedBranch = computed<WorkshopLinkBranch | null>(() => {
-  const id = selectedBranchId.value
-  return id ? (branches.value.find((branch) => branch.id === id) ?? null) : null
+const settledBranch = computed<WorkshopLinkBranch | null>(
+  () => branches.value.find((branch) => branch.id === settledBranchId.value) ?? null,
+)
+/**
+ * A multi-branch link says how many counters there are and names them — enough
+ * for the client to recognise the workshop — without turning it into a choice.
+ */
+const branchSummary = computed(() => {
+  if (settledBranchId.value || branches.value.length < 2) return null
+  return t('client.entry.branchCount', {
+    n: branches.value.length,
+    names: branches.value.map((branch) => branch.name).join(', '),
+  })
 })
 /** 429 gets the dead-link screen's transient variant — a retry, not a dead end. */
 const isTransient = computed(() => entry.linkError === 'workshop_link_rate_limited')
@@ -72,31 +90,24 @@ const logoUrl = computed(() =>
   link.value?.workshop_logo_file_id ? publicWorkshopLogoUrl(link.value.code) : null,
 )
 
+/**
+ * Resolve, then apply straight away — there is no question to ask.
+ *
+ * Signed in, the entry is recorded (and the branch pinned when the link named
+ * one) and the client lands on home; signed out, the entry is parked so the
+ * Telegram login round-trip can apply it on the other side.
+ */
 async function resolve() {
   applyFailed.value = false
   logoFailed.value = false
-  selectedBranchId.value = null
   const resolved = await entry.resolveLink(code.value, branchNo.value)
   if (!resolved) return
-  // A single visible branch is not a choice — the link means that counter.
-  const only = resolved.branches.length === 1 ? resolved.branches[0].id : null
-  const settled = resolved.requested_branch_id ?? only
-  if (!settled) return
-  await choose(settled)
-}
-
-/**
- * One tap chooses and continues: signed in, the pin is applied and the client
- * lands on home; signed out, the entry is parked for the login round-trip.
- */
-async function choose(branchId: string) {
-  selectedBranchId.value = branchId
-  storeClientEntry({ code: link.value?.code ?? code.value, branch_id: branchId })
+  storeClientEntry({ code: resolved.code, branch_id: settledBranchId.value })
   if (!auth.isAllowedFor('client')) return
-  await applyNow(branchId)
+  await applyNow(settledBranchId.value)
 }
 
-async function applyNow(branchId: string) {
+async function applyNow(branchId: string | null) {
   applying.value = true
   applyFailed.value = false
   try {
@@ -202,72 +213,43 @@ onMounted(resolve)
           {{ $t('client.entry.applyFailed') }}
         </p>
 
-        <!-- §3.2 — that workshop's branches only, one tap. A temporarily closed
-             branch shows its reason and stays choosable. -->
-        <div v-if="needsChoice && !resolvedBranch" class="mt-6">
-          <h2 class="text-sm font-bold text-ink">{{ $t('client.entry.chooseTitle') }}</h2>
-          <div class="mt-3 overflow-hidden rounded-[14px] border border-hairline">
-            <button
-              v-for="branch in branches"
-              :key="branch.id"
-              type="button"
-              class="flex w-full flex-col items-start gap-1 border-b border-hairline px-4 py-3 text-left last:border-b-0 hover:bg-sunk"
-              @click="choose(branch.id)"
-            >
-              <span class="flex flex-wrap items-center gap-2">
-                <b class="text-sm text-ink">{{ branch.name }}</b>
-                <span
-                  class="client-pill"
-                  :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
-                >
-                  {{
-                    branch.status === 'active'
-                      ? $t('client.workshops.active')
-                      : $t('client.workshops.closed')
-                  }}
-                </span>
-              </span>
-              <span class="text-xs text-ink-muted">{{ branch.address }}</span>
-              <span v-if="branch.closed_reason" class="text-xs text-warning">
-                {{ branch.closed_reason }}
-              </span>
-            </button>
-          </div>
+        <!-- One branch, named: the counter this link is for. -->
+        <div v-if="settledBranch" class="mt-4 rounded-[14px] bg-sunk p-4">
+          <b class="text-sm text-ink">{{ settledBranch.name }}</b>
+          <p class="mt-1 text-xs text-ink-muted">{{ settledBranch.address }}</p>
+          <a
+            class="mt-1 inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
+            :href="`tel:${settledBranch.phone}`"
+          >
+            {{ formatPhone(settledBranch.phone) }}
+          </a>
+          <p v-if="settledBranch.closed_reason" class="mt-1 text-xs text-warning">
+            {{ settledBranch.closed_reason }}
+          </p>
         </div>
 
-        <!-- Settled on a branch and signed out: the standard Kirish action into
-             the existing Telegram sign-in. The entry is already parked. -->
-        <div v-else-if="resolvedBranch" class="mt-6">
-          <div class="rounded-[14px] bg-sunk p-4">
-            <b class="text-sm text-ink">{{ resolvedBranch.name }}</b>
-            <p class="mt-1 text-xs text-ink-muted">{{ resolvedBranch.address }}</p>
-            <a
-              class="mt-1 inline-flex min-h-11 items-center text-xs font-bold text-accent-deep underline underline-offset-2"
-              :href="`tel:${resolvedBranch.phone}`"
-            >
-              {{ formatPhone(resolvedBranch.phone) }}
-            </a>
-            <p v-if="resolvedBranch.closed_reason" class="mt-1 text-xs text-warning">
-              {{ resolvedBranch.closed_reason }}
-            </p>
-          </div>
-          <button
-            v-if="!auth.isAllowedFor('client')"
-            type="button"
-            class="mp-button mp-button-primary mt-4 min-h-[46px] w-full"
-            @click="goToLogin"
-          >
-            {{ $t('client.entry.enter') }}
-          </button>
-          <button
-            v-else
-            type="button"
-            class="mp-button mp-button-primary mt-4 min-h-[46px] w-full"
-            @click="openApp"
-          >
-            {{ $t('client.entry.openApp') }}
-          </button>
-        </div>
+        <!-- Several counters: entry never asks which, so it names none. The
+             count and the names are recognition, not a choice (§2.2). -->
+        <p v-else-if="branchSummary" class="mt-2.5 text-[12.5px] leading-[1.45] text-ink-muted">
+          {{ branchSummary }}
+        </p>
+
+        <button
+          v-if="!auth.isAllowedFor('client')"
+          type="button"
+          class="mp-button mp-button-primary mt-6 min-h-[46px] w-full"
+          @click="goToLogin"
+        >
+          {{ $t('client.entry.enter') }}
+        </button>
+        <button
+          v-else
+          type="button"
+          class="mp-button mp-button-primary mt-6 min-h-[46px] w-full"
+          @click="openApp"
+        >
+          {{ $t('client.entry.openApp') }}
+        </button>
 
         <div class="mt-6 border-t border-hairline pt-5">
           <LocaleSwitcher variant="segmented" />

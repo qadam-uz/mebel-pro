@@ -1,9 +1,12 @@
-// The uz (Latin) catalog — the source of truth for every locale. ru is a
-// translation of it; uz-Cyrl is derived from it by `transliterate.ts`.
+// The **whole** uz (Latin) catalog — every namespace in one object.
 //
-// One file per feature area, imported explicitly rather than by glob so the
-// object's *type* is the schema `vue-i18n` type-checks every `t()` call
-// against: a key that does not exist here fails `vue-tsc`, not the browser.
+// The app does not load this: a role SPA assembles only the namespaces it
+// renders, in `shared/i18n/catalogs/<role>.ts`. This module exists so the
+// catalog specs and the test bootstrap can hold all fourteen namespaces at
+// once; importing it from app code would put every namespace back into that
+// role's bundle. The *type* every `t()` call is checked against lives in
+// `./schema.ts`, which imports the same files with `import type` and therefore
+// ships nothing.
 
 import catalog from './catalog.json'
 import client from './client.json'
@@ -20,7 +23,11 @@ import routes from './routes.json'
 import shell from './shell.json'
 import workshopAdmin from './workshopAdmin.json'
 
-export const uz = {
+import type { MessageSchema } from './schema'
+
+export type { MessageSchema, Namespace, RoleMessages } from './schema'
+
+export const uz: MessageSchema = {
   catalog,
   client,
   common,
@@ -36,5 +43,3 @@ export const uz = {
   shell,
   workshopAdmin,
 }
-
-export type MessageSchema = typeof uz

@@ -11,7 +11,7 @@ import {
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
-import { translate } from '@/shared/i18n'
+import { translate, translatePlural } from '@/shared/i18n'
 import { metres } from '@/shared/stores/cutting'
 import type {
   CuttingOffcut,
@@ -362,4 +362,55 @@ export function edgeRegistryEntryByMaterial(
 ) {
   const key = edgeRegistryKey(materialId, source)
   return edgeRegistry.find((entry) => entry.key === key) ?? null
+}
+
+/** One of the client's four result figures (§7.7). */
+export interface ClientResultFigure {
+  key: 'parts' | 'sheets' | 'edge' | 'offcuts'
+  label: string
+  value: string
+}
+
+/**
+ * **Detallar · Listlar · Kromka · Foydali qoldiq** — the four figures the client
+ * sees, and the only four, on the result stage, the phone summary card and the
+ * order confirmation alike (§7.7).
+ *
+ * One composer for all three so they cannot drift: a phone card and a desktop
+ * tally saying different things about the same layout is the complaint this
+ * replaces. «Arra yo'li» and «Chiqim» are absent by construction rather than
+ * filtered per call site — they are saw and yield metrics the shop plans
+ * around, and a client quoted a fixed price cannot act on either.
+ */
+export function clientResultFigures(result: CuttingResult): ClientResultFigure[] {
+  const totals = resultTotals(result)
+  return [
+    {
+      key: 'parts',
+      label: translate('cutting.result.summaryParts'),
+      value: `${totals.placedParts} ${translate('cutting.unit.pieceShort')}`,
+    },
+    {
+      key: 'sheets',
+      label: translate('cutting.result.summarySheets'),
+      value: `${totals.sheets} ${translatePlural('cutting.unit.sheet', totals.sheets)}`,
+    },
+    {
+      key: 'edge',
+      label: translate('cutting.result.edgeTitle'),
+      // Em-dash, not "0.00 m": a drawing with no banding has no tape figure,
+      // and a printed zero invites the reader to look for one.
+      value: totals.edgeConsumedMm > 0 ? metres(totals.edgeConsumedMm) : '—',
+    },
+    {
+      key: 'offcuts',
+      label: translate('cutting.result.usefulOffcut'),
+      value: totals.usableOffcutCount
+        ? translate('cutting.result.summaryOffcutsValue', {
+            n: totals.usableOffcutCount,
+            area: squareMetres(totals.usableOffcutAreaMm2),
+          })
+        : '—',
+    },
+  ]
 }

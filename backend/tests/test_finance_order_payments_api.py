@@ -589,7 +589,7 @@ async def test_ledger_names_who_handled_the_money_and_filters_by_them(
         workshop_id=workshop_id,
         branch_id=branch_id,
         client_id=buyer.id,
-        order_number="#26-1-0034",
+        order_number="482917",
         total_tiyin=9_000_000,
     )
     cashier = await _staff_access(

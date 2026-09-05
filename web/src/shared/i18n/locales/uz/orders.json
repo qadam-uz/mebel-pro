@@ -61,7 +61,7 @@
   "unit": {
     "parts": "{n} detal",
     "sheets": "{n} list",
-    "panels": "{n} panel",
+    "panels": "{n} list",
     "cuts": "{n} kesim"
   },
   "prices": {

@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  ref,
+  watch,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
-import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { DRAFT_RECOVERY_DEBOUNCE_MS, MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
+import { createDebouncedWriter } from '@/shared/app/recoveryWriter'
 import {
   clientCuttingEditorAdapter,
   cuttingEditorAdapterKey,
@@ -24,10 +34,11 @@ import {
   materialIdentityLabel,
   snapshotMaterialLabel,
 } from '@/shared/app/materialLabel'
-import { pinnedWorkshopId, scopedBranchOptions } from '@/shared/app/clientEntry'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
+import { formatOrderNumber } from '@/shared/formatters'
 import {
   deriveEdgeRegistry,
+  edgeAssignmentSignature,
   edgeRegistryKey,
   groupCuttingParts,
   isGeometryNeutralEdit,
@@ -35,19 +46,32 @@ import {
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
+import {
+  autoTapeDecorForPanel,
+  groupHasBandedSide,
+  groupTapeDecors,
+  preferredVariant,
+  reResolveGroupTape,
+  resolveGroupTape,
+  type TapeDecor,
+} from '@/shared/app/cuttingGroupTape'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
+import ActionMenu from '@/shared/components/ActionMenu.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import OrderWizardHead from '@/shared/components/OrderWizardHead.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
-import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
+import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
 import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
+import CuttingMaterialPicker from '@/shared/components/CuttingMaterialPicker.vue'
+import CuttingPartCard from '@/shared/components/CuttingPartCard.vue'
+import CuttingPartSheet from '@/shared/components/CuttingPartSheet.vue'
+import CuttingTapePicker from '@/shared/components/CuttingTapePicker.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
-import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
@@ -64,6 +88,29 @@ import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cutting
 import { overlayRect } from '@/shared/app/overlayGeometry'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { OrderDetail } from '@/shared/stores/orders'
+
+/**
+ * The two workshop-only modals, split out of this view's chunk.
+ *
+ * Between them they are ~1900 lines — a fifth of what the editor used to make
+ * every role download — and the client opens neither: §7.6 took file import off
+ * the client editor, and §7.5 docks kromka in a side panel instead of raising
+ * the picker modal. Both are mounted behind `v-if="!isClientEditor"`, so in the
+ * client SPA the loader is never called and the bytes are never fetched.
+ *
+ * No `loadingComponent`, deliberately. In the workshop the gate is true from
+ * the first render, so the chunk is already in flight while the editor paints
+ * and a click lands on a component that is long since resolved — a spinner
+ * there could only flash. If the network is slow enough that it hasn't arrived,
+ * the open state is held in `importWizardOpen` / `edgePickerPart` and the modal
+ * appears the moment it does.
+ */
+const CuttingImportWizard = defineAsyncComponent(
+  () => import('@/shared/components/CuttingImportWizard.vue'),
+)
+const CuttingEdgePickerModal = defineAsyncComponent(
+  () => import('@/shared/components/CuttingEdgePickerModal.vue'),
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -85,6 +132,12 @@ provide(cuttingEditorAdapterKey, adapter)
 // not a picker; the walk-in identity strip shows in workshop scope.
 const fixedBranch = computed(() => adapter.branch.fixed ?? null)
 const isWorkshopScope = computed(() => cutting.scope === 'workshop')
+// The client editor (SPEC_CLIENT_UX_MVP §7). Every §7 change is gated on this,
+// never on `inOrderWizard`: that flag is false for a workshop revision and for
+// a read-only bound draft too, and those are workshop screens that must keep
+// the registry, the tape picker, the import and the own-material flow exactly
+// as they are today.
+const isClientEditor = computed(() => cutting.scope === 'client')
 const draftId = computed(() => String(route.params.id))
 // New editor: it has no server id until it contains a complete detail, which
 // creates the draft through autosave.
@@ -117,7 +170,13 @@ type DraftRecovery = {
   branchId: string | null
 }
 
+// Set once the draft is deleted: every remaining flush point (route leave,
+// unmount) must then stay silent, or the exit that follows the delete would
+// write the snapshot straight back and resurrect the drawing on the next visit.
+let draftDeleted = false
+
 function writeDraftRecovery() {
+  if (draftDeleted) return
   try {
     const snapshot: DraftRecovery = {
       parts: parts.value,
@@ -163,6 +222,19 @@ function moveDraftRecovery(fromKey: string) {
   } catch {
     // See writeDraftRecovery: recovery storage is best effort.
   }
+}
+
+/**
+ * The recovery snapshot is debounced (300ms) rather than written per keystroke —
+ * at 300 rows the serialisation is ~60 kB per character. Every exit the editor
+ * can observe flushes it synchronously, so the layer still covers the two cases
+ * it exists for: the tab closing inside the server autosave's 700ms window, and
+ * a save that fails or never leaves an offline phone.
+ */
+const recoveryWriter = createDebouncedWriter(writeDraftRecovery, DRAFT_RECOVERY_DEBOUNCE_MS)
+
+function flushDraftRecovery() {
+  recoveryWriter.flush()
 }
 const optimizeError = ref<string | null>(null)
 // Per-row optimiser-error attribution (CB-89): the backend returns
@@ -220,6 +292,14 @@ const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null
 const inOrderWizard = computed(
   () => isWorkshopScope.value && !isReadOnly.value && revisionOrderId.value === null,
 )
+/**
+ * Whether kromka is edited in a card docked beside the board rather than in a
+ * modal — the staff order wizard, and now the client editor too (§7.5). Both
+ * select a row on click or focus and render the panel for that row; the client
+ * variant just carries a smaller block. Below `lg` the client's panel is not
+ * rendered at all and the phone sheet owns the job instead.
+ */
+const docksKromka = computed(() => inOrderWizard.value || isClientEditor.value)
 // The locked-branch strip names the branch the editor actually operates on. For a
 // resumed walk-in draft that's the draft's frozen branch (which may differ from
 // the topbar the adapter froze at mount); fall back to the topbar name.
@@ -274,27 +354,24 @@ const activeBranchId = computed(() => {
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
-// Editor scoping (spec §4). The pin scopes what the picker *offers*; it never
-// touches data, so the full option list stays loaded and an existing draft on a
-// foreign branch keeps naming its own branch (and its kerf/trim) through
-// `preferredBranch` above. Only `pickerOptions` is narrowed, and only for a
-// client the principal says is pinned — the workshop editor and the un-pinned
-// organic client both fall through to the list as it was.
-const pinnedWorkshop = computed(() =>
-  isWorkshopScope.value
-    ? null
-    : pinnedWorkshopId(
-        cutting.branchOptions,
-        auth.me?.preferred_branch_id,
-        auth.me?.pinned_workshop_name,
-      ),
-)
-const pinnedWorkshopName = computed(() =>
-  pinnedWorkshop.value ? (auth.me?.pinned_workshop_name ?? null) : null,
-)
-const pickerOptions = computed(() =>
-  scopedBranchOptions(cutting.branchOptions, pinnedWorkshop.value),
-)
+function hasBranchOption(branchId: string | null) {
+  return Boolean(branchId) && cutting.branchOptions.some((row) => row.branch_id === branchId)
+}
+/**
+ * The naming rule (decision 16), system-wide: a workshop with ONE branch is
+ * named by the workshop alone — the branch name never appears — and a workshop
+ * with several reads «{Workshop} · {Branch}», always in that order. A branch
+ * name is never shown on its own. (This line used to render branch-first,
+ * which is the reverse of how a client says it out loud.)
+ */
+const clientBranchLabel = computed(() => {
+  const branch = preferredBranch.value
+  if (!branch) return ''
+  const siblings = cutting.branchOptions.filter(
+    (option) => option.workshop_id === branch.workshop_id,
+  ).length
+  return siblings > 1 ? `${branch.workshop_name} · ${branch.branch_name}` : branch.workshop_name
+})
 // What the in-page picker should start on. A draft already bound to a branch
 // keeps it — the topbar must never retarget an in-progress drawing. Only when
 // nothing is bound do we fall back to the app's branch, instead of demanding a
@@ -347,6 +424,22 @@ function partsSignature(list: CuttingPart[] = parts.value) {
     ]),
   )
 }
+/**
+ * The same signature for a RESULT's frozen snapshot, computed once per snapshot.
+ *
+ * `currentChosenResult` is read by the primary CTA, so it re-runs on every
+ * keystroke — and it compared two freshly stringified lists each time, one of
+ * which is a server payload that cannot have changed. The array identity is the
+ * cache key: a new payload is a new array, and a re-used one is byte-identical.
+ */
+const snapshotSignatures = new WeakMap<object, string>()
+function snapshotSignature(snapshot: CuttingPart[]): string {
+  const cached = snapshotSignatures.get(snapshot)
+  if (cached !== undefined) return cached
+  const signature = partsSignature(snapshot)
+  snapshotSignatures.set(snapshot, signature)
+  return signature
+}
 // A result is actionable only when the draft explicitly chooses it and it was
 // calculated for the exact parts currently visible in the editor. This rejects
 // stale ids and preserved MAP layouts after a geometry edit, while allowing an
@@ -357,7 +450,7 @@ const currentChosenResult = computed(() => {
   const result = currentDraft.results.find((item) => item.id === currentDraft.chosen_result_id)
   if (!result || result.status === 'invalidated' || !Array.isArray(result.parts_snapshot))
     return null
-  return partsSignature(result.parts_snapshot) === partsSignature() ? result : null
+  return snapshotSignature(result.parts_snapshot) === partsSignature() ? result : null
 })
 const hasCurrentChosenResult = computed(() => currentChosenResult.value !== null)
 // docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
@@ -381,12 +474,19 @@ const optimizeDisabledHint = computed(() => {
 })
 const primaryCtaLabel = computed(() => {
   if (cutting.optimizing || creatingDraft.value) return t('cutting.editor.ctaCalculating')
-  // «Optimallashtirish» is the wizard's word for this step, and it is only true
-  // when the click will actually run one: with a chosen result already matching
-  // these parts the button just opens that result, and on a read-only drawing it
-  // does nothing at all. Both of those keep the neutral «Davom etish», as does
-  // the client SPA, whose editor is a screen of its own rather than step 2 of
-  // anything.
+  // §7.0 fixes the client's two labels: the button says what the tap does —
+  // it runs the optimiser, or it opens the result that is already current.
+  if (isClientEditor.value) {
+    return hasCurrentChosenResult.value
+      ? t('cutting.editor.ctaViewResult')
+      : t('cutting.editor.ctaCalculate')
+  }
+  // Below here is the workshop only — the client branch above has already
+  // returned. «Optimallashtirish» is the order wizard's word for this step, and
+  // it is only true when the click will actually run one: with a chosen result
+  // already matching these parts the button just opens that result, and outside
+  // the wizard (a standalone drawing, a revision) the step is not numbered at
+  // all. Both of those keep the neutral «Davom etish».
   if (!inOrderWizard.value || hasCurrentChosenResult.value) return t('cutting.editor.ctaContinue')
   return t('cutting.editor.ctaOptimize')
 })
@@ -440,12 +540,169 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
   }
 }
 
+/**
+ * Catalog lookup by id, indexed rather than scanned.
+ *
+ * These two are the most-called functions on the screen — row validation, the
+ * size/fit check, the group label, the source chip and the swatch all resolve a
+ * material, once per row, inside computeds that re-run on every keystroke. As a
+ * `find()` over a branch catalog of a few hundred rows that made a single
+ * character cost O(parts × catalog); the index turns it into O(parts) and is
+ * rebuilt only when the catalog itself is (re)loaded.
+ *
+ * First occurrence wins, which is what `find()` returned — ids are unique, but
+ * the tie-break should not change silently if that ever stops being true.
+ */
+function indexById(options: readonly ClientCatalogMaterialOption[]) {
+  const index = new Map<string, ClientCatalogMaterialOption>()
+  for (const material of options) if (!index.has(material.id)) index.set(material.id, material)
+  return index
+}
+const panelsById = computed(() => indexById(cutting.panelOptions))
+const edgesById = computed(() => indexById(cutting.edgeOptions))
+
 function materialById(id: string | null | undefined) {
-  return cutting.panelOptions.find((material) => material.id === id) ?? null
+  return (id ? panelsById.value.get(id) : null) ?? null
 }
 
 function edgeById(id: string | null | undefined) {
-  return cutting.edgeOptions.find((material) => material.id === id) ?? null
+  return (id ? edgesById.value.get(id) : null) ?? null
+}
+
+// ── The client's group tape (§7.1) ──────────────────────────────────────────
+// Nothing below is persisted: a side still stores the concrete kromka material
+// id it always did, and the group's decor is resolved from the parts snapshot
+// plus the branch's tape catalog on every read (see app/cuttingGroupTape.ts).
+// `pickedTapeByMaterial` only records the choice made in THIS editor, which is
+// the one thing the parts cannot say when no side is banded yet.
+const pickedTapeByMaterial = ref<Record<string, string>>({})
+/** The thickness the next banded side takes — «Qalinlikni tanlab, tomonga bosing». */
+const armedThicknessMm = ref<number | null>(null)
+const tapePickerGroupKey = ref<string | null>(null)
+const gateGroupKey = ref<string | null>(null)
+
+const tapeDecors = computed(() =>
+  isClientEditor.value ? groupTapeDecors(cutting.edgeOptions) : [],
+)
+
+function partsOfMaterial(materialId: string | null) {
+  return parts.value.filter((part) => (part.material_id || null) === materialId)
+}
+
+function groupTapeFor(materialId: string | null): TapeDecor | null {
+  if (!materialId) return null
+  return resolveGroupTape({
+    panel: materialById(materialId),
+    groupParts: partsOfMaterial(materialId),
+    decors: tapeDecors.value,
+    pickedKey: pickedTapeByMaterial.value[materialId] ?? null,
+  }).decor
+}
+
+function tapeThicknessOf(materialId: string): number | null {
+  const edge = edgeById(materialId)
+  if (!edge) return null
+  const value = Number(edge.thickness_mm)
+  return Number.isFinite(value) ? value : null
+}
+
+function foreignTapeLabel(materialId: string) {
+  const edge = edgeById(materialId)
+  return edge ? materialLabel(edge) : materialId
+}
+
+/**
+ * §7.1's auto-attach, as a side effect of the catalog and the parts settling
+ * rather than of the click that added the material: a material can arrive by
+ * picker, by hydration or by recovery, and all three owe the group the same
+ * tape. `resolveGroupTape` already prefers what the sides carry, so writing the
+ * auto-match into `pickedTapeByMaterial` only pins the case where nothing is
+ * banded — and never overwrites a pick the client made.
+ */
+watch(
+  [() => parts.value.map((part) => part.material_id).join('|'), tapeDecors],
+  () => {
+    if (!isClientEditor.value || tapeDecors.value.length === 0) return
+    const next = { ...pickedTapeByMaterial.value }
+    let changed = false
+    for (const materialId of new Set(parts.value.map((part) => part.material_id).filter(Boolean))) {
+      if (next[materialId]) continue
+      const auto = autoTapeDecorForPanel(materialById(materialId), tapeDecors.value)
+      if (!auto) continue
+      next[materialId] = auto.key
+      changed = true
+    }
+    if (changed) pickedTapeByMaterial.value = next
+  },
+  { immediate: true },
+)
+
+/** Groups that band a side but have no tape decor — the «Hisoblash» gate. */
+const groupsMissingGroupTape = computed(() =>
+  isClientEditor.value
+    ? groupedParts.value.filter(
+        (group) =>
+          group.materialId &&
+          groupHasBandedSide(group.parts.map((entry) => entry.part)) &&
+          groupTapeFor(group.materialId) === null,
+      )
+    : [],
+)
+
+function openTapePicker(materialId: string | null) {
+  if (!materialId) return
+  tapePickerGroupKey.value = materialId
+}
+
+function closeTapePicker() {
+  tapePickerGroupKey.value = null
+}
+
+const tapePickerPanel = computed(() =>
+  tapePickerGroupKey.value ? materialById(tapePickerGroupKey.value) : null,
+)
+const tapePickerCurrentKey = computed(() =>
+  tapePickerGroupKey.value ? (groupTapeFor(tapePickerGroupKey.value)?.key ?? null) : null,
+)
+
+/**
+ * Changing the group's tape re-points every banded side of that group at the
+ * new decor, keeping each side's thickness where the decor has it. A thickness
+ * the new decor does not carry falls back to the nearest one — and says so
+ * once, because a band silently changing from 2 mm to 0.4 mm is a price change
+ * the client did not ask for.
+ */
+function applyGroupTape(decorKey: string) {
+  const materialId = tapePickerGroupKey.value
+  const decor = tapeDecors.value.find((item) => item.key === decorKey)
+  if (!materialId || !decor) return
+  pickedTapeByMaterial.value = { ...pickedTapeByMaterial.value, [materialId]: decorKey }
+  const outcome = reResolveGroupTape({
+    parts: parts.value,
+    groupMaterialId: materialId,
+    decor,
+    thicknessById: tapeThicknessOf,
+  })
+  if (outcome.changed) parts.value = outcome.parts
+  if (outcome.fellBack) toast.warn(t('cutting.edge.thicknessFallback', { name: decor.label }))
+  if (gateGroupKey.value === materialId) gateGroupKey.value = null
+  closeTapePicker()
+}
+
+/** The armed thickness, clamped to what the open part's group decor carries. */
+function armedThicknessFor(decor: TapeDecor | null): number | null {
+  if (!decor) return null
+  const armed = decor.variants.find((variant) => variant.thicknessMm === armedThicknessMm.value)
+  return (armed ?? preferredVariant(decor, null))?.thicknessMm ?? null
+}
+
+function setPartSide(part: CuttingPart, side: EdgeField, materialId: string | null) {
+  part[side] = materialId ? { material_id: materialId, source: 'shop' } : null
+  if (materialId) {
+    const thickness = tapeThicknessOf(materialId)
+    if (thickness != null) armedThicknessMm.value = thickness
+    rememberEdgeMaterial(part, materialId)
+  }
 }
 
 const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
@@ -602,14 +859,24 @@ watch(errorCount, (count) => {
   if (count === 0) errorFilterEnabled.value = false
 })
 
-watch(
-  parts,
-  (rows) => {
-    syncEdgeAssignments(edgeAssignments.value, rows)
-    edgeAssignments.value = new Map(edgeAssignments.value)
-  },
-  { deep: true, immediate: true },
-)
+/**
+ * Re-number the tape registry from the parts as they stand. Idempotent: running
+ * it twice on an unchanged drawing produces the same numbers, which is what lets
+ * both callers below fire without coordinating.
+ */
+function refreshEdgeAssignments() {
+  syncEdgeAssignments(edgeAssignments.value, parts.value)
+  edgeAssignments.value = new Map(edgeAssignments.value)
+}
+// Watch the registry's actual input, not the whole parts array. This used to be
+// `watch(parts, …, { deep: true })`, which re-walked every row and allocated a
+// fresh Map on each keystroke in a length / width / soni / name field — up to
+// 300 rows of work per character, for a result that could not have changed.
+// `edgeAssignmentSignature` reads only `part.edge_*`, so the computed below is
+// not even a subscriber of the geometry fields: a geometry edit invalidates
+// nothing here. Add / remove / reorder / re-band still all move the signature.
+const edgeAssignmentInput = computed(() => edgeAssignmentSignature(parts.value))
+watch(edgeAssignmentInput, refreshEdgeAssignments, { immediate: true })
 
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
@@ -750,6 +1017,9 @@ function deleteRow(index: number) {
     // letting `activePart` resolve to null keeps `activeSide` from surviving
     // into whatever row is selected next.
     if (activePartRef.value === removed.part_ref) clearActivePart()
+    // Same for the phone sheet — deleting from its ⋯ menu closes it, and the
+    // undo toast below is then the only thing on screen about that part.
+    if (sheetPartRef.value === removed.part_ref) closePartSheet()
     const label = partDisplayName(removed, index)
     toast.action(
       t('cutting.editor.partDeleted', { name: label }),
@@ -938,6 +1208,16 @@ async function confirmDeleteDraft() {
   deleteDraftTraceId.value = null
   try {
     await cutting.deleteDraft(draft.value.id)
+    // The drawing is gone: drop the queued write and the stored snapshot, and
+    // latch `draftDeleted` so the route-leave/unmount flushes below cannot put
+    // it back.
+    draftDeleted = true
+    recoveryWriter.cancel()
+    // The queued server save too: the `router.push` below runs the route-leave
+    // guard, whose flush would PATCH the draft that no longer exists — and the
+    // guard refuses to navigate on a failed save, stranding the user here.
+    autosave.cancel()
+    clearDraftRecovery()
     await router.push(rolePath(adapter.paths.drafts))
   } catch (errorValue) {
     deleteDraftError.value = clientErrorLabel(
@@ -1024,6 +1304,38 @@ function selectPart(part: CuttingPart, side?: EdgeField) {
   activeSide.value = side ?? null
 }
 
+// ── The phone «Detal» sheet (§7.0) ──────────────────────────────────────────
+// One ref, not a copy of the part: the sheet edits the live object through
+// granular emits and the debounced autosave carries it, so «Saqlash» closes
+// rather than commits and there is no second copy of the truth to reconcile.
+const sheetPartRef = ref<string | null>(null)
+const sheetPart = computed(
+  () => parts.value.find((part) => part.part_ref === sheetPartRef.value) ?? null,
+)
+const sheetPartIndex = computed(() =>
+  parts.value.findIndex((part) => part.part_ref === sheetPartRef.value),
+)
+const sheetGroupTape = computed(() => groupTapeFor(sheetPart.value?.material_id ?? null))
+
+function openPartSheet(part: CuttingPart) {
+  sheetPartRef.value = part.part_ref
+  armedThicknessMm.value = armedThicknessFor(groupTapeFor(part.material_id))
+}
+
+function closePartSheet() {
+  sheetPartRef.value = null
+}
+
+/** «Saqlash va yana»: keep the flow going with a fresh part in the same group. */
+function savePartAndNext() {
+  const current = sheetPart.value
+  if (!current) return
+  const index = sheetPartIndex.value
+  addRow(current.material_id, current, index)
+  const next = parts.value[index + 1]
+  if (next) sheetPartRef.value = next.part_ref
+}
+
 function clearActivePart() {
   activePartRef.value = null
   activeSide.value = null
@@ -1106,11 +1418,9 @@ function onPanelEdgesChange(payload: {
   rememberEdgeMaterial(part, payload.rememberedMaterialId)
 }
 
-type MaterialPickerTarget =
-  | { type: 'part'; partRef: string }
-  | { type: 'group'; key: string }
-  | { type: 'bulk' }
-  | { type: 'new' }
+// No per-part target: a row's material is the group's, and changing one row
+// alone is what the group head (or a bulk selection) is for.
+type MaterialPickerTarget = { type: 'group'; key: string } | { type: 'bulk' } | { type: 'new' }
 const materialPickerTarget = ref<MaterialPickerTarget | null>(null)
 
 function toggleSelect(partRef: string) {
@@ -1139,16 +1449,30 @@ function openBulkEdge() {
   edgePickerInitialSide.value = null
   edgeReturnFocus = null
 }
-function openBulkMaterial() {
+/**
+ * §7.3: on a desktop the client picker is a panel anchored to the control that
+ * opened it, so every trigger hands over its own element. Null on the phone
+ * path (and for a keyboard activation with no element) simply means the sheet.
+ */
+const materialPickerAnchor = ref<HTMLElement | null>(null)
+function anchorFrom(event?: Event) {
+  materialPickerAnchor.value =
+    event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
+
+function openBulkMaterial(event?: Event) {
   if (selectedParts.value.length === 0) return
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'bulk' }
 }
 
-function openNewMaterial() {
+function openNewMaterial(event?: Event) {
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'new' }
 }
 
-function openGroupMaterial(group: { key: string }) {
+function openGroupMaterial(group: { key: string }, event?: Event) {
+  anchorFrom(event)
   materialPickerTarget.value = { type: 'group', key: group.key }
 }
 
@@ -1157,10 +1481,6 @@ function addGroupRow(group: { materialId: string | null; parts: Array<{ part: Cu
   const last = group.parts[group.parts.length - 1]?.part ?? null
   const lastIndex = last ? parts.value.findIndex((part) => part.part_ref === last.part_ref) : -1
   addRow(group.materialId, last, lastIndex)
-}
-
-function openPartMaterial(part: CuttingPart) {
-  materialPickerTarget.value = { type: 'part', partRef: part.part_ref }
 }
 
 function closeMaterialPicker() {
@@ -1280,9 +1600,6 @@ const materialPickerGroups = computed<MaterialPickerGroup[]>(() => {
 const materialPickerCurrentId = computed(() => {
   const target = materialPickerTarget.value
   if (!target) return null
-  if (target.type === 'part') {
-    return parts.value.find((part) => part.part_ref === target.partRef)?.material_id ?? null
-  }
   if (target.type === 'group') {
     const group = groupedParts.value.find((item) => item.key === target.key)
     return group?.materialId ?? null
@@ -1294,13 +1611,6 @@ const materialPickerCurrentId = computed(() => {
 const materialPickerSubtitle = computed(() => {
   const target = materialPickerTarget.value
   if (!target) return ''
-  if (target.type === 'part') {
-    const index = parts.value.findIndex((part) => part.part_ref === target.partRef)
-    const part = parts.value[index]
-    return part
-      ? t('cutting.material.forPart', { name: partDisplayName(part, index) })
-      : t('cutting.material.forPartGeneric')
-  }
   if (target.type === 'group') {
     const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
     return t('cutting.material.forGroup', { n: count }, count)
@@ -1317,9 +1627,6 @@ function applyMaterialPicker(materialId: string) {
     const existing = groupedParts.value.find((group) => group.materialId === materialId)
     if (existing) addGroupRow(existing)
     else addRow(materialId, null)
-  } else if (target.type === 'part') {
-    const part = parts.value.find((item) => item.part_ref === target.partRef)
-    if (part) part.material_id = materialId
   } else if (target.type === 'group') {
     const group = groupedParts.value.find((item) => item.key === target.key)
     if (!group) return
@@ -1334,8 +1641,27 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
+// `{workshop} katalogi · N ta dekor` — the picker's foot line, so the client
+// can see WHOSE prices these are without leaving the sheet.
+const materialCatalogCaption = computed(() =>
+  t('cutting.editor.catalogCaption', {
+    workshopBranch: clientBranchLabel.value,
+    n: materialPickerGroups.value.length,
+  }),
+)
+const tapeCatalogCaption = computed(() =>
+  t('cutting.editor.tapeCatalogCaption', {
+    workshopBranch: clientBranchLabel.value,
+    n: tapeDecors.value.length,
+  }),
+)
+
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
   return material.has_grain ? t('cutting.material.grained') : t('cutting.material.grainless')
+}
+
+function groupDecorImageId(materialId: string | null) {
+  return materialById(materialId)?.image_file_id ?? null
 }
 
 function groupSwatchStyle(materialId: string) {
@@ -1514,6 +1840,11 @@ async function persistPartsSnapshot() {
   const oldRecoveryKey = recoveryKey.value
   let id = draftId.value
 
+  // Land the freshest snapshot under the key we are about to clear or move,
+  // before the request goes out — a save that then fails (offline phone) must
+  // leave the latest work recoverable, not the state of 300ms ago.
+  flushDraftRecovery()
+
   if (startedAsNew) {
     if (!pendingDraftId.value) {
       pendingDraftId.value = (
@@ -1534,6 +1865,11 @@ async function persistPartsSnapshot() {
   })
 
   if (!startedAsNew) {
+    // The server now holds this state. Drop anything queued during the
+    // round-trip too — it would re-create the key we are clearing. A genuine
+    // edit made mid-flight leaves the autosave dirty, so the next run
+    // re-flushes the recovery ahead of it.
+    recoveryWriter.cancel()
     clearDraftRecovery(oldRecoveryKey)
     return
   }
@@ -1542,7 +1878,16 @@ async function persistPartsSnapshot() {
   hydratedDraftId = id
   leavingAfterCreate.value = true
   await router.replace(rolePath(adapter.paths.editor(id)))
-  moveDraftRecovery(oldRecoveryKey)
+  // `recoveryKey` now points at the persisted draft. A write queued during the
+  // round-trip carries live state, which is fresher than the snapshot sitting
+  // under the old key — flush it onto the new key instead of moving the stale
+  // one over it.
+  if (recoveryWriter.pending) {
+    flushDraftRecovery()
+    clearDraftRecovery(oldRecoveryKey)
+  } else {
+    moveDraftRecovery(oldRecoveryKey)
+  }
 }
 
 // Debounced autosave (700ms) — the timing core, status mirror, draft creation,
@@ -1568,7 +1913,7 @@ const autosave = useDraftAutosave({
   // A row-attributed optimiser error is stale once the parts change.
   onSchedule: () => {
     optimizeRowError.value = null
-    writeDraftRecovery()
+    recoveryWriter.schedule()
   },
 })
 const saveState = autosave.saveState
@@ -1581,7 +1926,7 @@ async function setPreferredBranch(branchId: string | null) {
     branchTouched.value = true
     branchPickerOpen.value = false
     selectedBranchId.value = branchId
-    writeDraftRecovery()
+    recoveryWriter.schedule()
     await loadMaterials()
     autosave.schedule()
     return
@@ -1637,8 +1982,27 @@ async function runPrimaryCta() {
   await optimize()
 }
 
+/**
+ * The §7.1 gate. A group that bands a side but has no tape decor cannot be
+ * priced — the tape is a line on the bill, and every order is fully priced at
+ * placement. So «Hisoblash» refuses, scrolls the offending group's line into
+ * view and arms it, rather than optimising into a quote that cannot be made.
+ */
+async function blockedByMissingGroupTape(): Promise<boolean> {
+  const group = groupsMissingGroupTape.value[0]
+  if (!group?.materialId) return false
+  gateGroupKey.value = group.materialId
+  toast.warn(t('cutting.edge.pickFirstGroup'))
+  await nextTick()
+  document
+    .getElementById(`group-tape-${group.materialId}`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  return true
+}
+
 async function optimize() {
   if (cutting.optimizing || creatingDraft.value || !canOptimize.value) return
+  if (await blockedByMissingGroupTape()) return
   optimizeError.value = null
   optimizeRowError.value = null
   if (isNewDraft.value) {
@@ -1768,6 +2132,12 @@ watch(
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
         )
         hydratedDraftId = value.id
+        // Re-number here rather than leaving it to the signature watch: a draft
+        // that happens to band the same tapes in the same order as the one on
+        // screen has the same signature, so the watch would not fire — and the
+        // Map we just emptied would stay empty. The watch handles every other
+        // path; this one resets the map, so it owns the refill.
+        refreshEdgeAssignments()
       })
       // Normalization diverged from the server copy — persist it (debounced;
       // optimise flushes first) instead of marking the draft already-saved.
@@ -1791,9 +2161,15 @@ watch(
 
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
+  // `pagehide` is the exit iOS Safari actually fires (a bfcache'd page gets no
+  // `beforeunload` at all), and a phone backgrounds the tab before the OS kills
+  // it — so `hidden` is the last moment a mobile editor is guaranteed to run.
+  window.addEventListener('pagehide', flushDraftRecovery)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (isNewDraft.value) {
     // `/cutting/new` is always a distinct drawing. A shared recovery key here
     // would otherwise repopulate this editor with the previous new draft.
+    recoveryWriter.cancel()
     clearDraftRecovery()
     // Fixed-branch mode: the branch is the app context, so it cannot be
     // unselected by the user.
@@ -1803,8 +2179,30 @@ onMounted(async () => {
       await loadMaterials()
       return
     }
-    // A client-side new drawing always starts with no branch selection.
     await cutting.loadBranchOptions()
+    // Decision 17: the branch is settled BEFORE the editor opens, and for the
+    // client that settling is the pin — «+ Yangi chizma» on home, or a branch
+    // row's own «Yangi chizma», which re-pins first. The editor therefore reads
+    // the pin rather than asking: it has no branch state of its own and no
+    // picker. A pin that no longer resolves to a visible branch (blocked
+    // workshop, retired counter) is the same situation the route guard answers
+    // for a pin-less client — Ustaxonalarim, before any editor screen renders.
+    if (isClientEditor.value) {
+      const pinned = auth.me?.preferred_branch_id ?? null
+      // `branchOptions.length` guards the redirect against a failed load: an
+      // empty list means "we don't know", not "the pin is gone".
+      const lost = cutting.branchOptions.length > 0 && !hasBranchOption(pinned)
+      if (auth.me && (!pinned || lost)) {
+        await router.replace(rolePath('/c/branches'))
+        return
+      }
+      localBranchId.value = pinned
+      selectedBranchId.value = pinned
+      await loadMaterials()
+      return
+    }
+    // Workshop scope with no topbar branch yet (a cold load into the editor):
+    // the picker is the recovery until `contextBranchId` lands.
     selectedBranchId.value = null
     branchPickerOpen.value = true
     await loadMaterials()
@@ -1843,9 +2241,12 @@ onMounted(async () => {
     })
     void nextTick(() => autosave.schedule())
   }
-  // Only the client app asks in-editor. In the workshop the branch comes from
-  // the app, and there are no options to show — an empty modal was a dead end.
-  if (!selectedBranchId.value && !appSuppliesBranch.value) branchPickerOpen.value = true
+  // The workshop takes its branch from the app context and has no options to
+  // show; the client's branch is settled before the editor opens (decision 17).
+  // Neither raises a picker here any more.
+  if (!selectedBranchId.value && !appSuppliesBranch.value && !isClientEditor.value) {
+    branchPickerOpen.value = true
+  }
   await loadMaterials()
 })
 
@@ -1861,10 +2262,20 @@ watch(contextBranchId, (value) => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('pagehide', flushDraftRecovery)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (isNewDraft.value) {
+    // An abandoned `/cutting/new` has nothing worth recovering — the next mount
+    // clears the shared `new` key anyway. Leaving after a successful create
+    // already moved the snapshot onto the persisted key.
+    recoveryWriter.cancel()
     autosave.cancel()
     return
   }
+  // Before the imported-layout guard below: that guard decides whether the
+  // *server* save runs, and the recovery snapshot is written on every edit
+  // regardless — it is what makes the discarded work recoverable at all.
+  flushDraftRecovery()
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
@@ -1879,10 +2290,15 @@ onBeforeUnmount(() => {
 })
 
 function onBeforeUnload() {
-  // Browsers do not wait for an async request here. The recovery snapshot was
-  // written synchronously on every edit; flush still helps when the browser
-  // keeps the request alive during unload.
+  // Browsers do not wait for an async request here, so the synchronous recovery
+  // flush is what actually saves the last edits; the autosave flush still helps
+  // when the browser keeps the request alive during unload.
+  flushDraftRecovery()
   void autosave.flush()
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'hidden') flushDraftRecovery()
 }
 
 onBeforeRouteLeave(async () => {
@@ -1891,6 +2307,7 @@ onBeforeRouteLeave(async () => {
   if (isNewDraft.value) {
     if (!leavingAfterCreate.value) {
       abandoningNewDraft = true
+      recoveryWriter.cancel()
       autosave.cancel()
     }
     // The first autosave itself replaces `/new` with the persisted draft URL.
@@ -1898,6 +2315,12 @@ onBeforeRouteLeave(async () => {
     // each other indefinitely.
     return true
   }
+  // The delete already cancelled both writers; there is nothing left to save,
+  // and an error status left over from before it must not hold the exit.
+  if (draftDeleted) return true
+  // Synchronously, before the awaited server save: leaving inside the debounce
+  // window must not drop the last keystroke even if that save then fails.
+  flushDraftRecovery()
   await autosave.flush()
   return saveState.value !== 'error'
 })
@@ -1936,7 +2359,71 @@ onBeforeRouteLeave(async () => {
       </template>
     </OrderWizardHead>
 
-    <div v-else class="client-page-head">
+    <!-- §7.0, phones: the draft NAME is the page title — inline-editable, with
+         the saved chip beside it and delete demoted into a ⋯ menu. There is no
+         «Chizma» H1 above it: two titles for one screen, one of them generic,
+         is the duplicate the phone shell explicitly drops. Desktop keeps the
+         H1 + name + outline delete the canvas draws. -->
+    <div v-else-if="isClientEditor" class="mb-3 flex items-center gap-2.5 md:hidden">
+      <input
+        v-if="draftNameEditing"
+        v-model="draftNameValue"
+        class="mp-input min-w-0 flex-1 text-lg font-bold"
+        maxlength="64"
+        :placeholder="$t('cutting.editor.namePlaceholder')"
+        :aria-label="$t('cutting.editor.namePlaceholder')"
+        autofocus
+        @keydown.enter.prevent="commitDraftName"
+        @keydown.esc.prevent="cancelDraftNameEdit"
+        @blur="commitDraftName"
+      />
+      <button
+        v-else-if="!isReadOnly"
+        type="button"
+        class="flex min-w-0 flex-1 items-center gap-1.5 border-b border-dashed border-hairline-strong pb-0.5 text-left font-display text-[22px] font-bold tracking-[-0.02em] text-ink"
+        @click="beginDraftNameEdit"
+      >
+        <span class="min-w-0 truncate">{{
+          isNewDraft
+            ? localDraftName || $t('cutting.editor.untitled')
+            : draft
+              ? draftDisplayName(draft)
+              : $t('cutting.editor.untitled')
+        }}</span>
+        <Icon name="pencil" class="size-4 shrink-0 text-ink-muted" />
+      </button>
+      <span v-else class="min-w-0 flex-1 truncate text-lg font-bold text-ink">{{
+        draft ? draftDisplayName(draft) : $t('cutting.editor.untitled')
+      }}</span>
+      <span
+        v-if="!isNewDraft && !isReadOnly"
+        class="mp-chip shrink-0"
+        :class="{
+          'bg-success-soft text-success': saveState === 'saved',
+          'bg-info-soft text-info': saveState === 'saving' || saveState === 'editing',
+          'bg-danger-soft text-danger': saveState === 'error',
+        }"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="mp-dot" aria-hidden="true"></span>
+        {{ saveLabel() }}
+      </span>
+      <!-- Decision 20: the drawing's ⋯ stays a single item. -->
+      <ActionMenu
+        v-if="!isNewDraft && !isReadOnly"
+        :label="$t('cutting.editor.draftActionsAria')"
+        trigger-class="mp-action-icon-button size-9 min-h-0 shrink-0 text-ink-muted"
+        :items="[{ label: $t('cutting.editor.deleteDraft'), icon: 'trash', danger: true }]"
+        @select="requestDeleteDraft"
+      />
+    </div>
+
+    <div
+      v-if="!inOrderWizard"
+      class="client-page-head"
+      :class="isClientEditor ? 'max-md:hidden' : ''"
+    >
       <div>
         <h1>{{ $t('cutting.editor.title') }}</h1>
       </div>
@@ -2012,7 +2499,9 @@ onBeforeRouteLeave(async () => {
             <b class="text-ink">
               {{
                 revisionOrder
-                  ? $t('cutting.editor.revisionOf', { order: revisionOrder.order_number })
+                  ? $t('cutting.editor.revisionOf', {
+                      order: formatOrderNumber(revisionOrder.order_number),
+                    })
                   : $t('cutting.editor.revisionGeneric')
               }}
             </b>
@@ -2079,7 +2568,11 @@ onBeforeRouteLeave(async () => {
                is a second title for a thing the operator has not saved as a
                drawing yet. It comes back on the standalone editor, where the
                name is how a saved drawing is found again. -->
-          <section v-if="!inOrderWizard" class="mb-3 flex items-center gap-2">
+          <section
+            v-if="!inOrderWizard"
+            class="mb-3 flex items-center gap-2"
+            :class="isClientEditor ? 'max-md:hidden' : ''"
+          >
             <input
               v-if="draftNameEditing"
               v-model="draftNameValue"
@@ -2122,13 +2615,20 @@ onBeforeRouteLeave(async () => {
             >
               i
             </span>
+            <!-- Decision 17: read-only. The branch is fixed at creation — the
+                 pin, or the branch whose «Yangi chizma» started this drawing —
+                 so there is no «O'zgartirish» and no picker here. Decision 16
+                 gives the name: workshop first, branch only when the workshop
+                 has more than one. -->
             <div class="min-w-0 flex-1">
-              <b class="text-ink">
-                {{ `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}` }}
-              </b>
+              <b class="text-ink">{{
+                isClientEditor
+                  ? clientBranchLabel
+                  : `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+              }}</b>
             </div>
             <button
-              v-if="preferredBranch"
+              v-if="!isClientEditor"
               type="button"
               class="mp-button mp-button-outline"
               @click="branchPickerOpen = true"
@@ -2147,9 +2647,29 @@ onBeforeRouteLeave(async () => {
              inside a number cell. `.stop` so it does not travel on to the
              wizard's own cancel — the operator is dismissing the panel, not
              the order. -->
-        <div ref="stepShell" @keydown.esc.stop="inOrderWizard && clearActivePart()">
-          <div :class="inOrderWizard ? 'flex flex-wrap items-start gap-[18px]' : ''">
-            <div :class="inOrderWizard ? 'shrink' : 'contents'">
+        <div ref="stepShell" @keydown.esc.stop="docksKromka && clearActivePart()">
+          <!-- §7.5: on the client this is a real two-column grid at `lg`
+               (`minmax(0,1fr) 340px`), not the wizard's measured wrap — the
+               client board is fluid, so there is no knowable width to wrap
+               against, and the docked card wants a fixed column. -->
+          <div
+            :class="
+              inOrderWizard
+                ? 'flex flex-wrap items-start gap-[18px]'
+                : isClientEditor && activePart
+                  ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]'
+                  : ''
+            "
+          >
+            <!-- `contents` normally dissolves this wrapper so the card and the
+                 sticky bar are siblings of the page. Under the client's docked
+                 grid it must stay a real box, or both would become grid items
+                 and the bar would land in the kromka column. -->
+            <div
+              :class="
+                inOrderWizard ? 'shrink' : isClientEditor && activePart ? 'min-w-0' : 'contents'
+              "
+            >
               <!-- A panel, not a bordered block: `.client-card` also sets
              `overflow: hidden`, which would trap the row grid's own horizontal
              scroller on a narrow viewport. `w-max` is what makes the wrap work:
@@ -2208,9 +2728,12 @@ onBeforeRouteLeave(async () => {
                     </button>
                     <!-- Outside the wizard the two entry modes are a segmented pair.
                    Inside it the import lives with the other "add something"
-                   actions at the foot of the list, where the design puts it. -->
+                   actions at the foot of the list, where the design puts it.
+                   Decision 18 / §7.6: the CLIENT app has no import surface at
+                   all — no mode switch, no flag, no workshop setting. The
+                   wizard and the backend parsers stay for the walk-in flow. -->
                     <div
-                      v-if="!inOrderWizard"
+                      v-if="!inOrderWizard && !isClientEditor"
                       class="inline-flex rounded-lg border border-hairline bg-sunk p-1"
                     >
                       <button
@@ -2268,7 +2791,7 @@ onBeforeRouteLeave(async () => {
                   <button
                     type="button"
                     class="text-accent-strong hover:underline"
-                    @click="openBulkMaterial"
+                    @click="openBulkMaterial($event)"
                   >
                     {{ $t('cutting.editor.bulkChangeMaterial') }}
                   </button>
@@ -2284,7 +2807,9 @@ onBeforeRouteLeave(async () => {
                   </button>
                 </div>
 
-                <div v-if="!activeBranchId" class="client-card-b">
+                <!-- Workshop-only: a client without a resolvable branch never
+                     reaches the editor (guard + the mount redirect above). -->
+                <div v-if="!activeBranchId && !isClientEditor" class="client-card-b">
                   <div class="client-empty">
                     <div class="client-empty-icon"><Icon name="store" /></div>
                     <h3>{{ $t('cutting.editor.pickBranchTitle') }}</h3>
@@ -2307,9 +2832,13 @@ onBeforeRouteLeave(async () => {
                       <button
                         type="button"
                         class="mp-button mp-button-primary"
-                        @click="openNewMaterial"
+                        @click="openNewMaterial($event)"
                       >
-                        + {{ $t('cutting.editor.emptyAction') }}
+                        {{
+                          isClientEditor
+                            ? $t('cutting.editor.addMaterialClient')
+                            : `+ ${$t('cutting.editor.emptyAction')}`
+                        }}
                       </button>
                       <!-- The import is a first-run path, not an advanced one: a shop
                      that already keeps its cut lists in a file should not have
@@ -2414,9 +2943,23 @@ onBeforeRouteLeave(async () => {
                             "
                             aria-hidden="true"
                           ></span>
+                          <!-- §7.3: on the client the decor's own picture takes
+                               the colour dot's place — a 6px dot of a hashed
+                               pastel never told anyone which board this is.
+                               No image → the shared swatch, at the same size,
+                               so the row never loses its leading mark. -->
+                          <AuthFileImage
+                            v-else-if="isClientEditor && groupDecorImageId(group.materialId)"
+                            :file-id="groupDecorImageId(group.materialId)"
+                            alt=""
+                            class="size-6 shrink-0 rounded-md border border-hairline object-cover"
+                          />
                           <span
                             v-else
-                            class="size-3 shrink-0 rounded-full"
+                            class="shrink-0 rounded-full"
+                            :class="
+                              isClientEditor ? 'size-6 rounded-md border border-hairline' : 'size-3'
+                            "
                             :style="
                               group.materialId
                                 ? groupSwatchStyle(group.materialId)
@@ -2434,7 +2977,7 @@ onBeforeRouteLeave(async () => {
                                 type="button"
                                 class="min-w-0 max-w-full truncate border-b border-dashed border-ink-muted text-left font-extrabold text-ink hover:border-accent"
                                 :class="inOrderWizard ? 'text-[15px]' : 'text-sm'"
-                                @click.stop="openGroupMaterial(group)"
+                                @click.stop="openGroupMaterial(group, $event)"
                               >
                                 {{ group.label }}
                               </button>
@@ -2481,8 +3024,13 @@ onBeforeRouteLeave(async () => {
                      the chip would join that button's accessible name and read
                      as a control. It is a statement about the material, and the
                      counts behind it belong to the post-optimizer dialog. -->
+                      <!-- Decision 9 / §7.7: no source chip on the client. Own
+                           material is hidden in the MVP, so every group is the
+                           workshop's and a chip repeating that on every head is
+                           noise — the result overview drops it for the same
+                           reason. -->
                       <span
-                        v-if="group.materialId && !inOrderWizard"
+                        v-if="group.materialId && !inOrderWizard && !isClientEditor"
                         class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
                         :class="
                           materialIsOwn(group.materialId)
@@ -2495,6 +3043,7 @@ onBeforeRouteLeave(async () => {
                         v-if="!isReadOnly"
                         type="button"
                         class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint"
+                        :class="isClientEditor ? 'max-md:hidden' : ''"
                         @click="addGroupRow(group)"
                       >
                         <Icon name="plus" class="size-3.5" />
@@ -2527,12 +3076,30 @@ onBeforeRouteLeave(async () => {
                         <span aria-hidden="true"></span>
                       </div>
                     </div>
+                    <!-- §7.1: on the client the registry line is REPLACED by the
+                         group's tape line — it names one tape decor and the
+                         thicknesses the branch stocks it in, and it is itself
+                         the control that changes them. A numbering has nothing
+                         left to number once a material group carries one tape. -->
+                    <CuttingGroupTapeLine
+                      v-if="isClientEditor && group.materialId"
+                      :id="`group-tape-${group.materialId}`"
+                      :decor="groupTapeFor(group.materialId)"
+                      :armed="gateGroupKey === group.materialId"
+                      :dense="false"
+                      @open="openTapePicker(group.materialId)"
+                    />
+
                     <!-- The registry names every tape in the drawing; on the parts
                          screen it is a second list of things the operator is not
                          editing here. The kromka panel names the tape it is
                          setting, and step 3 totals them. -->
                     <div
-                      v-if="!inOrderWizard && groupEdgeRegistryEntries(group).length > 0"
+                      v-if="
+                        !inOrderWizard &&
+                        !isClientEditor &&
+                        groupEdgeRegistryEntries(group).length > 0
+                      "
                       class="border-t border-hairline px-3 pb-2 pt-1.5"
                     >
                       <CuttingEdgeTapeRegistry
@@ -2542,9 +3109,40 @@ onBeforeRouteLeave(async () => {
                         @replace="openRegistryReplace"
                       />
                     </div>
+                    <!-- §7.0: the phone list is read-only cards that open the
+                         «Detal» sheet; the table below is the same parts at
+                         `md` and up, where a mouse and a keyboard make eight
+                         live columns the faster shape. -->
+                    <div
+                      v-if="isClientEditor && !collapsedGroupKeys.has(group.key)"
+                      class="grid gap-2 p-2 md:hidden"
+                    >
+                      <CuttingPartCard
+                        v-for="{ part, index } in group.parts"
+                        :key="part.part_ref"
+                        :part="part"
+                        :index="index"
+                        :display-index="displayPartIndex.get(part.part_ref)"
+                        :has-error="rowHasError(part, index)"
+                        @open="openPartSheet(part)"
+                      />
+                      <button
+                        v-if="!isReadOnly"
+                        type="button"
+                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13.5px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
+                        @click="addGroupRow(group)"
+                      >
+                        <Icon name="plus" class="size-4" />
+                        {{ $t('cutting.editor.addPart') }}
+                      </button>
+                    </div>
+
                     <div
                       v-if="!collapsedGroupKeys.has(group.key)"
-                      :class="inOrderWizard ? 'overflow-visible' : 'overflow-visible bg-elevated'"
+                      :class="[
+                        inOrderWizard ? 'overflow-visible' : 'overflow-visible bg-elevated',
+                        isClientEditor ? 'max-md:hidden' : '',
+                      ]"
                     >
                       <CuttingPartRow
                         v-for="{ part, index } in group.parts"
@@ -2558,8 +3156,8 @@ onBeforeRouteLeave(async () => {
                         :optimize-error="rowOptimizeError(part, index)"
                         :edge-registry="edgeRegistry"
                         :bare-index="inOrderWizard"
-                        :selected="inOrderWizard && activePartRef === part.part_ref"
-                        @select="inOrderWizard && selectPart(part)"
+                        :selected="docksKromka && activePartRef === part.part_ref"
+                        @select="docksKromka && selectPart(part)"
                         @toggle-select="toggleSelect(part.part_ref)"
                         @update:name="setPartName(part, $event)"
                         @update:length="part.length_mm = $event"
@@ -2571,14 +3169,11 @@ onBeforeRouteLeave(async () => {
                         @delete="deleteRow(index)"
                         @open-edge-picker="
                           (event, side) =>
-                            inOrderWizard
-                              ? selectPart(part, side)
-                              : openEdgePicker(part, event, side)
+                            docksKromka ? selectPart(part, side) : openEdgePicker(part, event, side)
                         "
                         @apply-edge-number="
                           (side, number) => applyEdgeNumberToPartSide(part, side, number)
                         "
-                        @open-material-picker="openPartMaterial(part)"
                       />
                     </div>
                   </section>
@@ -2600,10 +3195,16 @@ onBeforeRouteLeave(async () => {
                       :class="
                         inOrderWizard ? 'h-10 min-h-10 rounded-[11px] px-4 text-[13.5px]' : ''
                       "
-                      @click="openNewMaterial"
+                      @click="openNewMaterial($event)"
                     >
                       <Icon name="plus" class="size-4" />
-                      {{ $t('cutting.editor.addMaterial') }}
+                      <!-- §7.0 fixes the client's label to «+ Material» on both
+                           breakpoints; the workshop keeps «Boshqa material». -->
+                      {{
+                        isClientEditor
+                          ? $t('cutting.editor.addMaterialClient')
+                          : $t('cutting.editor.addMaterial')
+                      }}
                     </button>
                     <button
                       v-if="inOrderWizard"
@@ -2711,6 +3312,30 @@ onBeforeRouteLeave(async () => {
               @edges-change="onPanelEdgesChange"
               @close="clearActivePart"
             />
+
+            <!-- §7.5, client: the same docked card carrying §7.1's reduced
+                 block. Hidden below `lg`, where the phone sheet owns kromka —
+                 a 340px column has nowhere to go on a narrow viewport, and the
+                 sheet is the better control there anyway. -->
+            <CuttingKromkaPanel
+              v-if="isClientEditor && activePart"
+              variant="client"
+              class="max-lg:hidden"
+              :part="activePart"
+              :part-number="(displayPartIndex.get(activePart.part_ref) ?? 0) + 1"
+              :panel-material="materialById(activePart.material_id)"
+              :edge-options="cutting.edgeOptions"
+              :edge-registry="edgeRegistry"
+              :flash-side="activeSide"
+              :group-tape-decor="groupTapeFor(activePart.material_id)"
+              :selected-thickness-mm="armedThicknessFor(groupTapeFor(activePart.material_id))"
+              :foreign-tape-label="foreignTapeLabel"
+              @update:selected-thickness-mm="armedThicknessMm = $event"
+              @set-side="(side, materialId) => setPartSide(activePart!, side, materialId)"
+              @need-tape="openTapePicker(activePart.material_id)"
+              @open-group-tape="openTapePicker(activePart.material_id)"
+              @close="clearActivePart"
+            />
           </div>
         </div>
       </fieldset>
@@ -2740,7 +3365,10 @@ onBeforeRouteLeave(async () => {
       </p>
     </ConfirmDialog>
 
+    <!-- Workshop-only mount (§7.6). Not merely hidden: the client app must not
+         carry the wizard's state, its store calls or its copy at all. -->
     <CuttingImportWizard
+      v-if="!isClientEditor"
       :open="importWizardOpen"
       :panel-choices="panelChoices"
       :edge-choices="edgeChoices"
@@ -2753,7 +3381,10 @@ onBeforeRouteLeave(async () => {
       @load="onImportLoad"
       @committed="onImportCommitted"
     />
+    <!-- Workshop-only recovery (decision 17): the client's branch is the pin,
+         settled before the editor opens, so it never raises a picker. -->
     <AppModal
+      v-if="!isClientEditor"
       :open="branchPickerOpen"
       :title="$t('cutting.branch.modalTitle')"
       max-width="max-w-2xl"
@@ -2761,8 +3392,7 @@ onBeforeRouteLeave(async () => {
     >
       <CuttingBranchPicker
         :model-value="selectedBranchId"
-        :options="pickerOptions"
-        :pinned-workshop-name="pinnedWorkshopName"
+        :options="cutting.branchOptions"
         @update:model-value="setPreferredBranch"
       />
     </AppModal>
@@ -2788,7 +3418,10 @@ onBeforeRouteLeave(async () => {
       @confirm="resolveImportedLayoutWarning(true)"
     />
 
+    <!-- Workshop-only mount (§7.5): the client edits kromka in the docked panel
+         and never raises this modal, so the client SPA never loads its chunk. -->
     <CuttingEdgePickerModal
+      v-if="!isClientEditor"
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
@@ -2866,8 +3499,61 @@ onBeforeRouteLeave(async () => {
       </div>
     </div>
 
+    <!-- ── The client's three overlays (§7.0, §7.2, §7.3) ─────────────────── -->
+    <CuttingPartSheet
+      v-if="isClientEditor && sheetPart"
+      :open="Boolean(sheetPart)"
+      :part="sheetPart"
+      :index="sheetPartIndex"
+      :display-index="displayPartIndex.get(sheetPart.part_ref) ?? sheetPartIndex"
+      :decor="sheetGroupTape"
+      :selected-thickness-mm="armedThicknessFor(sheetGroupTape)"
+      :foreign-tape-label="foreignTapeLabel"
+      @close="closePartSheet"
+      @save="closePartSheet"
+      @save-and-next="savePartAndNext"
+      @delete="deleteRow(sheetPartIndex)"
+      @update:name="setPartName(sheetPart, $event)"
+      @update:length="sheetPart.length_mm = $event"
+      @update:width="sheetPart.width_mm = $event"
+      @update:quantity="sheetPart.quantity = $event"
+      @update:follow-grain="setFollowGrain(sheetPart, $event)"
+      @update:selected-thickness-mm="armedThicknessMm = $event"
+      @set-side="(side, materialId) => setPartSide(sheetPart!, side, materialId)"
+      @need-tape="openTapePicker(sheetPart.material_id)"
+      @open-group-tape="openTapePicker(sheetPart.material_id)"
+    />
+
+    <CuttingTapePicker
+      v-if="isClientEditor"
+      :open="Boolean(tapePickerGroupKey)"
+      :decors="tapeDecors"
+      :panel="tapePickerPanel"
+      :panel-image-file-id="tapePickerPanel?.image_file_id ?? null"
+      :current-key="tapePickerCurrentKey"
+      :caption="tapeCatalogCaption"
+      @close="closeTapePicker"
+      @pick="applyGroupTape"
+    />
+
+    <CuttingMaterialPicker
+      v-if="isClientEditor"
+      :open="Boolean(materialPickerTarget)"
+      :materials="cutting.panelOptions"
+      :loading="cutting.materialsLoading"
+      :current-id="materialPickerCurrentId"
+      :search="materialPickerSearch"
+      :caption="materialCatalogCaption"
+      :anchor="materialPickerAnchor"
+      @close="closeMaterialPicker"
+      @update:search="materialPickerSearch = $event"
+      @pick="applyMaterialPicker"
+    />
+
+    <!-- The workshop's own picker: the customer-board tab and the format list
+         it has always had. The client never mounts it. -->
     <div
-      v-if="materialPickerTarget"
+      v-if="materialPickerTarget && !isClientEditor"
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"

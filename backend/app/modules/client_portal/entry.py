@@ -1,17 +1,26 @@
 """Workshop-scoped client entry: link resolve, the pin, and Ustaxonalarim.
 
-A client enters through a workshop's door, not through a market: a scanned
-`/w/{code}` link resolves here, applying it writes `Client.preferred_branch_id`
-— the **pin** — and every workshop-scoped read downstream derives from that one
-column. There is no new entity behind any of it (spec §2).
+A client enters through a workshop's door, not through a market. A scanned
+`/w/{code}` link resolves here, and applying it writes **two** things
+(client-entry.md):
+
+- always a row in `client_workshop_entries` — the relationship itself, which is
+  what puts the workshop on Ustaxonalarim even before the client draws
+  anything;
+- the **pin** (`Client.preferred_branch_id`) only when the branch is *certain*:
+  a branch link, or a workshop link to a workshop with exactly one visible
+  branch. A multi-branch workshop link leaves the pin alone — the client is
+  pinned to a branch, never to a workshop, and nothing may guess which counter
+  they stood at.
 """
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from fastapi import status
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -19,6 +28,7 @@ from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import BranchStatus, WorkshopStatus
 from app.modules.access.api import SlidingWindowIpThrottle
+from app.modules.client_portal.models import ClientWorkshopEntry
 from app.modules.client_portal.schemas import (
     ClientEntryResponse,
     ClientWorkshopBranch,
@@ -167,33 +177,76 @@ async def workshop_link_logo(
     )
 
 
+async def record_workshop_entry(
+    db: AsyncSession,
+    *,
+    client_id: uuid.UUID,
+    workshop_id: uuid.UUID,
+    entered_at: datetime | None = None,
+) -> ClientWorkshopEntry:
+    """Upsert this client's row for this workshop and stamp it.
+
+    One row per pair, so the table records relationships rather than scans; the
+    stamp is what orders Ustaxonalarim under the pinned workshop.
+    """
+    moment = entered_at or datetime.now(UTC)
+    entry = await db.scalar(
+        select(ClientWorkshopEntry).where(
+            ClientWorkshopEntry.client_id == client_id,
+            ClientWorkshopEntry.workshop_id == workshop_id,
+        )
+    )
+    if entry is None:
+        entry = ClientWorkshopEntry(
+            client_id=client_id,
+            workshop_id=workshop_id,
+            last_entered_at=moment,
+        )
+        db.add(entry)
+        await db.flush()
+    else:
+        entry.last_entered_at = moment
+    return entry
+
+
 async def apply_entry(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
     code: str,
-    branch_id: uuid.UUID,
+    branch_id: uuid.UUID | None = None,
 ) -> ClientEntryResponse:
-    """Pin the client to the branch a workshop link named.
+    """Record the entry, and pin the branch when the link settles which one.
 
-    The pair is re-resolved server-side: the code names the workshop, and the
-    branch has to be one of *its* visible branches. Latest entry wins — walking
-    through a door is the confirmation — and re-applying the same link changes
-    nothing but the audit trail.
+    The pair is re-resolved server-side: the code names the workshop, and a
+    named branch has to be one of *its* visible branches. Latest entry wins —
+    walking through a door is the confirmation.
+
+    Certainty is the whole rule for the pin. A branch link names its counter; a
+    one-branch workshop has only one counter to name; a multi-branch workshop
+    link names none, so the pin is left exactly as it was and the client is
+    asked on Ustaxonalarim instead. The entry row is written either way.
     """
     client = await get_client_profile(db, principal=principal)
     workshop, normalized, branches = await _resolve_link(db, code)
-    branch = next((row for row in branches if row.id == branch_id), None)
-    if branch is None:
-        # A branch of another workshop, or one that isn't visible. Same answer
-        # either way — the client learns nothing about branches the link does
-        # not carry.
-        raise APIError(
-            "branch_not_found",
-            "Branch not found",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    client.preferred_branch_id = branch.id
+    branch: Branch | None = None
+    if branch_id is not None:
+        branch = next((row for row in branches if row.id == branch_id), None)
+        if branch is None:
+            # A branch of another workshop, or one that isn't visible. Same
+            # answer either way — the client learns nothing about branches the
+            # link does not carry.
+            raise APIError(
+                "branch_not_found",
+                "Branch not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+    elif len(branches) == 1:
+        branch = branches[0]
+
+    await record_workshop_entry(db, client_id=client.id, workshop_id=workshop.id)
+    if branch is not None:
+        client.preferred_branch_id = branch.id
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -201,15 +254,18 @@ async def apply_entry(
         entity_type="client",
         entity_id=client.id,
         workshop_id=workshop.id,
-        branch_id=branch.id,
+        branch_id=branch.id if branch is not None else None,
         summary=f"Entered {workshop.name} via workshop link",
-        details={"public_code": normalized, "preferred_branch_id": str(branch.id)},
+        details={
+            "public_code": normalized,
+            "preferred_branch_id": str(branch.id) if branch is not None else None,
+        },
     )
     return ClientEntryResponse(
         workshop_id=workshop.id,
         workshop_name=workshop.name,
-        branch_id=branch.id,
-        branch_name=branch.name,
+        branch_id=branch.id if branch is not None else None,
+        branch_name=branch.name if branch is not None else None,
     )
 
 
@@ -218,49 +274,38 @@ async def my_workshops(
     *,
     principal: AuthenticatedPrincipal,
 ) -> list[ClientWorkshopResponse]:
-    """The client's related workshops (spec §2), pinned first.
+    """The client's related workshops, pinned first (client-entry.md).
 
-    Derived at read time, never stored: the pinned branch's workshop, plus the
-    workshops of every branch the client has an order or a cutting draft on. A
-    client who followed a link and never drew simply loses it to the next link
-    — no relationship existed.
+    The set is stored plus derived: every workshop the client has *entered*
+    through a link, plus the pinned branch's workshop, plus the workshops of
+    every branch they have an order or a cutting draft on. The stored half is
+    what a link buys — before this table, a client who scanned a workshop's QR
+    and drew nothing lost the workshop to the next scan.
+
+    Order is the pinned workshop, then the rest by the most recent thing that
+    happened with them — an entry, an order, a drawing — newest first. A
+    blocked workshop is off the platform and appears in neither half.
     """
     client = await get_client_profile(db, principal=principal)
+    last_seen = await _workshop_activity(db, client_id=client.id)
     branch_ids: set[uuid.UUID] = set()
     if client.preferred_branch_id is not None:
         branch_ids.add(client.preferred_branch_id)
-    branch_ids.update(
-        (
-            await db.scalars(select(Order.branch_id).where(Order.client_id == client.id).distinct())
-        ).all()
-    )
-    draft_branch_ids = (
-        await db.scalars(
-            select(CuttingDraft.preferred_branch_id)
-            .where(
-                CuttingDraft.client_id == client.id,
-                CuttingDraft.preferred_branch_id.is_not(None),
-            )
-            .distinct()
-        )
-    ).all()
-    # The column is nullable, so its type stays optional even behind the filter.
-    branch_ids.update(row for row in draft_branch_ids if row is not None)
-    if not branch_ids:
-        return []
 
     # History points at branches, which is one hop from what the page groups by.
     # Invisible branches still count for the *derivation* — a workshop whose
-    # only branch went inactive stays on the page with its status (spec §8) —
-    # they just don't get listed below.
+    # only branch went inactive stays on the page with its status — they just
+    # don't get listed below.
     branch_workshops: dict[uuid.UUID, uuid.UUID] = dict(
         (await db.execute(select(Branch.id, Branch.workshop_id).where(Branch.id.in_(branch_ids))))
         .tuples()
         .all()
     )
-    workshop_ids = set(branch_workshops.values())
-    # A pin whose branch has gone invisible still pins its workshop — the badge
-    # follows the workshop, not the branch row.
+    workshop_ids = set(last_seen) | set(branch_workshops.values())
+    if not workshop_ids:
+        return []
+    # A pin whose branch has gone invisible still pins its workshop — the star
+    # sits on the branch row, but the workshop it belongs to still leads.
     pinned_workshop_id = (
         branch_workshops.get(client.preferred_branch_id)
         if client.preferred_branch_id is not None
@@ -306,9 +351,76 @@ async def my_workshops(
                 name=branch.name,
                 address=branch.address,
                 phone=branch.phone,
+                latitude=branch.latitude,
+                longitude=branch.longitude,
                 status=branch.status,
                 closed_reason=branch.closed_reason,
                 is_pinned=pinned,
             )
         )
-    return sorted(grouped.values(), key=lambda item: (not item.is_pinned, item.name))
+    return sorted(
+        grouped.values(),
+        key=lambda item: (
+            not item.is_pinned,
+            -_activity_rank(last_seen.get(item.workshop_id)),
+            item.name,
+        ),
+    )
+
+
+# Older than any row this platform can hold, so a workshop with no timestamped
+# activity of its own sorts last rather than first.
+_NO_ACTIVITY = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _activity_rank(moment: datetime | None) -> float:
+    return (moment or _NO_ACTIVITY).timestamp()
+
+
+async def _workshop_activity(
+    db: AsyncSession,
+    *,
+    client_id: uuid.UUID,
+) -> dict[uuid.UUID, datetime]:
+    """When each workshop last did anything with this client.
+
+    Three sources folded into one map by `max`: the entry stamp, the client's
+    latest order, and their latest drawing. They answer the same question —
+    "how recently did these two deal with each other" — and the page needs one
+    answer per workshop, not three columns.
+    """
+    latest: dict[uuid.UUID, datetime] = {}
+
+    def _fold(workshop_id: uuid.UUID | None, moment: datetime | None) -> None:
+        if workshop_id is None or moment is None:
+            return
+        current = latest.get(workshop_id)
+        if current is None or moment > current:
+            latest[workshop_id] = moment
+
+    entries = await db.execute(
+        select(ClientWorkshopEntry.workshop_id, ClientWorkshopEntry.last_entered_at).where(
+            ClientWorkshopEntry.client_id == client_id
+        )
+    )
+    for workshop_id, entered_at in entries.tuples().all():
+        _fold(workshop_id, entered_at)
+
+    orders = await db.execute(
+        select(Order.workshop_id, func.max(Order.created_at))
+        .where(Order.client_id == client_id)
+        .group_by(Order.workshop_id)
+    )
+    for workshop_id, created_at in orders.tuples().all():
+        _fold(workshop_id, created_at)
+
+    drafts = await db.execute(
+        select(Branch.workshop_id, func.max(CuttingDraft.created_at))
+        .join(Branch, Branch.id == CuttingDraft.preferred_branch_id)
+        .where(CuttingDraft.client_id == client_id)
+        .group_by(Branch.workshop_id)
+    )
+    for workshop_id, created_at in drafts.tuples().all():
+        _fold(workshop_id, created_at)
+
+    return latest

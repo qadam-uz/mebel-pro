@@ -18,6 +18,17 @@ import {
   type CuttingPart,
 } from '@/shared/stores/cutting'
 
+/**
+ * The editor keeps a per-draft recovery snapshot in `localStorage` (the
+ * last-mile layer behind server autosave), and jsdom keeps that storage for the
+ * whole file. Every test here mounts `draft-1`, so without this one test's
+ * parts reappear in the next — which is the editor working as designed, and a
+ * shared browser these tests never meant to share.
+ */
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 const editorRoutes = [
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
   { path: '/c/cutting/:id', name: 'client-cutting-editor', component: { template: '<div />' } },
@@ -28,6 +39,7 @@ const editorRoutes = [
   },
   { path: '/c/cutting/drafts', name: 'client-cutting-drafts', component: { template: '<div />' } },
   { path: '/c/orders/:id', name: 'client-order-detail', component: { template: '<div />' } },
+  { path: '/c/branches', name: 'client-branches', component: { template: '<div />' } },
 ]
 
 function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
@@ -86,12 +98,18 @@ async function mountEditor(
   // Per-test stub overrides. `AppModal: true` renders no slot, so a test that
   // needs to reach a component *inside* a modal replaces that one stub.
   stubOverrides: Record<string, unknown> = {},
+  // The store scope decides which editor this is (SPEC_CLIENT_UX_MVP §7): the
+  // client's phone sheets, group tape and decor-first pickers, or the
+  // workshop's registry, tape picker and file import. Default 'client', the
+  // store's own default.
+  scope: 'client' | 'workshop' = 'client',
 ) {
   const router = createRouter({ history: createMemoryHistory(), routes: editorRoutes })
   await router.push(path)
   await router.isReady()
 
   const cutting = useCuttingStore()
+  cutting.configureScope(scope)
   cutting.currentDraft = currentDraft
   vi.spyOn(cutting, 'loadBranchOptions').mockResolvedValue()
   vi.spyOn(cutting, 'loadMaterials').mockResolvedValue([])
@@ -229,9 +247,10 @@ describe('CuttingEditorView draft deletion', () => {
         results: [currentResult],
       }),
     )
+    // §7.0 fixes the client's CTA copy: the button says what the tap does.
     const viewResult = saved.wrapper
       .findAll('button')
-      .filter((button) => button.text() === 'Davom etish')
+      .filter((button) => button.text() === "Natijani ko'rish")
 
     expect(viewResult).toHaveLength(1)
     expect(viewResult[0]?.attributes('disabled')).toBeUndefined()
@@ -250,14 +269,29 @@ describe('CuttingEditorView draft deletion', () => {
     )
     const optimise = withoutResult.wrapper
       .findAll('button')
-      .filter((button) => button.text() === 'Davom etish')
+      .filter((button) => button.text() === 'Hisoblash')
 
     expect(optimise).toHaveLength(1)
     expect(optimise[0]?.attributes('disabled')).toBeDefined()
   })
 })
 
-describe('CuttingEditorView imported layout guard', () => {
+/**
+ * The MAP-import layout guard, in **workshop** scope.
+ *
+ * These used to mount the client editor, because the client had the import too.
+ * Decision 18 / §7.6 removed it from the client entirely — no mode switch, no
+ * wizard mount, no flag — so the guard's only remaining home is the workshop
+ * editor, and that is where it is now exercised. The subject is unchanged: an
+ * edit that moves a part must not silently discard an imported layout, and an
+ * edge-only edit must not warn at all.
+ *
+ * A revision draft is the shape that puts the workshop editor outside its order
+ * wizard (`inOrderWizard` is false for a revision), which is the standalone
+ * editor these assertions describe — the mode switch, the sticky CTA and the
+ * edge-picker modal rather than the docked panel.
+ */
+describe('CuttingEditorView imported layout guard (workshop)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.useFakeTimers()
@@ -267,10 +301,16 @@ describe('CuttingEditorView imported layout guard', () => {
     vi.useRealTimers()
   })
 
+  function workshopDraft(overrides: Partial<CuttingDraft> = {}) {
+    return draft({ revision_of_order_id: 'order-9', ...overrides })
+  }
+
   it('opens a committed MAP import on the standalone result stage', async () => {
     const { wrapper, router } = await mountEditor(
       '/c/cutting/draft-1',
-      draft({ preferred_branch_id: 'branch-1' }),
+      workshopDraft({ preferred_branch_id: 'branch-1' }),
+      {},
+      'workshop',
     )
 
     await wrapper
@@ -287,13 +327,15 @@ describe('CuttingEditorView imported layout guard', () => {
     const initialPart = part()
     const { wrapper, router } = await mountEditor(
       '/c/cutting/draft-map',
-      draft({
+      workshopDraft({
         id: 'draft-map',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [initialPart],
         chosen_result_id: 'imported-result-1',
         results: [importedResult([initialPart])],
       }),
+      {},
+      'workshop',
     )
 
     const viewResult = wrapper.findAll('button').filter((button) => button.text() === 'Davom etish')
@@ -308,13 +350,15 @@ describe('CuttingEditorView imported layout guard', () => {
   it('keeps one Continue CTA when the chosen MAP snapshot is stale', async () => {
     const { wrapper } = await mountEditor(
       '/c/cutting/draft-map-stale',
-      draft({
+      workshopDraft({
         id: 'draft-map-stale',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [part({ length_mm: 301 })],
         chosen_result_id: 'imported-result-1',
         results: [importedResult([part({ length_mm: 300 })])],
       }),
+      {},
+      'workshop',
     )
 
     expect(
@@ -324,14 +368,14 @@ describe('CuttingEditorView imported layout guard', () => {
 
   it('does not warn for an edge-only edit and keeps the returned layout', async () => {
     const initialPart = part()
-    const current = draft({
+    const current = workshopDraft({
       id: 'draft-edge',
       preferred_branch_id: 'branch-1',
       parts_snapshot: [initialPart],
       chosen_result_id: 'imported-result-1',
       results: [importedResult([initialPart])],
     })
-    const { wrapper, cutting } = await mountEditor('/c/cutting/draft-edge', current)
+    const { wrapper, cutting } = await mountEditor('/c/cutting/draft-edge', current, {}, 'workshop')
     const update = vi.spyOn(cutting, 'updateDraft').mockImplementation(async (_id, payload) => {
       const updated = draft({
         ...current,
@@ -356,12 +400,14 @@ describe('CuttingEditorView imported layout guard', () => {
     const initialPart = part()
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-dimension',
-      draft({
+      workshopDraft({
         id: 'draft-dimension',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [initialPart],
         results: [importedResult([initialPart])],
       }),
+      {},
+      'workshop',
     )
     const update = vi.spyOn(cutting, 'updateDraft').mockResolvedValue(draft())
 
@@ -504,51 +550,54 @@ describe('CuttingEditorView material picker', () => {
     } as ClientCatalogMaterialOption
   }
 
-  it('groups formats under one dekor heading and picks a format in one click', async () => {
+  it('opens the decor-first client picker and adds a part on the format picked', async () => {
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-1',
       draft({ preferred_branch_id: 'branch-1' }),
+      {
+        // The picker lives in a teleported sheet; a transparent stub keeps it
+        // reachable through the wrapper and lets us read what it is handed.
+        CuttingMaterialPicker: {
+          props: ['open', 'materials', 'currentId', 'caption'],
+          emits: ['pick'],
+          template: `<section v-if="open" data-test="material-picker">
+            <span data-test="caption">{{ caption }}</span>
+            <button
+              v-for="material in materials"
+              :key="material.id"
+              :data-test="'pick-' + material.id"
+              @click="$emit('pick', material.id)"
+            />
+          </section>`,
+        },
+      },
     )
     cutting.panelOptions = [
       option({ id: 'm-18' }),
       option({ id: 'm-16', thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
-      option({
-        id: 'm-other',
-        code: 'W980',
-        name: 'Oq',
-        thickness_mm: '18',
-        price_tiyin: 0,
-        price_unset: true,
-      }),
     ]
     await flushPromises()
 
+    // §7.0: the client's add-material control is «+ Material» on both breakpoints.
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes('Material tanlash'))!
+      .find((button) => button.text().includes('+ Material'))!
       .trigger('click')
 
-    const groups = wrapper.findAll('[role="dialog"] section')
-    expect(groups).toHaveLength(2)
-    // Identity once per decor — the label without its format tail — then the
-    // formats as the rows underneath.
-    expect(groups[0].text()).toContain('LDSP Egger H1334 · Dub Sonoma')
-    expect(groups[0].findAll('button').map((button) => button.text())).toEqual([
-      '2800×2070×18 mm',
-      '2750×1830×16 mm',
-    ])
-    // A workshop-facing row with no price is flagged rather than silently quoted at 0.
-    expect(groups[1].text()).toContain("Narx yo'q")
+    expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(true)
+    // The whole branch list reaches the picker; the decor grouping and the
+    // per-format prices are the picker's own job (see its component spec).
+    expect(wrapper.findAll('[data-test^="pick-"]')).toHaveLength(2)
 
-    // One click on a format row picks it and closes — no second step.
-    await groups[0].findAll('button')[1].trigger('click')
+    // One click on a format picks it, closes the sheet and starts a row on it.
+    await wrapper.get('[data-test="pick-m-16"]').trigger('click')
 
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
   })
 })
 
-describe('CuttingEditorView branch picker scoping (spec §4)', () => {
+describe('CuttingEditorView client branch (spec §2.2, decision 17)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
@@ -604,88 +653,276 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     auth.status = 'authenticated'
   }
 
-  /** `AppModal: true` renders no slot, and the picker lives inside one. */
-  const modalStub = {
-    AppModal: {
-      props: ['open'],
-      template: `<section v-if="open"><slot /></section>`,
-    },
-    CuttingBranchPicker: true,
+  /** Seed the options the mocked `loadBranchOptions` would have fetched. */
+  function seedOptions() {
+    useCuttingStore().branchOptions = crossWorkshopOptions
   }
 
-  async function mountWithPicker(currentDraft: CuttingDraft | null = draft()) {
-    const mounted = await mountEditor('/c/cutting/draft-1', currentDraft, modalStub)
-    mounted.cutting.branchOptions = crossWorkshopOptions
+  it('opens a new drawing on the pinned branch, without asking', async () => {
+    signIn({ preferred_branch_id: 'branch-2', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
+
+    const { wrapper, cutting } = await mountEditor('/c/cutting/new', null)
+    await flushPromises()
+
+    // The pin is the drawing's branch — the editor reads it and names it by the
+    // naming rule (decision 16: two visible branches, so workshop first).
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod')
+    // And the materials load for it rather than waiting on a pick.
+    expect(cutting.loadMaterials).toHaveBeenCalled()
+    // No picker, no «Filial tanlash» prompt anywhere on the client path.
+    expect(wrapper.findComponent(CuttingBranchPicker).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Filial tanlash')
+  })
+
+  it('sends a client whose pin no longer resolves to Ustaxonalarim', async () => {
+    // The route guard catches the pin-less client; this is the other hole —
+    // a pin whose branch is gone (blocked workshop, retired counter).
+    signIn({ preferred_branch_id: 'retired-branch', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
+
+    const { router } = await mountEditor('/c/cutting/new', null)
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/c/branches')
+  })
+
+  it('never rebranches a draft that lives on a foreign branch, and never offers to', async () => {
+    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+
+    // The draft was drawn at another workshop's branch before the pin moved.
+    const { wrapper, cutting } = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-9' }),
+    )
+    cutting.branchOptions = crossWorkshopOptions
+    await flushPromises()
+
+    // The draft keeps its own branch — the pin never touches data.
+    expect(cutting.currentDraft?.preferred_branch_id).toBe('branch-9')
+    // And the editor still names it, by the naming rule (decision 16): this
+    // workshop has one visible branch, so the workshop name stands alone and
+    // «Sergeli» never appears — a branch name is never shown on its own.
+    expect(wrapper.text()).toContain('Yog’och Pro')
+    expect(wrapper.text()).not.toContain('Sergeli')
+
+    // Decision 17: the branch is fixed at creation, so the editor carries no
+    // way to change it — no «O'zgartirish», and no picker raised on mount.
+    expect(wrapper.findAll('button').some((button) => button.text() === "O'zgartirish")).toBe(false)
+    expect(wrapper.findComponent(CuttingBranchPicker).exists()).toBe(false)
+  })
+})
+
+/**
+ * The group tape, end to end through the real components (§7.1).
+ *
+ * Nothing below the view is stubbed here except the part row and the icons: the
+ * group line, the docked kromka card and the tape sheet are the shipped ones.
+ * That is deliberate — `vue-tsc` cannot see a component used in a template but
+ * never imported (web/AGENTS.md, "Verifying UI work"), and neither can a spec
+ * that stubs it away. Mounting the real tree is what catches that class of
+ * defect without a browser.
+ */
+describe('CuttingEditorView group tape (spec §7.1)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const BOARD = 'panel-egger'
+  const TAPE_THIN = 'tape-egger-04'
+  const TAPE_THICK = 'tape-egger-2'
+  const TAPE_OTHER = 'tape-krono-2'
+
+  function catalogOption(overrides: Partial<ClientCatalogMaterialOption>) {
+    return {
+      id: 'x',
+      type: 'ldsp',
+      manufacturer_id: 'egger',
+      manufacturer_name: 'Egger',
+      code: 'H1145',
+      name: 'Dub Bardolino',
+      has_grain: true,
+      image_file_id: null,
+      thickness_mm: '18',
+      length_mm: 2800,
+      width_mm: 2070,
+      tape_width_mm: null,
+      price_tiyin: 28_500_000,
+      price_unset: false,
+      display_unit: 'list',
+      ...overrides,
+    } as ClientCatalogMaterialOption
+  }
+
+  function tapeOption(overrides: Partial<ClientCatalogMaterialOption>) {
+    return catalogOption({
+      type: 'kromka',
+      tape_width_mm: 22,
+      length_mm: null,
+      width_mm: null,
+      ...overrides,
+    })
+  }
+
+  const board = catalogOption({ id: BOARD })
+  // One decor in two thicknesses, plus a second decor the board does not match.
+  const tapes = [
+    tapeOption({ id: TAPE_THIN, thickness_mm: '0.4', price_tiyin: 130_000 }),
+    tapeOption({ id: TAPE_THICK, thickness_mm: '2', price_tiyin: 260_000 }),
+    tapeOption({
+      id: TAPE_OTHER,
+      manufacturer_id: 'kronospan',
+      manufacturer_name: 'Kronospan',
+      code: 'U963',
+      name: 'Antrasit',
+      thickness_mm: '2',
+      price_tiyin: 230_000,
+    }),
+  ]
+
+  async function mountWithCatalog(parts: CuttingPart[]) {
+    const mounted = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-1', parts_snapshot: parts }),
+      // `false` un-stubs the row the shared harness stubs by default: its
+      // kromka cell is how a desktop client reaches the docked card, and a stub
+      // would test a selection nobody can actually make.
+      { CuttingPartRow: false, Icon: true },
+    )
+    mounted.cutting.panelOptions = [board]
+    mounted.cutting.edgeOptions = tapes
     await flushPromises()
     return mounted
   }
 
-  /** The props the editor hands the picker — what "the list changes" means. */
-  async function pickerProps(currentDraft: CuttingDraft | null = draft()) {
-    const { wrapper } = await mountWithPicker(currentDraft)
-    return wrapper.findComponent(CuttingBranchPicker).props() as {
-      options: ClientBranchOption[]
-      pinnedWorkshopName: string | null
-    }
+  function partOn(overrides: Partial<CuttingPart> = {}): CuttingPart {
+    return part({ material_id: BOARD, ...overrides })
   }
 
-  it('offers a pinned client only their workshop, under its own header', async () => {
-    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+  function editorParts(wrapper: VueWrapper) {
+    return (wrapper.vm as unknown as { parts: CuttingPart[] }).parts
+  }
 
-    const props = await pickerProps()
+  /** The row's read-only sides glyph — the client's way into the docked card. */
+  async function selectRow(wrapper: VueWrapper) {
+    await wrapper.get('[data-cell="edge"]').trigger('click')
+  }
 
-    expect(props.pinnedWorkshopName).toBe('Mebel Master')
-    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
-    // No affordance carrying another workshop reaches the picker at all.
-    expect(props.options.some((row) => row.workshop_id === 'workshop-2')).toBe(false)
+  function kromkaPanel(wrapper: VueWrapper) {
+    return wrapper.findComponent({ name: 'CuttingKromkaPanel' })
+  }
+
+  function panelButton(wrapper: VueWrapper, startsWith: string) {
+    return kromkaPanel(wrapper)
+      .findAll('button')
+      .find((button) => button.text().startsWith(startsWith))!
+  }
+
+  it('auto-attaches the branch tape of the board decor, with every thickness', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
+
+    // «Kromka: Egger H1145 · Dub Bardolino · 0.4 / 2 mm» — one tape, and the
+    // thicknesses the branch stocks it in. Not a registry of numbers.
+    const line = wrapper.get(`#group-tape-${BOARD}`)
+    expect(line.text()).toContain('Dub Bardolino')
+    expect(line.text()).toContain('0.4 / 2 mm')
+    expect(wrapper.text()).not.toContain('rangi mos lentani tanlang')
   })
 
-  it('keeps the cross-workshop picker for an un-pinned client', async () => {
-    signIn()
+  it('asks for a colour when the branch carries no tape in the board decor', async () => {
+    const { wrapper, cutting } = await mountWithCatalog([partOn()])
+    cutting.edgeOptions = [tapes[2]]
+    await flushPromises()
 
-    const props = await pickerProps()
-
-    expect(props.pinnedWorkshopName).toBeNull()
-    expect(props.options).toHaveLength(3)
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('rangi mos lentani tanlang')
   })
 
-  it('scopes by the pinned workshop even when the pinned branch went invisible', async () => {
-    signIn({ preferred_branch_id: 'retired-branch', pinned_workshop_name: 'Mebel Master' })
+  it('bands a side with the armed thickness from the docked card', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
 
-    const props = await pickerProps()
+    // The row's kromka cell selects the row, which is what raises the card
+    // (§7.5) — on the client it no longer opens a modal.
+    await selectRow(wrapper)
+    expect(kromkaPanel(wrapper).exists()).toBe(true)
 
-    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
+    // The thickest variant is armed by default — a visible edge is the common
+    // case, and 2 mm is what a shop puts on one.
+    await panelButton(wrapper, 'Yuqori').trigger('click')
+
+    expect(editorParts(wrapper)[0].edge_top).toEqual({
+      material_id: TAPE_THICK,
+      source: 'shop',
+    })
+    // The side names its own thickness, which is what makes two of them on one
+    // part readable at a glance.
+    expect(panelButton(wrapper, 'Yuqori').text()).toContain('2 mm')
   })
 
-  it('never rebranches a draft that lives on a foreign branch', async () => {
-    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+  it('carries two thicknesses on one part', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
+    await selectRow(wrapper)
 
-    const { wrapper, cutting } = await mountWithPicker(
-      // The draft was drawn at another workshop's branch before the pin moved.
-      draft({ preferred_branch_id: 'branch-9' }),
-    )
+    await panelButton(wrapper, 'Yuqori').trigger('click')
+    // Arm 0.4 mm, then band the bottom with it.
+    await panelButton(wrapper, '0.4 mm').trigger('click')
+    await panelButton(wrapper, 'Pastki').trigger('click')
 
-    // The draft keeps its own branch — the pin scopes new choices, never data.
-    expect(cutting.currentDraft?.preferred_branch_id).toBe('branch-9')
-    // And the editor still names it, because the full option list stays loaded:
-    // scoping narrows the picker, not the data the draft is bound to.
-    expect(wrapper.text()).toContain('Sergeli')
-    expect(wrapper.text()).toContain('Yog’och Pro')
+    expect(editorParts(wrapper)[0].edge_top?.material_id).toBe(TAPE_THICK)
+    expect(editorParts(wrapper)[0].edge_bottom?.material_id).toBe(TAPE_THIN)
+  })
 
-    // The draft's own branch-switch control, though, follows the pin at the
-    // moment it renders — it offers the pinned workshop, not the draft's.
+  it('re-resolves every banded side when the group tape changes', async () => {
+    const { wrapper } = await mountWithCatalog([
+      partOn({
+        edge_top: { material_id: TAPE_THICK, source: 'shop' },
+        edge_bottom: { material_id: TAPE_THIN, source: 'shop' },
+      }),
+    ])
+
+    await wrapper.get(`#group-tape-${BOARD}`).trigger('click')
+    const sheet = wrapper.findComponent({ name: 'CuttingTapePicker' })
+    expect(sheet.props('open')).toBe(true)
+    sheet.vm.$emit('pick', 'kronospan|u963')
+    await flushPromises()
+
+    // 2 mm exists in the new decor and is kept; 0.4 mm does not, so that side
+    // falls back to the nearest thickness rather than losing its band.
+    expect(editorParts(wrapper)[0].edge_top?.material_id).toBe(TAPE_OTHER)
+    expect(editorParts(wrapper)[0].edge_bottom?.material_id).toBe(TAPE_OTHER)
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('Antrasit')
+  })
+
+  it('blocks «Hisoblash» on a banded group with no tape, and says why', async () => {
+    const { wrapper, cutting } = await mountWithCatalog([
+      partOn({ edge_top: { material_id: TAPE_THICK, source: 'shop' } }),
+    ])
+    const optimize = vi.spyOn(cutting, 'optimizeDraft')
+    // Drop every tape: the group is banded but now has no decor to band with.
+    cutting.edgeOptions = []
+    await flushPromises()
+
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === "O'zgartirish")!
+      .find((button) => button.text() === 'Hisoblash')!
       .trigger('click')
     await flushPromises()
 
-    expect(
-      (
-        wrapper.findComponent(CuttingBranchPicker).props() as {
-          options: ClientBranchOption[]
-        }
-      ).options.map((row) => row.branch_id),
-    ).toEqual(['branch-1', 'branch-2'])
+    expect(optimize).not.toHaveBeenCalled()
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('rangi mos lentani tanlang')
+  })
+
+  it('shows no tape registry, no import and no whole-part patterns', async () => {
+    const { wrapper } = await mountWithCatalog([
+      partOn({ edge_top: { material_id: TAPE_THICK, source: 'shop' } }),
+    ])
+    await selectRow(wrapper)
+
+    expect(wrapper.findComponent({ name: 'CuttingEdgeTapeRegistry' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'CuttingImportWizard' }).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Fayldan import')
+    // §7.1 dropped the patterns with the per-part tape list: four taps on the
+    // diagram, or none, say the same thing.
+    expect(wrapper.text()).not.toContain('4 tomon')
+    expect(wrapper.text()).not.toContain('Kromsiz')
   })
 })

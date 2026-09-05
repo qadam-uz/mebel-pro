@@ -1,19 +1,19 @@
 import '@/assets/main.css'
 
-import { createPinia } from 'pinia'
-import { createApp, watch } from 'vue'
+import { createPinia, type Pinia } from 'pinia'
+import { createApp, watch, type Component } from 'vue'
 import {
   createRouter,
   createWebHistory,
   type NavigationGuardNext,
   type NavigationGuardWithThis,
+  type RouteLocationNormalized,
   type RouteLocationRaw,
   type RouteRecordRaw,
 } from 'vue-router'
 
 import { configureSession } from '@/shared/api/client'
-import { i18n, initialLocale, setLocale } from '@/shared/i18n'
-import RoleApp from '@/shared/components/RoleApp.vue'
+import { i18n, initialLocale, installCatalog, setLocale, type RoleCatalog } from '@/shared/i18n'
 import {
   roleConfigKey,
   roleMessageKey,
@@ -25,8 +25,6 @@ import {
   type WorkshopRouteRequirement,
 } from '@/shared/app/workshopPermissions'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
-import { useCuttingStore } from '@/shared/stores/cutting'
-import { useWorkshopStore } from '@/shared/stores/workshop'
 
 export function resolveHistoryBase(
   localBase: string,
@@ -183,13 +181,6 @@ export function roleRoutePermissionAllowed(
   )
 }
 
-function focusAdminContent(toMeta: Record<string, unknown>) {
-  if (toMeta.layout === 'auth') return
-  requestAnimationFrame(() => {
-    document.getElementById('admin-content')?.focus({ preventScroll: true })
-  })
-}
-
 // Every route component is a lazy `import()` of a content-hashed chunk. A deploy
 // replaces `dist/`, so a tab left open across one is still holding the *old*
 // filenames: the import 404s, and vue-router aborts the navigation with nothing
@@ -246,11 +237,37 @@ export function clearStaleChunkMark(storage: Storage | null = tabStorage()): voi
   storage?.removeItem(STALE_RELOAD_KEY)
 }
 
+/**
+ * What a role SPA contributes to the shared bootstrap: its shell, plus the three
+ * moments that used to be `if (role === ...)` branches here. Keeping them as
+ * hooks is what lets this module — and the chunk every SPA loads with it — import
+ * no store but `auth` and no component at all, so the client bundle stops
+ * carrying the workshop's and the platform's.
+ */
+export interface RoleAppOptions {
+  /** The role's shell component (`src/apps/<role>/<Role>Shell.vue`). */
+  shell: Component
+  /** The role's slice of the message catalog
+   *  (`src/shared/i18n/catalogs/<role>.ts`) — the namespaces this SPA renders,
+   *  and nothing else. */
+  catalog: RoleCatalog
+  /** Runs once after Pinia exists, before the router is created. */
+  onBoot?: (pinia: Pinia) => void
+  /** Extra revalidation after `auth.refreshMe()` on a 403 (QAD-172). */
+  onRevalidate?: (pinia: Pinia) => Promise<void>
+  /** After every successful navigation. */
+  onAfterNavigate?: (to: RouteLocationNormalized) => void
+}
+
 export async function mountRoleApp(
   config: RoleConfig,
   routes: RouteRecordRaw[],
   localBase: string,
+  options: RoleAppOptions,
 ) {
+  // Messages first — `setLocale` derives uz-Cyrl from the installed uz
+  // catalog, so an empty i18n here would transliterate nothing.
+  installCatalog(options.catalog)
   // Before anything renders: a locale switched in a previous session must be in
   // place for the first paint, not applied over an Uzbek flash.
   await setLocale(initialLocale())
@@ -261,34 +278,28 @@ export async function mountRoleApp(
   const router = createRouter({
     history: createWebHistory(historyBase),
     routes: normalizeRoleRoutes(routes, localBase, historyBase),
-    scrollBehavior: () => ({ top: 0 }),
+    // A push starts at the top; `history.back()` returns to where the list was
+    // left (spec §2). Without the saved position, backing out of an order
+    // detail dropped the client at the top of a long list every time.
+    scrollBehavior: (_to, _from, savedPosition) => savedPosition ?? { top: 0 },
   })
   const auth = useAuthStore(pinia)
 
-  // The shared cutting store defaults to the client API surface ('/client/*');
-  // the workshop SPA flips it to the '/workshop/*' mirror once at bootstrap.
-  // Each SPA owns its Pinia instance, so this can never leak across apps.
-  if (roleConfig.role === 'workshop') {
-    useCuttingStore(pinia).configureScope('workshop')
-  }
+  options.onBoot?.(pinia)
 
   // A refused request means the grant set the shell was built from is stale —
   // the owner revoked something while this tab was open (QAD-172). Re-read the
-  // principal and, for the workshop app, the branch context the sidebar is
-  // built from; if the page the user is on is no longer allowed, send them
-  // home. Server-side enforcement was never fooled; this is the screen catching
-  // up. Serialized so a burst of 403s costs one round-trip.
+  // principal, let the role re-read whatever else its chrome is built from, and
+  // if the page the user is on is no longer allowed, send them home.
+  // Server-side enforcement was never fooled; this is the screen catching up.
+  // Serialized so a burst of 403s costs one round-trip.
   let revalidating: Promise<void> | null = null
   function revalidateAccess() {
     if (revalidating) return
     revalidating = (async () => {
       await auth.refreshMe()
       if (!auth.isAuthenticated) return
-      if (roleConfig.role === 'workshop') {
-        await useWorkshopStore(pinia)
-          .loadBranchContext({ force: true })
-          .catch(() => undefined)
-      }
+      await options.onRevalidate?.(pinia)
       const current = router.currentRoute.value
       if (current.meta.layout === 'auth') return
       if (!roleRoutePermissionAllowed(roleConfig.role, auth.me, current.meta, current.params)) {
@@ -347,7 +358,7 @@ export async function mountRoleApp(
     // says no (the arrival form's unsaved-changes confirm).
     if (failure) return
     document.title = roleDocumentTitle(to.meta.titleKey, roleConfig)
-    if (roleConfig.role === 'admin') focusAdminContent(to.meta)
+    options.onAfterNavigate?.(to)
   })
 
   router.onError((error, to) => {
@@ -363,7 +374,7 @@ export async function mountRoleApp(
     document.title = roleDocumentTitle(router.currentRoute.value.meta.titleKey, roleConfig)
   })
 
-  const app = createApp(RoleApp)
+  const app = createApp(options.shell)
   app.provide(roleConfigKey, roleConfig)
   app.use(pinia)
   app.use(router)

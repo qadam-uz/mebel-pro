@@ -44,7 +44,13 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useFinanceStore, type MoneyMethod } from '@/shared/stores/finance'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatDateInputValue, formatTiyin, parseSomToTiyin } from '@/shared/formatters'
+import {
+  formatDate,
+  formatDateInputValue,
+  formatOrderNumber,
+  formatTiyin,
+  parseSomToTiyin,
+} from '@/shared/formatters'
 import { translatePlural } from '@/shared/i18n'
 import { useAuthStore } from '@/shared/stores/auth'
 import {
@@ -1202,7 +1208,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <header class="od-head">
         <div class="od-top">
-          <h1>{{ order.order_number }}</h1>
+          <h1>{{ formatOrderNumber(order.order_number) }}</h1>
           <!-- The order's own branch mode: on a simple branch the three
                production statuses read as one word, «Tayyorlanmoqda». -->
           <span :class="orderPillClass(order.status, orderMode)">

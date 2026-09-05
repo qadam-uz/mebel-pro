@@ -36,6 +36,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatDateTime,
+  formatOrderNumber,
   formatTiyin,
   parseSomToTiyin,
 } from '@/shared/formatters'
@@ -250,7 +251,7 @@ const canManageFinance = computed(() => permissions.can(p.manageFinance))
 const financeBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageFinance]),
 )
-// Branch is driven by the topbar context picker (AppShell); the page follows it
+// Branch is driven by the topbar context picker (WorkshopShell); the page follows it
 // and falls back to the first accessible branch until context is set.
 const selectedBranchId = computed(() => {
   const context = workshop.selectedBranchContext
@@ -263,7 +264,7 @@ const selectedBranchId = computed(() => {
 const payableOrderOptions = computed<ChoiceOption[]>(() =>
   finance.payableOrders.map((order) => ({
     value: order.order_id,
-    label: `${order.order_number} · ${order.contact_name}`,
+    label: `${formatOrderNumber(order.order_number)} · ${order.contact_name}`,
     meta: formatTiyin(order.balance_tiyin),
   })),
 )

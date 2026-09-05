@@ -3,21 +3,20 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { clientErrorLabel, formatPercent, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import { clientErrorLabel, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import {
   buildBillRows,
   canPlaceBlocker,
   canPlaceBlockerLabel,
-  fieldDiffersFromProfile,
 } from '@/shared/app/clientOrderReview'
+import { clientResultFigures } from '@/shared/app/cuttingResultsDisplay'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import BranchContact from '@/shared/components/BranchContact.vue'
-import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
-import { metres, useCuttingStore } from '@/shared/stores/cutting'
+import { useCuttingStore } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
 
 const { t } = useI18n()
@@ -38,39 +37,53 @@ const placing = ref(false)
 const localError = ref<string | null>(null)
 
 const draft = computed(() => cutting.currentDraft)
+/**
+ * Cold read only. Arriving from the result stage the drawing is already the
+ * store's current draft, so the page paints while it revalidates rather than
+ * showing a full-page skeleton on every visit (client audit 2026-09-03).
+ */
+const showSkeleton = computed(() => cutting.loading && !draft.value)
 const chosenResult = computed(() =>
   draft.value?.results.find((result) => result.id === draft.value?.chosen_result_id),
 )
 const branchId = computed(() => draft.value?.preferred_branch_id ?? null)
 
-const totalQuantity = computed(
-  () => draft.value?.parts_snapshot.reduce((sum, part) => sum + Math.max(0, part.quantity), 0) ?? 0,
-)
-const totalPanels = computed(() =>
-  chosenResult.value
-    ? Object.values(chosenResult.value.panels_used_by_material).reduce(
-        (sum, count) => sum + count,
-        0,
-      )
-    : 0,
-)
-const totalEdge = computed(() =>
-  chosenResult.value
-    ? Object.values(chosenResult.value.edge_consumed_shop_by_material).reduce(
-        (sum, value) => sum + value,
-        0,
-      ) +
-      Object.values(chosenResult.value.edge_consumed_own_by_material).reduce(
-        (sum, value) => sum + value,
-        0,
-      )
-    : 0,
-)
+// §7.7: the same four figures the result stage shows — Detallar, Listlar,
+// Kromka, Foydali qoldiq — from the one composer, so the two pages cannot
+// disagree about the layout the client is about to buy. «Chiqim» is gone: a
+// yield percentage on a fixed-price quote is a number the client cannot act on.
+const figures = computed(() => (chosenResult.value ? clientResultFigures(chosenResult.value) : []))
+// The drawing's own name, as the page subtitle. Untitled shows nothing rather
+// than a grey placeholder.
+const draftName = computed(() => draft.value?.name?.trim() || '')
 
 // "To'liq xulosa" (step 4): the itemized bill, derived via the pure helpers in
 // clientOrderReview.ts so it stays unit-testable. The per-part table this step
 // used to carry is gone — the rail's part count is the summary now.
 const billRows = computed(() => (quote.value ? buildBillRows(quote.value) : []))
+
+/**
+ * §7.7: **the phone must be an Uzbek number** (`+998` + 9 digits).
+ *
+ * A Telegram sign-up can bring a foreign number into the profile, and that
+ * number is prefilled here — so this is the one field on the client that
+ * regularly arrives already invalid. It is rejected **on blur and on submit**,
+ * never per keystroke (the UX bar), and «Buyurtmani tasdiqlash» stays disabled
+ * until it is fixed. The profile is not overwritten either way: the order
+ * carries the corrected number, and changing the profile is the profile page's
+ * job.
+ *
+ * The field is a plain `tel` input rather than the shared `PhoneInput`
+ * deliberately. `PhoneInput` *forces* the shape — it strips a country code and
+ * keeps nine digits — which would silently rewrite `+7 926 123 45 67` into a
+ * well-formed but wrong `+998 79 261 23 45`. Showing the foreign number as it
+ * is, and refusing it, is the whole point of this rule.
+ */
+const phoneTouched = ref(false)
+const phoneRejected = computed(
+  () =>
+    phoneTouched.value && contactPhone.value.trim().length > 0 && !isUzPhone(contactPhone.value),
+)
 
 const blocker = computed(() =>
   canPlaceBlocker({
@@ -80,19 +93,14 @@ const blocker = computed(() =>
   }),
 )
 const canPlace = computed(() => blocker.value === null)
-// Shown under the CTA whenever it's disabled — unless a load/submit error is
-// already explaining itself there, which would just repeat the point.
-const reasonLine = computed(() =>
-  !canPlace.value && !localError.value ? canPlaceBlockerLabel(blocker.value) : null,
-)
-
-const nameDiffers = computed(() => fieldDiffersFromProfile(contactName.value, auth.me?.name))
-const phoneDiffers = computed(() => fieldDiffersFromProfile(contactPhone.value, auth.me?.phone))
-
-function resetField(field: 'name' | 'phone') {
-  if (field === 'name') contactName.value = auth.me?.name ?? ''
-  else contactPhone.value = auth.me?.phone ?? ''
-}
+// Shown under the CTA whenever it is disabled — unless a load/submit error is
+// already explaining itself there, or the rejected phone field is already
+// carrying the same message beside itself, which is where an error belongs.
+const reasonLine = computed(() => {
+  if (canPlace.value || localError.value) return null
+  if (blocker.value === 'phone' && phoneRejected.value) return null
+  return canPlaceBlockerLabel(blocker.value)
+})
 
 async function loadQuote() {
   if (!branchId.value) return
@@ -109,6 +117,9 @@ async function loadQuote() {
 }
 
 async function placeOrder() {
+  // Submit is the second validation trigger: a client who never left the field
+  // still sees the message rather than a button that does nothing.
+  phoneTouched.value = true
   // The button is disabled whenever `blocker` is set, so this only guards a
   // stray programmatic call — no message needed, there's nothing to submit.
   if (!branchId.value || !quote.value || blocker.value) return
@@ -169,10 +180,12 @@ onMounted(async () => {
     <div class="client-page-head">
       <div>
         <h1>{{ $t('client.orderNew.title') }}</h1>
+        <!-- §7.7: the subtitle is the draft name alone. -->
+        <p v-if="draftName" class="mt-1 text-[13.5px] text-ink-soft">{{ draftName }}</p>
       </div>
     </div>
 
-    <section v-if="cutting.loading" class="grid gap-3" aria-live="polite">
+    <section v-if="showSkeleton" class="grid gap-3" aria-live="polite">
       <div class="client-skeleton h-32"></div>
       <div class="client-skeleton h-64"></div>
     </section>
@@ -223,42 +236,52 @@ onMounted(async () => {
           </div>
         </section>
 
+        <!-- §7.7: two ordinary labelled fields, prefilled and editable. The
+             explanation is a muted label-style line under the title, not an
+             info banner — it is a caption on a two-field form, and a banner
+             gave it the weight of a warning. No «Profildan tiklash»: the
+             fields already hold the profile values, so the link only ever
+             appeared after the client deliberately changed one. -->
         <section class="client-card">
-          <div class="client-card-h">
+          <div class="client-card-h !block">
             <h2>{{ $t('client.orderNew.contactTitle') }}</h2>
+            <p class="mt-1 text-[12.5px] font-semibold text-ink-muted">
+              {{ $t('client.orderNew.contactHint') }}
+            </p>
           </div>
           <div class="client-card-b">
-            <div class="client-banner success">
-              <span class="font-black">i</span>
-              <span>{{ $t('client.orderNew.contactNote') }}</span>
-            </div>
-            <div class="grid gap-3 md:grid-cols-2">
-              <label class="grid gap-1 text-sm font-bold text-ink">
-                {{ $t('client.common.name') }}
+            <div class="grid gap-3.5 md:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-[12.5px] font-semibold text-ink">
+                  {{ $t('client.common.name') }}
+                </span>
                 <input v-model="contactName" class="mp-input" autocomplete="name" />
-                <button
-                  v-if="nameDiffers"
-                  type="button"
-                  class="w-fit text-xs font-bold text-accent-deep underline"
-                  @click="resetField('name')"
-                >
-                  {{ $t('client.orderNew.resetFromProfile') }}
-                </button>
               </label>
-              <label class="grid gap-1 text-sm font-bold text-ink">
-                {{ $t('client.common.phone') }}
-                <PhoneInput v-model="contactPhone" required />
-                <span v-if="contactPhone && !isUzPhone(contactPhone)" class="text-xs text-danger">{{
-                  $t('client.orderNew.phoneInvalid')
-                }}</span>
-                <button
-                  v-if="phoneDiffers"
-                  type="button"
-                  class="w-fit text-xs font-bold text-accent-deep underline"
-                  @click="resetField('phone')"
+              <label class="grid gap-1.5">
+                <span class="text-[12.5px] font-semibold text-ink">
+                  {{ $t('client.common.phone') }}
+                </span>
+                <!-- All three signals a rejected field owes the reader
+                     (DESIGN.md): the danger border, `aria-invalid`, and a
+                     message tied to it by `aria-describedby`. -->
+                <input
+                  v-model="contactPhone"
+                  type="tel"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  class="mp-input"
+                  :class="phoneRejected ? 'border-danger' : ''"
+                  :aria-invalid="phoneRejected || undefined"
+                  :aria-describedby="phoneRejected ? 'order-phone-error' : undefined"
+                  @blur="phoneTouched = true"
+                />
+                <span
+                  v-if="phoneRejected"
+                  id="order-phone-error"
+                  class="text-[12.5px] font-semibold leading-[1.25] text-danger"
                 >
-                  {{ $t('client.orderNew.resetFromProfile') }}
-                </button>
+                  {{ $t('client.orderNew.phoneUzOnly') }}
+                </span>
               </label>
             </div>
           </div>
@@ -273,28 +296,14 @@ onMounted(async () => {
           <h2>{{ $t('client.orderNew.railTitle') }}</h2>
         </div>
         <div class="client-card-b grid gap-4">
-          <div class="grid gap-2 text-sm">
-            <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">{{ $t('client.common.parts') }}</span
-              ><span class="font-bold text-ink">{{ totalQuantity }}</span>
+          <!-- §7.7: the four figures, as the 2×2 grid the canvas draws — the
+               same four the result stage shows, from the same composer. -->
+          <dl class="grid grid-cols-2 gap-x-3.5 gap-y-3">
+            <div v-for="figure in figures" :key="figure.key">
+              <dt class="text-[12.5px] font-semibold text-ink-muted">{{ figure.label }}</dt>
+              <dd class="mt-0.5 text-[15px] font-bold text-ink">{{ figure.value }}</dd>
             </div>
-            <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">{{ $t('client.orderNew.sheets') }}</span
-              ><span class="font-bold text-ink">{{ totalPanels }}</span>
-            </div>
-            <div class="flex justify-between gap-4">
-              <!-- "Kromka" length here, "Kromka: <material>" money below — never
-                   the same bare word for two different units (CB collision). -->
-              <span class="text-ink-soft">{{ $t('client.orderNew.edgeLength') }}</span
-              ><span class="font-bold text-ink">{{ metres(totalEdge) }}</span>
-            </div>
-            <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">{{ $t('client.orderNew.waste') }}</span
-              ><span class="font-bold text-ink">{{
-                formatPercent(chosenResult.waste_percentage)
-              }}</span>
-            </div>
-          </div>
+          </dl>
 
           <div class="grid gap-1.5 border-t border-hairline pt-3 text-xs">
             <div v-for="row in billRows" :key="row.key" class="flex justify-between gap-3">

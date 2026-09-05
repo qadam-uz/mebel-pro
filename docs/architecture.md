@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-06
 order: 70
 ---
 
@@ -130,6 +130,9 @@ customers — cut, order, track), **workshop** (workshop owner & staff — every
 **superadmin** (platform operators — provisioning, blocks, jobs console, error monitor). The
 three audiences barely overlap, and a marketing page needs to be indexable — a single SPA can't
 do both well. Shared primitives, the API client, design tokens, and i18n live once in the repo.
+The **client SPA is phone-first responsive** — a bottom tab bar below `md`, the desktop header
+above it — and there is **no native wrapper**: a store build is a distribution decision, not a
+capability the product needs, and nothing in the client app may assume one.
 Design system: web/DESIGN.md
 
 ## Data-model invariants
@@ -185,6 +188,12 @@ Three locales in the client and workshop SPAs: **`uz`** (Latin, the default), **
 is its translation, and `uz-Cyrl` is *derived* from `uz` by transliteration at load time, with an
 overrides file for the handful of words the rules get wrong. A hand-maintained third script would
 drift from the Latin the first time anyone fixed one sentence and not the other.
+
+The catalog is split by feature area, and **each SPA ships only the areas it renders** — the
+whole catalog is ~145 kB of a role's initial JavaScript, and a third of it is copy the client
+app has no screen for. A role that starts rendering a new area opts into it explicitly, and
+the i18n gate fails a role that renders copy it does not carry rather than letting a key path
+reach a screen.
 
 The locale is a **device preference** (`localStorage`), not a stored user attribute: it must
 resolve synchronously before the first paint, and no principal carries a locale column. It is

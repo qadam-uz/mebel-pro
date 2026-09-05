@@ -23,6 +23,7 @@ from structlog import get_logger
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.order_number import format_order_number
 from app.core.telegram import TelegramApiError, TelegramForbiddenError, bot_configured, send_message
 from app.modules.access.contracts import Client
 
@@ -61,7 +62,9 @@ def render_order_message(*, event_code: str, order_number: str, order_id: uuid.U
     if sentence is None:
         return None
     link = f"{settings.CLIENT_APP_BASE_URL.rstrip('/')}/c/orders/{order_id}"
-    return f"{sentence} — Buyurtma № {order_number}\n{link}"
+    # The formatter owns the `№` sign, so a legacy number keeps its own prefix
+    # (`#26-1-0003`) instead of collecting a second one.
+    return f"{sentence} — Buyurtma {format_order_number(order_number)}\n{link}"
 
 
 async def queue_client_order_message(

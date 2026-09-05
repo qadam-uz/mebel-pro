@@ -125,7 +125,7 @@ const canUseCatalog = computed(() => permissions.can(p.manageCatalog))
 const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageCatalog]),
 )
-// Branch is driven by the topbar context picker (AppShell); the page follows it
+// Branch is driven by the topbar context picker (WorkshopShell); the page follows it
 // and falls back to the first accessible branch until context is set.
 const selectedBranchId = computed(() => {
   const context = workshop.selectedBranchContext

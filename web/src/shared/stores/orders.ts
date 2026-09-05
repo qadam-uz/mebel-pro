@@ -7,6 +7,7 @@ import {
   apiErrorCode,
   apiTraceId,
   captureApiError,
+  isAbortError,
   isPermissionDenied,
   withQuery,
 } from '@/shared/api/client'
@@ -301,6 +302,9 @@ export const useOrdersStore = defineStore('orders', () => {
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
+  // True for the single-order read only (see loadOrder) — `loading` is shared
+  // with every list on this store and is not a safe skeleton gate for a detail.
+  const detailLoading = ref(false)
   const actionLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -446,10 +450,22 @@ export const useOrdersStore = defineStore('orders', () => {
   // Paginated with append (CB-38): offset 0 replaces, a higher offset appends the
   // next page. ordersHasMore is inferred from a full page, so the "load more"
   // button hides on the last page.
+  //
+  // Stale-while-revalidate (spec §4): the rows in hand are **not** cleared while
+  // a new page is in flight, so a filter change keeps the old list under a
+  // subtle dim instead of collapsing the page to a skeleton and back. The list
+  // owns one AbortController: a newer call aborts the older, and the loser's
+  // rejection is dropped rather than painted as an error — an aborted request
+  // is this store cancelling itself, not a failure the client can act on.
+  let clientOrdersRequest: AbortController | null = null
+
   async function loadClientOrders(
     filters: { status?: string; search?: string; offset?: number } = {},
   ) {
     const offset = filters.offset ?? 0
+    clientOrdersRequest?.abort()
+    const controller = new AbortController()
+    clientOrdersRequest = controller
     loading.value = true
     error.value = null
     traceId.value = null
@@ -461,14 +477,20 @@ export const useOrdersStore = defineStore('orders', () => {
           limit: ORDERS_PAGE_LIMIT,
           offset,
         }),
-        authInit(),
+        { ...authInit(), signal: controller.signal },
       )
       clientOrders.value = offset === 0 ? page : [...clientOrders.value, ...page]
       ordersHasMore.value = page.length === ORDERS_PAGE_LIMIT
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, 'client_orders_load_failed')
     } finally {
-      loading.value = false
+      // Only the newest call owns the flag; an aborted one must not switch the
+      // spinner off under the request that replaced it.
+      if (clientOrdersRequest === controller) {
+        clientOrdersRequest = null
+        loading.value = false
+      }
     }
   }
 
@@ -703,18 +725,48 @@ export const useOrdersStore = defineStore('orders', () => {
     await openPdf(`/workshop/orders/${orderId}/cutting/pdf`, orderId)
   }
 
+  // The detail read owns its own controller and its own flag. `loading` is
+  // still written for the surfaces that have always read it, but it is shared
+  // with the list — so a list page landing mid-navigation used to switch the
+  // detail's skeleton off under it, flashing "order not found" for a frame.
+  // `detailLoading` is true for exactly this request (CT-2).
+  let orderRequest: AbortController | null = null
+
   async function loadOrder(path: string, fallback: string) {
+    orderRequest?.abort()
+    const controller = new AbortController()
+    orderRequest = controller
     loading.value = true
+    detailLoading.value = true
     error.value = null
     traceId.value = null
-    currentOrder.value = null
+    // Re-reading the order already on screen revalidates it in place — coming
+    // back to a detail page repaints it at once instead of blanking. A
+    // different id clears first, so nothing renders under the wrong order.
+    if (currentOrder.value?.id !== orderIdFromPath(path)) currentOrder.value = null
     try {
-      currentOrder.value = await api.get<OrderDetail>(path, authInit())
+      currentOrder.value = await api.get<OrderDetail>(path, {
+        ...authInit(),
+        signal: controller.signal,
+      })
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, fallback)
+      // A failed read leaves nothing trustworthy: the page's error state is the
+      // whole screen, and a stale order under it would offer stale actions.
+      currentOrder.value = null
     } finally {
-      loading.value = false
+      if (orderRequest === controller) {
+        orderRequest = null
+        loading.value = false
+        detailLoading.value = false
+      }
     }
+  }
+
+  /** `/client/orders/<id>` → `<id>`; anything else → null (never matches). */
+  function orderIdFromPath(path: string) {
+    return path.match(/\/orders\/([^/?]+)$/)?.[1] ?? null
   }
 
   async function mutate(path: string, payload: unknown, method: 'post' | 'patch' = 'post') {
@@ -813,6 +865,12 @@ export const useOrdersStore = defineStore('orders', () => {
   }
 
   function reset() {
+    // Cancel first: reset is a sign-out, and a late answer must not repopulate
+    // the store the next session inherits.
+    clientOrdersRequest?.abort()
+    clientOrdersRequest = null
+    orderRequest?.abort()
+    orderRequest = null
     clientOrders.value = []
     ordersHasMore.value = false
     workshopOrders.value = []
@@ -823,6 +881,7 @@ export const useOrdersStore = defineStore('orders', () => {
     currentOrder.value = null
     workerOptions.value = []
     loading.value = false
+    detailLoading.value = false
     actionLoading.value = false
     error.value = null
     traceId.value = null
@@ -842,6 +901,7 @@ export const useOrdersStore = defineStore('orders', () => {
     currentOrder,
     workerOptions,
     loading,
+    detailLoading,
     actionLoading,
     error,
     traceId,

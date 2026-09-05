@@ -5,6 +5,7 @@ import {
   formatDateInputValue,
   formatDateTime,
   formatDayMonthWeekday,
+  formatOrderNumber,
   formatSignedPercent,
   formatRelative,
   formatStockQuantity,
@@ -161,5 +162,40 @@ describe('shared formatters', () => {
     expect(parseDisplayQuantity('12.5', 'm')).toBe(12500)
     expect(parseDisplayQuantity('3', 'piece')).toBe(3)
     expect(Number.isNaN(parseDisplayQuantity('abc', 'm'))).toBe(true)
+  })
+
+  describe('formatOrderNumber', () => {
+    const THIN = '\u2009'
+
+    it('groups a six-digit number in threes behind a number sign', () => {
+      expect(formatOrderNumber('482917')).toBe(`№${THIN}482${THIN}917`)
+      expect(formatOrderNumber('100000')).toBe(`№${THIN}100${THIN}000`)
+    })
+
+    // Grouping runs from the right, so widening the mint to seven digits later
+    // moves the leading group only — every other surface stays put.
+    it('groups a seven-digit number from the right', () => {
+      expect(formatOrderNumber('1482917')).toBe(`№${THIN}1${THIN}482${THIN}917`)
+    })
+
+    it('leaves legacy numbers exactly as they were minted', () => {
+      expect(formatOrderNumber('#26-14-0003')).toBe('#26-14-0003')
+      expect(formatOrderNumber('ORD-2026-000123')).toBe('ORD-2026-000123')
+    })
+
+    it('leaves digit runs of any other length alone', () => {
+      expect(formatOrderNumber('12345')).toBe('12345')
+      expect(formatOrderNumber('12345678')).toBe('12345678')
+    })
+
+    it('renders nothing for a missing number', () => {
+      expect(formatOrderNumber(null)).toBe('')
+      expect(formatOrderNumber(undefined)).toBe('')
+      expect(formatOrderNumber('  ')).toBe('')
+    })
+
+    it('trims surrounding whitespace before deciding', () => {
+      expect(formatOrderNumber(' 482917 ')).toBe(`№${THIN}482${THIN}917`)
+    })
   })
 })

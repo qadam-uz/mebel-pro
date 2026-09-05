@@ -1,6 +1,15 @@
 import { config } from '@vue/test-utils'
 
-import { i18n } from '@/shared/i18n'
+import { i18n, installCatalog } from '@/shared/i18n'
+import { uz } from '@/shared/i18n/locales/uz'
+
+// In the browser a SPA installs *its* slice of the catalog
+// (`shared/i18n/catalogs/<role>.ts`); a spec mounts one component at a time and
+// has no role, so the bootstrap installs all fourteen namespaces. Which
+// namespaces each role actually ships is asserted in
+// `shared/i18n/__tests__/roleCatalogs.spec.ts` and enforced by
+// `pnpm i18n:check` — not by starving the specs.
+installCatalog({ uz, loadRu: async () => (await import('@/shared/i18n/locales/ru')).ru })
 
 // jsdom parses and styles but never lays out, so it ships no
 // `Element.prototype.scrollIntoView` at all — calling it throws instead of

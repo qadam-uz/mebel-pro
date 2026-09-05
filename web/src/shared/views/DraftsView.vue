@@ -29,6 +29,13 @@ const sortedDrafts = computed(() =>
   ),
 )
 const pendingDeletePartCount = computed(() => draftParts(draftPendingDelete.value))
+/**
+ * Stale-while-revalidate: the skeleton is for a cold list only. Arriving here
+ * from home the drawings are already in the store, so they render at once and
+ * the refresh runs under a dim instead of blanking the page (client audit
+ * 2026-09-03).
+ */
+const showSkeleton = computed(() => cutting.draftsLoading && sortedDrafts.value.length === 0)
 
 function chosenResult(draft: CuttingDraft | null) {
   if (!draft) return null
@@ -98,26 +105,31 @@ onMounted(() => {
 
 <template>
   <section>
-    <div class="client-page-head">
-      <div>
+    <div class="client-page-head max-md:mb-3">
+      <!-- §2: one title per phone screen — the compact header already says
+           «Chizmalar», so only the heading and its subtitle go. «Yangi chizma»
+           stays: this tab is the phone's entry point for starting a drawing,
+           and the empty state's copy of the button is not reachable once the
+           list has anything in it. -->
+      <div class="max-md:hidden">
         <h1>{{ $t('client.drafts.title') }}</h1>
         <p class="sub">{{ $t('client.drafts.subtitle') }}</p>
       </div>
-      <button type="button" class="mp-button mp-button-primary" @click="newCutting">
+      <button type="button" class="mp-button mp-button-primary max-md:w-full" @click="newCutting">
         {{ $t('client.common.newDraft') }}
       </button>
     </div>
 
-    <div v-if="cutting.loading || sortedDrafts.length > 0" class="client-section-title">
+    <div v-if="showSkeleton || sortedDrafts.length > 0" class="client-section-title">
       <h2>{{ $t('client.drafts.all') }}</h2>
-      <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
+      <span v-if="showSkeleton" class="client-skeleton inline-block h-4 w-20"></span>
       <span v-else class="text-sm text-ink-muted">
         <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }}
         {{ $t('client.drafts.capacityUnit') }}
       </span>
     </div>
 
-    <div v-if="cutting.loading" class="grid gap-2" aria-live="polite">
+    <div v-if="showSkeleton" class="grid gap-2" aria-live="polite">
       <div v-for="item in 3" :key="item" class="client-card grid grid-cols-[1fr_auto] gap-4 p-4">
         <div>
           <div class="client-skeleton h-4 w-1/2"></div>
@@ -127,8 +139,10 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Only when there is nothing else to show: a refresh that fails behind a
+         list already on screen leaves the list there. -->
     <ClientErrorState
-      v-else-if="cutting.error"
+      v-else-if="cutting.error && sortedDrafts.length === 0"
       :title="$t('client.drafts.loadFailed')"
       :trace-id="cutting.traceId"
       @retry="cutting.loadDrafts"
@@ -143,7 +157,11 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-else class="grid gap-3">
+    <div
+      v-else
+      class="grid gap-3 transition-opacity"
+      :class="cutting.draftsLoading ? 'opacity-60' : ''"
+    >
       <!-- Same card as the home "Chizmalar" section, plus the delete control —
            the two lists show the same object and had drifted into two shapes. -->
       <article

@@ -47,8 +47,9 @@ export interface ProvisionWorkshopResponse {
 
 export interface PlatformWorkshopDetail {
   workshop: WorkshopSummary
-  // `branch_no` is the immutable middle segment of the branch's order numbers
-  // (`#26-1-0003`) — read-only, and the only way to decode a printed document.
+  // `branch_no` is the branch's immutable platform-wide number and the last
+  // segment of its QR link (`/w/{code}/{branch_no}`) — read-only. It is not
+  // part of an order number: those are six random digits (sales.md).
   branches: Array<{
     id: string
     branch_no: number

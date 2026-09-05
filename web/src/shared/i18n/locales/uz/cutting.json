@@ -16,12 +16,14 @@
     "kind": "xil",
     "material": "material",
     "metre": "m",
-    "panel": "panel",
+    "panel": "list",
     "part": "detal",
     "piece": "dona",
     "remainder": "qoldiq",
     "sheet": "list",
-    "waste": "chiqindi"
+    "waste": "chiqindi",
+    "mm": "mm",
+    "pieceShort": "ta"
   },
   "side": {
     "top": "Yuqori",
@@ -56,8 +58,6 @@
     "unassigned": "Material tanlanmagan",
     "pick": "Material tanlang",
     "replaceTitle": "Materialni almashtirish",
-    "forPart": "«{name}» detali uchun",
-    "forPartGeneric": "Detal uchun",
     "forGroup": "Ushbu guruhdagi {n} detal uchun",
     "forSelection": "Tanlangan {n} ta detal uchun",
     "grained": "Teksturali material",
@@ -65,11 +65,16 @@
     "selected": "Tanlangan",
     "emptyInBranch": "Bu filialda list materiali topilmadi.",
     "priceUnset": "Narx yo'q",
+    "priceOnRequest": "Narx kelishiladi",
     "searchLabel": "Material qidirish",
     "searchPlaceholder": "Dekor nomi yoki kodi — Sonoma, H1145, сонома",
     "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
     "pickerEmpty": "Bu filialda material yo‘q.",
-    "discontinued": "Ishlab chiqarishdan chiqqan"
+    "discontinued": "Ishlab chiqarishdan chiqqan",
+    "perSheet": "/ list",
+    "formatLine": "{thickness} mm · {length}×{width} mm",
+    "formatCount": "{n} ta format · formatni tanlang",
+    "viewImage": "{material} — rasmini ochish"
   },
   "customerBoard": {
     "modeLabel": "Material manbasi",
@@ -129,7 +134,13 @@
     "hintIncomplete": "To'ldirilmagan qatorlarni to'ldiring",
     "hintOverCap": "{max} donadan oshib ketdi",
     "grainFitError": "Tekstura yo'nalishi qat'iy — detal {length}×{width} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).",
-    "sizeFitError": "Detal listga sig'maydi — maksimal {length}×{width} mm (list − 2×{trim} mm chetki qirqim)."
+    "sizeFitError": "Detal listga sig'maydi — maksimal {length}×{width} mm (list − 2×{trim} mm chetki qirqim).",
+    "ctaCalculate": "Hisoblash",
+    "ctaViewResult": "Natijani ko'rish",
+    "addMaterialClient": "+ Material",
+    "draftActionsAria": "Chizma amallari",
+    "catalogCaption": "{workshopBranch} katalogi · {n} ta dekor",
+    "tapeCatalogCaption": "{workshopBranch} · {n} ta kromka dekori"
   },
   "parts": {
     "heading": "Detallar",
@@ -147,7 +158,8 @@
     "emptyResult": "Detal yo'q.",
     "listHint": "Chizmada ko'rish uchun qatorni bosing.",
     "noPlacements": "Bu natijada joylashtirilgan detal yo'q.",
-    "rotatedCount": "{n} ta burilgan"
+    "rotatedCount": "{n} ta burilgan",
+    "edgeSideCount": "Kromka: {n} tomon"
   },
   "edge": {
     "label": "Kromka",
@@ -201,7 +213,20 @@
     "matchColor": "rang mos",
     "others": "Boshqa kromkalar",
     "alreadyInDrawing": "Bu kromka allaqachon chizmada — 1-ro'yxatdan tanlang.",
-    "noMatches": "Mos kromka topilmadi. Qidiruv yoki qalinlikni o'zgartiring."
+    "noMatches": "Mos kromka topilmadi. Qidiruv yoki qalinlikni o'zgartiring.",
+    "thickness": "Qalinlik",
+    "thicknessHint": "Qalinlikni tanlab, tomonga bosing",
+    "thicknessFallback": "«{name}» bu qalinlikda yo'q — eng yaqini qo'yildi.",
+    "groupLabel": "Kromka:",
+    "groupPick": "Kromka: rangi mos lentani tanlang",
+    "changeForGroup": "guruh uchun o'zgartirish",
+    "pickFirstGroup": "Avval guruh uchun kromka rangini tanlang",
+    "pickerTitle": "Rangi mos kromkani tanlang",
+    "boardColour": "Plita rangi",
+    "perMetre": "so'm/m",
+    "select": "Tanlash",
+    "legacyTape": "Boshqa rang: {name}",
+    "emptyInBranch": "Bu filialda kromka yo'q."
   },
   "thickening": {
     "mark": "УТ",
@@ -359,7 +384,12 @@
     "cutSettings": "Arra kesigi {kerf} mm · Chetki qirqim {trim} mm",
     "panelAria": "List {n} joylashuvi",
     "offcutUsable": "Qoldiq {dims}",
-    "offcutWaste": "chiqit"
+    "offcutWaste": "chiqit",
+    "showDrawing": "Chizmani ko'rish",
+    "hideDrawing": "Chizmani yashirish",
+    "usefulOffcut": "Foydali qoldiq",
+    "totalCaption": "jami narx",
+    "placeOrder": "Buyurtma berish"
   },
   "drafts": {
     "title": "Saqlangan chizmalar",
@@ -383,8 +413,7 @@
     "searchPlaceholder": "Ustaxona, filial yoki manzil — masalan: Chilonzor",
     "searchAria": "Filial qidirish",
     "recommended": "Tavsiya — afzal filial",
-    "noMatches": "Mos filial topilmadi.",
-    "scopedHeader": "{workshop} filiallari"
+    "noMatches": "Mos filial topilmadi."
   },
   "error": {
     "importFallback": "Faylni import qilib bo'lmadi. Qayta urinib ko'ring.",
@@ -430,5 +459,19 @@
     "shop": "Ombordan",
     "own": "Mijoz materiali",
     "ownClient": "Mening materialim"
+  },
+  "part": {
+    "sheetTitle": "Detal #{n}",
+    "save": "Saqlash",
+    "saveAndNext": "Saqlash va yana",
+    "delete": "O'chirish"
+  },
+  "branchRow": {
+    "closed": "vaqtincha yopiq",
+    "active": "faol",
+    "cuttingService": "Kesish xizmati: {amount}",
+    "materials": "Materiallar: {amount}",
+    "edgeBanding": "Kromka yopishtirish: {amount}",
+    "unit": "so'm · {n} list"
   }
 }

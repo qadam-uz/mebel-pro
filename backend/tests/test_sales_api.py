@@ -1,6 +1,7 @@
 # ruff: noqa: RUF001 -- expected material/edge labels reuse the canonical display
 # format's multiplication sign in dimensions.
 
+import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -242,6 +243,8 @@ async def _placed_order(
         },
     )
     assert placed.status_code == 201
+    # The client path mints the same global handle the walk-in path does.
+    assert re.fullmatch(r"[1-9]\d{5}", str(placed.json()["order_number"]))
     return placed.json(), client_access, owner_access, workshop_id, branch_id, edge.id
 
 

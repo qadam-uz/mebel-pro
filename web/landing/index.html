@@ -16,11 +16,18 @@
   <meta property="og:description"
     content="Mebel panellarini kesish uchun onlayn platforma: ustaxonaga to'liq boshqaruv, mijozga onlayn buyurtma.">
   <meta property="og:type" content="website">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400..800&family=Wix+Madefor+Text:wght@400..800&display=swap"
-    rel="stylesheet">
+  <!-- The two Wix Madefor faces, self-hosted. This page is styled on its own and
+       never loads the app's `main.css`, so it links the shared @font-face file
+       directly — Vite bundles and hashes it here just as it inlines it there,
+       and the woff2 assets are shared with the SPAs by content hash. The two
+       latin subsets are preloaded because a font inside a stylesheet is only
+       discovered after that sheet parses; `crossorigin` is required even
+       same-origin, since fonts are always fetched in CORS mode. -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+    href="/node_modules/@fontsource-variable/wix-madefor-text/files/wix-madefor-text-latin-wght-normal.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+    href="/node_modules/@fontsource-variable/wix-madefor-display/files/wix-madefor-display-latin-wght-normal.woff2">
+  <link rel="stylesheet" href="/src/assets/fonts.css">
   <style>
     :root {
       /* This page is self-styled by design — it does not import the app's token

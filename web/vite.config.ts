@@ -28,6 +28,18 @@ function roleHistoryFallback() {
 // Dev API proxy target — localhost for host-based dev, the backend service in Docker compose.
 const apiTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:8000'
 
+// The API is same-origin `/api` in every environment (Caddy does it in prod), so
+// both Vite servers forward it to the backend. `vite preview` does NOT inherit
+// `server.proxy` — without its own copy of this map the built bundle it serves
+// answers every API call with its own index.html, which looks like a broken
+// backend rather than a missing proxy.
+const apiProxy = {
+  '/api': { target: apiTarget, changeOrigin: true },
+  '/docs': { target: apiTarget, changeOrigin: true },
+  '/api-docs': { target: apiTarget, changeOrigin: true },
+  '/api-redoc': { target: apiTarget, changeOrigin: true },
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [roleHistoryFallback(), vue(), tailwindcss()],
@@ -37,6 +49,13 @@ export default defineConfig({
     },
   },
   build: {
+    // A font is never inlined. The two `cyrillic-ext` subsets sit under Vite's
+    // 4 kB default, and as data: URIs they land base64-inflated inside the
+    // render-blocking stylesheet that *every* visitor parses — to carry glyphs
+    // (Ғ, Қ, Ҳ) only the uz-Cyrl locale ever paints. As files they stay
+    // separately cacheable, and `unicode-range` keeps them undownloaded until
+    // something on the page actually needs them.
+    assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
     // Multi-page: standalone landing plus the three role SPAs.
     rollupOptions: {
       input: {
@@ -49,24 +68,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      // Dev: forward API calls to the FastAPI backend.
-      '/api': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      '/docs': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      '/api-docs': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      '/api-redoc': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-    },
+    proxy: apiProxy,
+  },
+  preview: {
+    port: 4173,
+    proxy: apiProxy,
   },
 })

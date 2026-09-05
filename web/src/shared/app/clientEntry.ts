@@ -9,7 +9,6 @@
  */
 
 import { API_PREFIX } from '@/shared/api/client'
-import type { ClientBranchOption } from '@/shared/stores/cutting'
 
 /**
  * The workshop's logo, addressed by its code rather than by a file id.
@@ -33,8 +32,13 @@ const TOAST_KEY = 'client.entry.toast'
 export interface StoredClientEntry {
   /** Canonical public code, as the resolve endpoint echoed it. */
   code: string
-  /** The branch the client chose (or the only one the link had). */
-  branch_id: string
+  /**
+   * The branch the link settled on — a branch QR, or a one-branch workshop's
+   * only counter. `null` for a multi-branch workshop link, which pins nothing
+   * (spec §2.2): entry still records the workshop, so it lands on
+   * Ustaxonalarim, and home then asks the client to choose a workshop.
+   */
+  branch_id: string | null
 }
 
 /**
@@ -76,9 +80,9 @@ export function readClientEntry(
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const { code, branch_id: branchId } = parsed as Partial<StoredClientEntry>
-    if (typeof code !== 'string' || typeof branchId !== 'string') return null
-    if (!code || !branchId) return null
-    return { code, branch_id: branchId }
+    if (typeof code !== 'string' || !code) return null
+    if (branchId !== null && branchId !== undefined && typeof branchId !== 'string') return null
+    return { code, branch_id: branchId || null }
   } catch {
     // Someone else's key, or a half-written value. Treat it as absent.
     return null
@@ -121,50 +125,4 @@ export function takeEntryToast(storage: Storage | null = defaultStorage()): stri
   } catch {
     return null
   }
-}
-
-/**
- * Which workshop the editor's branch picker is scoped to, or `null` for the
- * unpinned (organic) client whose cross-workshop picker stays as it was.
- *
- * `pinnedWorkshopName` from `/auth/me` is the authoritative "is this client
- * pinned" signal — it is null when there is no pin *and* when the pinned
- * workshop is blocked, which is exactly when scoping must not apply. The
- * workshop **id** is then derived from the branch-options payload, which
- * already groups by workshop, so the picker costs no extra request:
- *
- * 1. the option matching `preferredBranchId` names it directly;
- * 2. failing that — the pinned branch went `inactive` and dropped out of the
- *    options — the workshop's *other* visible branches are matched by name,
- *    which §8 requires the picker to keep offering.
- */
-export function pinnedWorkshopId(
-  options: ClientBranchOption[],
-  preferredBranchId: string | null | undefined,
-  pinnedWorkshopName: string | null | undefined,
-): string | null {
-  if (!pinnedWorkshopName) return null
-  const pinnedOption = preferredBranchId
-    ? options.find((option) => option.branch_id === preferredBranchId)
-    : undefined
-  if (pinnedOption) return pinnedOption.workshop_id
-  const byName = options.find((option) => option.workshop_name === pinnedWorkshopName)
-  return byName?.workshop_id ?? null
-}
-
-/**
- * The branch list the picker may offer.
- *
- * A pinned client sees one workshop's branches and nothing else — no tab, no
- * cross-workshop search, no "see more" (spec §4). A pin whose workshop has no
- * visible branch left yields an empty list on purpose: the picker's own empty
- * state is the right answer, and falling back to every workshop would reopen
- * the door this spec closed.
- */
-export function scopedBranchOptions(
-  options: ClientBranchOption[],
-  workshopId: string | null,
-): ClientBranchOption[] {
-  if (!workshopId) return options
-  return options.filter((option) => option.workshop_id === workshopId)
 }

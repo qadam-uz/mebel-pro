@@ -28,6 +28,7 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import {
   formatDate,
   formatDateInputValue,
+  formatOrderNumber,
   formatSom,
   formatTiyin,
   formatTiyinParts,
@@ -246,13 +247,19 @@ function statementRowLabel(row: DebtStatementRow) {
     return parts.join(' · ')
   }
   if (row.kind === 'payment') {
-    if (row.order_number) return t('finance.statement.rowPaymentOrder', { order: row.order_number })
+    if (row.order_number) {
+      return t('finance.statement.rowPaymentOrder', {
+        order: formatOrderNumber(row.order_number),
+      })
+    }
     return t('finance.statement.rowExpense', {
       note: row.note ?? t('finance.statement.rowExpenseFallback'),
     })
   }
   if (row.kind === 'order') {
-    return t('finance.statement.rowOrder', { order: row.order_number ?? '' }).trim()
+    return t('finance.statement.rowOrder', {
+      order: formatOrderNumber(row.order_number),
+    }).trim()
   }
   return t('finance.statement.rowAdjustment', { note: row.note ?? '' }).trim()
 }

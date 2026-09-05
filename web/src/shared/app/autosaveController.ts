@@ -39,7 +39,11 @@ export interface AutosaveController {
   flush(): Promise<void>
   /** External save/hydration happened — reset to `saved`, drop the timer. */
   markSaved(): void
-  /** Drop a pending timer without saving (e.g. teardown without flush). */
+  /**
+   * Abandon the queued edit: drop the timer *and* the dirty flag, so a later
+   * `flush()` has nothing to save either (e.g. the draft was deleted, or a
+   * never-created `/new` draft is being torn down).
+   */
   cancel(): void
 }
 
@@ -131,6 +135,10 @@ export function createAutosaveController(options: AutosaveControllerOptions): Au
     },
     cancel() {
       clearTimer()
+      // Not just the timer: a still-dirty ledger would make the next `flush()`
+      // (route leave, unmount) persist the edit this call abandoned.
+      dirty = false
+      savedRevision = revision
     },
   }
 }

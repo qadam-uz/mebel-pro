@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useToast, type Toast } from '@/shared/composables/useToast'
 
-// Single global toast outlet (CB-14). Mounted once in AppShell; renders the
+// Single global toast outlet (CB-14). Mounted once per role shell; renders the
 // shared queue bottom-centre over everything via a body teleport.
 const { toasts, dismiss } = useToast()
 

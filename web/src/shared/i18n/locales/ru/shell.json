@@ -93,11 +93,8 @@
     "clientSubtitle": "Изменения заказов и сообщения от мастерской.",
     "readFilterLabel": "Статус",
     "clientFilterAll": "Все",
-    "clientFilterAllMeta": "все сообщения",
     "clientFilterUnread": "Непрочитанные",
-    "clientFilterUnreadMeta": "ещё не открыты",
     "clientFilterRead": "Прочитанные",
-    "clientFilterReadMeta": "просмотренные сообщения",
     "emptyUnreadBody": "Непрочитанных уведомлений нет — вы просмотрели все.",
     "emptyReadBody": "Прочитанных уведомлений нет.",
     "emptyClientBody": "Уведомлений пока нет — изменение статуса заказа появится здесь."

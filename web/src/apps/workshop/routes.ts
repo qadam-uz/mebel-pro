@@ -26,8 +26,8 @@ async function ensureWalkInClient(to: RouteLocationNormalized) {
 /**
  * Every workshop route states how it relates to the topbar branch picker — the
  * type makes it a compile error to add one without a `branchScope` (see
- * `@/shared/app/branchScope`). `AppShell` reads it to decide whether the picker
- * is live or rendered disabled with a hint.
+ * `@/shared/app/branchScope`). `WorkshopShell` reads it to decide whether the
+ * picker is live or rendered disabled with a hint.
  */
 type WorkshopRouteRecord = RouteRecordRaw & { meta: { branchScope: BranchScope } }
 

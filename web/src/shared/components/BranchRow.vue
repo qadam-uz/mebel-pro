@@ -39,8 +39,8 @@ defineEmits<{ select: [] }>()
           "
           >{{
             branch.status === 'temporarily_closed'
-              ? $t('workshopAdmin.branchRow.closed')
-              : $t('workshopAdmin.branchRow.active')
+              ? $t('cutting.branchRow.closed')
+              : $t('cutting.branchRow.active')
           }}</span
         ></span
       ><span class="mt-1 block text-xs text-ink-muted">{{ branch.address }}</span
@@ -53,15 +53,15 @@ defineEmits<{ select: [] }>()
         v-if="selected && quote"
         class="mt-2 grid gap-1 border-t border-hairline pt-2 text-xs text-ink-soft"
         >{{
-          $t('workshopAdmin.branchRow.cuttingService', {
+          $t('cutting.branchRow.cuttingService', {
             amount: formatTiyin(quote.subtotal_cutting_tiyin),
           })
         }}<br />{{
-          $t('workshopAdmin.branchRow.materials', {
+          $t('cutting.branchRow.materials', {
             amount: formatTiyin(quote.subtotal_materials_tiyin),
           })
         }}<br />{{
-          $t('workshopAdmin.branchRow.edgeBanding', {
+          $t('cutting.branchRow.edgeBanding', {
             amount: formatTiyin(quote.subtotal_edge_banding_tiyin),
           })
         }}</span
@@ -72,7 +72,7 @@ defineEmits<{ select: [] }>()
       :class="error ? 'text-ink-muted' : 'text-ink'"
       >{{ quote ? formatTiyin(quote.total_tiyin) : '—'
       }}<small v-if="quote" class="mt-1 block text-[10px] text-ink-muted">{{
-        $t('workshopAdmin.branchRow.unit', { n: quote.panels_used }, quote.panels_used)
+        $t('cutting.branchRow.unit', { n: quote.panels_used }, quote.panels_used)
       }}</small></span
     >
   </button>

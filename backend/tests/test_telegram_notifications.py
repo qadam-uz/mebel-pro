@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 import pytest
 from app.core.config import settings
+from app.core.order_number import format_order_number
 from app.models import Base
 from app.models.enums import AuthenticatedPrincipalType, UserStatus
 from app.modules.access.contracts import Client
@@ -115,10 +116,12 @@ async def _stored_client(
 
 
 def test_the_bot_message_is_the_inbox_sentence_plus_an_order_link() -> None:
-    text = render_order_message(event_code="order.ready", order_number="A-1042", order_id=ORDER_ID)
+    text = render_order_message(event_code="order.ready", order_number="482917", order_id=ORDER_ID)
 
+    # The number arrives grouped, exactly as the client reads it on screen.
+    number = format_order_number("482917")
     assert text == (
-        f"Buyurtma tayyor — Buyurtma № A-1042\nhttps://app.mebel-pro.uz/c/orders/{ORDER_ID}"
+        f"Buyurtma tayyor — Buyurtma {number}\nhttps://app.mebel-pro.uz/c/orders/{ORDER_ID}"
     )
     # An event with no client-facing sentence delivers nothing at all.
     assert (
@@ -268,5 +271,5 @@ async def test_an_order_status_change_queues_the_same_sentence_as_the_inbox_row(
     assert len(pending) == 1
     assert pending[0].telegram_user_id == 777001
     assert pending[0].text.startswith(
-        f"Buyurtma tayyorlanmoqda — Buyurtma № {row.payload['order_number']}"
+        f"Buyurtma tayyorlanmoqda — Buyurtma {format_order_number(row.payload['order_number'])}"
     )

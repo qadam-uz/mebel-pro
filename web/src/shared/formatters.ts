@@ -108,6 +108,34 @@ export function formatTiyinRow(values: number[]): Array<{
   }))
 }
 
+// U+2009 THIN SPACE. A regular space would let a line break fall inside the
+// number, and a non-breaking space is wider than the digit rhythm wants.
+const THIN_SPACE = ' '
+
+/**
+ * The client–workshop handle as it is printed and spoken — `№ 482 917`.
+ *
+ * New orders carry six random digits (`docs/ref/entities/sales.md`); the string
+ * is grouped in threes **from the right**, so widening the mint to seven digits
+ * later moves nothing here. Legacy numbers (`#26-14-0003`, `ORD-2026-000123`)
+ * are stored as they were minted and render unchanged — history is never
+ * reformatted, and a number that is not a bare 6–7 digit run is left alone.
+ *
+ * Every surface that prints `order_number` goes through this; there is no
+ * exception (spec §1.3). One separator rule, thin space everywhere — after the
+ * sign and between the groups — matching `format_order_number` in
+ * `backend/app/core/order_number.py` byte for byte, so a number read off the
+ * screen and one printed on the cutting PDF are the same string.
+ */
+export function formatOrderNumber(raw: string | null | undefined): string {
+  const value = (raw ?? '').trim()
+  if (!/^\d{6,7}$/.test(value)) return value
+  const head = value.length === 7 ? value.slice(0, 1) : ''
+  const rest = value.slice(value.length - 6)
+  const groups = [rest.slice(0, 3), rest.slice(3)]
+  return `№${THIN_SPACE}${[head, ...groups].filter(Boolean).join(THIN_SPACE)}`
+}
+
 // Date-only strings ("2026-07-05") parse as UTC midnight via `new Date`, which
 // shifts a calendar day for users west of Greenwich once local getters read it —
 // build a local date from the parts instead. Full ISO datetimes carry an offset

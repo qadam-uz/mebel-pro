@@ -8,7 +8,7 @@ import { translate } from '@/shared/i18n'
  * The picker writes `selectedBranchContext` (workshop store) and every view
  * decides for itself whether to read it. Nothing used to communicate that
  * choice, so on a workshop-wide page the picker sat there looking live and
- * silently did nothing. Each route now *declares* its scope and `AppShell`
+ * silently did nothing. Each route now *declares* its scope and `WorkshopShell`
  * renders the picker accordingly — a new route has to state where it stands.
  *
  * The scopes, and which pages fall into each, are documented in
