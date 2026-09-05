@@ -19,19 +19,9 @@ const props = defineProps<{
   recommendedBranchId?: string | null
   quotes?: Record<string, BranchQuote>
   quoteErrors?: Record<string, string>
-  /**
-   * The pinned workshop's name. Set → the picker is **scoped** (spec §4): one
-   * workshop's branches under its own header, and no affordance that could reach
-   * another workshop — no cross-workshop search, no grouping by workshop, no
-   * "see more". Unset → the cross-workshop picker the organic, un-pinned client
-   * still gets. Scoping the `options` themselves is the caller's job; this prop
-   * is what removes the *controls* that only make sense across workshops.
-   */
-  pinnedWorkshopName?: string | null
 }>()
 const emit = defineEmits<{ 'update:modelValue': [string] }>()
 const query = ref('')
-const scoped = computed(() => Boolean(props.pinnedWorkshopName))
 const quoteMode = computed(() => props.quotes !== undefined)
 const filtered = computed(() => {
   const value = query.value.trim().toLowerCase()
@@ -91,17 +81,7 @@ function select(row: ClientBranchOption) {
     {{ $t('cutting.branch.emptyOptions') }}
   </div>
   <div v-else class="grid gap-3" role="group" :aria-label="$t('cutting.branch.pick')">
-    <!-- Scoped: the workshop names itself once, and there is nothing to search
-         across — picking among its counters is a pickup choice, not a
-         comparison. The search field only exists in the cross-workshop form. -->
-    <h3
-      v-if="scoped"
-      class="font-display text-base font-semibold text-ink"
-      data-testid="branch-picker-scope"
-    >
-      {{ $t('cutting.branch.scopedHeader', { workshop: pinnedWorkshopName }) }}
-    </h3>
-    <div v-else class="relative">
+    <div class="relative">
       <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
         ><Icon name="search" class="size-[18px]" /></span
       ><input
@@ -129,11 +109,7 @@ function select(row: ClientBranchOption) {
       :key="rows[0].workshop_id"
       class="overflow-hidden rounded-lg border border-hairline bg-elevated"
     >
-      <!-- The per-group workshop header is what makes the cross-workshop list
-           readable; scoped, the heading above already named the one workshop and
-           repeating it here would be a second label for the same thing. -->
       <div
-        v-if="!scoped"
         class="flex items-center gap-2 border-b border-hairline bg-sunk px-3 py-2 text-sm font-bold text-ink"
       >
         <span

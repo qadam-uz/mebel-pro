@@ -24,8 +24,8 @@ import {
   materialIdentityLabel,
   snapshotMaterialLabel,
 } from '@/shared/app/materialLabel'
-import { pinnedWorkshopId, scopedBranchOptions } from '@/shared/app/clientEntry'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
+import { formatOrderNumber } from '@/shared/formatters'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
@@ -303,6 +303,9 @@ const activeBranchId = computed(() => {
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
+function hasBranchOption(branchId: string | null) {
+  return Boolean(branchId) && cutting.branchOptions.some((row) => row.branch_id === branchId)
+}
 /**
  * The naming rule (decision 16), system-wide: a workshop with ONE branch is
  * named by the workshop alone — the branch name never appears — and a workshop
@@ -318,27 +321,6 @@ const clientBranchLabel = computed(() => {
   ).length
   return siblings > 1 ? `${branch.workshop_name} · ${branch.branch_name}` : branch.workshop_name
 })
-// Editor scoping (spec §4). The pin scopes what the picker *offers*; it never
-// touches data, so the full option list stays loaded and an existing draft on a
-// foreign branch keeps naming its own branch (and its kerf/trim) through
-// `preferredBranch` above. Only `pickerOptions` is narrowed, and only for a
-// client the principal says is pinned — the workshop editor and the un-pinned
-// organic client both fall through to the list as it was.
-const pinnedWorkshop = computed(() =>
-  isWorkshopScope.value
-    ? null
-    : pinnedWorkshopId(
-        cutting.branchOptions,
-        auth.me?.preferred_branch_id,
-        auth.me?.pinned_workshop_name,
-      ),
-)
-const pinnedWorkshopName = computed(() =>
-  pinnedWorkshop.value ? (auth.me?.pinned_workshop_name ?? null) : null,
-)
-const pickerOptions = computed(() =>
-  scopedBranchOptions(cutting.branchOptions, pinnedWorkshop.value),
-)
 // What the in-page picker should start on. A draft already bound to a branch
 // keeps it — the topbar must never retarget an in-progress drawing. Only when
 // nothing is bound do we fall back to the app's branch, instead of demanding a
@@ -2063,15 +2045,32 @@ onMounted(async () => {
       await loadMaterials()
       return
     }
-    // A client-side new drawing always starts with no branch selection.
     await cutting.loadBranchOptions()
+    // Decision 17: the branch is settled BEFORE the editor opens, and for the
+    // client that settling is the pin — «+ Yangi chizma» on home, or a branch
+    // row's own «Yangi chizma», which re-pins first. The editor therefore reads
+    // the pin rather than asking: it has no branch state of its own and no
+    // picker. A pin that no longer resolves to a visible branch (blocked
+    // workshop, retired counter) is the same situation the route guard answers
+    // for a pin-less client — Ustaxonalarim, before any editor screen renders.
+    if (isClientEditor.value) {
+      const pinned = auth.me?.preferred_branch_id ?? null
+      // `branchOptions.length` guards the redirect against a failed load: an
+      // empty list means "we don't know", not "the pin is gone".
+      const lost = cutting.branchOptions.length > 0 && !hasBranchOption(pinned)
+      if (auth.me && (!pinned || lost)) {
+        await router.replace(rolePath('/c/branches'))
+        return
+      }
+      localBranchId.value = pinned
+      selectedBranchId.value = pinned
+      await loadMaterials()
+      return
+    }
+    // Workshop scope with no topbar branch yet (a cold load into the editor):
+    // the picker is the recovery until `contextBranchId` lands.
     selectedBranchId.value = null
-    // Decision 17: the branch is settled BEFORE the editor opens (the pin, or
-    // the branch whose «Yangi chizma» was tapped), so the client editor never
-    // opens a picker of its own. A pin-less URL is a route-guard redirect to
-    // Ustaxonalarim; the empty state below is the last-resort recovery when
-    // that guard has not run.
-    branchPickerOpen.value = !isClientEditor.value
+    branchPickerOpen.value = true
     await loadMaterials()
     return
   }
@@ -2344,7 +2343,9 @@ onBeforeRouteLeave(async () => {
             <b class="text-ink">
               {{
                 revisionOrder
-                  ? $t('cutting.editor.revisionOf', { order: revisionOrder.order_number })
+                  ? $t('cutting.editor.revisionOf', {
+                      order: formatOrderNumber(revisionOrder.order_number),
+                    })
                   : $t('cutting.editor.revisionGeneric')
               }}
             </b>
@@ -2650,7 +2651,9 @@ onBeforeRouteLeave(async () => {
                   </button>
                 </div>
 
-                <div v-if="!activeBranchId" class="client-card-b">
+                <!-- Workshop-only: a client without a resolvable branch never
+                     reaches the editor (guard + the mount redirect above). -->
+                <div v-if="!activeBranchId && !isClientEditor" class="client-card-b">
                   <div class="client-empty">
                     <div class="client-empty-icon"><Icon name="store" /></div>
                     <h3>{{ $t('cutting.editor.pickBranchTitle') }}</h3>
@@ -2865,8 +2868,13 @@ onBeforeRouteLeave(async () => {
                      the chip would join that button's accessible name and read
                      as a control. It is a statement about the material, and the
                      counts behind it belong to the post-optimizer dialog. -->
+                      <!-- Decision 9 / §7.7: no source chip on the client. Own
+                           material is hidden in the MVP, so every group is the
+                           workshop's and a chip repeating that on every head is
+                           noise — the result overview drops it for the same
+                           reason. -->
                       <span
-                        v-if="group.materialId && !inOrderWizard"
+                        v-if="group.materialId && !inOrderWizard && !isClientEditor"
                         class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
                         :class="
                           materialIsOwn(group.materialId)
@@ -3218,7 +3226,10 @@ onBeforeRouteLeave(async () => {
       @load="onImportLoad"
       @committed="onImportCommitted"
     />
+    <!-- Workshop-only recovery (decision 17): the client's branch is the pin,
+         settled before the editor opens, so it never raises a picker. -->
     <AppModal
+      v-if="!isClientEditor"
       :open="branchPickerOpen"
       :title="$t('cutting.branch.modalTitle')"
       max-width="max-w-2xl"
@@ -3226,8 +3237,7 @@ onBeforeRouteLeave(async () => {
     >
       <CuttingBranchPicker
         :model-value="selectedBranchId"
-        :options="pickerOptions"
-        :pinned-workshop-name="pinnedWorkshopName"
+        :options="cutting.branchOptions"
         @update:model-value="setPreferredBranch"
       />
     </AppModal>

@@ -379,7 +379,11 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else class="grid gap-3" :class="catalog.loading ? 'opacity-60' : ''">
-        <div v-for="section in sections" :key="section.type">
+        <!-- `min-w-0`: a grid item's `min-width: auto` is its min-content size,
+             and a decor row's min-content (thumbnail + longest word + the
+             nowrap price) is wider than a 375px phone — so without this the
+             column, and the page, scroll sideways. -->
+        <div v-for="section in sections" :key="section.type" class="min-w-0">
           <div class="mb-[7px] flex items-center gap-2">
             <span
               class="size-[5px] shrink-0 rounded-full md:size-1.5"

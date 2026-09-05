@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web-b",
+      "name": "web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["-y", "pnpm@10.29.3", "exec", "vite", "--port", "5203", "--strictPort"],
-      "port": 5203,
+      "runtimeArgs": ["-y", "pnpm@10.29.3", "exec", "vite", "--port", "5199", "--strictPort"],
+      "port": 5199,
       "cwd": "web"
     }
   ]

@@ -49,12 +49,35 @@ export function decorIdentityKey(material: ClientCatalogMaterialOption): string 
   return `${material.manufacturer_id}|${lower(material.code) || lower(material.name)}`
 }
 
-/** `Egger H1145 · Dub Bardolino` — the label with no format tail. */
+/**
+ * `LDSP Egger H1145 · Dub Bardolino` — the label with no format tail. The
+ * substrate stays in it: the material picker lists boards of every type in one
+ * list, and «LDSP» vs «MDF» is the first thing a client sorts them by.
+ */
 export function decorTitle(material: ClientCatalogMaterialOption): string {
   return snapshotMaterialLabel(
     {
       manufacturer_name: material.manufacturer_name,
       type: material.type,
+      code: material.code,
+      name: material.name,
+    },
+    material.name || material.id.slice(0, 8),
+  )
+}
+
+/**
+ * `Egger H1145 · Dub Bardolino` — the same label with the substrate dropped.
+ *
+ * Every row in a tape list is a tape, and every line that names one already
+ * says so («Kromka: …», «Rangi mos kromkani tanlang»), so carrying the type
+ * word into the title only produces «Kromka: Kromka Egger H3734».
+ */
+export function tapeDecorTitle(material: ClientCatalogMaterialOption): string {
+  return snapshotMaterialLabel(
+    {
+      manufacturer_name: material.manufacturer_name,
+      type: null,
       code: material.code,
       name: material.name,
     },
@@ -85,7 +108,7 @@ export function groupTapeDecors(edgeOptions: readonly ClientCatalogMaterialOptio
     if (!decor) {
       decor = {
         key,
-        label: decorTitle(material),
+        label: tapeDecorTitle(material),
         imageFileId: material.image_file_id,
         swatchName: material.name,
         variants: [],

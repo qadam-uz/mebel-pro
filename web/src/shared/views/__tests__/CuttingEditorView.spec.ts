@@ -39,6 +39,7 @@ const editorRoutes = [
   },
   { path: '/c/cutting/drafts', name: 'client-cutting-drafts', component: { template: '<div />' } },
   { path: '/c/orders/:id', name: 'client-order-detail', component: { template: '<div />' } },
+  { path: '/c/branches', name: 'client-branches', component: { template: '<div />' } },
 ]
 
 function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
@@ -596,7 +597,7 @@ describe('CuttingEditorView material picker', () => {
   })
 })
 
-describe('CuttingEditorView branch picker scoping (spec §4)', () => {
+describe("CuttingEditorView client branch (spec §2.2, decision 17)", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
@@ -652,69 +653,38 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     auth.status = 'authenticated'
   }
 
-  /** `AppModal: true` renders no slot, and the picker lives inside one. */
-  const modalStub = {
-    AppModal: {
-      props: ['open'],
-      template: `<section v-if="open"><slot /></section>`,
-    },
-    CuttingBranchPicker: true,
+  /** Seed the options the mocked `loadBranchOptions` would have fetched. */
+  function seedOptions() {
+    useCuttingStore().branchOptions = crossWorkshopOptions
   }
 
-  /**
-   * Decision 17 removed the editor's own branch affordance — no «O'zgartirish»
-   * on the line, and no picker raised on mount — because the branch is settled
-   * before the editor opens. What is left is the recovery path for a drawing
-   * that reached the editor with no branch at all (a pin-less URL that got past
-   * the route guard), and that is where the pin scoping still has to hold.
-   */
-  async function mountWithPicker(currentDraft: CuttingDraft | null = draft()) {
-    const mounted = await mountEditor('/c/cutting/draft-1', currentDraft, modalStub)
-    mounted.cutting.branchOptions = crossWorkshopOptions
+  it('opens a new drawing on the pinned branch, without asking', async () => {
+    signIn({ preferred_branch_id: 'branch-2', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
+
+    const { wrapper, cutting } = await mountEditor('/c/cutting/new', null)
     await flushPromises()
-    await mounted.wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Filial tanlash')
-      ?.trigger('click')
-    await flushPromises()
-    return mounted
-  }
 
-  /** The props the editor hands the picker — what "the list changes" means. */
-  async function pickerProps(currentDraft: CuttingDraft | null = draft()) {
-    const { wrapper } = await mountWithPicker(currentDraft)
-    return wrapper.findComponent(CuttingBranchPicker).props() as {
-      options: ClientBranchOption[]
-      pinnedWorkshopName: string | null
-    }
-  }
-
-  it('offers a pinned client only their workshop, under its own header', async () => {
-    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
-
-    const props = await pickerProps()
-
-    expect(props.pinnedWorkshopName).toBe('Mebel Master')
-    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
-    // No affordance carrying another workshop reaches the picker at all.
-    expect(props.options.some((row) => row.workshop_id === 'workshop-2')).toBe(false)
+    // The pin is the drawing's branch — the editor reads it and names it by the
+    // naming rule (decision 16: two visible branches, so workshop first).
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod')
+    // And the materials load for it rather than waiting on a pick.
+    expect(cutting.loadMaterials).toHaveBeenCalled()
+    // No picker, no «Filial tanlash» prompt anywhere on the client path.
+    expect(wrapper.findComponent(CuttingBranchPicker).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Filial tanlash')
   })
 
-  it('keeps the cross-workshop picker for an un-pinned client', async () => {
-    signIn()
-
-    const props = await pickerProps()
-
-    expect(props.pinnedWorkshopName).toBeNull()
-    expect(props.options).toHaveLength(3)
-  })
-
-  it('scopes by the pinned workshop even when the pinned branch went invisible', async () => {
+  it('sends a client whose pin no longer resolves to Ustaxonalarim', async () => {
+    // The route guard catches the pin-less client; this is the other hole —
+    // a pin whose branch is gone (blocked workshop, retired counter).
     signIn({ preferred_branch_id: 'retired-branch', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
 
-    const props = await pickerProps()
+    const { router } = await mountEditor('/c/cutting/new', null)
+    await flushPromises()
 
-    expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
+    expect(router.currentRoute.value.path).toBe('/c/branches')
   })
 
   it('never rebranches a draft that lives on a foreign branch, and never offers to', async () => {
@@ -724,12 +694,11 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-1',
       draft({ preferred_branch_id: 'branch-9' }),
-      modalStub,
     )
     cutting.branchOptions = crossWorkshopOptions
     await flushPromises()
 
-    // The draft keeps its own branch — the pin scopes new choices, never data.
+    // The draft keeps its own branch — the pin never touches data.
     expect(cutting.currentDraft?.preferred_branch_id).toBe('branch-9')
     // And the editor still names it, by the naming rule (decision 16): this
     // workshop has one visible branch, so the workshop name stands alone and
