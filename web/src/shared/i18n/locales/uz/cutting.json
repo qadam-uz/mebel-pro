@@ -22,7 +22,8 @@
     "piece": "dona",
     "remainder": "qoldiq",
     "sheet": "list",
-    "waste": "chiqindi"
+    "waste": "chiqindi",
+    "pieceShort": "ta"
   },
   "side": {
     "top": "Yuqori",

@@ -175,7 +175,10 @@
     "blockerName": "Введите ваше имя.",
     "blockerPhone": "Телефон должен быть в формате +998XXXXXXXXX.",
     "billCuttingDetail": "{panels} × {price}",
-    "billEdge": "Кромка: {material}"
+    "billEdge": "Кромка: {material}",
+    "contactHint": "Чтобы мастерская связалась с вами",
+    "phoneUzOnly": "Нужен номер Узбекистана: +998 XX XXX XX XX",
+    "billEdgeBasis": "материал + услуга"
   },
   "branches": {
     "openMap": "Открыть на карте"

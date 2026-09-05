@@ -175,7 +175,10 @@
     "blockerName": "Ismingizni kiriting.",
     "blockerPhone": "Telefon +998XXXXXXXXX shaklida bo'lishi kerak.",
     "billCuttingDetail": "{panels} × {price}",
-    "billEdge": "Kromka: {material}"
+    "billEdge": "Kromka: {material}",
+    "contactHint": "Ustaxona siz bilan bog'lanishi uchun",
+    "phoneUzOnly": "O'zbekiston raqami kerak: +998 XX XXX XX XX",
+    "billEdgeBasis": "material + xizmat"
   },
   "branches": {
     "openMap": "Xaritada ochish"

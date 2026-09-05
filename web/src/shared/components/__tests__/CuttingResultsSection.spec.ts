@@ -4,7 +4,12 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
-import type { CuttingDraft, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
+import {
+  useCuttingStore,
+  type CuttingDraft,
+  type CuttingPart,
+  type CuttingResult,
+} from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
 
 const PANEL_A = 'panel-a'
@@ -139,8 +144,16 @@ function quote(): OrderQuote {
 }
 
 function mountSection(
-  overrides: { draft?: Partial<CuttingDraft>; quote?: Partial<OrderQuote> } = {},
+  overrides: {
+    draft?: Partial<CuttingDraft>
+    quote?: Partial<OrderQuote>
+    // Own material is hidden on every client surface in the MVP (§7.7), so the
+    // own-material assertions describe the WORKSHOP's copy of this card. The
+    // store scope is what the component branches on.
+    scope?: 'client' | 'workshop'
+  } = {},
 ) {
+  useCuttingStore().configureScope(overrides.scope ?? 'client')
   return mount(CuttingResultsSection, {
     props: {
       draft: { ...draft(), ...overrides.draft } as CuttingDraft,
@@ -210,15 +223,18 @@ describe('CuttingResultsSection receipt card', () => {
     expect(text.indexOf('ABS H1334')).toBeLessThan(text.indexOf('ABS Oq'))
   })
 
-  it('carries the currency once, on the total', async () => {
+  it('carries the currency on the totals only, never on a factor', async () => {
     setActivePinia(createPinia())
     const wrapper = mountSection()
     await flushPromises()
 
     const text = wrapper.text().replace(/\u00a0/g, ' ')
     expect(text).toContain("2 615 500 so'm")
-    // Repeating it on every factor turned each line into three currency labels.
-    expect(text.match(/so'm/g) ?? []).toHaveLength(1)
+    // Twice, and only twice: the phone hero's price (\u00a77.7) and the receipt's
+    // \u00abJami\u00bb. Repeating it on every factor turned each line into three currency
+    // labels \u2014 that is what this counts, and `5 list \u00d7 300 000 = 1 500 000`
+    // above is the line it protects.
+    expect(text.match(/so'm/g) ?? []).toHaveLength(2)
   })
 
   it('leaves the sheet size to the material name instead of repeating it', async () => {
@@ -274,7 +290,7 @@ describe('CuttingResultsSection own material', () => {
 
   it('charges only the sheets the workshop supplies, and says which is which', async () => {
     setActivePinia(createPinia())
-    const wrapper = mountSection({ quote: OWNED_QUOTE as never })
+    const wrapper = mountSection({ quote: OWNED_QUOTE as never, scope: 'workshop' })
     await flushPromises()
 
     const text = wrapper.text().replace(/\u00a0/g, ' ')
@@ -286,7 +302,7 @@ describe('CuttingResultsSection own material', () => {
 
   it('gives an own tape no arithmetic line at all', async () => {
     setActivePinia(createPinia())
-    const wrapper = mountSection({ quote: OWNED_QUOTE as never })
+    const wrapper = mountSection({ quote: OWNED_QUOTE as never, scope: 'workshop' })
     await flushPromises()
 
     const text = wrapper.text()
@@ -297,7 +313,7 @@ describe('CuttingResultsSection own material', () => {
 
   it('states the saving under the total, since nothing else moves when you claim', async () => {
     setActivePinia(createPinia())
-    const wrapper = mountSection({ quote: OWNED_QUOTE as never })
+    const wrapper = mountSection({ quote: OWNED_QUOTE as never, scope: 'workshop' })
     await flushPromises()
 
     // 3 sheets × 300 000 = 900 000, plus the shop rate the free tape would have
@@ -318,7 +334,7 @@ describe('CuttingResultsSection own material', () => {
 
   it('opens the claim dialog from the card', async () => {
     setActivePinia(createPinia())
-    const wrapper = mountSection()
+    const wrapper = mountSection({ scope: 'workshop' })
     await flushPromises()
 
     const opener = wrapper.findAll('button').find((b) => b.text() === "O'zim olib kelaman")

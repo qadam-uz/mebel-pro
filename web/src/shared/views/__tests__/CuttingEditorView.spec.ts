@@ -86,12 +86,18 @@ async function mountEditor(
   // Per-test stub overrides. `AppModal: true` renders no slot, so a test that
   // needs to reach a component *inside* a modal replaces that one stub.
   stubOverrides: Record<string, unknown> = {},
+  // The store scope decides which editor this is (SPEC_CLIENT_UX_MVP §7): the
+  // client's phone sheets, group tape and decor-first pickers, or the
+  // workshop's registry, tape picker and file import. Default 'client', the
+  // store's own default.
+  scope: 'client' | 'workshop' = 'client',
 ) {
   const router = createRouter({ history: createMemoryHistory(), routes: editorRoutes })
   await router.push(path)
   await router.isReady()
 
   const cutting = useCuttingStore()
+  cutting.configureScope(scope)
   cutting.currentDraft = currentDraft
   vi.spyOn(cutting, 'loadBranchOptions').mockResolvedValue()
   vi.spyOn(cutting, 'loadMaterials').mockResolvedValue([])
@@ -229,9 +235,10 @@ describe('CuttingEditorView draft deletion', () => {
         results: [currentResult],
       }),
     )
+    // §7.0 fixes the client's CTA copy: the button says what the tap does.
     const viewResult = saved.wrapper
       .findAll('button')
-      .filter((button) => button.text() === 'Davom etish')
+      .filter((button) => button.text() === "Natijani ko'rish")
 
     expect(viewResult).toHaveLength(1)
     expect(viewResult[0]?.attributes('disabled')).toBeUndefined()
@@ -250,14 +257,29 @@ describe('CuttingEditorView draft deletion', () => {
     )
     const optimise = withoutResult.wrapper
       .findAll('button')
-      .filter((button) => button.text() === 'Davom etish')
+      .filter((button) => button.text() === 'Hisoblash')
 
     expect(optimise).toHaveLength(1)
     expect(optimise[0]?.attributes('disabled')).toBeDefined()
   })
 })
 
-describe('CuttingEditorView imported layout guard', () => {
+/**
+ * The MAP-import layout guard, in **workshop** scope.
+ *
+ * These used to mount the client editor, because the client had the import too.
+ * Decision 18 / §7.6 removed it from the client entirely — no mode switch, no
+ * wizard mount, no flag — so the guard's only remaining home is the workshop
+ * editor, and that is where it is now exercised. The subject is unchanged: an
+ * edit that moves a part must not silently discard an imported layout, and an
+ * edge-only edit must not warn at all.
+ *
+ * A revision draft is the shape that puts the workshop editor outside its order
+ * wizard (`inOrderWizard` is false for a revision), which is the standalone
+ * editor these assertions describe — the mode switch, the sticky CTA and the
+ * edge-picker modal rather than the docked panel.
+ */
+describe('CuttingEditorView imported layout guard (workshop)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.useFakeTimers()
@@ -267,10 +289,16 @@ describe('CuttingEditorView imported layout guard', () => {
     vi.useRealTimers()
   })
 
+  function workshopDraft(overrides: Partial<CuttingDraft> = {}) {
+    return draft({ revision_of_order_id: 'order-9', ...overrides })
+  }
+
   it('opens a committed MAP import on the standalone result stage', async () => {
     const { wrapper, router } = await mountEditor(
       '/c/cutting/draft-1',
-      draft({ preferred_branch_id: 'branch-1' }),
+      workshopDraft({ preferred_branch_id: 'branch-1' }),
+      {},
+      'workshop',
     )
 
     await wrapper
@@ -287,13 +315,15 @@ describe('CuttingEditorView imported layout guard', () => {
     const initialPart = part()
     const { wrapper, router } = await mountEditor(
       '/c/cutting/draft-map',
-      draft({
+      workshopDraft({
         id: 'draft-map',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [initialPart],
         chosen_result_id: 'imported-result-1',
         results: [importedResult([initialPart])],
       }),
+      {},
+      'workshop',
     )
 
     const viewResult = wrapper.findAll('button').filter((button) => button.text() === 'Davom etish')
@@ -308,13 +338,15 @@ describe('CuttingEditorView imported layout guard', () => {
   it('keeps one Continue CTA when the chosen MAP snapshot is stale', async () => {
     const { wrapper } = await mountEditor(
       '/c/cutting/draft-map-stale',
-      draft({
+      workshopDraft({
         id: 'draft-map-stale',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [part({ length_mm: 301 })],
         chosen_result_id: 'imported-result-1',
         results: [importedResult([part({ length_mm: 300 })])],
       }),
+      {},
+      'workshop',
     )
 
     expect(
@@ -324,14 +356,14 @@ describe('CuttingEditorView imported layout guard', () => {
 
   it('does not warn for an edge-only edit and keeps the returned layout', async () => {
     const initialPart = part()
-    const current = draft({
+    const current = workshopDraft({
       id: 'draft-edge',
       preferred_branch_id: 'branch-1',
       parts_snapshot: [initialPart],
       chosen_result_id: 'imported-result-1',
       results: [importedResult([initialPart])],
     })
-    const { wrapper, cutting } = await mountEditor('/c/cutting/draft-edge', current)
+    const { wrapper, cutting } = await mountEditor('/c/cutting/draft-edge', current, {}, 'workshop')
     const update = vi.spyOn(cutting, 'updateDraft').mockImplementation(async (_id, payload) => {
       const updated = draft({
         ...current,
@@ -356,12 +388,14 @@ describe('CuttingEditorView imported layout guard', () => {
     const initialPart = part()
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-dimension',
-      draft({
+      workshopDraft({
         id: 'draft-dimension',
         preferred_branch_id: 'branch-1',
         parts_snapshot: [initialPart],
         results: [importedResult([initialPart])],
       }),
+      {},
+      'workshop',
     )
     const update = vi.spyOn(cutting, 'updateDraft').mockResolvedValue(draft())
 
@@ -504,46 +538,49 @@ describe('CuttingEditorView material picker', () => {
     } as ClientCatalogMaterialOption
   }
 
-  it('groups formats under one dekor heading and picks a format in one click', async () => {
+  it('opens the decor-first client picker and adds a part on the format picked', async () => {
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-1',
       draft({ preferred_branch_id: 'branch-1' }),
+      {
+        // The picker lives in a teleported sheet; a transparent stub keeps it
+        // reachable through the wrapper and lets us read what it is handed.
+        CuttingMaterialPicker: {
+          props: ['open', 'materials', 'currentId', 'caption'],
+          emits: ['pick'],
+          template: `<section v-if="open" data-test="material-picker">
+            <span data-test="caption">{{ caption }}</span>
+            <button
+              v-for="material in materials"
+              :key="material.id"
+              :data-test="'pick-' + material.id"
+              @click="$emit('pick', material.id)"
+            />
+          </section>`,
+        },
+      },
     )
     cutting.panelOptions = [
       option({ id: 'm-18' }),
       option({ id: 'm-16', thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
-      option({
-        id: 'm-other',
-        code: 'W980',
-        name: 'Oq',
-        thickness_mm: '18',
-        price_tiyin: 0,
-        price_unset: true,
-      }),
     ]
     await flushPromises()
 
+    // §7.0: the client's add-material control is «+ Material» on both breakpoints.
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes('Material tanlash'))!
+      .find((button) => button.text().includes('+ Material'))!
       .trigger('click')
 
-    const groups = wrapper.findAll('[role="dialog"] section')
-    expect(groups).toHaveLength(2)
-    // Identity once per decor — the label without its format tail — then the
-    // formats as the rows underneath.
-    expect(groups[0].text()).toContain('LDSP Egger H1334 · Dub Sonoma')
-    expect(groups[0].findAll('button').map((button) => button.text())).toEqual([
-      '2800×2070×18 mm',
-      '2750×1830×16 mm',
-    ])
-    // A workshop-facing row with no price is flagged rather than silently quoted at 0.
-    expect(groups[1].text()).toContain("Narx yo'q")
+    expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(true)
+    // The whole branch list reaches the picker; the decor grouping and the
+    // per-format prices are the picker's own job (see its component spec).
+    expect(wrapper.findAll('[data-test^="pick-"]')).toHaveLength(2)
 
-    // One click on a format row picks it and closes — no second step.
-    await groups[0].findAll('button')[1].trigger('click')
+    // One click on a format picks it, closes the sheet and starts a row on it.
+    await wrapper.get('[data-test="pick-m-16"]').trigger('click')
 
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
   })
 })
@@ -613,9 +650,21 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     CuttingBranchPicker: true,
   }
 
+  /**
+   * Decision 17 removed the editor's own branch affordance — no «O'zgartirish»
+   * on the line, and no picker raised on mount — because the branch is settled
+   * before the editor opens. What is left is the recovery path for a drawing
+   * that reached the editor with no branch at all (a pin-less URL that got past
+   * the route guard), and that is where the pin scoping still has to hold.
+   */
   async function mountWithPicker(currentDraft: CuttingDraft | null = draft()) {
     const mounted = await mountEditor('/c/cutting/draft-1', currentDraft, modalStub)
     mounted.cutting.branchOptions = crossWorkshopOptions
+    await flushPromises()
+    await mounted.wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Filial tanlash')
+      ?.trigger('click')
     await flushPromises()
     return mounted
   }
@@ -657,35 +706,29 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     expect(props.options.map((row) => row.branch_id)).toEqual(['branch-1', 'branch-2'])
   })
 
-  it('never rebranches a draft that lives on a foreign branch', async () => {
+  it('never rebranches a draft that lives on a foreign branch, and never offers to', async () => {
     signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
 
-    const { wrapper, cutting } = await mountWithPicker(
-      // The draft was drawn at another workshop's branch before the pin moved.
+    // The draft was drawn at another workshop's branch before the pin moved.
+    const { wrapper, cutting } = await mountEditor(
+      '/c/cutting/draft-1',
       draft({ preferred_branch_id: 'branch-9' }),
+      modalStub,
     )
+    cutting.branchOptions = crossWorkshopOptions
+    await flushPromises()
 
     // The draft keeps its own branch — the pin scopes new choices, never data.
     expect(cutting.currentDraft?.preferred_branch_id).toBe('branch-9')
-    // And the editor still names it, because the full option list stays loaded:
-    // scoping narrows the picker, not the data the draft is bound to.
-    expect(wrapper.text()).toContain('Sergeli')
+    // And the editor still names it, by the naming rule (decision 16): this
+    // workshop has one visible branch, so the workshop name stands alone and
+    // «Sergeli» never appears — a branch name is never shown on its own.
     expect(wrapper.text()).toContain('Yog’och Pro')
+    expect(wrapper.text()).not.toContain('Sergeli')
 
-    // The draft's own branch-switch control, though, follows the pin at the
-    // moment it renders — it offers the pinned workshop, not the draft's.
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === "O'zgartirish")!
-      .trigger('click')
-    await flushPromises()
-
-    expect(
-      (
-        wrapper.findComponent(CuttingBranchPicker).props() as {
-          options: ClientBranchOption[]
-        }
-      ).options.map((row) => row.branch_id),
-    ).toEqual(['branch-1', 'branch-2'])
+    // Decision 17: the branch is fixed at creation, so the editor carries no
+    // way to change it — no «O'zgartirish», and no picker raised on mount.
+    expect(wrapper.findAll('button').some((button) => button.text() === "O'zgartirish")).toBe(false)
+    expect(wrapper.findComponent(CuttingBranchPicker).exists()).toBe(false)
   })
 })

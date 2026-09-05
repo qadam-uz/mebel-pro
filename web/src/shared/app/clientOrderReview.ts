@@ -89,7 +89,10 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
       // shows a "Kromka" figure (total banded length), a different meaning of
       // the same word. Money and metres must never share an unqualified label.
       label: translate('client.orderNew.billEdge', { material: line.material_name }),
-      detail: metres(line.consumed_mm),
+      // `line_total_tiyin` is the tape AND the banding labour, so the detail
+      // says so — §7.4's «… · 5,15 m · material + xizmat». Without it the
+      // metres read as the whole basis of a figure they only half explain.
+      detail: `${metres(line.consumed_mm)} · ${translate('client.orderNew.billEdgeBasis')}`,
       amount_tiyin: line.line_total_tiyin,
     })
   }
