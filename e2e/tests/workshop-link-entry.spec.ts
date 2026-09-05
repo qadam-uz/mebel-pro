@@ -9,6 +9,7 @@ import {
   clientTokenViaApi,
   continueButton,
   devConfirmLogin,
+  escapeRegExp,
   expectOk,
   openTelegramLoginTab,
   orderNumberText,
@@ -111,21 +112,35 @@ test("a scanned branch link pins the client, scopes the editor and carries the o
   expect(token, `no ?start= token in the deep link ${href}`).toBeTruthy();
   await devConfirmLogin(page.request, token as string, clientPhone, clientName);
 
-  // 3. Home, with the connected toast and the pinned context in the header.
+  // 3. Home, with the connected toast and the Ustaxonangiz card. The greeting's
+  //    old `{workshop} · {branch}` line is gone (§3): the card is the trust cue
+  //    now, and its body links to the workshop's own profile.
   await expect(page).toHaveURL(/\/client\/c$/);
   await expect(
     page.getByText(`Siz ${settings.name} ustaxonasiga ulandingiz`),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: `${settings.name} · ${branch.name}` }),
-  ).toBeVisible();
+  await expect(page.getByText("Ustaxonangiz").first()).toBeVisible();
+  const workshopCard = page
+    .getByRole("link", { name: new RegExp(escapeRegExp(settings.name)) })
+    .first();
+  await expect(workshopCard).toBeVisible();
+  await expect(workshopCard).toHaveAttribute("href", /\/c\/workshops\//);
 
-  // 4. The editor's branch picker is scoped to the pinned workshop, with no
-  //    affordance that reaches another one.
+  // 4. The editor opens at the pinned branch and never asks which one: the
+  //    branch is settled before it renders (§2.2, decision 17), so its line is
+  //    read-only, there is no «O'zgartirish», and the picker — the one control
+  //    that could ever reach another workshop — is not mounted at all.
   await page.goto("/client/c/cutting/new");
-  await expect(page.getByText(`${settings.name} filiallari`)).toBeVisible();
-  // The cross-workshop search is the one control that could reach another
-  // workshop, so a scoped picker does not render it at all (spec §4).
+  await expect(
+    page.getByRole("heading", { name: "Chizma", exact: true }),
+  ).toBeVisible();
+  // A one-branch workshop is named by the workshop alone (decision 16), so the
+  // branch name never appears on that line.
+  await expect(page.getByText(settings.name).first()).toBeVisible();
+  await expect(page.getByText(`${settings.name} filiallari`)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "O'zgartirish" }),
+  ).toHaveCount(0);
   await expect(
     page.getByPlaceholder("Ustaxona, filial yoki manzil — masalan: Chilonzor"),
   ).toHaveCount(0);
