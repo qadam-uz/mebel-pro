@@ -302,6 +302,9 @@ export const useOrdersStore = defineStore('orders', () => {
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
+  // True for the single-order read only (see loadOrder) — `loading` is shared
+  // with every list on this store and is not a safe skeleton gate for a detail.
+  const detailLoading = ref(false)
   const actionLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -722,18 +725,48 @@ export const useOrdersStore = defineStore('orders', () => {
     await openPdf(`/workshop/orders/${orderId}/cutting/pdf`, orderId)
   }
 
+  // The detail read owns its own controller and its own flag. `loading` is
+  // still written for the surfaces that have always read it, but it is shared
+  // with the list — so a list page landing mid-navigation used to switch the
+  // detail's skeleton off under it, flashing "order not found" for a frame.
+  // `detailLoading` is true for exactly this request (CT-2).
+  let orderRequest: AbortController | null = null
+
   async function loadOrder(path: string, fallback: string) {
+    orderRequest?.abort()
+    const controller = new AbortController()
+    orderRequest = controller
     loading.value = true
+    detailLoading.value = true
     error.value = null
     traceId.value = null
-    currentOrder.value = null
+    // Re-reading the order already on screen revalidates it in place — coming
+    // back to a detail page repaints it at once instead of blanking. A
+    // different id clears first, so nothing renders under the wrong order.
+    if (currentOrder.value?.id !== orderIdFromPath(path)) currentOrder.value = null
     try {
-      currentOrder.value = await api.get<OrderDetail>(path, authInit())
+      currentOrder.value = await api.get<OrderDetail>(path, {
+        ...authInit(),
+        signal: controller.signal,
+      })
     } catch (errorValue) {
+      if (isAbortError(errorValue)) return
       captureError(errorValue, fallback)
+      // A failed read leaves nothing trustworthy: the page's error state is the
+      // whole screen, and a stale order under it would offer stale actions.
+      currentOrder.value = null
     } finally {
-      loading.value = false
+      if (orderRequest === controller) {
+        orderRequest = null
+        loading.value = false
+        detailLoading.value = false
+      }
     }
+  }
+
+  /** `/client/orders/<id>` → `<id>`; anything else → null (never matches). */
+  function orderIdFromPath(path: string) {
+    return path.match(/\/orders\/([^/?]+)$/)?.[1] ?? null
   }
 
   async function mutate(path: string, payload: unknown, method: 'post' | 'patch' = 'post') {
@@ -832,6 +865,12 @@ export const useOrdersStore = defineStore('orders', () => {
   }
 
   function reset() {
+    // Cancel first: reset is a sign-out, and a late answer must not repopulate
+    // the store the next session inherits.
+    clientOrdersRequest?.abort()
+    clientOrdersRequest = null
+    orderRequest?.abort()
+    orderRequest = null
     clientOrders.value = []
     ordersHasMore.value = false
     workshopOrders.value = []
@@ -842,6 +881,7 @@ export const useOrdersStore = defineStore('orders', () => {
     currentOrder.value = null
     workerOptions.value = []
     loading.value = false
+    detailLoading.value = false
     actionLoading.value = false
     error.value = null
     traceId.value = null
@@ -861,6 +901,7 @@ export const useOrdersStore = defineStore('orders', () => {
     currentOrder,
     workerOptions,
     loading,
+    detailLoading,
     actionLoading,
     error,
     traceId,
