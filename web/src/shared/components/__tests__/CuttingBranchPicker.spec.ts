@@ -47,6 +47,21 @@ describe('CuttingBranchPicker', () => {
     expect(view.text()).toContain('Yog’och Pro')
   })
 
+  it('names each branch status from the catalog', () => {
+    const view = mount(CuttingBranchPicker, {
+      props: {
+        options: [option(), option({ branch_id: 'b9', status: 'temporarily_closed' })],
+        modelValue: null,
+      },
+    })
+
+    // The row's copy lives under `cutting.branchRow.*` — it followed the
+    // component into the namespace the client already ships, so a raw key
+    // here is the split having taken the copy with it.
+    expect(view.text()).toContain('faol')
+    expect(view.text()).toContain('vaqtincha yopiq')
+  })
+
   it('filters across workshops', async () => {
     const view = mount(CuttingBranchPicker, {
       props: { options: crossWorkshop, modelValue: null },
