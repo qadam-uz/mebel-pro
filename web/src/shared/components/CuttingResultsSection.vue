@@ -369,7 +369,8 @@ async function choose(result: CuttingResult) {
                   <p class="text-sm font-extrabold text-ink">
                     <span class="text-ink-muted">{{ index + 1 }}.</span> {{ line.material_name }}
                     <span class="whitespace-nowrap"
-                      >— {{ line.panels_used }} {{ $t('cutting.unit.sheet') }}</span
+                      >— {{ line.panels_used }}
+                      {{ $t('cutting.unit.sheet', line.panels_used) }}</span
                     >
                   </p>
                   <span
@@ -384,7 +385,8 @@ async function choose(result: CuttingResult) {
                     }}
                   </span>
                   <span class="pt-0.5 text-right text-xs text-ink">
-                    {{ chargedSheets(line) }} {{ $t('cutting.unit.sheet') }} ×
+                    {{ chargedSheets(line) }} {{ $t('cutting.unit.sheet', chargedSheets(line)) }}
+                    ×
                     {{ formatSom(line.unit_price_tiyin) }} =
                     <b class="font-extrabold">{{ formatSom(line.line_total_tiyin) }}</b>
                   </span>
@@ -430,7 +432,7 @@ async function choose(result: CuttingResult) {
                       {{ $t('cutting.result.serviceCutting') }}
                     </span>
                     <span class="text-right text-xs text-ink">
-                      {{ quote.panels_used }} {{ $t('cutting.unit.sheet') }} ×
+                      {{ quote.panels_used }} {{ $t('cutting.unit.sheet', quote.panels_used) }} ×
                       {{ formatSom(quote.cutting_rate_tiyin) }} =
                       <b class="font-extrabold">{{ formatSom(quote.subtotal_cutting_tiyin) }}</b>
                     </span>

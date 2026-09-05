@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueEntryToast, takeEntryToast } from '@/shared/app/clientEntry'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
 import { useToast } from '@/shared/composables/useToast'
+import { DEFAULT_LOCALE, setLocale } from '@/shared/i18n'
 import ClientHomeView from '@/apps/client/views/ClientHomeView.vue'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 import type { OrderSummary } from '@/shared/stores/orders'
@@ -256,5 +257,74 @@ describe('ClientHomeView — the connected toast', () => {
     await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
 
     expect(useToast().toasts.value).toHaveLength(1)
+  })
+})
+
+/**
+ * A drawing's meta line is `N деталь · N лист · когда`, and Russian agrees both
+ * nouns with the number in front of them. The line used to call
+ * `t('client.unit.part')` with no count, so vue-i18n never reached the plural
+ * rule and a drawing of two parts read «2 деталь». One drawing per Russian
+ * class: 1 → one, 2 → few, 5 → many.
+ */
+describe('ClientHomeView — the drawing meta line agrees with its numbers', () => {
+  /** Three drawings sized 1, 2 and 5 — one per Russian plural class — each with
+   *  as many sheets as parts, so one line exercises both units. */
+  function withPluralDrafts() {
+    const drafts = [1, 2, 5].map((size, index) => ({
+      id: `draft-${size}`,
+      name: `Chizma ${size}`,
+      parts_snapshot: [{ quantity: size }],
+      results: [{ id: `result-${size}`, panels_used_by_material: { 'panel-a': size } }],
+      chosen_result_id: `result-${size}`,
+      updated_at: `2026-09-0${index + 1}T10:00:00Z`,
+    }))
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/cutting-drafts') ? drafts : [],
+    )
+  }
+
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  it('inflects both деталь and лист in Russian', async () => {
+    withPluralDrafts()
+    await setLocale('ru')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text()
+    expect(text).toContain('1 деталь · 1 лист')
+    expect(text).toContain('2 детали · 2 листа')
+    expect(text).toContain('5 деталей · 5 листов')
+    // The first form is what an un-counted call renders for every number.
+    expect(text).not.toContain('2 деталь')
+    expect(text).not.toContain('5 деталь')
+  })
+
+  it('leaves Uzbek on its single form at every count', async () => {
+    withPluralDrafts()
+    await setLocale('uz')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text()
+    expect(text).toContain('1 detal · 1 list')
+    expect(text).toContain('2 detal · 2 list')
+    expect(text).toContain('5 detal · 5 list')
+  })
+
+  // uz-Cyrl is transliterated from uz, so it carries the same one form.
+  it('gives uz-Cyrl the same single transliterated form', async () => {
+    withPluralDrafts()
+    await setLocale('uz-Cyrl')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text()
+    expect(text).toContain('1 детал · 1 лист')
+    expect(text).toContain('2 детал · 2 лист')
+    expect(text).toContain('5 детал · 5 лист')
   })
 })

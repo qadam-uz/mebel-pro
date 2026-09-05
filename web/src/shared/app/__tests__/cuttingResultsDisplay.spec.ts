@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  clientResultFigures,
   deriveSnapshotEdgeRegistry,
   groupPanelPlacements,
   offcutLabelMode,
@@ -13,6 +14,7 @@ import {
   snapshotShortLabel,
   squareMetres,
 } from '@/shared/app/cuttingResultsDisplay'
+import { DEFAULT_LOCALE, setLocale } from '@/shared/i18n'
 import type {
   CuttingPanel,
   CuttingPart,
@@ -565,5 +567,50 @@ describe('sheetEdgeLine', () => {
     const parts = [part()]
 
     expect(sheetEdgeLine(result({ parts_snapshot: parts }), sheet(), [])).toBeNull()
+  })
+})
+
+/**
+ * Russian agrees the unit noun with the number in front of it, and the catalog
+ * carries the three forms — but only a call that hands vue-i18n the *count*
+ * reaches them. This figure used to read `translate('cutting.unit.sheet')` with
+ * no count at all, so a Russian client saw «2 лист» on the result stage, the
+ * phone summary card and the order confirmation alike. The counts below are the
+ * three Russian classes: 1 → one, 2 → few, 5 → many.
+ */
+describe('clientResultFigures — the sheets figure agrees with its number', () => {
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  function sheetsFigure(sheets: number): string {
+    const figures = clientResultFigures(result({ panels_used_by_material: { 'panel-a': sheets } }))
+    return figures.find((figure) => figure.key === 'sheets')!.value
+  }
+
+  it.each([
+    [1, '1 лист'],
+    [2, '2 листа'],
+    [5, '5 листов'],
+  ])('renders %i sheets as «%s» in Russian', async (sheets, expected) => {
+    await setLocale('ru')
+
+    expect(sheetsFigure(sheets)).toBe(expected)
+  })
+
+  // Uzbek has one form, so the same call must leave it exactly as it was —
+  // passing a count is not allowed to start inflecting a language that doesn't.
+  it.each([1, 2, 5])('leaves the single Uzbek form alone at %i sheets', async (sheets) => {
+    await setLocale('uz')
+
+    expect(sheetsFigure(sheets)).toBe(`${sheets} list`)
+  })
+
+  // uz-Cyrl is transliterated from uz, so it inherits that single form; the
+  // count must not split it into anything else.
+  it.each([1, 2, 5])('transliterates the same single form at %i sheets', async (sheets) => {
+    await setLocale('uz-Cyrl')
+
+    expect(sheetsFigure(sheets)).toBe(`${sheets} лист`)
   })
 })

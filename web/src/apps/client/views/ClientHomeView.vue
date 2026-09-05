@@ -160,8 +160,8 @@ function draftMeta(draft: CuttingDraft) {
   const parts = draftParts(draft)
   const panels = draftPanels(draft)
   return [
-    `${parts} ${t('client.unit.part')}`,
-    `${panels || '—'} ${t('client.unit.sheet')}`,
+    `${parts} ${t('client.unit.part', parts)}`,
+    `${panels || '—'} ${t('client.unit.sheet', panels)}`,
     formatRelativeDate(draft.updated_at),
   ].join(' · ')
 }

@@ -283,9 +283,10 @@ onMounted(() => {
           </p>
           <p class="mt-0.5 text-[12.5px] leading-[1.4] text-ink-soft md:text-sm">
             <b class="font-semibold text-ink">{{ order.item_count }}</b>
-            {{ $t('client.unit.part') }} ·
+            {{ $t('client.unit.part', order.item_count) }} ·
             <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
-            {{ $t('client.unit.sheet') }} · {{ formatDate(order.created_at) }}
+            {{ $t('client.unit.sheet', order.planned_panels) }} ·
+            {{ formatDate(order.created_at) }}
           </p>
         </div>
 
