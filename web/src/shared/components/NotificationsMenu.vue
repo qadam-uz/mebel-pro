@@ -62,13 +62,15 @@ function destination(item: NotificationItem) {
 }
 
 // Reuse the loaded list for ~30s instead of refetching on every bell open (CB-52);
-// the unread badge is kept live by the ~45s poll regardless.
+// the unread badge is kept live by the ~45s poll regardless. The rows come from
+// the store's `recent` slice, never `items` — the notifications page owns that
+// one, and the bell's shorter page must not overwrite the feed behind it (CB-131).
 let listLoadedAt = 0
 async function toggle() {
   open.value = !open.value
   if (open.value) {
-    if (notifications.items.length === 0 || Date.now() - listLoadedAt > 30000) {
-      await notifications.loadList()
+    if (notifications.recent.length === 0 || Date.now() - listLoadedAt > 30000) {
+      await notifications.loadRecent()
       listLoadedAt = Date.now()
     }
     await nextTick()
@@ -142,7 +144,7 @@ async function markAllRead() {
     toast.danger(t('shell.notifications.markAllFailed'))
     return
   }
-  await notifications.loadList()
+  await notifications.loadRecent()
   listLoadedAt = Date.now()
   toast.success(t('shell.notifications.markAllDone'))
 }
@@ -272,18 +274,21 @@ onBeforeUnmount(() => {
           {{ $t('shell.notifications.markAll') }}
         </button>
       </div>
-      <div v-if="notifications.loading" class="px-4 py-5 text-sm text-ink-soft">
+      <div v-if="notifications.recentLoading" class="px-4 py-5 text-sm text-ink-soft">
         {{ $t('shell.notifications.loading') }}
       </div>
-      <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-semibold text-danger">
+      <div
+        v-else-if="notifications.recentError"
+        class="px-4 py-5 text-sm font-semibold text-danger"
+      >
         {{ $t('shell.notifications.loadFailedMenu') }}
       </div>
-      <div v-else-if="notifications.items.length === 0" class="px-4 py-5 text-sm text-ink-soft">
+      <div v-else-if="notifications.recent.length === 0" class="px-4 py-5 text-sm text-ink-soft">
         {{ $t('shell.notifications.emptyMenu') }}
       </div>
       <template v-else>
         <button
-          v-for="item in notifications.items"
+          v-for="item in notifications.recent"
           :key="item.id"
           type="button"
           class="block w-full border-b border-hairline px-4 py-3 text-left transition last:border-b-0 hover:bg-sunk"

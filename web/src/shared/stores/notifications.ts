@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api, apiTraceId, isAbortError } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { NOTIFICATIONS_MENU_LIMIT } from '@/shared/app/constants'
 import { useAuthStore } from '@/shared/stores/auth'
 
 // The known, presenter-relevant keys of a notification payload (CB-101). The
@@ -38,6 +39,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const traceId = ref<string | null>(null)
   const actionError = ref<string | null>(null)
   const hasMore = ref(false)
+  // The bell's own slice (CB-131). It used to render `items`, so opening the
+  // bell over the notifications page replaced that page's 50-row feed with the
+  // bell's 10 — two consumers, two page sizes, one array. The unread badge and
+  // the read actions stay shared; only the rows are split.
+  const recent = ref<NotificationItem[]>([])
+  const recentLoading = ref(false)
+  const recentError = ref<string | null>(null)
   const auth = useAuthStore()
 
   async function loadUnreadCount() {
@@ -95,10 +103,41 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  // The bell's read: its own rows, its own flags, its own AbortController, and
+  // it never touches `items` / `hasMore` / `cursor` — so opening the dropdown
+  // over the notifications page leaves that page's feed exactly as it was.
+  let recentRequest: AbortController | null = null
+
+  async function loadRecent(limit = NOTIFICATIONS_MENU_LIMIT) {
+    if (!auth.accessToken) return
+    recentRequest?.abort()
+    const controller = new AbortController()
+    recentRequest = controller
+    recentLoading.value = true
+    recentError.value = null
+    try {
+      recent.value = await api.get<NotificationItem[]>(
+        `/notifications?limit=${limit}&offset=0&unread_only=false`,
+        { ...authInit(), signal: controller.signal },
+      )
+    } catch (caught) {
+      if (isAbortError(caught)) return
+      recentError.value = 'notifications_load_failed'
+    } finally {
+      if (recentRequest === controller) {
+        recentRequest = null
+        recentLoading.value = false
+      }
+    }
+  }
+
   async function markRead(id: string) {
     // Decrement the badge only for a genuinely-unread item, so a double-tap or a
-    // re-read never drives the count below the true value.
-    const wasUnread = items.value.find((item) => item.id === id)?.read_at === null
+    // re-read never drives the count below the true value. The row may be held by
+    // either slice (bell, page, or both) — whichever has it answers.
+    const known =
+      items.value.find((item) => item.id === id) ?? recent.value.find((item) => item.id === id)
+    const wasUnread = known?.read_at === null
     actionError.value = null
     try {
       const updated = await api.post<NotificationItem>(
@@ -106,7 +145,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
         undefined,
         authInit(),
       )
+      // Both slices carry the same row, so both take the update: marking read
+      // from the bell must not leave the open page showing an unread dot.
       items.value = items.value.map((item) => (item.id === id ? updated : item))
+      recent.value = recent.value.map((item) => (item.id === id ? updated : item))
       if (wasUnread) unread.value = Math.max(0, unread.value - 1)
     } catch (caught) {
       actionError.value = 'notifications_read_failed'
@@ -119,10 +161,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
     try {
       await api.post('/notifications/read-all', undefined, authInit())
       unread.value = 0
-      items.value = items.value.map((item) => ({
-        ...item,
-        read_at: item.read_at ?? new Date().toISOString(),
-      }))
+      const readAt = new Date().toISOString()
+      const markAll = (list: NotificationItem[]) =>
+        list.map((item) => ({ ...item, read_at: item.read_at ?? readAt }))
+      items.value = markAll(items.value)
+      recent.value = markAll(recent.value)
     } catch (caught) {
       actionError.value = 'notifications_read_all_failed'
       traceId.value = apiTraceId(caught)
@@ -134,6 +177,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     // the feed the next session inherits.
     listRequest?.abort()
     listRequest = null
+    recentRequest?.abort()
+    recentRequest = null
     unread.value = 0
     items.value = []
     loading.value = false
@@ -141,6 +186,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     traceId.value = null
     actionError.value = null
     hasMore.value = false
+    recent.value = []
+    recentLoading.value = false
+    recentError.value = null
   }
 
   return {
@@ -151,8 +199,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     traceId,
     actionError,
     hasMore,
+    recent,
+    recentLoading,
+    recentError,
     loadUnreadCount,
     loadList,
+    loadRecent,
     markRead,
     markAllRead,
     reset,
