@@ -414,12 +414,12 @@ const primaryCtaLabel = computed(() => {
       ? t('cutting.editor.ctaViewResult')
       : t('cutting.editor.ctaCalculate')
   }
-  // «Optimallashtirish» is the wizard's word for this step, and it is only true
-  // when the click will actually run one: with a chosen result already matching
-  // these parts the button just opens that result, and on a read-only drawing it
-  // does nothing at all. Both of those keep the neutral «Davom etish», as does
-  // the client SPA, whose editor is a screen of its own rather than step 2 of
-  // anything.
+  // Below here is the workshop only — the client branch above has already
+  // returned. «Optimallashtirish» is the order wizard's word for this step, and
+  // it is only true when the click will actually run one: with a chosen result
+  // already matching these parts the button just opens that result, and outside
+  // the wizard (a standalone drawing, a revision) the step is not numbered at
+  // all. Both of those keep the neutral «Davom etish».
   if (!inOrderWizard.value || hasCurrentChosenResult.value) return t('cutting.editor.ctaContinue')
   return t('cutting.editor.ctaOptimize')
 })
