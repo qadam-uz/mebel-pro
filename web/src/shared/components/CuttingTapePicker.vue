@@ -97,7 +97,8 @@ function variantLines(decor: TapeDecor): string[] {
       >
         <CuttingDecorThumb :file-id="panelImageFileId" :label="panelLabel" size-class="size-6" />
         <span class="min-w-0">
-          <span class="block text-[12.5px] font-bold uppercase tracking-[0.01em] text-ink-muted">{{
+          <!-- Sentence case, not uppercase: DESIGN.md's label rule. -->
+          <span class="block text-[12.5px] font-semibold text-ink-muted">{{
             $t('cutting.edge.boardColour')
           }}</span>
           <span class="block truncate text-[13px] font-bold text-ink">{{ panelLabel }}</span>

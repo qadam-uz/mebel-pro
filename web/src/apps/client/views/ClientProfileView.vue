@@ -143,7 +143,10 @@ onMounted(reloadProfile)
 
       <section class="client-card">
         <div class="client-card-h">
-          <h2>{{ $t('client.profile.title') }}</h2>
+          <!-- §2, one title per screen: on phones the compact header already
+               says «Profil», so the card's own heading is read but not shown.
+               The head row stays — it carries «Chiqib ketish». -->
+          <h2 class="max-md:sr-only">{{ $t('client.profile.title') }}</h2>
           <button
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"

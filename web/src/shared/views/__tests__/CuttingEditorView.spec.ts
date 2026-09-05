@@ -597,7 +597,7 @@ describe('CuttingEditorView material picker', () => {
   })
 })
 
-describe("CuttingEditorView client branch (spec §2.2, decision 17)", () => {
+describe('CuttingEditorView client branch (spec §2.2, decision 17)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
