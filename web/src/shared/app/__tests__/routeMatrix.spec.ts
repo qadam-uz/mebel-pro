@@ -267,7 +267,7 @@ describe('role route matrix', () => {
       normalizeRoleConfig(clientConfig, '/client', '/client/').nav.map((item) =>
         i18n.global.t(item.labelKey),
       ),
-    ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxonalarim'])
+    ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxona'])
     // Profile stays reachable via the user pill (config.profilePath), not the nav.
     expect(clientConfig.profilePath).toBe('/c/profile')
   })

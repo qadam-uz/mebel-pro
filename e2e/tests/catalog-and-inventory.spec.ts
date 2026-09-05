@@ -1092,11 +1092,12 @@ test('client browses Ustaxonalarim without prices or stock details', async ({ pa
   await page.goto(`/client/w/${public_code}/${branch_no}`)
   await expect(page).toHaveURL(/\/client\/c\/?$/)
 
-  // The desktop nav item and the phone tab share one live target: with exactly
+  // The desktop nav item and the phone tab share one label («Ustaxona») and
+  // one live target: with exactly
   // one related workshop there is nothing to choose, so it opens that
   // workshop's profile; two or more and it opens Ustaxonalarim. This client
   // entered one workshop, so following the item lands on the profile.
-  await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
+  await page.getByRole('link', { name: 'Ustaxona', exact: true }).first().click()
   await expect(page).toHaveURL(/\/client\/c\/workshops\/[0-9a-f-]+$/)
   await expect(
     page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),

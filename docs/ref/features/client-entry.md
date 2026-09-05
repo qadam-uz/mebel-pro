@@ -151,9 +151,9 @@ and the pin narrows what the app *offers*, never what data it can render.
 
 - **Pinned** → home shows the **Ustaxonangiz** card and its **+ Yangi chizma**, which starts a
   drawing at the pinned branch. The workshop entry point — the phone's **Ustaxona** tab and
-  the desktop nav's **Ustaxonalarim**, one target for both — opens that workshop's profile
-  directly when the client deals with exactly one workshop, and Ustaxonalarim when there
-  are several or the list has not loaded yet.
+  the desktop nav's **Ustaxona**, one label and one target for both — opens that workshop's
+  profile directly when the client deals with exactly one workshop, and Ustaxonalarim (the
+  page, which keeps its own name) when there are several or the list has not loaded yet.
 - **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → **there is no
   drawing action anywhere**: home's card is replaced by the **Ustaxona tanlang** prompt into
   Ustaxonalarim, and a direct URL to the new-drawing route is redirected there before any

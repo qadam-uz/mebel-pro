@@ -54,19 +54,24 @@ async function mountShell(workshops: ClientWorkshop[]) {
   return wrapper
 }
 
+/** Both surfaces are labelled «Ustaxona», so they are told apart by their
+ *  container rather than their text: `.client-nav` is the desktop header nav,
+ *  the other `<nav>` is the phone tab bar. */
 function ustaxonaHrefs(wrapper: Awaited<ReturnType<typeof mountShell>>) {
-  const links = wrapper.findAll('a')
-  return {
-    nav: links.find((link) => link.text().trim() === 'Ustaxonalarim')?.attributes('href'),
-    tab: links.find((link) => link.text().trim() === 'Ustaxona')?.attributes('href'),
-  }
+  const hrefIn = (selector: string) =>
+    wrapper
+      .findAll(`${selector} a`)
+      .find((link) => link.text().trim() === 'Ustaxona')
+      ?.attributes('href')
+  return { nav: hrefIn('nav.client-nav'), tab: hrefIn('nav:not(.client-nav)') }
 }
 
 /**
  * Spec §2.1 defined the shortcut for the phone tab; the desktop nav renders the
  * same item and used to always land on Ustaxonalarim. Both now read
- * `clientEntry.workshopPath` — assert the two hrefs together, never one alone,
- * because a single-surface assertion is exactly what let them drift.
+ * `clientEntry.workshopPath` — and share one label key — so assert the two
+ * hrefs together, never one alone: a single-surface assertion is exactly what
+ * let them drift.
  */
 describe('ClientShell — the Ustaxona entry point', () => {
   beforeEach(() => {

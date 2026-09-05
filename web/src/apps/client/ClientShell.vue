@@ -41,17 +41,18 @@ const pageTitle = computed(() => {
 })
 
 /**
- * The desktop nav, with "Ustaxonalarim" pointed where the phone tab points.
+ * The desktop nav, with «Ustaxona» pointed where the phone tab points.
  *
  * It is the same item on both surfaces (§2.1, UX review 2026-09-05): one
  * related workshop is the common case, and a one-item list is a hop with
- * nothing to choose. `roleConfig` can only carry the static fallback, so the
- * live target comes off the store — the same `workshopPath` the tab reads,
+ * nothing to choose. Both surfaces now share the label key too, so the two
+ * cannot be renamed apart. `roleConfig` can only carry the static fallback, so
+ * the live target comes off the store — the same `workshopPath` the tab reads,
  * which is what stops the two drifting apart again.
  */
 const navItems = computed(() =>
   config.nav.map((item) =>
-    item.labelKey === 'nav.item.clientWorkshops' ? { ...item, to: entry.workshopPath } : item,
+    item.labelKey === 'nav.item.clientWorkshop' ? { ...item, to: entry.workshopPath } : item,
   ),
 )
 
