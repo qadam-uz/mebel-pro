@@ -109,16 +109,14 @@ After platform provisioning creates the first branch, branch operations are **ow
   ([`sales.md`](../entities/sales.md)). It is shown, never edited: printed QR codes must not
   rot, and an owner holding a paper `#26-1-0003` still has to be able to find out which branch
   the `1` is.
-- **Set the production mode** — `simple` (the default) or `full`: whether the branch closes
-  an order with one **Tayyor** tap or runs the per-stage choreography of assignment, start
-  taps and station queues ([`orders.md`](orders.md#production-mode) owns the behaviour). It
-  is a shop-floor property like kerf and the edge overhang — how *this* floor is actually
-  operated — which is why it sits with them rather than in workshop settings. **Switching
-  never blocks and carries no warning**: the mode is read at the moment of each action, so
-  nothing is migrated and nothing is stranded — an order caught mid-spine on a switch to
-  `simple` is finished by the composite Tayyor and reads *Tayyorlanmoqda* meanwhile, so a
-  modal counting such orders would warn about a non-event. Audited like any branch settings
-  change.
+- **The production mode is not an owner control.** A branch is born `simple` and stays there:
+  the current plan (**Start**) offers simple mode only, and the radio group that used to sit
+  with the cutting settings was removed on 2026-09-05. The branch closes an order with one
+  **Tayyor** tap; the per-stage choreography of assignment, start taps and station queues is
+  implemented but unreachable ([`orders.md`](orders.md#production-mode) owns the behaviour and
+  the plan decision). The setting itself survives on the branch API, which is how the demo
+  seed and the E2E suite still drive a `full` branch, and it returns to owners with a future
+  plan.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
   carry an optional reason. **Status changes do not revoke staff sessions or grants** — a
   staff grant on an `inactive` branch just stays inert until the branch is reactivated. A
@@ -149,9 +147,7 @@ Visibility for read operations:
   ko'rish** link, which opens Yandex Maps, since that is what people here navigate with —
   pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), edge settings (the
   glue-and-trim overhang, in mm), material settings (whether the branch takes a client's own
-  sheets), **production settings** — an **Ishlab chiqarish rejimi** radio group, `Oddiy` /
-  `To'liq`, each explained in one line, with no confirmation step on switching — and status
-  controls. It does not duplicate materials, stock, staff, or order
+  sheets), and status controls. It does not duplicate materials, stock, staff, or order
   management; those stay in their own sidebar sections. Edge settings are their own group
   rather than a third cutting setting: the overhang is consumed at the bander, and it is the
   one branch millimetre that moves what the client is billed for tape

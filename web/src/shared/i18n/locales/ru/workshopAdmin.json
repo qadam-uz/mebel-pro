@@ -40,7 +40,7 @@
   "permission": {
     "view_orders": "Просмотр заказов (только чтение)",
     "manage_orders": "Заказы",
-    "process_production": "Производство",
+    "process_production": "Мастер (для отчётов)",
     "manage_catalog": "Каталог материалов",
     "manage_inventory": "Склад",
     "manage_finance": "Финансовые записи",
@@ -201,10 +201,7 @@
     "statusSaveFailed": "Статус не сохранён",
     "statusSaving": "Изменение",
     "statusSubmit": "Изменить статус",
-    "statusChanged": "Статус филиала изменён.",
-    "productionMode": "Режим производства",
-    "productionModeSimple": "Простой — заказ закрывается одной кнопкой «Готов»",
-    "productionModeFull": "Полный — назначение мастера, старт и поэтапный контроль"
+    "statusChanged": "Статус филиала изменён."
   },
   "staff": {
     "title": "Список сотрудников",

@@ -40,7 +40,7 @@
   "permission": {
     "view_orders": "Buyurtmalarni ko'rish (faqat o'qish)",
     "manage_orders": "Buyurtmalar",
-    "process_production": "Ishlab chiqarish",
+    "process_production": "Usta (hisobot uchun)",
     "manage_catalog": "Material katalogi",
     "manage_inventory": "Ombor",
     "manage_finance": "Moliya yozuvlari",
@@ -201,10 +201,7 @@
     "statusSaveFailed": "Holat saqlanmadi",
     "statusSaving": "O'zgartirilmoqda",
     "statusSubmit": "Holatni o'zgartirish",
-    "statusChanged": "Filial holati o'zgartirildi.",
-    "productionMode": "Ishlab chiqarish rejimi",
-    "productionModeSimple": "Oddiy — buyurtma bitta «Tayyor» tugmasi bilan yopiladi",
-    "productionModeFull": "To'liq — usta tayinlash, boshlash va bosqichma-bosqich kuzatuv"
+    "statusChanged": "Filial holati o'zgartirildi."
   },
   "staff": {
     "title": "Xodimlar ro'yxati",
