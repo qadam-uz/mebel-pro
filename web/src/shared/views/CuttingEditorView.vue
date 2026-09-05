@@ -14,8 +14,9 @@ import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
-import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { DRAFT_RECOVERY_DEBOUNCE_MS, MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
+import { createDebouncedWriter } from '@/shared/app/recoveryWriter'
 import {
   clientCuttingEditorAdapter,
   cuttingEditorAdapterKey,
@@ -169,7 +170,13 @@ type DraftRecovery = {
   branchId: string | null
 }
 
+// Set once the draft is deleted: every remaining flush point (route leave,
+// unmount) must then stay silent, or the exit that follows the delete would
+// write the snapshot straight back and resurrect the drawing on the next visit.
+let draftDeleted = false
+
 function writeDraftRecovery() {
+  if (draftDeleted) return
   try {
     const snapshot: DraftRecovery = {
       parts: parts.value,
@@ -215,6 +222,19 @@ function moveDraftRecovery(fromKey: string) {
   } catch {
     // See writeDraftRecovery: recovery storage is best effort.
   }
+}
+
+/**
+ * The recovery snapshot is debounced (300ms) rather than written per keystroke —
+ * at 300 rows the serialisation is ~60 kB per character. Every exit the editor
+ * can observe flushes it synchronously, so the layer still covers the two cases
+ * it exists for: the tab closing inside the server autosave's 700ms window, and
+ * a save that fails or never leaves an offline phone.
+ */
+const recoveryWriter = createDebouncedWriter(writeDraftRecovery, DRAFT_RECOVERY_DEBOUNCE_MS)
+
+function flushDraftRecovery() {
+  recoveryWriter.flush()
 }
 const optimizeError = ref<string | null>(null)
 // Per-row optimiser-error attribution (CB-89): the backend returns
@@ -1188,6 +1208,12 @@ async function confirmDeleteDraft() {
   deleteDraftTraceId.value = null
   try {
     await cutting.deleteDraft(draft.value.id)
+    // The drawing is gone: drop the queued write and the stored snapshot, and
+    // latch `draftDeleted` so the route-leave/unmount flushes below cannot put
+    // it back.
+    draftDeleted = true
+    recoveryWriter.cancel()
+    clearDraftRecovery()
     await router.push(rolePath(adapter.paths.drafts))
   } catch (errorValue) {
     deleteDraftError.value = clientErrorLabel(
@@ -1810,6 +1836,11 @@ async function persistPartsSnapshot() {
   const oldRecoveryKey = recoveryKey.value
   let id = draftId.value
 
+  // Land the freshest snapshot under the key we are about to clear or move,
+  // before the request goes out — a save that then fails (offline phone) must
+  // leave the latest work recoverable, not the state of 300ms ago.
+  flushDraftRecovery()
+
   if (startedAsNew) {
     if (!pendingDraftId.value) {
       pendingDraftId.value = (
@@ -1830,6 +1861,11 @@ async function persistPartsSnapshot() {
   })
 
   if (!startedAsNew) {
+    // The server now holds this state. Drop anything queued during the
+    // round-trip too — it would re-create the key we are clearing. A genuine
+    // edit made mid-flight leaves the autosave dirty, so the next run
+    // re-flushes the recovery ahead of it.
+    recoveryWriter.cancel()
     clearDraftRecovery(oldRecoveryKey)
     return
   }
@@ -1838,7 +1874,16 @@ async function persistPartsSnapshot() {
   hydratedDraftId = id
   leavingAfterCreate.value = true
   await router.replace(rolePath(adapter.paths.editor(id)))
-  moveDraftRecovery(oldRecoveryKey)
+  // `recoveryKey` now points at the persisted draft. A write queued during the
+  // round-trip carries live state, which is fresher than the snapshot sitting
+  // under the old key — flush it onto the new key instead of moving the stale
+  // one over it.
+  if (recoveryWriter.pending) {
+    flushDraftRecovery()
+    clearDraftRecovery(oldRecoveryKey)
+  } else {
+    moveDraftRecovery(oldRecoveryKey)
+  }
 }
 
 // Debounced autosave (700ms) — the timing core, status mirror, draft creation,
@@ -1864,7 +1909,7 @@ const autosave = useDraftAutosave({
   // A row-attributed optimiser error is stale once the parts change.
   onSchedule: () => {
     optimizeRowError.value = null
-    writeDraftRecovery()
+    recoveryWriter.schedule()
   },
 })
 const saveState = autosave.saveState
@@ -1877,7 +1922,7 @@ async function setPreferredBranch(branchId: string | null) {
     branchTouched.value = true
     branchPickerOpen.value = false
     selectedBranchId.value = branchId
-    writeDraftRecovery()
+    recoveryWriter.schedule()
     await loadMaterials()
     autosave.schedule()
     return
@@ -2112,9 +2157,15 @@ watch(
 
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
+  // `pagehide` is the exit iOS Safari actually fires (a bfcache'd page gets no
+  // `beforeunload` at all), and a phone backgrounds the tab before the OS kills
+  // it — so `hidden` is the last moment a mobile editor is guaranteed to run.
+  window.addEventListener('pagehide', flushDraftRecovery)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (isNewDraft.value) {
     // `/cutting/new` is always a distinct drawing. A shared recovery key here
     // would otherwise repopulate this editor with the previous new draft.
+    recoveryWriter.cancel()
     clearDraftRecovery()
     // Fixed-branch mode: the branch is the app context, so it cannot be
     // unselected by the user.
@@ -2207,10 +2258,20 @@ watch(contextBranchId, (value) => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('pagehide', flushDraftRecovery)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (isNewDraft.value) {
+    // An abandoned `/cutting/new` has nothing worth recovering — the next mount
+    // clears the shared `new` key anyway. Leaving after a successful create
+    // already moved the snapshot onto the persisted key.
+    recoveryWriter.cancel()
     autosave.cancel()
     return
   }
+  // Before the imported-layout guard below: that guard decides whether the
+  // *server* save runs, and the recovery snapshot is written on every edit
+  // regardless — it is what makes the discarded work recoverable at all.
+  flushDraftRecovery()
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
@@ -2225,10 +2286,15 @@ onBeforeUnmount(() => {
 })
 
 function onBeforeUnload() {
-  // Browsers do not wait for an async request here. The recovery snapshot was
-  // written synchronously on every edit; flush still helps when the browser
-  // keeps the request alive during unload.
+  // Browsers do not wait for an async request here, so the synchronous recovery
+  // flush is what actually saves the last edits; the autosave flush still helps
+  // when the browser keeps the request alive during unload.
+  flushDraftRecovery()
   void autosave.flush()
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'hidden') flushDraftRecovery()
 }
 
 onBeforeRouteLeave(async () => {
@@ -2237,6 +2303,7 @@ onBeforeRouteLeave(async () => {
   if (isNewDraft.value) {
     if (!leavingAfterCreate.value) {
       abandoningNewDraft = true
+      recoveryWriter.cancel()
       autosave.cancel()
     }
     // The first autosave itself replaces `/new` with the persisted draft URL.
@@ -2244,6 +2311,9 @@ onBeforeRouteLeave(async () => {
     // each other indefinitely.
     return true
   }
+  // Synchronously, before the awaited server save: leaving inside the debounce
+  // window must not drop the last keystroke even if that save then fails.
+  flushDraftRecovery()
   await autosave.flush()
   return saveState.value !== 'error'
 })
