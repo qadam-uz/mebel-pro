@@ -28,6 +28,7 @@ import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import { formatOrderNumber } from '@/shared/formatters'
 import {
   deriveEdgeRegistry,
+  edgeAssignmentSignature,
   edgeRegistryKey,
   groupCuttingParts,
   isGeometryNeutralEdit,
@@ -771,14 +772,24 @@ watch(errorCount, (count) => {
   if (count === 0) errorFilterEnabled.value = false
 })
 
-watch(
-  parts,
-  (rows) => {
-    syncEdgeAssignments(edgeAssignments.value, rows)
-    edgeAssignments.value = new Map(edgeAssignments.value)
-  },
-  { deep: true, immediate: true },
-)
+/**
+ * Re-number the tape registry from the parts as they stand. Idempotent: running
+ * it twice on an unchanged drawing produces the same numbers, which is what lets
+ * both callers below fire without coordinating.
+ */
+function refreshEdgeAssignments() {
+  syncEdgeAssignments(edgeAssignments.value, parts.value)
+  edgeAssignments.value = new Map(edgeAssignments.value)
+}
+// Watch the registry's actual input, not the whole parts array. This used to be
+// `watch(parts, …, { deep: true })`, which re-walked every row and allocated a
+// fresh Map on each keystroke in a length / width / soni / name field — up to
+// 300 rows of work per character, for a result that could not have changed.
+// `edgeAssignmentSignature` reads only `part.edge_*`, so the computed below is
+// not even a subscriber of the geometry fields: a geometry edit invalidates
+// nothing here. Add / remove / reorder / re-band still all move the signature.
+const edgeAssignmentInput = computed(() => edgeAssignmentSignature(parts.value))
+watch(edgeAssignmentInput, refreshEdgeAssignments, { immediate: true })
 
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
@@ -2005,6 +2016,12 @@ watch(
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
         )
         hydratedDraftId = value.id
+        // Re-number here rather than leaving it to the signature watch: a draft
+        // that happens to band the same tapes in the same order as the one on
+        // screen has the same signature, so the watch would not fire — and the
+        // Map we just emptied would stay empty. The watch handles every other
+        // path; this one resets the map, so it owns the refill.
+        refreshEdgeAssignments()
       })
       // Normalization diverged from the server copy — persist it (debounced;
       // optimise flushes first) instead of marking the draft already-saved.

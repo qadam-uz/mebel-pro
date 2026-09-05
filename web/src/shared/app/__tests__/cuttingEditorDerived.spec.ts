@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   deriveEdgeRegistry,
+  edgeAssignmentSignature,
   edgeRegistryKey,
   groupCuttingParts,
   isGeometryNeutralEdit,
@@ -256,6 +257,117 @@ describe('cuttingEditorDerived', () => {
       expect(contrastRatio(style.fg, style.bg)).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(BONE, style.bg)).toBeLessThan(4.5)
     }
+  })
+})
+
+/**
+ * `edgeAssignmentSignature` replaces a `deep: true` watch on `parts` in the
+ * editor, so what it owes is not "looks right" but *equivalence*: a sync that
+ * runs only when the signature moves must land on the same map as one that runs
+ * on every mutation. The first test walks a realistic edit sequence with both
+ * strategies side by side and compares after every step — that is the proof;
+ * the two after it pin the two halves of the claim, so a failure says which
+ * half broke.
+ */
+describe('edgeAssignmentSignature', () => {
+  const A = { material_id: 'edge-a', source: 'shop' } as const
+  const B = { material_id: 'edge-b', source: 'shop' } as const
+  const AOwn = { material_id: 'edge-a', source: 'own' } as const
+
+  const editSequence: Array<{ step: string; parts: CuttingPart[] }> = [
+    { step: 'empty drawing', parts: [] },
+    { step: 'first row, unbanded', parts: [part({ part_ref: 'p1' })] },
+    { step: 'band the top with A', parts: [part({ part_ref: 'p1', edge_top: A })] },
+    {
+      step: 'type a new length',
+      parts: [part({ part_ref: 'p1', edge_top: A, length_mm: 1200 })],
+    },
+    {
+      step: 'type a name and a quantity',
+      parts: [part({ part_ref: 'p1', edge_top: A, length_mm: 1200, name: 'Eshik', quantity: 4 })],
+    },
+    {
+      step: 'add a second row banded with B',
+      parts: [
+        part({ part_ref: 'p1', edge_top: A, length_mm: 1200, name: 'Eshik', quantity: 4 }),
+        part({ part_ref: 'p2', edge_left: B }),
+      ],
+    },
+    {
+      step: 'spread A onto more sides of row 1',
+      parts: [
+        part({ part_ref: 'p1', edge_top: A, edge_bottom: A, edge_left: A, length_mm: 1200 }),
+        part({ part_ref: 'p2', edge_left: B }),
+      ],
+    },
+    {
+      step: 'reorder the rows',
+      parts: [
+        part({ part_ref: 'p2', edge_left: B }),
+        part({ part_ref: 'p1', edge_top: A, edge_bottom: A, edge_left: A, length_mm: 1200 }),
+      ],
+    },
+    {
+      step: 'the same tape from own stock joins',
+      parts: [
+        part({ part_ref: 'p2', edge_left: B }),
+        part({ part_ref: 'p1', edge_top: A, edge_right: AOwn, length_mm: 1200 }),
+      ],
+    },
+    {
+      step: 'delete the B row',
+      parts: [part({ part_ref: 'p1', edge_top: A, edge_right: AOwn, length_mm: 1200 })],
+    },
+    { step: 'strip every band', parts: [part({ part_ref: 'p1', length_mm: 1200 })] },
+    { step: 'band B again after A is gone', parts: [part({ part_ref: 'p1', edge_top: B })] },
+  ]
+
+  it('drives the same assignments as an unconditional deep watch, edit for edit', () => {
+    const deepWatch = new Map<string, number>()
+    const signatureWatch = new Map<string, number>()
+    let previous: CuttingPart[] = []
+
+    for (const { step, parts } of editSequence) {
+      syncEdgeAssignments(deepWatch, parts)
+      if (edgeAssignmentSignature(previous) !== edgeAssignmentSignature(parts)) {
+        syncEdgeAssignments(signatureWatch, parts)
+      }
+      previous = parts
+      expect([...signatureWatch.entries()], step).toEqual([...deepWatch.entries()])
+    }
+  })
+
+  it('is unmoved by the fields typed per keystroke', () => {
+    const banded = part({ part_ref: 'p1', edge_top: A, edge_right: B })
+    const signature = edgeAssignmentSignature([banded])
+
+    for (const change of [
+      { length_mm: 1200 },
+      { width_mm: 401 },
+      { quantity: 12 },
+      { name: 'Eshik' },
+      { follow_grain: false },
+      { thickened: true },
+      { material_id: 'panel-9' },
+    ]) {
+      expect(edgeAssignmentSignature([{ ...banded, ...change }])).toBe(signature)
+    }
+  })
+
+  it('moves whenever the banding does', () => {
+    const banded = part({ part_ref: 'p1', edge_top: A })
+    const signature = edgeAssignmentSignature([banded])
+
+    // A tape added, removed, swapped for another, or re-sourced.
+    expect(edgeAssignmentSignature([{ ...banded, edge_left: B }])).not.toBe(signature)
+    expect(edgeAssignmentSignature([{ ...banded, edge_top: null }])).not.toBe(signature)
+    expect(edgeAssignmentSignature([{ ...banded, edge_top: B }])).not.toBe(signature)
+    expect(edgeAssignmentSignature([{ ...banded, edge_top: AOwn }])).not.toBe(signature)
+    // And a row carrying a tape arriving or leaving.
+    expect(edgeAssignmentSignature([banded, part({ part_ref: 'p2', edge_top: B })])).not.toBe(
+      signature,
+    )
+    expect(edgeAssignmentSignature([])).not.toBe(signature)
   })
 })
 
