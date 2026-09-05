@@ -37,6 +37,12 @@ const placing = ref(false)
 const localError = ref<string | null>(null)
 
 const draft = computed(() => cutting.currentDraft)
+/**
+ * Cold read only. Arriving from the result stage the drawing is already the
+ * store's current draft, so the page paints while it revalidates rather than
+ * showing a full-page skeleton on every visit (client audit 2026-09-03).
+ */
+const showSkeleton = computed(() => cutting.loading && !draft.value)
 const chosenResult = computed(() =>
   draft.value?.results.find((result) => result.id === draft.value?.chosen_result_id),
 )
@@ -179,7 +185,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <section v-if="cutting.loading" class="grid gap-3" aria-live="polite">
+    <section v-if="showSkeleton" class="grid gap-3" aria-live="polite">
       <div class="client-skeleton h-32"></div>
       <div class="client-skeleton h-64"></div>
     </section>

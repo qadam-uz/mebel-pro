@@ -39,6 +39,16 @@ const filterOptions = computed(() => [
   { value: 'read', label: t('shell.notifications.clientFilterRead') },
 ])
 
+/**
+ * Stale-while-revalidate: the skeleton is for a cold feed only. Re-opening the
+ * page — or flipping the chip row — keeps the rows in hand under a dim while
+ * the refresh lands, instead of blanking the list on every visit (client audit
+ * 2026-09-03). Gated on the store's raw items, not `visibleItems`: the read/
+ * unread split is applied client-side, and an empty *filter* result is an empty
+ * state, never a skeleton.
+ */
+const showSkeleton = computed(() => notifications.loading && notifications.items.length === 0)
+
 const visibleItems = computed(() =>
   notifications.items.filter((item) => {
     if (readFilter.value === 'unread') return item.read_at === null
@@ -152,7 +162,7 @@ onMounted(() => {
     />
 
     <div class="max-w-[760px]">
-      <div v-if="notifications.loading" class="grid gap-2" aria-live="polite">
+      <div v-if="showSkeleton" class="grid gap-2" aria-live="polite">
         <div
           v-for="item in 5"
           :key="item"
@@ -167,8 +177,10 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Only when there is nothing else to show: a refresh that fails behind
+           a feed already on screen leaves the feed there. -->
       <ClientErrorState
-        v-else-if="notifications.error"
+        v-else-if="notifications.error && notifications.items.length === 0"
         :title="$t('shell.notifications.loadFailedTitle')"
         :message="$t('shell.notifications.loadFailedClientBody')"
         :trace-id="notifications.traceId"
@@ -183,7 +195,11 @@ onMounted(() => {
         <p v-else>{{ $t('shell.notifications.emptyClientBody') }}</p>
       </div>
 
-      <div v-else class="grid gap-2">
+      <div
+        v-else
+        class="grid gap-2 transition-opacity"
+        :class="notifications.loading ? 'opacity-60' : ''"
+      >
         <!-- The unread edge is a ring, and the ring utility re-declares
              `box-shadow` from the utilities layer — which would drop the card's
              own `--shadow-card` — so the two shadow utilities come along to put

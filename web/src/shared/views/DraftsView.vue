@@ -29,6 +29,13 @@ const sortedDrafts = computed(() =>
   ),
 )
 const pendingDeletePartCount = computed(() => draftParts(draftPendingDelete.value))
+/**
+ * Stale-while-revalidate: the skeleton is for a cold list only. Arriving here
+ * from home the drawings are already in the store, so they render at once and
+ * the refresh runs under a dim instead of blanking the page (client audit
+ * 2026-09-03).
+ */
+const showSkeleton = computed(() => cutting.draftsLoading && sortedDrafts.value.length === 0)
 
 function chosenResult(draft: CuttingDraft | null) {
   if (!draft) return null
@@ -113,16 +120,16 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-if="cutting.loading || sortedDrafts.length > 0" class="client-section-title">
+    <div v-if="showSkeleton || sortedDrafts.length > 0" class="client-section-title">
       <h2>{{ $t('client.drafts.all') }}</h2>
-      <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
+      <span v-if="showSkeleton" class="client-skeleton inline-block h-4 w-20"></span>
       <span v-else class="text-sm text-ink-muted">
         <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }}
         {{ $t('client.drafts.capacityUnit') }}
       </span>
     </div>
 
-    <div v-if="cutting.loading" class="grid gap-2" aria-live="polite">
+    <div v-if="showSkeleton" class="grid gap-2" aria-live="polite">
       <div v-for="item in 3" :key="item" class="client-card grid grid-cols-[1fr_auto] gap-4 p-4">
         <div>
           <div class="client-skeleton h-4 w-1/2"></div>
@@ -132,8 +139,10 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Only when there is nothing else to show: a refresh that fails behind a
+         list already on screen leaves the list there. -->
     <ClientErrorState
-      v-else-if="cutting.error"
+      v-else-if="cutting.error && sortedDrafts.length === 0"
       :title="$t('client.drafts.loadFailed')"
       :trace-id="cutting.traceId"
       @retry="cutting.loadDrafts"
@@ -148,7 +157,11 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-else class="grid gap-3">
+    <div
+      v-else
+      class="grid gap-3 transition-opacity"
+      :class="cutting.draftsLoading ? 'opacity-60' : ''"
+    >
       <!-- Same card as the home "Chizmalar" section, plus the delete control —
            the two lists show the same object and had drifted into two shapes. -->
       <article

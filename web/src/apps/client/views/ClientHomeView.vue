@@ -106,7 +106,15 @@ const workshopProfileTo = computed(() => {
  *  branch earns one (§3 item 5). */
 const branchClosed = computed(() => pinnedBranch.value?.branch.status === 'temporarily_closed')
 
-const pageLoading = computed(() => cutting.loading || orders.loading)
+const pageLoading = computed(() => cutting.draftsLoading || orders.loading)
+/**
+ * Stale-while-revalidate: the skeleton is for a cold home only. Coming back
+ * from Buyurtmalar or Chizmalar the two lists are already in the store, so the
+ * cards render straight away and the refresh happens under them — the page used
+ * to blank on every return (client audit 2026-09-03).
+ */
+const hasListContent = computed(() => orders.clientOrders.length > 0 || cutting.drafts.length > 0)
+const showSkeleton = computed(() => pageLoading.value && !hasListContent.value)
 const pageError = computed(() => cutting.error ?? orders.error)
 const traceId = computed(() => cutting.traceId ?? orders.traceId)
 /** Pinned, nothing in flight and nothing saved — the start prompt (§3 item 6). */
@@ -295,11 +303,7 @@ onMounted(() => {
 
     <!-- Loading and error cover the two lists only; the card above is already
          on screen and must not blink. -->
-    <div
-      v-if="pageLoading && orders.clientOrders.length === 0"
-      class="grid gap-3"
-      aria-live="polite"
-    >
+    <div v-if="showSkeleton" class="grid gap-3" aria-live="polite">
       <span class="sr-only">{{ $t('client.common.loading') }}</span>
       <div class="flex items-center justify-between gap-3 border-b border-divider pb-2">
         <div class="client-skeleton h-[18px] w-[132px]"></div>
@@ -323,8 +327,11 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Only when there is nothing else to show: a refresh that fails behind
+         lists already on screen leaves them there rather than replacing a
+         working page with an error card. -->
     <ClientErrorState
-      v-else-if="pageError"
+      v-else-if="pageError && !hasListContent"
       :title="$t('client.home.loadFailed')"
       :trace-id="traceId"
       @retry="reloadHome"
@@ -383,7 +390,12 @@ onMounted(() => {
       <!-- Side by side on desktop, stacked on phones. An empty section is
            omitted rather than filled with a zero state: the card and its action
            above already carry the page. -->
-      <div class="md:grid md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:items-start md:gap-6">
+      <!-- Dimmed, not replaced, while the lists revalidate — same affordance
+           Buyurtmalar uses for a filter change. -->
+      <div
+        class="transition-opacity md:grid md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:items-start md:gap-6"
+        :class="pageLoading && hasListContent ? 'opacity-60' : ''"
+      >
         <section v-if="visibleActiveOrders.length > 0" class="mb-5 md:mb-0">
           <div class="client-section-title">
             <h2>{{ $t('client.home.activeOrders') }}</h2>
