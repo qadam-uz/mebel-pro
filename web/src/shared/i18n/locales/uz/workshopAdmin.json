@@ -164,7 +164,8 @@
       "aria": "Filial joylashuvi xaritasi",
       "hint": "Filial joyini xaritada bosib belgilang. Nishonni sudrab aniqlashtirish mumkin.",
       "clear": "Joyni olib tashlash",
-      "label": "Joylashuv"
+      "label": "Joylashuv",
+      "failed": "Xaritani yuklab bo'lmadi. Sahifani yangilang."
     }
   },
   "branchDetail": {

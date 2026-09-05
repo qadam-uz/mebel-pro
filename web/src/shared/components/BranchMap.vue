@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import type L from 'leaflet'
 
 import { yandexMapUrl } from '@/shared/app/yandexMapLink'
 
@@ -13,6 +12,12 @@ import { yandexMapUrl } from '@/shared/app/yandexMapLink'
 // picker works the moment the app is served. The saved pin is still opened in
 // Yandex Maps on the client-facing surfaces, which is what people here use for
 // directions.
+//
+// Leaflet itself arrives through a dynamic `import()` on mount
+// (`branchMapLeaflet.ts`) — it is by far the heaviest dependency in the app and
+// only two screens ever draw a map. The `import type` above is erased at build
+// time, so it does not pull the library back in. The frame keeps its final
+// height from the first frame, so nothing on the page moves when the map lands.
 const props = defineProps<{
   latitude: number | string | null
   longitude: number | string | null
@@ -30,8 +35,13 @@ const FALLBACK = { lat: 41.311081, lon: 69.240562, zoom: 12 }
 const PIN_ZOOM = 16
 
 const host = ref<HTMLElement | null>(null)
+/** `loading` until the Leaflet chunk lands, `failed` if it never does — a
+ *  stale-chunk 404 after a deploy, or a dropped connection. */
+const status = ref<'loading' | 'ready' | 'failed'>('loading')
+let leaflet: typeof import('@/shared/components/branchMapLeaflet') | null = null
 let map: L.Map | null = null
 let marker: L.Marker | null = null
+let disposed = false
 
 const point = ref<{ latitude: number; longitude: number } | null>(readPoint())
 const openUrl = ref<string | null>(null)
@@ -44,24 +54,16 @@ function readPoint() {
   return { latitude: lat, longitude: lon }
 }
 
-// Leaflet ships its marker icons as bundler-hostile relative URLs; pointing at
-// the packaged assets keeps the pin visible under Vite without copying files.
-const icon = L.icon({
-  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
-  iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).href,
-  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  shadowSize: [41, 41],
-})
-
 function place(latitude: number, longitude: number) {
   point.value = { latitude, longitude }
   openUrl.value = yandexMapUrl(latitude, longitude)
-  if (!map) return
+  if (!map || !leaflet) return
   if (marker) marker.setLatLng([latitude, longitude])
   else {
-    marker = L.marker([latitude, longitude], { icon, draggable: !props.readonly }).addTo(map)
+    marker = leaflet.L.marker([latitude, longitude], {
+      icon: leaflet.markerIcon,
+      draggable: !props.readonly,
+    }).addTo(map)
     marker.on('dragend', () => {
       const next = marker?.getLatLng()
       if (next) commit(next.lat, next.lng)
@@ -84,14 +86,25 @@ function clear() {
   emit('update:point', null)
 }
 
-onMounted(() => {
-  if (!host.value) return
+onMounted(async () => {
+  try {
+    leaflet = await import('@/shared/components/branchMapLeaflet')
+  } catch {
+    // The coordinates and the "open in Yandex Maps" link below stay usable, so
+    // the screen degrades to read-only rather than breaking.
+    status.value = 'failed'
+    return
+  }
+  // Unmounted while the chunk was in flight — the host element is gone.
+  if (disposed || !host.value) return
+  status.value = 'ready'
+
   const start = point.value
-  map = L.map(host.value, { scrollWheelZoom: false }).setView(
+  map = leaflet.L.map(host.value, { scrollWheelZoom: false }).setView(
     [start?.latitude ?? FALLBACK.lat, start?.longitude ?? FALLBACK.lon],
     start ? PIN_ZOOM : FALLBACK.zoom,
   )
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  leaflet.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap',
   }).addTo(map)
@@ -104,6 +117,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   map?.remove()
   map = null
   marker = null
@@ -125,12 +139,25 @@ watch(
 
 <template>
   <div class="grid gap-2">
-    <div
-      ref="host"
-      class="h-64 w-full overflow-hidden rounded-md border border-hairline"
-      role="application"
-      :aria-label="$t('workshopAdmin.branches.map.aria')"
-    ></div>
+    <div class="relative h-64 w-full overflow-hidden rounded-md border border-hairline">
+      <div
+        ref="host"
+        class="h-full w-full"
+        role="application"
+        :aria-label="$t('workshopAdmin.branches.map.aria')"
+      ></div>
+      <!-- Sits over the frame rather than replacing it: Leaflet needs the host
+           element in the DOM at the moment it initialises, and the box already
+           holds its final height so nothing reflows when the map appears. -->
+      <div
+        v-if="status !== 'ready'"
+        class="absolute inset-0 grid place-items-center bg-sunk px-4 text-center text-xs text-ink-muted"
+      >
+        {{
+          status === 'failed' ? $t('workshopAdmin.branches.map.failed') : $t('common.state.loading')
+        }}
+      </div>
+    </div>
 
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-xs text-ink-muted">
