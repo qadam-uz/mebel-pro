@@ -273,6 +273,7 @@ async function choose(result: CuttingResult) {
         <CuttingResultOverview
           class="order-1 min-w-0 xl:col-start-1 xl:row-start-1"
           :result="chosenResult"
+          :figures-xl-only="isClientView"
           :active-panel-id="activePanelId"
           @update:active-panel-id="emit('update:activePanelId', $event)"
         >
@@ -317,14 +318,22 @@ async function choose(result: CuttingResult) {
                  on, then the four figures as a 2×2 grid. On desktop the tally
                  already sits in the left column of the overview, so the grid
                  would be the same four numbers twice on one screen. -->
-            <div v-if="isClientView && quote" class="xl:hidden">
-              <p class="mt-3 font-display text-[30px] font-bold leading-[1.15] text-ink">
-                {{ formatTiyin(quote.total_tiyin) }}
-              </p>
-              <p class="mt-0.5 text-[12.5px] font-semibold text-ink-muted">
-                {{ $t('cutting.result.totalCaption') }}
-              </p>
-              <dl class="mt-3.5 grid grid-cols-2 gap-x-3.5 gap-y-3 border-t border-hairline pt-3.5">
+            <div v-if="isClientView" class="xl:hidden">
+              <!-- The figures do not wait on the quote: below `xl` this grid is
+                   the ONLY copy of them (the overview's rail is `xl`-only there),
+                   so a slow or failed price must not take them off the screen. -->
+              <template v-if="quote">
+                <p class="mt-3 font-display text-[30px] font-bold leading-[1.15] text-ink">
+                  {{ formatTiyin(quote.total_tiyin) }}
+                </p>
+                <p class="mt-0.5 text-[12.5px] font-semibold text-ink-muted">
+                  {{ $t('cutting.result.totalCaption') }}
+                </p>
+              </template>
+              <dl
+                class="grid grid-cols-2 gap-x-3.5 gap-y-3 pt-3.5"
+                :class="quote ? 'mt-3.5 border-t border-hairline' : ''"
+              >
                 <div v-for="figure in clientFigures" :key="figure.key">
                   <dt class="text-[12.5px] font-semibold text-ink-muted">{{ figure.label }}</dt>
                   <dd class="mt-0.5 text-[15px] font-bold text-ink">{{ figure.value }}</dd>

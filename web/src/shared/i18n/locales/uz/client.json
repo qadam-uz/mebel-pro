@@ -16,7 +16,7 @@
     "sheet": "list",
     "parts": "{n} detal",
     "materials": "{n} material",
-    "panels": "{n} panel",
+    "panels": "{n} list",
     "drafts": "{n} chizma",
     "count": "{n} ta",
     "sheets": "{n} list"

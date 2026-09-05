@@ -80,6 +80,24 @@ const totalEdge = computed(() => {
 })
 
 /**
+ * The tapes behind the «Kromka» row — «{tape} · {metres}», one line each (§5).
+ *
+ * The row keeps ONE money figure because `subtotal_edge_banding_tiyin` is one:
+ * it is material *plus* the per-metre banding service, and that service is not
+ * split per tape anywhere. So the tapes are named in the row's sub-lines rather
+ * than given rows of their own — which is what the receipt owes the client,
+ * since «Kromka · 3.72 m» alone never says which colour was banded on.
+ */
+const edgeRows = computed(() =>
+  (order.value?.price_lines ?? [])
+    .filter((line) => line.kind === 'edge' && (line.consumed_mm ?? 0) > 0)
+    .map((line) => ({
+      id: line.material_id,
+      label: `${line.material_name} · ${metres(line.consumed_mm ?? 0)}`,
+    })),
+)
+
+/**
  * One receipt row per material the workshop supplied, rather than a single
  * lumped «Material» line: with two boards on an order the lump is a number the
  * client cannot check against anything. The rows still sum to
@@ -341,10 +359,22 @@ onMounted(() => {
               <div class="text-[13.5px] text-ink">{{ formatTiyin(row.total) }}</div>
             </div>
             <div v-if="order.subtotal_edge_banding_tiyin > 0" class="client-row-item">
-              <div>
+              <div class="min-w-0">
                 <div class="client-row-name">{{ $t('client.orderDetail.edge') }}</div>
+                <!-- Legacy orders carry no edge price lines; the total metres
+                     stand in so the row is never left without its quantity. -->
+                <div
+                  v-for="row in edgeRows"
+                  :key="row.id"
+                  class="truncate text-[13px] text-ink-muted"
+                >
+                  {{ row.label }}
+                </div>
+                <div v-if="edgeRows.length === 0" class="text-[13px] text-ink-muted">
+                  {{ metres(totalEdge) }}
+                </div>
                 <div class="text-[13px] text-ink-muted">
-                  {{ metres(totalEdge) }} · {{ $t('client.orderDetail.edgeMaterialAndService') }}
+                  {{ $t('client.orderDetail.edgeMaterialAndService') }}
                 </div>
               </div>
               <div class="text-[13.5px] text-ink">

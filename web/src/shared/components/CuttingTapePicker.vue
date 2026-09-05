@@ -71,10 +71,15 @@ const rows = computed(() => {
  * what makes this a decor choice rather than a format one.
  */
 function variantLines(decor: TapeDecor): string[] {
-  return decor.variants.map(
-    (variant) =>
-      `${formatMm(variant.material.thickness_mm)} mm · ${formatSom(variant.material.price_tiyin)} ${t('cutting.edge.perMetre')}`,
-  )
+  return decor.variants.map((variant) => {
+    const thickness = `${formatMm(variant.material.thickness_mm)} mm`
+    // An unpriced tape («0 so'm/m» would be a price, and a wrong one) — the
+    // branch has the format on the shelf but has not priced it yet.
+    if (variant.material.price_unset || variant.material.price_tiyin <= 0) {
+      return `${thickness} · ${t('cutting.material.priceOnRequest')}`
+    }
+    return `${thickness} · ${formatSom(variant.material.price_tiyin)} ${t('cutting.edge.perMetre')}`
+  })
 }
 </script>
 

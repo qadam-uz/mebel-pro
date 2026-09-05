@@ -67,6 +67,7 @@
     "selected": "Выбран",
     "emptyInBranch": "В этом филиале листовых материалов нет.",
     "priceUnset": "Нет цены",
+    "priceOnRequest": "Цена по запросу",
     "searchLabel": "Поиск материала",
     "searchPlaceholder": "Название или код декора — Sonoma, H1145, сонома",
     "searchEmpty": "По этому запросу материалов не найдено.",

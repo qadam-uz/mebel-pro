@@ -83,6 +83,16 @@ function price(material: ClientCatalogMaterialOption): string {
   return formatTiyin(material.price_tiyin)
 }
 
+/**
+ * A branch registers its whole format list long before it prices it, and the
+ * client endpoint deliberately returns the unpriced rows (`price_unset`) so the
+ * shelf reads as the shelf. What it must not do is print «0 so'm»: that is a
+ * price, and a wrong one. The catalog page says the same thing here.
+ */
+function hasPrice(material: ClientCatalogMaterialOption): boolean {
+  return !material.price_unset && material.price_tiyin > 0
+}
+
 // Which multi-format decor is expanded. A decor is not chosen until one of its
 // formats is: with several formats there is no sensible default (a 16 and an
 // 18 mm board are different boards), so the row opens instead of selecting.
@@ -189,11 +199,16 @@ function rowIsCurrent(row: DecorRow) {
                  Several → the price lives on the format rows, because there is
                  no single number this row could honestly print. -->
             <span v-if="row.formats.length === 1" class="shrink-0 text-right">
-              <span class="block whitespace-nowrap text-sm font-bold text-ink">
-                {{ price(row.formats[0]) }}
-              </span>
-              <span class="mt-0.5 block text-[12.5px] text-ink-muted">
-                {{ $t('cutting.material.perSheet') }}
+              <template v-if="hasPrice(row.formats[0])">
+                <span class="block whitespace-nowrap text-sm font-bold text-ink">
+                  {{ price(row.formats[0]) }}
+                </span>
+                <span class="mt-0.5 block text-[12.5px] text-ink-muted">
+                  {{ $t('cutting.material.perSheet') }}
+                </span>
+              </template>
+              <span v-else class="block whitespace-nowrap text-[12.5px] text-ink-muted">
+                {{ $t('cutting.material.priceOnRequest') }}
               </span>
             </span>
             <Icon
@@ -227,11 +242,17 @@ function rowIsCurrent(row: DecorRow) {
             <span class="min-w-0 flex-1 text-[13.5px] font-semibold text-ink">
               {{ formatLabel(format) }}
             </span>
-            <span class="shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink">
+            <span
+              v-if="hasPrice(format)"
+              class="shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
+            >
               {{ price(format)
               }}<span class="font-normal text-ink-muted">
                 {{ $t('cutting.material.perSheet') }}</span
               >
+            </span>
+            <span v-else class="shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
+              {{ $t('cutting.material.priceOnRequest') }}
             </span>
           </button>
         </div>
