@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { nextStableId } from '@/shared/app/listboxNav'
 
@@ -15,6 +15,12 @@ import { nextStableId } from '@/shared/app/listboxNav'
  * A radiogroup with a roving tabindex, like `SegmentedControl`: one tab stop for
  * the whole row, arrows to move, which is what a set of mutually exclusive
  * choices owes the keyboard.
+ *
+ * **A scroller has to say it scrolls.** Five status chips do not fit a 375px
+ * phone, and a row that simply clips «Yakunlangan» mid-word against the search
+ * button reads as broken rather than as "swipe for more". The overflowing side
+ * is faded out, and the checked chip is scrolled into view — so arriving on
+ * `?status=cancelled` shows the chip that is actually selected.
  */
 const props = defineProps<{
   /** The group's accessible name; never rendered — the chips say what they are. */
@@ -36,6 +42,59 @@ const currentIndex = computed(() =>
 function chipId(value: string) {
   return `${id}-${value}`
 }
+
+// ---- the scroll affordance ------------------------------------------------
+
+const row = ref<HTMLElement | null>(null)
+const atStart = ref(true)
+const atEnd = ref(true)
+const FADE = 24
+
+// Slack wide enough to swallow the row's own 4px focus-ring padding and a
+// fractional scroll position — but far narrower than a chip, so a chip that is
+// genuinely off-screen still earns the fade.
+const SLACK = 8
+
+function measure() {
+  const element = row.value
+  if (!element) return
+  atStart.value = element.scrollLeft <= SLACK
+  atEnd.value = element.scrollLeft + element.clientWidth >= element.scrollWidth - SLACK
+}
+
+/** Only the side that has content off-screen is faded. */
+const maskStyle = computed(() => {
+  if (atStart.value && atEnd.value) return undefined
+  const start = atStart.value ? '#000 0' : `transparent 0, #000 ${FADE}px`
+  const end = atEnd.value ? '#000 100%' : `#000 calc(100% - ${FADE}px), transparent 100%`
+  const gradient = `linear-gradient(to right, ${start}, ${end})`
+  return { maskImage: gradient, WebkitMaskImage: gradient }
+})
+
+let observer: ResizeObserver | null = null
+
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver === 'function') {
+    observer = new ResizeObserver(measure)
+    if (row.value) observer.observe(row.value)
+  }
+  // The row is `md:hidden` on the orders page, so it may mount with zero width;
+  // and a chip chosen from a link has to be visible without a swipe.
+  void nextTick(() => {
+    document
+      .getElementById(chipId(props.modelValue))
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    measure()
+  })
+})
+
+onBeforeUnmount(() => observer?.disconnect())
+
+watch(
+  () => props.options.length,
+  () => void nextTick(measure),
+)
 
 async function select(value: string, focus = false) {
   emit('update:modelValue', value)
@@ -66,10 +125,13 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <div
+    ref="row"
     class="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     role="radiogroup"
     :aria-label="label"
+    :style="maskStyle"
     @keydown="onKeydown"
+    @scroll="measure"
   >
     <button
       v-for="(option, index) in options"
