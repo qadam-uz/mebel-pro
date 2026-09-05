@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { api, captureApiError, withQuery } from '@/shared/api/client'
@@ -211,6 +211,20 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
     return workshops.value
   }
 
+  /**
+   * Where "Ustaxona" goes — the one target both nav surfaces read.
+   *
+   * Exactly one related workshop means there is nothing to choose, so the entry
+   * lands on that workshop's profile (§2.1); two or more, or nothing loaded
+   * yet, and it opens Ustaxonalarim. It lives on the store rather than in each
+   * shell because the phone tab and the desktop nav render the same item and
+   * had drifted apart — the tab took the shortcut, the nav always went to the
+   * list.
+   */
+  const workshopPath = computed(() =>
+    workshops.value.length === 1 ? `/c/workshops/${workshops.value[0].workshop_id}` : '/c/branches',
+  )
+
   function reset() {
     link.value = null
     linkLoading.value = false
@@ -226,6 +240,7 @@ export const useClientEntryStore = defineStore('clientEntry', () => {
     linkLoading,
     linkError,
     workshops,
+    workshopPath,
     workshopsLoading,
     workshopsError,
     workshopsTraceId,

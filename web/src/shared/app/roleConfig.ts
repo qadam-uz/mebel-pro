@@ -81,6 +81,9 @@ export const clientConfig: RoleConfig = {
     { labelKey: 'nav.item.clientDrafts', to: '/c/cutting/drafts', icon: 'scissors' },
     { labelKey: 'nav.item.clientOrders', to: '/c/orders', icon: 'orders' },
     // Ustaxonalarim: the client's own workshops, not a platform directory (spec §5).
+    // This `to` is the fallback the config can state statically; ClientShell
+    // re-points the item at `clientEntry.workshopPath`, which skips the
+    // one-item list, so the nav and the phone's Ustaxona tab land together.
     { labelKey: 'nav.item.clientWorkshops', to: '/c/branches', icon: 'store' },
   ],
 }

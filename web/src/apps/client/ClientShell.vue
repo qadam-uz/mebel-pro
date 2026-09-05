@@ -41,16 +41,19 @@ const pageTitle = computed(() => {
 })
 
 /**
- * The "Ustaxona" tab (§2, UX review 2026-09-05).
+ * The desktop nav, with "Ustaxonalarim" pointed where the phone tab points.
  *
- * One related workshop is the common case, and a one-item list is a hop with
- * nothing to choose — so the tab goes straight to that workshop's profile.
- * Two or more, or nothing loaded yet, and it opens Ustaxonalarim.
+ * It is the same item on both surfaces (§2.1, UX review 2026-09-05): one
+ * related workshop is the common case, and a one-item list is a hop with
+ * nothing to choose. `roleConfig` can only carry the static fallback, so the
+ * live target comes off the store — the same `workshopPath` the tab reads,
+ * which is what stops the two drifting apart again.
  */
-const workshopTabTo = computed(() => {
-  const only = entry.workshops.length === 1 ? entry.workshops[0] : null
-  return only ? `/c/workshops/${only.workshop_id}` : '/c/branches'
-})
+const navItems = computed(() =>
+  config.nav.map((item) =>
+    item.labelKey === 'nav.item.clientWorkshops' ? { ...item, to: entry.workshopPath } : item,
+  ),
+)
 
 interface ClientTab {
   labelKey: string
@@ -74,7 +77,7 @@ const tabs = computed<ClientTab[]>(() => [
   {
     labelKey: 'nav.item.clientWorkshop',
     icon: 'store',
-    to: workshopTabTo.value,
+    to: entry.workshopPath,
     owns: ['/c/branches', '/c/workshops'],
   },
   {
@@ -144,7 +147,7 @@ watch([isChromeless, () => auth.accessToken], primeWorkshops)
         </span>
 
         <nav class="client-nav hidden md:flex" :aria-label="$t('shell.a11y.mainNav')">
-          <RouterLink v-for="item in config.nav" :key="item.to" :to="item.to">
+          <RouterLink v-for="item in navItems" :key="item.labelKey" :to="rolePath(item.to)">
             <span class="client-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
             </span>
