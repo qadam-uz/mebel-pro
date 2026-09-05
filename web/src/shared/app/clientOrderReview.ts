@@ -68,7 +68,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
       key: 'cutting',
       label: translate('client.common.cuttingService'),
       detail: translate('client.orderNew.billCuttingDetail', {
-        panels: translatePlural('client.unit.panels', quote.panels_used),
+        panels: translatePlural('client.unit.sheets', quote.panels_used),
         price: formatTiyin(quote.cutting_rate_tiyin),
       }),
       amount_tiyin: quote.panels_used * quote.cutting_rate_tiyin,
@@ -78,7 +78,7 @@ export function buildBillRows(quote: OrderQuote): OrderBillRow[] {
     rows.push({
       key: `material:${line.material_id}`,
       label: line.material_name,
-      detail: translatePlural('client.unit.panels', line.panels_used),
+      detail: translatePlural('client.unit.sheets', line.panels_used),
       amount_tiyin: line.line_total_tiyin,
     })
   }
