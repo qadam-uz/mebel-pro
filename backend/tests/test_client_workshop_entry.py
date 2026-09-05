@@ -71,6 +71,7 @@ async def _add_branch(
     closed_reason: str | None = None,
     latitude: Decimal | None = None,
     longitude: Decimal | None = None,
+    additional_phones: list[str] | None = None,
 ) -> Branch:
     branch = Branch(
         workshop_id=workshop.id,
@@ -78,6 +79,7 @@ async def _add_branch(
         name=name,
         address=f"Tashkent, {name}",
         phone="+998901111111",
+        additional_phones=additional_phones or [],
         status=status,
         closed_reason=closed_reason,
         latitude=latitude,
@@ -817,6 +819,29 @@ async def test_my_workshops_lists_the_pinned_workshop_with_its_visible_branches(
     assert [row["name"] for row in body[0]["branches"]] == [closed.name, branch.name]
     assert [row["is_pinned"] for row in body[0]["branches"]] == [False, True]
     assert body[0]["branches"][0]["closed_reason"] == "Ta'mirlash"
+
+
+async def test_my_workshops_lists_every_published_phone_of_a_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The client calls the counter, and a branch with three lines has three
+    because the first two are busy — so Ustaxonalarim and the home card show
+    all of them, primary first, not just the first."""
+
+    workshop, branch, _ = await seed_workshop_with_owner(db_session, login="phones_owner")
+    branch.additional_phones = ["+998902222222", "+998903333333"]
+    quiet = await _add_branch(db_session, workshop=workshop, name="Sergeli")
+    _, token = await _client_token(db_session, preferred_branch_id=branch.id)
+
+    response = await client.get("/api/v1/client/my-workshops", headers=_auth(token))
+
+    assert response.status_code == 200
+    rows = {row["name"]: row for row in response.json()[0]["branches"]}
+    assert rows[branch.name]["phone"] == branch.phone
+    assert rows[branch.name]["additional_phones"] == ["+998902222222", "+998903333333"]
+    # A branch that publishes one number says so with an empty list, never null.
+    assert rows[quiet.name]["additional_phones"] == []
 
 
 async def test_my_workshops_derives_history_from_orders_and_drafts(

@@ -9,6 +9,7 @@ import {
   clientStatusPillClass,
   formatPhone,
 } from '@/shared/app/clientUi'
+import { branchPhoneList } from '@/shared/app/branchPhones'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import { yandexMapUrl } from '@/shared/app/yandexMapLink'
@@ -336,11 +337,14 @@ onMounted(() => {
               >
                 {{ $t('client.workshop.viewOnMap') }}
               </a>
+              <!-- Every published number, primary first (decision 24). -->
               <a
+                v-for="phone in branchPhoneList(order.branch_phone, order.branch_additional_phones)"
+                :key="phone"
                 class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2"
-                :href="`tel:${order.branch_phone}`"
+                :href="`tel:${phone}`"
               >
-                {{ formatPhone(order.branch_phone) }}
+                {{ formatPhone(phone) }}
               </a>
             </div>
           </div>

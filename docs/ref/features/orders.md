@@ -623,7 +623,8 @@ inbox rows written before that (`order.status_changed`) still render
 (`order.updated`, see [Revising a placed order](#revising-a-placed-order)).
 
 - **Home dashboard** (`/c`) — `Salom, {ism}` alone on the greeting row, then, in order: the
-  **Ustaxonangiz** card (the client's pinned branch — logo, name, address, tap-to-call phone,
+  **Ustaxonangiz** card (the client's pinned branch — logo, name, address, every tap-to-call
+  phone,
   a pill only when the branch is `temporarily_closed`; the card body links to the workshop
   profile, [`client-entry.md`](client-entry.md) owns it), the page's one primary
   **+ Yangi chizma** directly under the card and outside it, a **ready-for-pickup** banner for

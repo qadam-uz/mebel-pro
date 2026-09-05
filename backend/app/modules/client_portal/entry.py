@@ -386,6 +386,7 @@ async def my_workshops(
                 name=branch.name,
                 address=branch.address,
                 phone=branch.phone,
+                additional_phones=list(branch.additional_phones or []),
                 latitude=branch.latitude,
                 longitude=branch.longitude,
                 status=branch.status,

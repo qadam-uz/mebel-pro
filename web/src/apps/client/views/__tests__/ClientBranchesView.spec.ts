@@ -86,6 +86,34 @@ afterEach(() => {
 })
 
 describe('Ustaxonalarim', () => {
+  // Decision 24 — a branch that publishes three lines has three because the
+  // first two are busy, so the row lists every one of them as its own
+  // tap-to-call link, primary first.
+  it('gives every published number of a branch its own tel: link', async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      workshop({
+        branches: [
+          branch({
+            additional_phones: ['+998902222222', '+998903333333'],
+          }),
+        ],
+      }),
+    ])
+
+    const view = await mountPage()
+
+    const numbers = view.findAll('a[href^="tel:"]').map((link) => link.attributes('href'))
+    expect(numbers).toEqual(['tel:+998901234567', 'tel:+998902222222', 'tel:+998903333333'])
+  })
+
+  it('renders a single link for a branch that publishes one number', async () => {
+    vi.mocked(api.get).mockResolvedValue([workshop()])
+
+    const view = await mountPage()
+
+    expect(view.findAll('a[href^="tel:"]')).toHaveLength(1)
+  })
+
   it('lists one card per related workshop, with pickup information per branch', async () => {
     vi.mocked(api.get).mockResolvedValue([
       workshop({ is_pinned: true, branches: [branch({ is_pinned: true })] }),

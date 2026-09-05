@@ -25,6 +25,8 @@ const routes = [
   { path: '/c/cutting/drafts', name: 'client-drafts', component: { template: '<div />' } },
   { path: '/c/orders', name: 'client-orders', component: { template: '<div />' } },
   { path: '/c/orders/:id', name: 'client-order', component: { template: '<div />' } },
+  // The Ustaxonangiz card links here once the workshops list has landed.
+  { path: '/c/workshops/:workshopId', name: 'client-workshop', component: { template: '<div />' } },
 ]
 
 function clientMe(overrides: Partial<MeResponse> = {}): MeResponse {
@@ -124,6 +126,45 @@ afterEach(() => {
 })
 
 describe('ClientHomeView — the Ustaxonangiz card (§3)', () => {
+  // Decision 24 — the card dials every number the counter publishes, not just
+  // the first. Each stays its own tap target inside a card that is itself a
+  // link, so `@click.stop` has to survive the list.
+  it('lists every published phone of the pinned branch, primary first', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/my-workshops')
+        ? [
+            {
+              workshop_id: 'workshop-1',
+              name: 'Mebel Master',
+              logo_file_id: null,
+              public_code: 'ABCD2345',
+              is_pinned: true,
+              branches: [
+                {
+                  id: 'branch-1',
+                  branch_no: 1,
+                  name: 'Chilonzor',
+                  address: 'Chilonzor 12',
+                  phone: '+998901234567',
+                  additional_phones: ['+998902222222'],
+                  status: 'active',
+                  closed_reason: null,
+                  is_pinned: true,
+                },
+              ],
+            },
+          ]
+        : [],
+    )
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.findAll('a[href^="tel:"]').map((link) => link.attributes('href'))).toEqual([
+      'tel:+998901234567',
+      'tel:+998902222222',
+    ])
+  })
+
   // Decision 16: with the branch list not yet in hand the card still has both
   // names off `/auth/me`, so it renders «Workshop · Branch» rather than waiting.
   it('titles the card by the naming rule and links to the workshop', async () => {

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import { branchPhoneList } from '@/shared/app/branchPhones'
 import { formatPhone } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import { yandexMapUrl } from '@/shared/app/yandexMapLink'
@@ -42,6 +43,9 @@ const { t } = useI18n()
 const pinning = ref(false)
 
 const isClosed = computed(() => props.branch.status !== 'active')
+/** Every number the branch publishes, primary first (decision 24) — a client
+ *  who cannot get through on the first line has the others right there. */
+const phones = computed(() => branchPhoneList(props.branch.phone, props.branch.additional_phones))
 const mapUrl = computed(() => yandexMapUrl(props.branch.latitude, props.branch.longitude))
 const catalogTo = computed(() =>
   rolePath(`/c/workshops/${props.workshopId}/catalog?branch=${props.branch.id}`),
@@ -118,10 +122,12 @@ async function makePrimary() {
 
     <div class="flex flex-wrap items-center gap-x-3.5">
       <a
+        v-for="phone in phones"
+        :key="phone"
         class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2"
-        :href="`tel:${branch.phone}`"
+        :href="`tel:${phone}`"
       >
-        {{ formatPhone(branch.phone) }}
+        {{ formatPhone(phone) }}
       </a>
       <!-- Rendered only when the branch actually has a pin — decision 8: the
            map is Yandex's, opened in a new tab, never an in-app frame. -->

@@ -98,7 +98,12 @@ class ClientWorkshopBranch(APIModel):
     branch_no: int
     name: str
     address: str
+    # Every published number, primary first: the client calls the counter, and
+    # a branch that publishes three lines has three because the first two are
+    # busy. `ClientBranchResponse` has carried the pair since checkout needed
+    # it; Ustaxonalarim and the home card were the surfaces still showing one.
     phone: str
+    additional_phones: list[str]
     # For the «Xaritada ko'rish» link; null on a branch nobody has placed on
     # the map yet, and the link is then simply absent.
     latitude: Decimal | None

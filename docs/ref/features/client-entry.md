@@ -47,14 +47,18 @@ find that shop in a list of strangers.
   and there is no `preferred_workshop_id`.
 - **Naming rule, system-wide.** A workshop with **one** branch is named by the workshop alone;
   its branch name never appears. A workshop with **several** is named
-  **«{Workshop} · {Branch}»**, always in that order. A branch name is never shown alone.
-  Address and phone are always the branch's. One rule, so the same shop reads the same way on
-  home, in the editor, on an order and in a notification. **The branch count is what decides,
-  and it travels in the payload** — the client's order list and detail carry
-  `workshop_branch_count`, counted with the same visibility predicate Ustaxonalarim uses — so a
-  screen holding two names never has to guess which case it is in. Guessing was the old
-  behaviour and it always guessed "several", which is how a one-counter workshop's client ended
-  up reading a branch name on every order card.
+  **«{Workshop} · {Branch}»**, always in that order. A branch name is never shown alone. One
+  rule, so the same shop reads the same way on home, in the editor, on an order and in a
+  notification. **The branch count is what decides, and it travels in the payload** — the
+  client's order list and detail carry `workshop_branch_count`, counted with the same
+  visibility predicate Ustaxonalarim uses — so a screen holding two names never has to guess
+  which case it is in. Guessing was the old behaviour and it always guessed "several", which is
+  how a one-counter workshop's client read a branch name on every order card.
+- **Address and phones are always the branch's, and every published phone is shown** — primary
+  first, each its own tap-to-call link, on every surface where the client sees a branch: the
+  home card, the order detail, the workshop profile, Ustaxonalarim and checkout. A branch that
+  publishes three lines has three because the first two are busy, so showing only the first
+  shows the client the line least likely to answer.
 - **The marketplace is a later phase**, and a deliberate one: public workshop cards and open
   price comparison start only when the platform itself brings the demand that would justify
   them. Nothing here builds it early; nothing here makes it harder. Until then it stays an
@@ -252,7 +256,8 @@ be scanned again.
 Entry lands on the **existing home dashboard** — no storefront, no interstitial. The trust cue
 is a one-time toast, *"Siz {workshop} ustaxonasiga ulandingiz"*, and then the
 **Ustaxonangiz** card at the top of home: logo, the workshop named by the naming rule, the
-branch's address and tap-to-call phone, a pill only when the branch is `temporarily_closed`,
+branch's address and every tap-to-call phone, a pill only when the branch is
+`temporarily_closed`,
 and a chevron — the card body links to that workshop's profile
 ([`orders.md`](orders.md#ux-client-app) owns the rest of the page).
 
@@ -271,8 +276,8 @@ visible branch — the same row the profile uses.
 
 **The branch row is where the pin and the actions live**, because the pin is a branch. Its
 title line names the branch (or the workshop, for a one-branch workshop — the naming rule),
-with a status pill and reason only when `temporarily_closed`; then address, tap-to-call phone
-and **Xaritada ko'rish** when the branch has coordinates; then two small buttons, primary
+with a status pill and reason only when `temporarily_closed`; then address, every tap-to-call
+phone and **Xaritada ko'rish** when the branch has coordinates; then two small buttons, primary
 **Yangi chizma** and outline **Katalog**.
 
 The mark is a **star**: the pinned row carries a filled one, labelled *Asosiy*; every other row

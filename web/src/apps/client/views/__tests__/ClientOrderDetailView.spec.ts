@@ -111,6 +111,28 @@ afterEach(async () => {
   await setLocale(DEFAULT_LOCALE)
 })
 
+// Decision 24 — the Ustaxona card reaches the counter on every line it
+// publishes, not only the first.
+describe('ClientOrderDetailView — every branch phone is dialable (decision 24)', () => {
+  it('lists the primary first and then the extras, each its own tel: link', async () => {
+    const view = await mountDetail(1, {
+      branch_additional_phones: ['+998902222222', '+998903333333'],
+    } as Partial<OrderDetail>)
+
+    expect(view.findAll('a[href^="tel:"]').map((link) => link.attributes('href'))).toEqual([
+      'tel:+998901234567',
+      'tel:+998902222222',
+      'tel:+998903333333',
+    ])
+  })
+
+  it('renders one link when the branch publishes one number', async () => {
+    const view = await mountDetail(1)
+
+    expect(view.findAll('a[href^="tel:"]')).toHaveLength(1)
+  })
+})
+
 // Decision 23 — the Ustaxona card names the counter the same way the orders
 // list does. The workshop is always the title; the branch earns a second line
 // only where there is more than one branch to tell apart. The branch name in

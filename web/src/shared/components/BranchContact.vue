@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { branchPhoneList } from '@/shared/app/branchPhones'
 import { formatPhone } from '@/shared/app/clientUi'
 import { yandexMapUrl } from '@/shared/app/yandexMapLink'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -16,8 +17,8 @@ const props = defineProps<{
   longitude?: string | number | null
 }>()
 
-/** Primary first, then the extras — all tap-to-call. */
-const phones = computed(() => [props.phone, ...(props.additionalPhones ?? [])].filter(Boolean))
+/** Primary first, then the extras — all tap-to-call (decision 24). */
+const phones = computed(() => branchPhoneList(props.phone, props.additionalPhones))
 const mapUrl = computed(() => yandexMapUrl(props.latitude, props.longitude))
 </script>
 
