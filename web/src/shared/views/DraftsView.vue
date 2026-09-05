@@ -98,12 +98,17 @@ onMounted(() => {
 
 <template>
   <section>
-    <div class="client-page-head">
-      <div>
+    <div class="client-page-head max-md:mb-3">
+      <!-- §2: one title per phone screen — the compact header already says
+           «Chizmalar», so only the heading and its subtitle go. «Yangi chizma»
+           stays: this tab is the phone's entry point for starting a drawing,
+           and the empty state's copy of the button is not reachable once the
+           list has anything in it. -->
+      <div class="max-md:hidden">
         <h1>{{ $t('client.drafts.title') }}</h1>
         <p class="sub">{{ $t('client.drafts.subtitle') }}</p>
       </div>
-      <button type="button" class="mp-button mp-button-primary" @click="newCutting">
+      <button type="button" class="mp-button mp-button-primary max-md:w-full" @click="newCutting">
         {{ $t('client.common.newDraft') }}
       </button>
     </div>
