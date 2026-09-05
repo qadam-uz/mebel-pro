@@ -203,13 +203,19 @@ function openLightbox(group: DecorGroup, event: MouseEvent | KeyboardEvent) {
 }
 
 // AppModal's focus trap restores focus to whatever had it when the modal
-// opened, which is the thumbnail — this only has to survive the trap's own
-// restore, so it runs after it on the next frame.
+// opened — which is the thumbnail only when the browser focused it on click
+// (Safari does not). So the trigger is remembered and re-focused here, after
+// the trap's own restore has run.
+//
+// A timeout rather than `requestAnimationFrame`: rAF is suspended while the tab
+// is in the background, which would leave focus on `<body>` for a modal closed
+// from a background tab — and a macrotask still lands after the post-flush
+// watcher the trap restores from.
 function closeLightbox() {
   lightbox.value = null
   const trigger = lightboxTrigger
   lightboxTrigger = null
-  requestAnimationFrame(() => trigger?.focus())
+  setTimeout(() => trigger?.focus(), 0)
 }
 
 // --------------------------------------------------------------- loading
