@@ -37,6 +37,13 @@ export default defineConfig({
     },
   },
   build: {
+    // A font is never inlined. The two `cyrillic-ext` subsets sit under Vite's
+    // 4 kB default, and as data: URIs they land base64-inflated inside the
+    // render-blocking stylesheet that *every* visitor parses — to carry glyphs
+    // (Ғ, Қ, Ҳ) only the uz-Cyrl locale ever paints. As files they stay
+    // separately cacheable, and `unicode-range` keeps them undownloaded until
+    // something on the page actually needs them.
+    assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
     // Multi-page: standalone landing plus the three role SPAs.
     rollupOptions: {
       input: {

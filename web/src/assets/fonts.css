@@ -1,0 +1,119 @@
+/* The two Wix Madefor faces, served from this origin.
+ *
+ * The files are the OFL-licensed `@fontsource-variable/*` packages (pinned in
+ * package.json, LICENSE inside each). Vite rewrites every `url()` below to a
+ * content-hashed asset under /assets/, so the fonts cache immutably alongside
+ * the JS and CSS and no request ever leaves the app's own host — the previous
+ * setup paid DNS + TCP + TLS to fonts.googleapis.com and then again to
+ * fonts.gstatic.com before a single glyph arrived, on links where that cost
+ * 300-600 ms.
+ *
+ * The `@font-face` rules are written here rather than `@import`ed from the
+ * packages for one reason: Fontsource names the families "Wix Madefor Text
+ * Variable" / "Wix Madefor Display Variable", and every token, print view and
+ * the landing page's mirrored palette say "Wix Madefor Text" / "Wix Madefor
+ * Display". Declaring the families under the names the design system already
+ * uses keeps the rename out of ~7500 lines of CSS and out of DESIGN.md.
+ *
+ * One face per family: both are VARIABLE (`font-weight: 400 800` from a single
+ * file), and neither carries an italic — which matches what the Google URL
+ * asked for, so nothing regresses. `font-display: swap` keeps text painted in
+ * the fallback until the file lands.
+ *
+ * Four subsets each, and no more. `unicode-range` means the browser downloads
+ * only what a page actually renders: `latin` for uz, `cyrillic` for ru,
+ * `cyrillic-ext` for uz-Cyrl — Ғ, Қ and Ҳ (U+0492/049A/04B2) live there, not in
+ * `cyrillic`, so dropping it would leave the Uzbek Cyrillic locale in a
+ * fallback face. `vietnamese` is dropped; this app has no Vietnamese copy. */
+
+/* Wix Madefor Text — body, labels, controls. */
+@font-face {
+  font-family: 'Wix Madefor Text';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-text/files/wix-madefor-text-latin-wght-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Text';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-text/files/wix-madefor-text-latin-ext-wght-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Text';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-text/files/wix-madefor-text-cyrillic-wght-normal.woff2')
+    format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Text';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-text/files/wix-madefor-text-cyrillic-ext-wght-normal.woff2')
+    format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+
+/* Wix Madefor Display — headings, figures, the wordmark. */
+@font-face {
+  font-family: 'Wix Madefor Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-display/files/wix-madefor-display-latin-wght-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-display/files/wix-madefor-display-latin-ext-wght-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-display/files/wix-madefor-display-cyrillic-wght-normal.woff2')
+    format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Wix Madefor Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url('@fontsource-variable/wix-madefor-display/files/wix-madefor-display-cyrillic-ext-wght-normal.woff2')
+    format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}

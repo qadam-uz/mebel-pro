@@ -8,25 +8,34 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#f1f2f4" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Fonts load without blocking the first paint. As a plain stylesheet this
-         gated every pixel on a THIRD-PARTY chain — DNS + TCP + TLS to
-         fonts.googleapis.com, the CSS, then the font files — which on the links
-         this app is used over cost 300-600 ms of blank screen. `preload as=style`
-         fetches at high priority without blocking, and the onload swap promotes it
-         the moment it lands. `display=swap` (already in the URL) means text paints
-         in the fallback face immediately and reflows once, so nothing is hidden
-         while it arrives. Both families are VARIABLE (one file each covers
-         400-800) and both ship a real cyrillic subset, so the whole system is
-         two families in a single request. -->
+    <!-- The two variable faces the first paint needs, self-hosted and
+         content-hashed: the @font-face rules live in `src/assets/fonts.css`,
+         which `main.css` pulls in. Nothing is fetched from a third party any
+         more — the old setup gated every glyph on DNS + TCP + TLS to
+         fonts.googleapis.com and then again to fonts.gstatic.com, which on the
+         links this app is used over cost 300-600 ms.
+         Preloaded because a font in a stylesheet is only discovered once that
+         stylesheet has parsed, which is a second round trip on every cold load.
+         `latin` is the subset the default locale paints; a Cyrillic locale
+         picks its own subset up from the same stylesheet. `crossorigin` is
+         required even same-origin — fonts are always fetched in CORS mode, and
+         without it the browser preloads one copy and then fetches another.
+         Vite rewrites both hrefs to the same hashed assets the CSS resolves to,
+         so preload and @font-face are one request. -->
     <link
       rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400..800&family=Wix+Madefor+Text:wght@400..800&display=swap"
-      onload="this.onload=null;this.rel='stylesheet'"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/node_modules/@fontsource-variable/wix-madefor-text/files/wix-madefor-text-latin-wght-normal.woff2"
     />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400..800&family=Wix+Madefor+Text:wght@400..800&display=swap" /></noscript>
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/node_modules/@fontsource-variable/wix-madefor-display/files/wix-madefor-display-latin-wght-normal.woff2"
+    />
     <title>Mebel Pro · Workshop</title>
   </head>
   <body>

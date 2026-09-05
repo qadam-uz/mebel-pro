@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+/* The two Wix Madefor faces, self-hosted. Also linked directly by
+   `landing/index.html`, which is styled on its own and never loads this file. */
+@import './fonts.css';
 
 @theme {
   /* The desktop `zoom: 90%` below scales content but NOT media queries — they
