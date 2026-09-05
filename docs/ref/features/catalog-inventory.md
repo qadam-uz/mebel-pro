@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 50
 ---
 
@@ -639,7 +639,7 @@ now-redundant branch column:
     here too, marked, because it is the same document's story told backwards.
   - **Tuzatishlar** — corrections, with the actor and the mandatory reason that justifies each.
   - **Chiqimlar** — what production took, each linked to the **order** that took it by its own
-    `#26-1-0005` number (a `consume`, or the `restore` of a reverted step).
+    `№ 482 917` number (a `consume`, or the `restore` of a reverted step).
 
   A correction booked from the page switches to *Tuzatishlar*, so the row explaining the new
   balance is the one on screen. The window is the last 100 movements and the page **says so**
@@ -713,7 +713,7 @@ now-redundant branch column:
 - **Transactions** (`manage_inventory`) — full log: type (`stock_in` / `stock_in_void` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, unit price and total (stock-in rows only), order link (for
-  consume/restore — the order's own `#26-1-0005` number, which the movement carries), the
+  consume/restore — the order's own `№ 482 917` number, which the movement carries), the
   `K-…` faktura link to the document's page (for stock_in and
   stock_in_void), supplier (for stock_in), actor, note, date-time; filtered by the
   shared date-range picker and a **material filter** — one material's stock-in rows

@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 80
 ---
 
@@ -39,13 +39,13 @@ detail does not mint a draft (see _Lifecycle_).
 
 A draft owns:
 
-- **A `preferred_branch_id` — required to build the parts list.** A new client editor starts with
-  no branch selected. Selecting a workshop is **mandatory**: the catalog is scoped to the chosen
-  branch, so the parts editor stays gated behind a "pick a workshop" prompt until one is set, and
-  **Optimise** is disabled without it. The client can **change** the branch (there is no "clear to
-  none" — the field is required once you're editing), and the order step defaults to it.
-  Switching branches is not a data operation: parts already in the list stay editable, and a row
-  whose material belongs to the previous branch keeps it until the client picks a replacement.
+- **A `preferred_branch_id` — required to build the parts list**, because the catalog, the
+  prices and the saw settings are all the branch's. The branch is settled **before** the
+  editor opens and is fixed for the life of the drawing (see _The drawing's branch_): for a
+  client it is the pin or the branch whose **Yangi chizma** started it, and a client with no
+  pin is sent to Ustaxonalarim instead of into an editor. Only the workshop editor may change
+  it, and doing so is not a data operation: parts already in the list stay editable, and a row
+  whose material belongs to the previous branch keeps it until a replacement is picked.
   The column stays nullable in storage for drafts that predate this rule and for an editor
   before its first saved detail.
 - **Parts.** Each part picks its own **panel** material from the branch's carried formats,
@@ -124,11 +124,15 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   material and `own_edge_material_ids` per tape. The stored number is the client's **claim,
   not a cap** — a result applies `min(claim, panels_used)`, so a claim survives a re-optimise
   that needs fewer sheets and still applies to one that needs more.
-  Whether a **client** may make the claim unattended is the branch's call:
-  `own_material_allowed` is off until the owner turns it on ([`workshop.md`](workshop.md)),
-  the client editor hides the affordance where it is off, and the server drops any claim the
-  client path sends to a disallowing branch — including a stale one, on the next write, when
-  a branch switches the setting off. **Staff are not gated by it**: the walk-in editor and
+  **The client app shows no own-material control at all in the MVP** (owner, 2026-09-05): no
+  «O'zim olib kelaman» toggle, no ownership dialog, no «Siz olib kelasiz» banner — the flow
+  asks a client to reason about sheet counts before they have placed their first order, and
+  it can be switched on later without moving anything, because the data and the workshop path
+  are untouched. Where it does run, whether a **client** may claim unattended is the branch's
+  call: `own_material_allowed` is off until the owner turns it on
+  ([`workshop.md`](workshop.md)), and the server drops any claim the client path sends to a
+  disallowing branch — including a stale one, on the next write, when a branch switches the
+  setting off. **Staff are not gated by it**: the walk-in editor and
   the order-side action ([`orders.md`](orders.md#pricing)) always accept a claim, because
   the setting is a self-serve policy rather than a rule about what the shop floor will take.
   What ownership changes is only the **bill and the stock seam**, never the layout: own sheets
@@ -170,6 +174,19 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   pins decor-matching edges at the top of one material list, then prefers tape widths that
   cover the selected panel thickness with the closest fit. Narrow tapes sink to the bottom and
   show a warning, but stay selectable (see _UX_).
+- **In the client editor the tape *decor* belongs to the material group and only the
+  *thickness* belongs to the side.** Adding a material attaches the branch's tape of the same
+  decor to the group, with every thickness variant the branch carries in it; a part then
+  chooses sides and one of those thicknesses, and one part may carry 2 mm on a visible side
+  and 0.4 mm on a hidden one. This is the shop floor's own rule — one tape decor per board,
+  thick where it shows — so the screen asks the question the client can answer and skips the
+  one they cannot. **Storage is unchanged**: each side still stores the `kromka` material id
+  resolved from (tape decor, thickness), so the optimiser, pricing, the PDF and the workshop
+  side see exactly what they saw before. A decor the branch carries no tape for is the one
+  case that asks: the group's tape is picked once, and until it is, banding a side is blocked
+  rather than guessed. There is **no per-part tape override** — a contrasting tape on one part
+  is settled with the workshop by phone, and every banded side therefore resolves to a
+  concrete tape at placement, so no order is ever placed with a price still pending.
 - **Thickening (`УТ`) is an instruction, not geometry.** A part may be flagged `thickened`
   (utolshenie / obmanka): the workshop glues a strip of the same panel underneath so the
   visible edge reads twice as thick. The strip is **never planned** — it is not placed, not
@@ -287,11 +304,18 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   browser.
 - As a workshop user (cutter), I want the confirmed layout and PDF on my tablet at the saw,
   so I can cut without translation.
-- As a client or workshop staff member acting for a walk-in client, I want to import a 2D-Place
+- As workshop staff acting for a walk-in client, I want to import a 2D-Place
   `.map` file and keep its exact sheet layout, so a layout prepared outside the app can become
   the chosen cutting result without rerunning the optimiser.
 
 ## Imports
+
+**Importing is a workshop-side feature.** The client app exposes no entry point to it in the
+MVP — no mode switch in the editor, no action on the drawings list, and no setting or flag
+that could reveal one (owner, 2026-09-05): a client draws a handful of parts, and a file that
+came out of a furniture CAD came out of somebody's workshop. The parsers and the
+client-scoped endpoints stay as they are, unreached, so the entry point is a UI change on the
+day a workshop asks for it. Everything below therefore describes the **workshop** editor.
 
 The cutting import endpoint accepts three source formats:
 
@@ -332,30 +356,54 @@ texture direction). Accepting the edit removes the file layout, clears the choic
 fresh optimiser run. Name, edge-band, and material-source edits are geometry-neutral: they save
 without the warning and retain the layout while its edge metrics are refreshed.
 
-## UX — the cutting flow (client app)
+## UX — the cutting flow
+
+**One editor component, two audiences.** The client app and the workshop app mount the same
+editor, and the differences between them are named at each subsection below rather than
+maintained as two descriptions. Where nothing is said, both behave alike.
 
 Two stages share one draft: the detail editor at `/c/cutting/:id` (`/c/cutting/new` before the
-first complete detail), then the standalone result at `/c/cutting/:id/result`. Entry is the client
-app's home **New cutting** button, which opens an empty editor; its first complete detail creates
-and persists the draft (see _Lifecycle_). **Optimise** moves to the result stage only after a
-successful run. A secondary **My drafts** entry lists unbound drafts and opens drafts with a chosen
-result on the result stage; drafts without one reopen in the editor.
+first complete detail), then the standalone result at `/c/cutting/:id/result`. The client's
+entry is **+ Yangi chizma** on home or a branch row's **Yangi chizma**, which opens an empty
+editor; its first complete detail creates and persists the draft (see _Lifecycle_). The
+sticky primary reads **Hisoblash**, and **Natijani ko'rish** once the chosen result matches
+what is on screen. A secondary **Chizmalar** entry lists unbound drafts and opens drafts with
+a chosen result on the result stage; drafts without one reopen in the editor.
 
-### Branch selector (top of the editor)
+The client editor is **phone-first**: the draft name is the page title (inline-editable, with
+delete behind its ⋯ menu), each part opens as a sheet whose action row docks above the
+on-screen keyboard, and the material and tape pickers are full-height sheets rather than
+modals.
 
-A small affordance under the page header naming the active branch. Choosing one is
-**required** — the catalog is scoped to the branch, so until one is set the parts editor
-shows a **"pick a workshop first"** gate (a `store`-icon empty state with a single **Pick a
-workshop** button) in place of the parts list, and a caption on the selector explains the
-list is built from the chosen workshop's catalog.
+### The drawing's branch
 
-**Which branches the picker offers depends on the client's pin**
-([`client-entry.md`](client-entry.md)). A client pinned to a workshop sees only that
-workshop's branches, under a **`{workshop} filiallari`** header, with no affordance of any
-kind toward another workshop — the only door to one is that workshop's own link. An unpinned
-client keeps the flat cross-workshop list described below. Either way an **existing draft
-keeps the branch it already has**, even a branch outside the pinned workshop: the pin scopes
-new choices, never the drawing's own data.
+**The branch is settled before the editor opens, and the editor never changes it.** For a
+client it is the pinned branch, or the branch whose **Yangi chizma** started the drawing
+([`client-entry.md`](client-entry.md)); the editor shows it as a **read-only** line under the
+draft name, named by the system-wide rule — the workshop alone when it has one branch,
+`{Workshop} · {Branch}` when it has several. There is no picker, no **O'zgartirish**, and no
+way to compare branches from inside a drawing: the branch decides the catalog, the prices and
+the kerf, so changing it mid-drawing changes the drawing's meaning rather than a preference.
+A client with no pin reaching `/c/cutting/new` directly is **redirected to Ustaxonalarim
+before any editor renders** — the editor has no branch and no way to ask for one. An existing
+draft always carries its own branch, including one outside the client's current pin.
+
+*Why this replaced a picker.* Until 2026-09 the editor opened a flat cross-workshop branch
+list (narrowed to the pinned workshop's branches under a `{workshop} filiallari` header), and
+the parts editor stood behind a "pick a workshop first" gate. It asked the branch question in
+the one place where the answer is already known, and it was the last surface in the client app
+from which another workshop was reachable.
+
+**The workshop editor keeps a picker**, because a staffer legitimately starts a walk-in
+drawing at whichever branch they are standing in. Its line reads the branch name with a
+**O'zgartirish** button — there is no Clear, the field is required once editing has begun —
+and the picker is one flat list, a row per branch naming the branch, its workshop and today's
+hours, with a status pill (`temporarily_closed` branches stay selectable and the row flags
+why) and a search field once the list is long. One tap selects; **Apply** writes the draft's
+`preferred_branch_id`. **Changing it never edits the parts list**: the catalog reloads against
+the new branch, and a row still holding the old branch's material is swapped through the
+ordinary material picker. A branch frozen onto a walk-in draft or an order revision is locked
+even here — see _Workshop side_.
 
 ### Parts editor
 
@@ -390,13 +438,27 @@ Every column except the row number is fixed-width, `Nomi` included. Left to stre
 ends and the leftover width stays empty — or, in the staff wizard, carries the kromka panel
 beside it.
 
-Each material group shows its own edge-tape registry under the material name. Distinct
-`(edge material_id, source)` pairs get one number and colour in their first-use order; row edge
-cells, group registries, and the edge picker all render that same identity. Applying a tape to more
-sides never changes its number or colour. When a tape is removed, the remaining tapes are compacted
-back to consecutive `1..N` numbers, so the next tape takes a deleted number and its matching colour.
-The visible group registry lists only tapes currently used in that group, sorted by this drawing-wide
-number.
+**Workshop editor — the edge-tape registry.** Each material group shows its own registry under
+the material name. Distinct `(edge material_id, source)` pairs get one number and colour in
+their first-use order; row edge cells, group registries, and the edge picker all render that
+same identity. Applying a tape to more sides never changes its number or colour. When a tape
+is removed, the remaining tapes are compacted back to consecutive `1..N` numbers, so the next
+tape takes a deleted number and its matching colour. The visible group registry lists only
+tapes currently used in that group, sorted by this drawing-wide number.
+
+**Client editor — one tape line per group, no registry.** In its place the group head carries
+a single line naming the group's tape and the thicknesses it exists in at this branch —
+**«Kromka: Egger H1145 · 0.4 / 2 mm»**. The line *is* the control: the tape name carries the
+same dashed underline the material name does and a tap anywhere on the row opens the tape
+picker. A group whose decor the branch carries no tape for reads
+**«Kromka: rangi mos lentani tanlang»** in the warning colour, and nothing is forced until a
+side is actually banded — a client who never bands never meets the picker. **Hisoblash**
+re-checks and scrolls to a group that has banded sides and no tape. Numbers and colours are
+absent because there is nothing to number: one material group has exactly one tape decor.
+
+The client's group head also replaces the coloured dot with the **decor image**, and states
+`{n} detal · {area} m²` on a muted second line; counts are pieces everywhere, so the header
+total and the group sums agree.
 
 ### Results
 
@@ -405,24 +467,13 @@ removes it, and the next optimisation creates one replacement layout. The result
 sheet-thumbnail strip, one large sheet SVG, offcut/remainder overlays, material and detail rails,
 and the order summary before checkout.
 
-- **None set** → "No workshop selected" + a **Pick a workshop** button.
-- **Set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Change** button.
-  There is **no Clear** — the field is required once you're editing.
-
-Picking or changing the branch opens a single flat branch list — one row per branch, naming
-the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
-branches stay selectable, the row just flags why); a search field appears once the list is
-long — the same list, narrowed and re-headed, for a pinned client. One tap selects a branch;
-**Apply** sets the draft's `preferred_branch_id`.
-**Changing it never edits the parts list.** The picker reloads against the new branch; a row
-still holding the old branch's material is swapped through the ordinary material picker.
-
-### Parts editor (top)
+### Parts editor (top) — workshop editor
 
 A mode switch at the top: **Manual entry** (default) · **Upload file** (`.csv` / `.xml`).
 Upload opens the import wizard; manual entry stays as the plain row editor. The expected
 source is БАЗИС-Мебельщик's **Спецификация в CSV** or **Спецификация в XML** export;
-Excel-made lists must be saved as CSV first. For a mutable saved draft, the page header carries
+Excel-made lists must be saved as CSV first. **The client editor has no mode switch** — it is
+the row editor and nothing else (see _Imports_). For a mutable saved draft, the page header carries
 a danger-outline **Delete drawing** button; it is absent for a new or read-only drawing. The
 sticky bottom action bar has exactly one primary action — alongside the row / piece count (and,
 when optimisation is disabled, the reason shown inline) — so it stays reachable above a long
@@ -517,8 +568,36 @@ The grain toggle (small arrow + `Tekstura`) appears on the row.
 Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
 `follow_grain=false` and the optimiser may rotate it.
 
-**Edge picker** — two surfaces, one behaviour:
+**The client's material picker leads with the decor, and prices the format.** One row per
+decor the branch carries as a panel: a 40 px decor image (the swatch fallback where there is
+none), the decor name, and — because the price belongs to a concrete format and to nothing
+else — either the single format's size on a sub-line with its price per sheet at the right,
+or `{n} ta format` and no price on the row, expanded into one selectable row per format each
+carrying its own size and price. Nothing is pre-picked in the multi-format case; the decor row
+is not chosen until a format row is. **Tapping the thumbnail opens the full-size lightbox**
+instead of selecting — a client picks a board by looking at it, and the 40 px square is not
+enough to decide on.
 
+**Edge picker** — three surfaces, one behaviour:
+
+- **The client editor docks a card on desktop and opens a sheet on phones.** Its content is
+  the part's own kromka block and nothing else: the part's name and size, the group-tape line,
+  the four-side diagram, and the **Qalinlik** chips — exactly the thicknesses the group's tape
+  decor exists in at this branch, so a decor carried only in 0.4 and 2 mm offers two chips. The
+  pre-selected chip is the last thickness used in the drawing, else the thickest. There are
+  **no whole-part pattern buttons** («4 tomon» / «Kromsiz»): four taps on the diagram, or none,
+  say the same thing. With more than one thickness in use, the diagram's sides and the chips
+  are coloured per thickness so a part banded 2 mm at the front and 0.4 mm at the back reads at
+  a glance; with one thickness everything stays ink. Banding a side of a group with no tape
+  opens the **tape picker** first. A legacy drawing whose side carries a tape outside the
+  group's decor keeps it, named read-only as «Boshqa rang: {name}»; re-tapping that side uses
+  the group tape.
+- **The client's tape picker chooses a decor, never a format.** It pins the group material's
+  own decor and image at the top for comparison («Plita rangi»), searches by tape name or code,
+  and lists one row per tape decor the branch carries — thumbnail, name, and the thickness
+  variants with their per-metre prices shown as information rather than as choices. Changing
+  the group tape re-resolves every banded side of the group into the new decor at the same
+  thickness, falling back to the nearest thickness the new decor has and saying so once.
 - **The staff order wizard docks it.** In step 2 of the staff new-order flow, banding is a
   300px panel beside the parts board rather than a modal. The board is sized to its own
   columns, so the panel either fits next to it or wraps underneath — a wrap, not a
@@ -537,8 +616,10 @@ Pressed means `follow_grain=true` and the part is rotation-locked; unpressed mea
   which side the button means; two glyph buttons beside them for the whole-part patterns
   (band every side, band none); and the tape row, which expands into the same searchable,
   ranked catalog the modal uses. Every toggle writes through immediately — there is no Apply.
-- **Everywhere else it stays a modal** — the client editor's board is full-width, so there is
-  no rail to dock into. The description below is that modal.
+- **In the standalone workshop editor it stays a modal**, described below. The registry, the
+  arming ladder and the two in-dialog panels belong to that modal alone — the client's card
+  and sheet carry none of them, because the client's tape is settled one level up, on the
+  material group.
 - **One modal, two in-dialog panels.** The compact glyph is display-only: its four borders
   show banding state, while the whole glyph opens this modal on desktop and mobile alike.
   Panel 1 is the marking view. Its tape list contains only tapes already used in this drawing:
@@ -593,20 +674,32 @@ in workshop scope). Changing the branch never removes parts.
 
 ### Run and the result stage
 
-The editor's single primary sticky action reads **Davom etish**. With a current chosen result it
-opens the result stage; otherwise it runs optimisation and shows its validation reason inline when
-unavailable. While a run is in progress (10 s cap), it is disabled and shows **Hisoblanmoqda**. On
-a brand-new editor, the first complete detail creates and saves the draft before continuing.
+The editor's single primary sticky action names what the tap does. In the **client** editor it
+is **Hisoblash**, and **Natijani ko'rish** once the chosen result matches the parts on screen.
+The workshop editor keeps the neutral **Davom etish**, except inside the staff order wizard,
+where a tap that will really run the optimiser says **Optimallashtirish**. Either way the
+action runs optimisation or opens the current result, shows its validation reason inline when
+unavailable, and reads **Hisoblanmoqda** while a run is in flight (10 s cap). On a brand-new
+editor, the first complete detail creates and saves the draft before continuing.
 
 The editor never embeds results. Before the first run there is no result placeholder — the parts
 editor and sticky action are all there is to see. A successful run navigates to the standalone
 result stage; a failure stays in the editor beside the affected row or action. Only a current
-chosen result makes **Davom etish** open the result; merely having an unchosen or stale candidate
-makes it run optimisation instead.
+chosen result opens the result; merely having an unchosen or stale candidate makes the action
+run optimisation instead.
 
 The result stage has three desktop columns: materials and details at left, the layout visualiser
 in the centre, and **Buyurtmangiz** alone at right. Narrow screens stack the visualiser, details,
 then order summary.
+
+**The client's result stage is the layout and its price, and nothing about a workshop.** Its
+subtitle is the **draft name alone** — an untitled drawing shows none rather than a grey
+placeholder, and the `· 4 detal · 1 list` tail is gone because those figures are in the
+summary a few centimetres below. There is no workshop or branch block: the branch was settled
+before the drawing opened and the confirmation page names it again. On phones the summary,
+the sheet thumbnails and **PDF ochish** are the page, and the full sheet drawing sits behind
+a **Chizmani ko'rish** disclosure — at 358 px it is unreadable, so showing it by default
+costs a screenful and gives nothing.
 
 **768px is the line between the two readings of a result.** A 2800 mm sheet inside a 390 px
 viewport draws at roughly a 7× reduction, where no part label and no dimension in the drawing
@@ -689,15 +782,17 @@ instead, so fewer labels print and the ones that do are legible.
      then its Kromka block shows a dot in the same colour as the drawing, fuller material label
      such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed metres. These two cards have
      border-only surfaces.
-   - Each panel-material row carries a **source chip** — `Mijoz materiali` where that material
-     holds an ownership claim, `Ombordan` otherwise (the client reads `Mening materialim` for
-     the first). It is display only: the counts behind a claim are entered in the
-     post-optimizer ownership dialog, and a second control for the same fact on a read-only
-     screen would be two places to change one number. The row also carries that material's own
-     fill — `{x}% ishlatildi` and a bar — averaged over its own sheets, so a material is judged
-     against itself rather than against a result-wide figure two materials would share. The
-     percentage is always written out; the bar is a second reading of it, never the only one.
-   - Under the tape list, a five-row block carries the order-level figures that otherwise only
+   - **Workshop only:** each panel-material row carries a **source chip** — `Mijoz materiali`
+     where that material holds an ownership claim, `Ombordan` otherwise — and that material's
+     own fill, `{x}% ishlatildi` plus a bar, averaged over its own sheets so a material is
+     judged against itself rather than against a result-wide figure two materials would share.
+     The percentage is always written out; the bar is a second reading of it, never the only
+     one. The chip is display only: the counts behind a claim are entered in the post-optimizer
+     ownership dialog. **The client's row is the material name and its sheet count, and nothing
+     else** — with own material hidden in the MVP every board is the workshop's, so a chip
+     saying so on every row is noise, and per-material utilisation is a yield question the shop
+     answers (the per-sheet figure on the sheet's own label already covers what a client asks).
+   - Under the tape list, a block carries the order-level figures that otherwise only
      existed on the order detail screen: `Detallar` (placed against requested — the shortfall
      spelled out and coloured when the layout could not take everything), `Listlar`,
      `Arra yo'li` (the propil length), `Kromka lentasi` (shop plus own consumed tape, `—` when
@@ -706,6 +801,12 @@ instead, so fewer labels print and the ones that do are legible.
      API for it. On a placed order in the client app this block's first row is the only
      shortage signal on the screen, which is why the shortfall is stated in words and not by
      colour alone.
+   - **The client reads four of those five**: `Detallar`, `Listlar`, `Kromka` and
+     `Foydali qoldiq`. `Arra yo'li` is a saw metric the shop plans around and `Chiqim` is the
+     shop's yield; a client quoted a fixed price can act on neither. The same four appear
+     wherever this component does on the client path — the result stage, the order
+     confirmation summary and the order detail's Chizma tab — and on phones they render as a
+     2×2 grid under the price, so the phone and the desktop say the same things.
    - Below 768px the per-sheet rail is replaced by a **`Detallar` parts list directly beneath
      the drawing**, covering the whole result rather than only the active sheet: one `List N`
      group per sheet — the material label printed once per run of sheets that share it — and

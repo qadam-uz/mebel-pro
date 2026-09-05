@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 50
 ---
 
@@ -27,7 +27,7 @@ Material source is **per item** for the panel and **per side** for each edge —
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `order_number` | text | human-readable, `#26-14-0003` — 2-digit year · the branch's `branch_no` · a per-branch, per-year sequence (4 digits, resets each January); globally unique |
+| `order_number` | text | the client–workshop handle: **six random decimal digits**, no leading zero (`100000`–`999999`), e.g. `482917`; globally unique. Displayed as `№ 482 917` |
 | `client_id` | UUID | the client the order belongs to — its placer, or the walk-in it was placed for |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
@@ -37,17 +37,36 @@ Material source is **per item** for the panel and **per side** for each edge —
 | `note_client` / `note_workshop` | text? | client and staff notes |
 | `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
 
-**Order number** — `#26-14-0003` is the third 2026 order of branch 14. The sequence is scoped
-to the branch because a client orders from a branch, and that is the unit staff count in; the
-`branch_no` segment ([`workshop.md`](workshop.md)) carries both the branch's identity and the
-number's platform-wide uniqueness, so there is no workshop segment. `branch_no` is never
-zero-padded and the prefix keeps its trailing dash, which is what stops branch 1's numbers
-from being read as branch 14's. Numbers are minted under an advisory lock and counted from
-existing rows — safe only because orders are never deleted.
+**Order number** — the number is dictated over the phone, printed on the cutting PDF and typed
+into a staff search box on a numeric keypad. That is the whole brief: short, digits only, no
+meaning. Letters would need the lookalike normalisation the workshop code already carries;
+six digits are short enough to say in two breaths.
 
-*Legacy era:* orders placed before this format keep their `ORD-2026-000123` numbers — clients
-hold screenshots and printed cutting maps of them. The two formats coexist permanently; order
-search is a substring match, so both stay findable.
+*Why random, and why no branch or year segment.* A global **sequence** would let every
+workshop — and every client — read the platform's volume off the gaps between their own
+numbers. The number was `#26-14-0003` until 2026-09 — the third 2026 order of branch 14 —
+which made it a small report as well as an identifier; but "the branch's Nth order this
+year" is a finance-report question, answered off the report's own columns, so the segments
+bought nothing and were parsed by app code that had no business parsing an identifier.
+
+*Collisions.* The space is 900 000. At the operating envelope in
+[`architecture.md`](../../architecture.md) — a few workshops, thousands of orders a year — a
+retry on the `order_number` unique constraint is the whole collision strategy: no reservation
+table, no sequence, no advisory lock. Creation redraws up to five times, then fails loudly
+with `order_number_unavailable` rather than issuing a wrong number. Revisit at roughly
+100 000 live orders, where a birthday-style collision stops being rare: widen to seven
+digits, and nothing else moves, because the display groups from the right.
+
+*Display.* Rendered everywhere as the numero sign, then groups of three from the right, thin
+space separated: **`№ 482 917`**. The prefix is not copy — it is emitted in every locale, by
+`format_order_number` on the backend (which the cutting PDF also uses) and `formatOrderNumber`
+on the web. Search normalises the query by stripping `№`, `#` and whitespace, so `№ 482 917`,
+`482 917` and `482917` are one number said three ways.
+
+*Legacy era:* orders placed before this format keep their `#26-14-0003` and `ORD-2026-000123`
+numbers **exactly as stored** — clients hold screenshots and printed cutting maps of them, and
+nothing reformats history. Both pass through the formatter unchanged, and stay findable
+because search ORs the normalised form beside a raw substring match.
 
 **Pricing snapshot** (frozen at creation against the chosen branch's rates; there is no
 post-placement modification, so it is never re-priced)
