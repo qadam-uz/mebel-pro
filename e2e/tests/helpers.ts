@@ -764,11 +764,11 @@ export async function workshopLinkFor(
  * Enter as a client the way every client does: scan a branch QR while signed
  * out, then sign in through the bot handshake.
  *
- * This is the only route to a pinned client, and a pin is what the editor
- * needs — a drawing only ever starts from a workshop, so `/c/cutting/new`
- * redirects a client who arrived through `loginClient` alone. Use `loginClient`
- * for flows that are about the session; use this for anything that opens the
- * editor or reads the pin.
+ * This is the only route to a pinned client short of placing an order, and a
+ * pin is what the editor needs — a drawing only ever starts from a workshop, so
+ * a bare `/c/cutting/new` (no `?branch=`) redirects a client who arrived
+ * through `loginClient` alone. Use `loginClient` for flows that are about the
+ * session; use this for anything that opens the editor or reads the pin.
  *
  * The landing and the pin it writes are asserted in full by
  * `workshop-link-entry.spec.ts`; this helper checks only that the door opened

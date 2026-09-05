@@ -16,6 +16,7 @@ import BranchContact from '@/shared/components/BranchContact.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
 
@@ -24,6 +25,7 @@ const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
 const auth = useAuthStore()
+const entry = useClientEntryStore()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
 const toast = useToast()
@@ -133,6 +135,12 @@ async function placeOrder() {
       contact_phone: normalizeUzPhone(contactPhone.value),
     })
     toast.success(t('client.orderNew.placedToast'))
+    // Placing the order moved the pin to its branch (decision 25), and home
+    // reads «Ustaxonangiz» from both the principal's pinned names and the
+    // `is_pinned` flags on Ustaxonalarim — both stale until re-read, and home
+    // is one tap away. A refresh that fails is not worth failing a placed
+    // order over, so neither rejection escapes.
+    await Promise.allSettled([auth.refreshMe(), entry.loadMyWorkshops()])
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
     // createClientOrder captures the failure to actionError/actionTraceId —

@@ -2180,24 +2180,34 @@ onMounted(async () => {
       return
     }
     await cutting.loadBranchOptions()
-    // Decision 17: the branch is settled BEFORE the editor opens, and for the
-    // client that settling is the pin — «+ Yangi chizma» on home, or a branch
-    // row's own «Yangi chizma», which re-pins first. The editor therefore reads
-    // the pin rather than asking: it has no branch state of its own and no
-    // picker. A pin that no longer resolves to a visible branch (blocked
-    // workshop, retired counter) is the same situation the route guard answers
-    // for a pin-less client — Ustaxonalarim, before any editor screen renders.
+    // Decision 17: the branch is settled BEFORE the editor opens, and the
+    // editor never asks — it has no branch state of its own and no picker.
+    // Two things can settle it, in this order: `?branch=`, the branch whose
+    // «Yangi chizma» was tapped on Ustaxonalarim or a workshop profile (that
+    // button pins nothing — decision 25 — so the URL is the only carrier), and
+    // otherwise the pin, which is what home's «+ Yangi chizma» means. Neither
+    // resolving to a visible branch (blocked workshop, retired counter,
+    // hand-edited id and no pin) is the situation the route guard answers for a
+    // pin-less client — Ustaxonalarim, before any editor screen renders.
     if (isClientEditor.value) {
-      const pinned = auth.me?.preferred_branch_id ?? null
-      // `branchOptions.length` guards the redirect against a failed load: an
-      // empty list means "we don't know", not "the pin is gone".
-      const lost = cutting.branchOptions.length > 0 && !hasBranchOption(pinned)
-      if (auth.me && (!pinned || lost)) {
+      // `branchOptions.length` separates "we don't know" (a failed load) from
+      // "that branch is gone": an empty list must not redirect or discard.
+      const optionsKnown = cutting.branchOptions.length > 0
+      const asked = typeof route.query.branch === 'string' ? route.query.branch : null
+      // The URL is user-editable, so an id outside the client's own visible
+      // branches is ignored and the pin answers instead.
+      const requested = asked && (!optionsKnown || hasBranchOption(asked)) ? asked : null
+      const branchId = requested ?? auth.me?.preferred_branch_id ?? null
+      const lost = optionsKnown && !hasBranchOption(branchId)
+      if (auth.me && (!branchId || lost)) {
         await router.replace(rolePath('/c/branches'))
         return
       }
-      localBranchId.value = pinned
-      selectedBranchId.value = pinned
+      localBranchId.value = branchId
+      selectedBranchId.value = branchId
+      // The draft is created with the client's pin unless the payload names a
+      // branch, so a drawing started from another counter has to say so.
+      if (requested) branchTouched.value = true
       await loadMaterials()
       return
     }

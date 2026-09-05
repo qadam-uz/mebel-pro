@@ -151,47 +151,38 @@ describe('Ustaxonalarim', () => {
     expect(view.text()).not.toContain('Qaysi filialdan olib ketasiz?')
   })
 
-  // Decision 17: the editor has no branch state, so the move has to land first.
-  it('re-pins before opening the editor from a non-pinned branch', async () => {
+  // Decision 25: tapping «Yangi chizma» is a look, not a choice — the branch
+  // rides the URL and the pin stays where it is until an order is placed.
+  it('opens the editor at a non-pinned branch without pinning it', async () => {
     vi.mocked(api.get).mockResolvedValue([
       workshop({
         branches: [branch({ is_pinned: true }), branch({ id: 'branch-2', name: 'Yunusobod' })],
       }),
     ])
-    vi.mocked(api.post).mockResolvedValue({
-      workshop_id: 'workshop-1',
-      workshop_name: 'Mebel Master',
-      branch_id: 'branch-2',
-      branch_name: 'Yunusobod',
-    })
 
     const view = await mountPage()
-    const draw = view.findAll('button').filter((node) => node.text() === 'Yangi chizma')
+    const draw = view.findAll('a').filter((node) => node.text() === 'Yangi chizma')
+    expect(draw.at(1)?.attributes('href')).toBe('/c/cutting/new?branch=branch-2')
+
     await draw.at(1)?.trigger('click')
     await flushPromises()
 
-    expect(api.post).toHaveBeenCalledWith(
-      '/client/entry',
-      { code: 'ABCD2345', branch_id: 'branch-2' },
-      expect.anything(),
-    )
-    expect(router.currentRoute.value.path).toBe('/c/cutting/new')
+    expect(api.post).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/c/cutting/new?branch=branch-2')
   })
 
-  it('starts the editor without a write when the branch is already the pin', async () => {
+  it('carries the branch even when it is already the pin', async () => {
     vi.mocked(api.get).mockResolvedValue([
       workshop({ is_pinned: true, branches: [branch({ is_pinned: true })] }),
     ])
 
     const view = await mountPage()
-    await view
-      .findAll('button')
-      .find((node) => node.text() === 'Yangi chizma')
-      ?.trigger('click')
+    const draw = view.findAll('a').find((node) => node.text() === 'Yangi chizma')
+    await draw?.trigger('click')
     await flushPromises()
 
     expect(api.post).not.toHaveBeenCalled()
-    expect(router.currentRoute.value.path).toBe('/c/cutting/new')
+    expect(router.currentRoute.value.fullPath).toBe('/c/cutting/new?branch=branch-1')
   })
 
   it('links each branch to that branch of the workshop catalog', async () => {

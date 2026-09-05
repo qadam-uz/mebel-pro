@@ -675,6 +675,60 @@ describe('CuttingEditorView client branch (spec §2.2, decision 17)', () => {
     expect(wrapper.text()).not.toContain('Filial tanlash')
   })
 
+  // Decision 25: a branch row's «Yangi chizma» pins nothing, so the branch it
+  // was tapped on rides the URL and outranks the pin for this drawing only.
+  it('opens a new drawing on the branch named in the URL, over the pin', async () => {
+    signIn({ preferred_branch_id: 'branch-1', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
+
+    const { wrapper, cutting } = await mountEditor('/c/cutting/new?branch=branch-9', null)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Yog’och Pro')
+    expect(cutting.loadMaterials).toHaveBeenCalledWith(
+      expect.objectContaining({ branchId: 'branch-9' }),
+    )
+  })
+
+  // The client never got a pin (a multi-branch link, an organic signup); the
+  // route guard let them in on the query alone, and the editor must agree.
+  it('opens a new drawing from the URL for a client with no pin at all', async () => {
+    signIn({ preferred_branch_id: null, pinned_workshop_name: null })
+    seedOptions()
+
+    const { wrapper, router } = await mountEditor('/c/cutting/new?branch=branch-2', null)
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/c/cutting/new')
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod')
+  })
+
+  // The URL is user-editable, so a branch outside the client's own options is
+  // ignored rather than obeyed — the pin answers instead.
+  it('falls back to the pin when the URL names a branch it cannot see', async () => {
+    signIn({ preferred_branch_id: 'branch-2', pinned_workshop_name: 'Mebel Master' })
+    seedOptions()
+
+    const { wrapper, cutting } = await mountEditor('/c/cutting/new?branch=branch-404', null)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod')
+    expect(cutting.loadMaterials).toHaveBeenCalledWith(
+      expect.objectContaining({ branchId: 'branch-2' }),
+    )
+  })
+
+  // Neither a usable query nor a pin: the same answer the route guard gives.
+  it('sends an un-pinned client with an unusable branch query to Ustaxonalarim', async () => {
+    signIn({ preferred_branch_id: null, pinned_workshop_name: null })
+    seedOptions()
+
+    const { router } = await mountEditor('/c/cutting/new?branch=branch-404', null)
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/c/branches')
+  })
+
   it('sends a client whose pin no longer resolves to Ustaxonalarim', async () => {
     // The route guard catches the pin-less client; this is the other hole —
     // a pin whose branch is gone (blocked workshop, retired counter).

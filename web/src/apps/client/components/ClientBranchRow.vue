@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 
 import { formatPhone } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
@@ -15,9 +15,10 @@ import { useClientEntryStore, type ClientWorkshopBranch } from '@/shared/stores/
  * profile both render, identically (spec §6.1).
  *
  * It carries the pin and both actions, because the pin *is* a branch: a filled
- * star marks the pinned row, an outline star button pins any other in place,
- * and «Yangi chizma» re-pins as it opens the editor there (decision 17). The
- * head above it carries no drawing action.
+ * star marks the pinned row and an outline star button pins any other in place.
+ * «Yangi chizma» only opens the editor at that branch — it writes nothing
+ * (decision 25: "shunchaki bosib ko'rishi ham mumkin"); the pin moves when an
+ * order is actually placed. The head above it carries no drawing action.
  */
 const props = defineProps<{
   branch: ClientWorkshopBranch
@@ -33,12 +34,11 @@ const props = defineProps<{
 }>()
 
 const entry = useClientEntryStore()
-const router = useRouter()
 const rolePath = useRolePath()
 const toast = useToast()
 const { t } = useI18n()
 
-/** Both actions write the pin, so one flag disables the whole row's pair. */
+/** The star is the row's only write, so it owns the in-flight flag. */
 const pinning = ref(false)
 
 const isClosed = computed(() => props.branch.status !== 'active')
@@ -46,6 +46,12 @@ const mapUrl = computed(() => yandexMapUrl(props.branch.latitude, props.branch.l
 const catalogTo = computed(() =>
   rolePath(`/c/workshops/${props.workshopId}/catalog?branch=${props.branch.id}`),
 )
+/**
+ * The branch travels to the editor in the URL, not through the pin (decision
+ * 25). The editor validates it against the client's own branch options, so a
+ * hand-typed id can't point a drawing at a counter the client can't reach.
+ */
+const drawingTo = computed(() => rolePath(`/c/cutting/new?branch=${props.branch.id}`))
 
 async function makePrimary() {
   if (props.branch.is_pinned || pinning.value) return
@@ -58,28 +64,6 @@ async function makePrimary() {
   } finally {
     pinning.value = false
   }
-}
-
-/**
- * «Yangi chizma» on a non-pinned branch re-pins as it starts (decision 17) —
- * the editor itself has no branch state and never re-pins, so the move has to
- * land before it opens. A failed re-pin keeps the client here rather than
- * dropping them into an editor pointed at the wrong counter.
- */
-async function startDrawing() {
-  if (pinning.value) return
-  if (!props.branch.is_pinned) {
-    pinning.value = true
-    try {
-      await entry.pinBranch(props.publicCode, props.branch.id)
-    } catch {
-      toast.danger(t('client.workshops.pinFailed'))
-      return
-    } finally {
-      pinning.value = false
-    }
-  }
-  void router.push(rolePath('/c/cutting/new'))
 }
 </script>
 
@@ -153,15 +137,15 @@ async function startDrawing() {
     </div>
 
     <div class="mt-0.5 flex flex-wrap gap-2">
-      <button
-        type="button"
+      <!-- A plain link: opening the editor at this branch is a look, not a
+           choice, so it writes nothing (decision 25). -->
+      <RouterLink
+        :to="drawingTo"
         class="mp-button mp-button-primary min-h-10 px-3.5 py-2.5 text-[13.5px]"
-        :disabled="pinning"
-        @click="startDrawing"
       >
         <Icon name="plus" class="size-[17px]" />
         {{ $t('client.workshop.newDrawing') }}
-      </button>
+      </RouterLink>
       <RouterLink
         :to="catalogTo"
         class="mp-button mp-button-outline min-h-10 px-3.5 py-2.5 text-[13.5px]"
