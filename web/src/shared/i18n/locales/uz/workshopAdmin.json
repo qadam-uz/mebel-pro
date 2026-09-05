@@ -40,7 +40,7 @@
   "permission": {
     "view_orders": "Buyurtmalarni ko'rish (faqat o'qish)",
     "manage_orders": "Buyurtmalar",
-    "process_production": "Ishlab chiqarish",
+    "process_production": "Usta (hisobot uchun)",
     "manage_catalog": "Material katalogi",
     "manage_inventory": "Ombor",
     "manage_finance": "Moliya yozuvlari",

@@ -40,7 +40,7 @@
   "permission": {
     "view_orders": "Просмотр заказов (только чтение)",
     "manage_orders": "Заказы",
-    "process_production": "Производство",
+    "process_production": "Мастер (для отчётов)",
     "manage_catalog": "Каталог материалов",
     "manage_inventory": "Склад",
     "manage_finance": "Финансовые записи",
