@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId } from '@/shared/api/client'
+import { api, apiTraceId, isAbortError } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -57,23 +57,41 @@ export const useNotificationsStore = defineStore('notifications', () => {
   // Paginated with append (CB-41): offset 0 replaces, a higher offset appends.
   // hasMore is inferred from a full page so the "load more" button hides at the end.
   // unreadOnly filters server-side so pagination stays accurate under the filter.
+  //
+  // Stale-while-revalidate (client audit 2026-09-03): the rows in hand are NOT
+  // cleared while the next page is in flight, so re-opening the page (or
+  // flipping its filter) keeps the feed on screen instead of collapsing to a
+  // skeleton and back. The list owns one AbortController — a newer call aborts
+  // the older, and the loser's rejection is dropped rather than painted as an
+  // error, because an aborted read is this store cancelling itself.
+  let listRequest: AbortController | null = null
+
   async function loadList(limit = 10, offset = 0, unreadOnly = false) {
     if (!auth.accessToken) return
+    listRequest?.abort()
+    const controller = new AbortController()
+    listRequest = controller
     loading.value = true
     error.value = null
     traceId.value = null
     try {
       const page = await api.get<NotificationItem[]>(
         `/notifications?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`,
-        authInit(),
+        { ...authInit(), signal: controller.signal },
       )
       items.value = offset === 0 ? page : [...items.value, ...page]
       hasMore.value = page.length === limit
     } catch (caught) {
+      if (isAbortError(caught)) return
       error.value = 'notifications_load_failed'
       traceId.value = apiTraceId(caught)
     } finally {
-      loading.value = false
+      // Only the newest call owns the flag; an aborted one must not switch the
+      // skeleton off under the request that replaced it.
+      if (listRequest === controller) {
+        listRequest = null
+        loading.value = false
+      }
     }
   }
 
@@ -112,6 +130,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   function reset() {
+    // Cancel first: reset is a sign-out, and a late page must not repopulate
+    // the feed the next session inherits.
+    listRequest?.abort()
+    listRequest = null
     unread.value = 0
     items.value = []
     loading.value = false
