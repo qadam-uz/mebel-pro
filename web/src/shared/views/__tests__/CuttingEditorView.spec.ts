@@ -18,6 +18,17 @@ import {
   type CuttingPart,
 } from '@/shared/stores/cutting'
 
+/**
+ * The editor keeps a per-draft recovery snapshot in `localStorage` (the
+ * last-mile layer behind server autosave), and jsdom keeps that storage for the
+ * whole file. Every test here mounts `draft-1`, so without this one test's
+ * parts reappear in the next — which is the editor working as designed, and a
+ * shared browser these tests never meant to share.
+ */
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 const editorRoutes = [
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
   { path: '/c/cutting/:id', name: 'client-cutting-editor', component: { template: '<div />' } },
@@ -730,5 +741,219 @@ describe('CuttingEditorView branch picker scoping (spec §4)', () => {
     // way to change it — no «O'zgartirish», and no picker raised on mount.
     expect(wrapper.findAll('button').some((button) => button.text() === "O'zgartirish")).toBe(false)
     expect(wrapper.findComponent(CuttingBranchPicker).exists()).toBe(false)
+  })
+})
+
+/**
+ * The group tape, end to end through the real components (§7.1).
+ *
+ * Nothing below the view is stubbed here except the part row and the icons: the
+ * group line, the docked kromka card and the tape sheet are the shipped ones.
+ * That is deliberate — `vue-tsc` cannot see a component used in a template but
+ * never imported (web/AGENTS.md, "Verifying UI work"), and neither can a spec
+ * that stubs it away. Mounting the real tree is what catches that class of
+ * defect without a browser.
+ */
+describe('CuttingEditorView group tape (spec §7.1)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const BOARD = 'panel-egger'
+  const TAPE_THIN = 'tape-egger-04'
+  const TAPE_THICK = 'tape-egger-2'
+  const TAPE_OTHER = 'tape-krono-2'
+
+  function catalogOption(overrides: Partial<ClientCatalogMaterialOption>) {
+    return {
+      id: 'x',
+      type: 'ldsp',
+      manufacturer_id: 'egger',
+      manufacturer_name: 'Egger',
+      code: 'H1145',
+      name: 'Dub Bardolino',
+      has_grain: true,
+      image_file_id: null,
+      thickness_mm: '18',
+      length_mm: 2800,
+      width_mm: 2070,
+      tape_width_mm: null,
+      price_tiyin: 28_500_000,
+      price_unset: false,
+      display_unit: 'list',
+      ...overrides,
+    } as ClientCatalogMaterialOption
+  }
+
+  function tapeOption(overrides: Partial<ClientCatalogMaterialOption>) {
+    return catalogOption({
+      type: 'kromka',
+      tape_width_mm: 22,
+      length_mm: null,
+      width_mm: null,
+      ...overrides,
+    })
+  }
+
+  const board = catalogOption({ id: BOARD })
+  // One decor in two thicknesses, plus a second decor the board does not match.
+  const tapes = [
+    tapeOption({ id: TAPE_THIN, thickness_mm: '0.4', price_tiyin: 130_000 }),
+    tapeOption({ id: TAPE_THICK, thickness_mm: '2', price_tiyin: 260_000 }),
+    tapeOption({
+      id: TAPE_OTHER,
+      manufacturer_id: 'kronospan',
+      manufacturer_name: 'Kronospan',
+      code: 'U963',
+      name: 'Antrasit',
+      thickness_mm: '2',
+      price_tiyin: 230_000,
+    }),
+  ]
+
+  async function mountWithCatalog(parts: CuttingPart[]) {
+    const mounted = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-1', parts_snapshot: parts }),
+      // `false` un-stubs the row the shared harness stubs by default: its
+      // kromka cell is how a desktop client reaches the docked card, and a stub
+      // would test a selection nobody can actually make.
+      { CuttingPartRow: false, Icon: true },
+    )
+    mounted.cutting.panelOptions = [board]
+    mounted.cutting.edgeOptions = tapes
+    await flushPromises()
+    return mounted
+  }
+
+  function partOn(overrides: Partial<CuttingPart> = {}): CuttingPart {
+    return part({ material_id: BOARD, ...overrides })
+  }
+
+  function editorParts(wrapper: VueWrapper) {
+    return (wrapper.vm as unknown as { parts: CuttingPart[] }).parts
+  }
+
+  /** The row's read-only sides glyph — the client's way into the docked card. */
+  async function selectRow(wrapper: VueWrapper) {
+    await wrapper.get('[data-cell="edge"]').trigger('click')
+  }
+
+  function kromkaPanel(wrapper: VueWrapper) {
+    return wrapper.findComponent({ name: 'CuttingKromkaPanel' })
+  }
+
+  function panelButton(wrapper: VueWrapper, startsWith: string) {
+    return kromkaPanel(wrapper)
+      .findAll('button')
+      .find((button) => button.text().startsWith(startsWith))!
+  }
+
+  it('auto-attaches the branch tape of the board decor, with every thickness', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
+
+    // «Kromka: Egger H1145 · Dub Bardolino · 0.4 / 2 mm» — one tape, and the
+    // thicknesses the branch stocks it in. Not a registry of numbers.
+    const line = wrapper.get(`#group-tape-${BOARD}`)
+    expect(line.text()).toContain('Dub Bardolino')
+    expect(line.text()).toContain('0.4 / 2 mm')
+    expect(wrapper.text()).not.toContain('rangi mos lentani tanlang')
+  })
+
+  it('asks for a colour when the branch carries no tape in the board decor', async () => {
+    const { wrapper, cutting } = await mountWithCatalog([partOn()])
+    cutting.edgeOptions = [tapes[2]]
+    await flushPromises()
+
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('rangi mos lentani tanlang')
+  })
+
+  it('bands a side with the armed thickness from the docked card', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
+
+    // The row's kromka cell selects the row, which is what raises the card
+    // (§7.5) — on the client it no longer opens a modal.
+    await selectRow(wrapper)
+    expect(kromkaPanel(wrapper).exists()).toBe(true)
+
+    // The thickest variant is armed by default — a visible edge is the common
+    // case, and 2 mm is what a shop puts on one.
+    await panelButton(wrapper, 'Yuqori').trigger('click')
+
+    expect(editorParts(wrapper)[0].edge_top).toEqual({
+      material_id: TAPE_THICK,
+      source: 'shop',
+    })
+    // The side names its own thickness, which is what makes two of them on one
+    // part readable at a glance.
+    expect(panelButton(wrapper, 'Yuqori').text()).toContain('2 mm')
+  })
+
+  it('carries two thicknesses on one part', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()])
+    await selectRow(wrapper)
+
+    await panelButton(wrapper, 'Yuqori').trigger('click')
+    // Arm 0.4 mm, then band the bottom with it.
+    await panelButton(wrapper, '0.4 mm').trigger('click')
+    await panelButton(wrapper, 'Pastki').trigger('click')
+
+    expect(editorParts(wrapper)[0].edge_top?.material_id).toBe(TAPE_THICK)
+    expect(editorParts(wrapper)[0].edge_bottom?.material_id).toBe(TAPE_THIN)
+  })
+
+  it('re-resolves every banded side when the group tape changes', async () => {
+    const { wrapper } = await mountWithCatalog([
+      partOn({
+        edge_top: { material_id: TAPE_THICK, source: 'shop' },
+        edge_bottom: { material_id: TAPE_THIN, source: 'shop' },
+      }),
+    ])
+
+    await wrapper.get(`#group-tape-${BOARD}`).trigger('click')
+    const sheet = wrapper.findComponent({ name: 'CuttingTapePicker' })
+    expect(sheet.props('open')).toBe(true)
+    sheet.vm.$emit('pick', 'kronospan|u963')
+    await flushPromises()
+
+    // 2 mm exists in the new decor and is kept; 0.4 mm does not, so that side
+    // falls back to the nearest thickness rather than losing its band.
+    expect(editorParts(wrapper)[0].edge_top?.material_id).toBe(TAPE_OTHER)
+    expect(editorParts(wrapper)[0].edge_bottom?.material_id).toBe(TAPE_OTHER)
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('Antrasit')
+  })
+
+  it('blocks «Hisoblash» on a banded group with no tape, and says why', async () => {
+    const { wrapper, cutting } = await mountWithCatalog([
+      partOn({ edge_top: { material_id: TAPE_THICK, source: 'shop' } }),
+    ])
+    const optimize = vi.spyOn(cutting, 'optimizeDraft')
+    // Drop every tape: the group is banded but now has no decor to band with.
+    cutting.edgeOptions = []
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Hisoblash')!
+      .trigger('click')
+    await flushPromises()
+
+    expect(optimize).not.toHaveBeenCalled()
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('rangi mos lentani tanlang')
+  })
+
+  it('shows no tape registry, no import and no whole-part patterns', async () => {
+    const { wrapper } = await mountWithCatalog([
+      partOn({ edge_top: { material_id: TAPE_THICK, source: 'shop' } }),
+    ])
+    await selectRow(wrapper)
+
+    expect(wrapper.findComponent({ name: 'CuttingEdgeTapeRegistry' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'CuttingImportWizard' }).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Fayldan import')
+    // §7.1 dropped the patterns with the per-part tape list: four taps on the
+    // diagram, or none, say the same thing.
+    expect(wrapper.text()).not.toContain('4 tomon')
+    expect(wrapper.text()).not.toContain('Kromsiz')
   })
 })
