@@ -20,7 +20,7 @@ import { useRolePath } from '@/shared/app/paths'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatTiyin } from '@/shared/formatters'
+import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
@@ -225,7 +225,7 @@ onMounted(() => {
             {{ $t('client.home.readyTitle') }}
           </div>
           <div class="mt-0.5 text-lg font-bold text-ink">
-            {{ primaryReady.order_number }}
+            {{ formatOrderNumber(primaryReady.order_number) }}
           </div>
           <div class="mt-0.5 text-sm text-ink-muted">
             {{ primaryReady.branch_name }}
@@ -349,12 +349,14 @@ onMounted(() => {
             "
             role="link"
             tabindex="0"
-            :aria-label="`${order.order_number} — ${order.branch_name}`"
+            :aria-label="`${formatOrderNumber(order.order_number)} — ${order.branch_name}`"
             @click="openOrder(order.id)"
             @keydown.enter="openOrder(order.id)"
           >
             <div class="min-w-0">
-              <div class="text-base font-bold text-ink">{{ order.order_number }}</div>
+              <div class="text-base font-bold text-ink">
+                {{ formatOrderNumber(order.order_number) }}
+              </div>
               <div class="mt-1 text-sm text-ink-muted">
                 <b class="font-semibold text-ink">{{ order.branch_name }}</b> ·
                 {{ formatRelativeDate(order.created_at) }}

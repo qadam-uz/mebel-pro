@@ -25,7 +25,7 @@ import { stockShortfallMessage, workshopErrorMessage } from '@/shared/app/worksh
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatStockQuantity } from '@/shared/formatters'
+import { formatOrderNumber, formatStockQuantity } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { CuttingPanel, CuttingPlacement, CuttingResult } from '@/shared/stores/cutting'
 import { useOrdersStore } from '@/shared/stores/orders'
@@ -256,7 +256,7 @@ async function openComplete() {
 const completeMessage = computed(() => {
   const current = job.value
   if (!current) return ''
-  const intro = `${current.order_number} · ${metaLine.value}`
+  const intro = `${formatOrderNumber(current.order_number)} · ${metaLine.value}`
   if (station.value === 'banding' || !current.has_banding) {
     return t('finance.complete.toReady', { job: intro })
   }
@@ -286,7 +286,9 @@ async function confirmComplete() {
         : await orders.bandingDone(current.id, payload)
     completeOpen.value = false
     clearPanelMarks(current.id)
-    toast.success(t('finance.toast.jobFinished', { order: current.order_number }))
+    toast.success(
+      t('finance.toast.jobFinished', { order: formatOrderNumber(current.order_number) }),
+    )
     // The books went negative — say so, but only after the job is marked done.
     if (updated.stock_shortfall) toast.warn(stockShortfallMessage())
     void router.push(stationListPath.value)
@@ -358,7 +360,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="page-head">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 class="!text-[22px]">{{ job.order_number }}</h1>
+          <h1 class="!text-[22px]">{{ formatOrderNumber(job.order_number) }}</h1>
           <!-- The job's size in numbers, on the number's own row; material
                names stay in the panels rail and the parts list. -->
           <div class="prod-stats">

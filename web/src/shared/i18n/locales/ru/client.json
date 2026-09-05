@@ -245,7 +245,7 @@
     "orderReady": "Заказ готов",
     "orderCancelled": "Заказ отменён",
     "orderCompleted": "Заказ выдан",
-    "orderNumber": "Заказ № {number}",
+    "orderNumber": "Заказ {number}",
     "material": "Материал: {name}"
   },
   "error": {

@@ -8,7 +8,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatTiyin } from '@/shared/formatters'
+import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderDetail, type OrderQuote } from '@/shared/stores/orders'
 
@@ -118,7 +118,9 @@ async function discard() {
       <div>
         <h1>{{ $t('orders.editReview.title') }}</h1>
         <div class="sub">
-          {{ order ? order.order_number : $t('orders.editReview.orderFallback') }}
+          {{
+            order ? formatOrderNumber(order.order_number) : $t('orders.editReview.orderFallback')
+          }}
         </div>
       </div>
       <div class="tools">

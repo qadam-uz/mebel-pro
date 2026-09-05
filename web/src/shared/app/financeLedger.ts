@@ -1,3 +1,5 @@
+import { formatOrderNumber } from '@/shared/formatters'
+
 export type FinanceLedgerTab = 'expense' | 'income'
 
 export function financeLedgerTabFromPath(path: string): FinanceLedgerTab {
@@ -89,5 +91,5 @@ export function financeIncomeOrderLabel(
 ): string {
   if (!orderId) return '—'
   if (!order) return orderId
-  return `${order.order_number} · ${order.contact_name}`
+  return `${formatOrderNumber(order.order_number)} · ${order.contact_name}`
 }

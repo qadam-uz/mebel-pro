@@ -1,5 +1,6 @@
 import { DRAFT_LIMIT } from '@/shared/app/constants'
 import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
+import { formatOrderNumber } from '@/shared/formatters'
 import { translate, translatePlural } from '@/shared/i18n'
 import type { NotificationItem } from '@/shared/stores/notifications'
 import type { OrderStatus } from '@/shared/stores/orders'
@@ -330,7 +331,11 @@ export function clientNotificationBody(item: NotificationItem): string | null {
   // Order events (CB-02) carry a denormalized order_number but no prose body —
   // surface it so the row identifies which order changed, not just that one did.
   const orderNumber = payloadString(item.payload, ['order_number'])
-  if (orderNumber) return translate('client.notification.orderNumber', { number: orderNumber })
+  if (orderNumber) {
+    return translate('client.notification.orderNumber', {
+      number: formatOrderNumber(orderNumber),
+    })
+  }
   // Inventory events carry the material the balance belongs to — same reason.
   const materialName = payloadString(item.payload, ['material_name'])
   return materialName ? translate('client.notification.material', { name: materialName }) : null

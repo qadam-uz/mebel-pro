@@ -16,7 +16,7 @@ import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import { formatTiyin } from '@/shared/formatters'
+import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 const { t } = useI18n()
@@ -191,7 +191,7 @@ onMounted(() => {
         class="client-card client-card-link p-5 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         role="link"
         tabindex="0"
-        :aria-label="`${order.order_number} — ${order.branch_name}`"
+        :aria-label="`${formatOrderNumber(order.order_number)} — ${order.branch_name}`"
         @click="openOrder(order)"
         @keydown.enter="openOrder(order)"
       >
@@ -205,7 +205,9 @@ onMounted(() => {
                  status pill already occupies this row on the right, and a second
                  boxed element would read as a second status. -->
             <p class="truncate text-sm text-ink-soft">
-              <span class="text-[15px] font-bold text-ink">{{ order.order_number }}</span>
+              <span class="text-[15px] font-bold text-ink">{{
+                formatOrderNumber(order.order_number)
+              }}</span>
               · {{ order.workshop_name }} · {{ order.branch_name }}
             </p>
             <div class="mt-1 flex flex-wrap items-center gap-2">

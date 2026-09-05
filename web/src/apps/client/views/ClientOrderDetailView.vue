@@ -23,7 +23,7 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.vue'
 import BranchContact from '@/shared/components/BranchContact.vue'
 import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
-import { formatDate, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { metres } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderStatus } from '@/shared/stores/orders'
 
@@ -198,7 +198,7 @@ onMounted(() => {
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 class="m-0 font-display text-[28px] font-semibold leading-tight text-ink">
-              {{ order.order_number }}
+              {{ formatOrderNumber(order.order_number) }}
             </h1>
             <p class="mt-2 text-sm text-ink-soft">
               {{ order.branch_name }} · {{ formatRelativeDate(order.created_at) }} ·

@@ -170,7 +170,7 @@
   "branchDetail": {
     "back": "← Filiallar",
     "fallbackName": "Filial",
-    "numberHint": "Filial raqami {no} — bu filial buyurtmalari {prefix} bilan boshlanadi.",
+    "numberHint": "Filial raqami {no} — filialning QR havolasi shu raqam bilan tugaydi.",
     "loadFailed": "Filialni yuklab bo'lmadi",
     "inactiveBody": "bu filial yangi buyurtma qabul qilmaydi.",
     "infoTitle": "Filial ma'lumotlari",

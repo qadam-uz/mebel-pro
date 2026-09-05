@@ -36,6 +36,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatDateTime,
+  formatOrderNumber,
   formatTiyin,
   parseSomToTiyin,
 } from '@/shared/formatters'
@@ -263,7 +264,7 @@ const selectedBranchId = computed(() => {
 const payableOrderOptions = computed<ChoiceOption[]>(() =>
   finance.payableOrders.map((order) => ({
     value: order.order_id,
-    label: `${order.order_number} · ${order.contact_name}`,
+    label: `${formatOrderNumber(order.order_number)} · ${order.contact_name}`,
     meta: formatTiyin(order.balance_tiyin),
   })),
 )

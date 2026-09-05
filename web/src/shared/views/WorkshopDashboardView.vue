@@ -14,6 +14,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatDayMonthWeekday,
+  formatOrderNumber,
   formatRelative,
   formatSignedPercent,
   formatStockQuantity,
@@ -232,7 +233,7 @@ const worklistRows = computed<WorklistRow[]>(() => {
       ),
       chip: null,
       detail: t('workshopAdmin.dashboard.waitNewOrdersDetail', {
-        order: oldest.order_number,
+        order: formatOrderNumber(oldest.order_number),
         client: oldest.contact_name,
         age: formatRelative(oldest.created_at),
       }),
@@ -251,7 +252,7 @@ const worklistRows = computed<WorklistRow[]>(() => {
     const rest = readyOrders.value.length - listed.length
     const waits = listed.map((order) =>
       t('workshopAdmin.dashboard.waitReadyOrdersItem', {
-        order: order.order_number,
+        order: formatOrderNumber(order.order_number),
         age: formatRelative(readyAt(order)),
       }),
     )

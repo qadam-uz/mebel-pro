@@ -245,7 +245,7 @@
     "orderReady": "Buyurtma tayyor",
     "orderCancelled": "Buyurtma bekor qilindi",
     "orderCompleted": "Buyurtma topshirildi",
-    "orderNumber": "Buyurtma № {number}",
+    "orderNumber": "Buyurtma {number}",
     "material": "Material: {name}"
   },
   "error": {
