@@ -325,6 +325,66 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert workshop_page_two.json() == []
 
 
+async def test_placing_an_order_pins_its_branch_and_a_later_order_moves_the_pin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Decision 25: the order's branch becomes «Ustaxonangiz», latest wins.
+
+    Opening the editor from a branch row no longer pins anything, so this is
+    the path that has to carry the move — including away from a branch the
+    client was already pinned to.
+    """
+    _, _, first_branch_id, _ = await _workshop_setup(db_session, login="pin_first")
+    first_panel, first_edge = await _materials(db_session, branch_id=first_branch_id)
+    client_access, client_row = await _client_access(db_session, phone="+998901555777")
+    assert client_row.preferred_branch_id is None
+
+    first_draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=first_branch_id,
+        panel=first_panel,
+        edge=first_edge,
+    )
+    first_order = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": first_draft["id"],
+            "branch_id": str(first_branch_id),
+            "contact_name": "Pin Client",
+            "contact_phone": "+998901555777",
+        },
+    )
+    assert first_order.status_code == 201, first_order.text
+    # Nothing was pinned: the first order settles it.
+    assert client_row.preferred_branch_id == first_branch_id
+
+    _, _, second_branch_id, _ = await _workshop_setup(db_session, login="pin_second")
+    second_panel, second_edge = await _materials(db_session, branch_id=second_branch_id)
+    second_draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=second_branch_id,
+        panel=second_panel,
+        edge=second_edge,
+    )
+    second_order = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": second_draft["id"],
+            "branch_id": str(second_branch_id),
+            "contact_name": "Pin Client",
+            "contact_phone": "+998901555777",
+        },
+    )
+    assert second_order.status_code == 201, second_order.text
+    # And the second order moves it, rather than leaving the first one standing.
+    assert client_row.preferred_branch_id == second_branch_id
+
+
 async def test_client_order_detail_gates_settlement_until_ready(
     client: AsyncClient,
     db_session: AsyncSession,

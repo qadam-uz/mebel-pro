@@ -43,7 +43,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import (
     can_access_branch,
-    seed_preferred_branch_if_missing,
+    pin_branch_on_order,
 )
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.api import branch_material_snapshot
@@ -280,7 +280,9 @@ async def place_client_order(
     )
     await _insert_order(db, order)
 
-    await seed_preferred_branch_if_missing(db, client=client, branch_id=branch.id)
+    # Decision 25: the order's branch becomes the pin, every time — this is
+    # where «Ustaxonangiz» is decided, not the editor.
+    await pin_branch_on_order(db, client=client, branch_id=branch.id)
 
     await _add_order_items(db, order=order, pricing=pricing)
 

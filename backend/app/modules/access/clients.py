@@ -72,9 +72,13 @@ async def find_or_create_client(
     return ClientResolution(client=client, created=True)
 
 
-async def seed_preferred_branch_if_missing(
-    db: AsyncSession, *, client: Client, branch_id: uuid.UUID
-) -> None:
-    """Persist the first self-serve order's branch without replacing a choice."""
-    if client.preferred_branch_id is None:
-        client.preferred_branch_id = branch_id
+async def pin_branch_on_order(db: AsyncSession, *, client: Client, branch_id: uuid.UUID) -> None:
+    """Pin the branch an order was just placed at — latest order wins.
+
+    Placing an order is the strongest statement a client makes about where they
+    collect, so it always moves the pin (it used to seed it only when nothing
+    was pinned). The other two paths that move it are «Asosiy qilish» on a
+    branch row and a link entry that names a branch; merely opening the editor
+    from a branch («Yangi chizma») never does.
+    """
+    client.preferred_branch_id = branch_id

@@ -21,7 +21,7 @@ from app.modules.access.clients import (
     ClientResolution,
     find_or_create_client,
     normalize_uz_phone,
-    seed_preferred_branch_if_missing,
+    pin_branch_on_order,
 )
 from app.modules.access.login_throttle import (
     LoginIpThrottle,
@@ -90,6 +90,7 @@ __all__ = [
     "issue_login_code",
     "login_throttle",
     "normalize_uz_phone",
+    "pin_branch_on_order",
     "poll_login_token",
     "principal_from_session",
     "prune_expired_sessions",
@@ -104,7 +105,6 @@ __all__ = [
     "revoke_for_workshop",
     "revoke_other_sessions",
     "revoke_session",
-    "seed_preferred_branch_if_missing",
     "telegram_code_throttle",
     "visible_branch_ids",
     "visible_workshop_ids",
