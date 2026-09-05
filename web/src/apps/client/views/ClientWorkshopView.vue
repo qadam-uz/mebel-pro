@@ -91,7 +91,7 @@ onMounted(() => {
             v-if="workshop.logo_file_id"
             :file-id="workshop.logo_file_id"
             :alt="workshop.name"
-            size="md"
+            size="sm"
             class="size-13 rounded-[14px] border border-hairline object-contain"
           />
           <span
