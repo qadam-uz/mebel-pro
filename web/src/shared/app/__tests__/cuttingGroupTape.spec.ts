@@ -239,7 +239,11 @@ describe('reResolveGroupTape', () => {
         edge_top: { material_id: kronoThick.id, source: 'shop' },
         edge_bottom: { material_id: kronoThin.id, source: 'shop' },
       }),
-      part({ part_ref: 'b', material_id: 'panel-2', edge_top: { material_id: kronoThick.id, source: 'shop' } }),
+      part({
+        part_ref: 'b',
+        material_id: 'panel-2',
+        edge_top: { material_id: kronoThick.id, source: 'shop' },
+      }),
     ]
     const outcome = reResolveGroupTape({
       parts,

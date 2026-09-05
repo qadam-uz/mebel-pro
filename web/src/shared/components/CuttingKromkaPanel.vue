@@ -2,9 +2,12 @@
 import { computed, ref, watch } from 'vue'
 
 import Icon from '@/shared/components/AppIcon.vue'
+import CuttingEdgeSides from '@/shared/components/CuttingEdgeSides.vue'
+import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
 import { colorForMaterial, edgeSearchText, sideLabels } from '@/shared/app/cuttingDisplay'
 import { edgeTooNarrow, rankedEdges } from '@/shared/app/cuttingEdgeDisplay'
 import { edgeRegistryKey, type EdgeRegistryEntry } from '@/shared/app/cuttingEditorDerived'
+import type { TapeDecor } from '@/shared/app/cuttingGroupTape'
 import type {
   ClientCatalogMaterialOption,
   CuttingEdgeBand,
@@ -31,23 +34,54 @@ import type { EdgeField } from '@/shared/app/cuttingDisplay'
 // placeholder: with nothing selected there is nothing to say, and a 300px column
 // of explanatory text beside the board is width spent on a sentence the operator
 // reads once.
-const props = defineProps<{
-  part: CuttingPart
-  partNumber: number
-  /** The board this detal is cut from — drives the tape ranking. */
-  panelMaterial: ClientCatalogMaterialOption | null
-  edgeOptions: ClientCatalogMaterialOption[]
-  edgeRegistry: EdgeRegistryEntry[]
-  /** The side the operator pointed at in the row, so its toggle can announce itself. */
-  flashSide: EdgeField | null
-}>()
+/**
+ * Two variants, one frame (§7.5). `workshop` is everything below: the tape
+ * catalog, the ranking, the registry colours, the two whole-part patterns.
+ * `client` swaps the body for §7.1's reduced block — the group's tape line, the
+ * four sides and the thickness chips — and keeps the frame, because the docked
+ * card *is* the shape the client editor wants on desktop; only its contents
+ * shrink. The two bodies share no state, so they are `v-if` siblings rather
+ * than one body full of conditionals.
+ */
+const props = withDefaults(
+  defineProps<{
+    part: CuttingPart
+    partNumber: number
+    /** The board this detal is cut from — drives the tape ranking. */
+    panelMaterial: ClientCatalogMaterialOption | null
+    edgeOptions: ClientCatalogMaterialOption[]
+    edgeRegistry: EdgeRegistryEntry[]
+    /** The side the operator pointed at in the row, so its toggle can announce itself. */
+    flashSide: EdgeField | null
+    variant?: 'workshop' | 'client'
+    /** Client variant: the material group's tape decor (null → the picker). */
+    groupTapeDecor?: TapeDecor | null
+    /** Client variant: the armed thickness for the next banded side. */
+    selectedThicknessMm?: number | null
+    /** Client variant: names a band outside the group decor (legacy, §7.1). */
+    foreignTapeLabel?: (materialId: string) => string
+  }>(),
+  {
+    variant: 'workshop',
+    groupTapeDecor: null,
+    selectedThicknessMm: null,
+    foreignTapeLabel: () => '',
+  },
+)
 
 const emit = defineEmits<{
   'edges-change': [
     { edges: Record<EdgeField, CuttingEdgeBand | null>; rememberedMaterialId: string | null },
   ]
   close: []
+  /** Client variant only. */
+  'update:selectedThicknessMm': [number]
+  'set-side': [side: EdgeField, materialId: string | null]
+  'need-tape': []
+  'open-group-tape': []
 }>()
+
+const isClient = computed(() => props.variant === 'client')
 
 const tapeOpen = ref(false)
 const search = ref('')
@@ -232,7 +266,8 @@ const subline = computed(() => {
   <aside
     role="region"
     :aria-label="$t('cutting.edge.panelTitle')"
-    class="flex w-[300px] flex-none flex-col overflow-hidden rounded-2xl bg-elevated shadow-card"
+    class="flex flex-col overflow-hidden rounded-2xl bg-elevated shadow-card"
+    :class="isClient ? 'min-w-0' : 'w-[300px] flex-none'"
   >
     <div class="flex items-start gap-2.5 border-b border-divider px-[15px] py-3.5">
       <div class="min-w-0 flex-1">
@@ -252,7 +287,31 @@ const subline = computed(() => {
       </button>
     </div>
 
-    <div class="px-[15px] pt-[15px]">
+    <!-- Client (§7.1): the tape belongs to the material group, so the card
+         opens by naming it and pointing at where it changes. -->
+    <CuttingGroupTapeLine
+      v-if="isClient"
+      class="bg-sunk/50"
+      dense
+      :decor="groupTapeDecor"
+      @open="emit('open-group-tape')"
+    />
+
+    <div v-if="isClient" class="p-[15px]">
+      <CuttingEdgeSides
+        dense
+        :part="part"
+        :part-label="`D${partNumber}`"
+        :decor="groupTapeDecor"
+        :selected-thickness-mm="selectedThicknessMm"
+        :foreign-tape-label="foreignTapeLabel"
+        @update:selected-thickness-mm="emit('update:selectedThicknessMm', $event)"
+        @set-side="(side, materialId) => emit('set-side', side, materialId)"
+        @need-tape="emit('need-tape')"
+      />
+    </div>
+
+    <div v-if="!isClient" class="px-[15px] pt-[15px]">
       <div class="flex gap-[7px]">
         <div class="grid min-w-0 flex-1 grid-cols-2 gap-[7px]">
           <button
@@ -318,7 +377,7 @@ const subline = computed(() => {
       </div>
     </div>
 
-    <div class="mt-[15px] border-t border-divider px-[15px] py-[13px]">
+    <div v-if="!isClient" class="mt-[15px] border-t border-divider px-[15px] py-[13px]">
       <button
         type="button"
         :aria-expanded="tapeOpen"

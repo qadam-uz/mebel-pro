@@ -35,8 +35,18 @@ import {
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
+import {
+  autoTapeDecorForPanel,
+  groupHasBandedSide,
+  groupTapeDecors,
+  preferredVariant,
+  reResolveGroupTape,
+  resolveGroupTape,
+  type TapeDecor,
+} from '@/shared/app/cuttingGroupTape'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
+import ActionMenu from '@/shared/components/ActionMenu.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import OrderWizardHead from '@/shared/components/OrderWizardHead.vue'
 import AppModal from '@/shared/components/AppModal.vue'
@@ -44,7 +54,12 @@ import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
+import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
 import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
+import CuttingMaterialPicker from '@/shared/components/CuttingMaterialPicker.vue'
+import CuttingPartCard from '@/shared/components/CuttingPartCard.vue'
+import CuttingPartSheet from '@/shared/components/CuttingPartSheet.vue'
+import CuttingTapePicker from '@/shared/components/CuttingTapePicker.vue'
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
@@ -85,6 +100,12 @@ provide(cuttingEditorAdapterKey, adapter)
 // not a picker; the walk-in identity strip shows in workshop scope.
 const fixedBranch = computed(() => adapter.branch.fixed ?? null)
 const isWorkshopScope = computed(() => cutting.scope === 'workshop')
+// The client editor (SPEC_CLIENT_UX_MVP §7). Every §7 change is gated on this,
+// never on `inOrderWizard`: that flag is false for a workshop revision and for
+// a read-only bound draft too, and those are workshop screens that must keep
+// the registry, the tape picker, the import and the own-material flow exactly
+// as they are today.
+const isClientEditor = computed(() => cutting.scope === 'client')
 const draftId = computed(() => String(route.params.id))
 // New editor: it has no server id until it contains a complete detail, which
 // creates the draft through autosave.
@@ -220,6 +241,14 @@ const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null
 const inOrderWizard = computed(
   () => isWorkshopScope.value && !isReadOnly.value && revisionOrderId.value === null,
 )
+/**
+ * Whether kromka is edited in a card docked beside the board rather than in a
+ * modal — the staff order wizard, and now the client editor too (§7.5). Both
+ * select a row on click or focus and render the panel for that row; the client
+ * variant just carries a smaller block. Below `lg` the client's panel is not
+ * rendered at all and the phone sheet owns the job instead.
+ */
+const docksKromka = computed(() => inOrderWizard.value || isClientEditor.value)
 // The locked-branch strip names the branch the editor actually operates on. For a
 // resumed walk-in draft that's the draft's frozen branch (which may differ from
 // the topbar the adapter froze at mount); fall back to the topbar name.
@@ -274,6 +303,21 @@ const activeBranchId = computed(() => {
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
+/**
+ * The naming rule (decision 16), system-wide: a workshop with ONE branch is
+ * named by the workshop alone — the branch name never appears — and a workshop
+ * with several reads «{Workshop} · {Branch}», always in that order. A branch
+ * name is never shown on its own. (This line used to render branch-first,
+ * which is the reverse of how a client says it out loud.)
+ */
+const clientBranchLabel = computed(() => {
+  const branch = preferredBranch.value
+  if (!branch) return ''
+  const siblings = cutting.branchOptions.filter(
+    (option) => option.workshop_id === branch.workshop_id,
+  ).length
+  return siblings > 1 ? `${branch.workshop_name} · ${branch.branch_name}` : branch.workshop_name
+})
 // Editor scoping (spec §4). The pin scopes what the picker *offers*; it never
 // touches data, so the full option list stays loaded and an existing draft on a
 // foreign branch keeps naming its own branch (and its kerf/trim) through
@@ -381,6 +425,13 @@ const optimizeDisabledHint = computed(() => {
 })
 const primaryCtaLabel = computed(() => {
   if (cutting.optimizing || creatingDraft.value) return t('cutting.editor.ctaCalculating')
+  // §7.0 fixes the client's two labels: the button says what the tap does —
+  // it runs the optimiser, or it opens the result that is already current.
+  if (isClientEditor.value) {
+    return hasCurrentChosenResult.value
+      ? t('cutting.editor.ctaViewResult')
+      : t('cutting.editor.ctaCalculate')
+  }
   // «Optimallashtirish» is the wizard's word for this step, and it is only true
   // when the click will actually run one: with a chosen result already matching
   // these parts the button just opens that result, and on a read-only drawing it
@@ -446,6 +497,142 @@ function materialById(id: string | null | undefined) {
 
 function edgeById(id: string | null | undefined) {
   return cutting.edgeOptions.find((material) => material.id === id) ?? null
+}
+
+// ── The client's group tape (§7.1) ──────────────────────────────────────────
+// Nothing below is persisted: a side still stores the concrete kromka material
+// id it always did, and the group's decor is resolved from the parts snapshot
+// plus the branch's tape catalog on every read (see app/cuttingGroupTape.ts).
+// `pickedTapeByMaterial` only records the choice made in THIS editor, which is
+// the one thing the parts cannot say when no side is banded yet.
+const pickedTapeByMaterial = ref<Record<string, string>>({})
+/** The thickness the next banded side takes — «Qalinlikni tanlab, tomonga bosing». */
+const armedThicknessMm = ref<number | null>(null)
+const tapePickerGroupKey = ref<string | null>(null)
+const gateGroupKey = ref<string | null>(null)
+
+const tapeDecors = computed(() =>
+  isClientEditor.value ? groupTapeDecors(cutting.edgeOptions) : [],
+)
+
+function partsOfMaterial(materialId: string | null) {
+  return parts.value.filter((part) => (part.material_id || null) === materialId)
+}
+
+function groupTapeFor(materialId: string | null): TapeDecor | null {
+  if (!materialId) return null
+  return resolveGroupTape({
+    panel: materialById(materialId),
+    groupParts: partsOfMaterial(materialId),
+    decors: tapeDecors.value,
+    pickedKey: pickedTapeByMaterial.value[materialId] ?? null,
+  }).decor
+}
+
+function tapeThicknessOf(materialId: string): number | null {
+  const edge = edgeById(materialId)
+  if (!edge) return null
+  const value = Number(edge.thickness_mm)
+  return Number.isFinite(value) ? value : null
+}
+
+function foreignTapeLabel(materialId: string) {
+  const edge = edgeById(materialId)
+  return edge ? materialLabel(edge) : materialId
+}
+
+/**
+ * §7.1's auto-attach, as a side effect of the catalog and the parts settling
+ * rather than of the click that added the material: a material can arrive by
+ * picker, by hydration or by recovery, and all three owe the group the same
+ * tape. `resolveGroupTape` already prefers what the sides carry, so writing the
+ * auto-match into `pickedTapeByMaterial` only pins the case where nothing is
+ * banded — and never overwrites a pick the client made.
+ */
+watch(
+  [() => parts.value.map((part) => part.material_id).join('|'), tapeDecors],
+  () => {
+    if (!isClientEditor.value || tapeDecors.value.length === 0) return
+    const next = { ...pickedTapeByMaterial.value }
+    let changed = false
+    for (const materialId of new Set(parts.value.map((part) => part.material_id).filter(Boolean))) {
+      if (next[materialId]) continue
+      const auto = autoTapeDecorForPanel(materialById(materialId), tapeDecors.value)
+      if (!auto) continue
+      next[materialId] = auto.key
+      changed = true
+    }
+    if (changed) pickedTapeByMaterial.value = next
+  },
+  { immediate: true },
+)
+
+/** Groups that band a side but have no tape decor — the «Hisoblash» gate. */
+const groupsMissingGroupTape = computed(() =>
+  isClientEditor.value
+    ? groupedParts.value.filter(
+        (group) =>
+          group.materialId &&
+          groupHasBandedSide(group.parts.map((entry) => entry.part)) &&
+          groupTapeFor(group.materialId) === null,
+      )
+    : [],
+)
+
+function openTapePicker(materialId: string | null) {
+  if (!materialId) return
+  tapePickerGroupKey.value = materialId
+}
+
+function closeTapePicker() {
+  tapePickerGroupKey.value = null
+}
+
+const tapePickerPanel = computed(() =>
+  tapePickerGroupKey.value ? materialById(tapePickerGroupKey.value) : null,
+)
+const tapePickerCurrentKey = computed(() =>
+  tapePickerGroupKey.value ? (groupTapeFor(tapePickerGroupKey.value)?.key ?? null) : null,
+)
+
+/**
+ * Changing the group's tape re-points every banded side of that group at the
+ * new decor, keeping each side's thickness where the decor has it. A thickness
+ * the new decor does not carry falls back to the nearest one — and says so
+ * once, because a band silently changing from 2 mm to 0.4 mm is a price change
+ * the client did not ask for.
+ */
+function applyGroupTape(decorKey: string) {
+  const materialId = tapePickerGroupKey.value
+  const decor = tapeDecors.value.find((item) => item.key === decorKey)
+  if (!materialId || !decor) return
+  pickedTapeByMaterial.value = { ...pickedTapeByMaterial.value, [materialId]: decorKey }
+  const outcome = reResolveGroupTape({
+    parts: parts.value,
+    groupMaterialId: materialId,
+    decor,
+    thicknessById: tapeThicknessOf,
+  })
+  if (outcome.changed) parts.value = outcome.parts
+  if (outcome.fellBack) toast.warn(t('cutting.edge.thicknessFallback', { name: decor.label }))
+  if (gateGroupKey.value === materialId) gateGroupKey.value = null
+  closeTapePicker()
+}
+
+/** The armed thickness, clamped to what the open part's group decor carries. */
+function armedThicknessFor(decor: TapeDecor | null): number | null {
+  if (!decor) return null
+  const armed = decor.variants.find((variant) => variant.thicknessMm === armedThicknessMm.value)
+  return (armed ?? preferredVariant(decor, null))?.thicknessMm ?? null
+}
+
+function setPartSide(part: CuttingPart, side: EdgeField, materialId: string | null) {
+  part[side] = materialId ? { material_id: materialId, source: 'shop' } : null
+  if (materialId) {
+    const thickness = tapeThicknessOf(materialId)
+    if (thickness != null) armedThicknessMm.value = thickness
+    rememberEdgeMaterial(part, materialId)
+  }
 }
 
 const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
@@ -750,6 +937,9 @@ function deleteRow(index: number) {
     // letting `activePart` resolve to null keeps `activeSide` from surviving
     // into whatever row is selected next.
     if (activePartRef.value === removed.part_ref) clearActivePart()
+    // Same for the phone sheet — deleting from its ⋯ menu closes it, and the
+    // undo toast below is then the only thing on screen about that part.
+    if (sheetPartRef.value === removed.part_ref) closePartSheet()
     const label = partDisplayName(removed, index)
     toast.action(
       t('cutting.editor.partDeleted', { name: label }),
@@ -1022,6 +1212,38 @@ const activeSide = ref<EdgeField | null>(null)
 function selectPart(part: CuttingPart, side?: EdgeField) {
   activePartRef.value = part.part_ref
   activeSide.value = side ?? null
+}
+
+// ── The phone «Detal» sheet (§7.0) ──────────────────────────────────────────
+// One ref, not a copy of the part: the sheet edits the live object through
+// granular emits and the debounced autosave carries it, so «Saqlash» closes
+// rather than commits and there is no second copy of the truth to reconcile.
+const sheetPartRef = ref<string | null>(null)
+const sheetPart = computed(
+  () => parts.value.find((part) => part.part_ref === sheetPartRef.value) ?? null,
+)
+const sheetPartIndex = computed(() =>
+  parts.value.findIndex((part) => part.part_ref === sheetPartRef.value),
+)
+const sheetGroupTape = computed(() => groupTapeFor(sheetPart.value?.material_id ?? null))
+
+function openPartSheet(part: CuttingPart) {
+  sheetPartRef.value = part.part_ref
+  armedThicknessMm.value = armedThicknessFor(groupTapeFor(part.material_id))
+}
+
+function closePartSheet() {
+  sheetPartRef.value = null
+}
+
+/** «Saqlash va yana»: keep the flow going with a fresh part in the same group. */
+function savePartAndNext() {
+  const current = sheetPart.value
+  if (!current) return
+  const index = sheetPartIndex.value
+  addRow(current.material_id, current, index)
+  const next = parts.value[index + 1]
+  if (next) sheetPartRef.value = next.part_ref
 }
 
 function clearActivePart() {
@@ -1334,8 +1556,27 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
+// `{workshop} katalogi · N ta dekor` — the picker's foot line, so the client
+// can see WHOSE prices these are without leaving the sheet.
+const materialCatalogCaption = computed(() =>
+  t('cutting.editor.catalogCaption', {
+    workshopBranch: clientBranchLabel.value,
+    n: materialPickerGroups.value.length,
+  }),
+)
+const tapeCatalogCaption = computed(() =>
+  t('cutting.editor.tapeCatalogCaption', {
+    workshopBranch: clientBranchLabel.value,
+    n: tapeDecors.value.length,
+  }),
+)
+
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
   return material.has_grain ? t('cutting.material.grained') : t('cutting.material.grainless')
+}
+
+function groupDecorImageId(materialId: string | null) {
+  return materialById(materialId)?.image_file_id ?? null
 }
 
 function groupSwatchStyle(materialId: string) {
@@ -1637,8 +1878,27 @@ async function runPrimaryCta() {
   await optimize()
 }
 
+/**
+ * The §7.1 gate. A group that bands a side but has no tape decor cannot be
+ * priced — the tape is a line on the bill, and every order is fully priced at
+ * placement. So «Hisoblash» refuses, scrolls the offending group's line into
+ * view and arms it, rather than optimising into a quote that cannot be made.
+ */
+async function blockedByMissingGroupTape(): Promise<boolean> {
+  const group = groupsMissingGroupTape.value[0]
+  if (!group?.materialId) return false
+  gateGroupKey.value = group.materialId
+  toast.warn(t('cutting.edge.pickFirstGroup'))
+  await nextTick()
+  document
+    .getElementById(`group-tape-${group.materialId}`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  return true
+}
+
 async function optimize() {
   if (cutting.optimizing || creatingDraft.value || !canOptimize.value) return
+  if (await blockedByMissingGroupTape()) return
   optimizeError.value = null
   optimizeRowError.value = null
   if (isNewDraft.value) {
@@ -1806,7 +2066,12 @@ onMounted(async () => {
     // A client-side new drawing always starts with no branch selection.
     await cutting.loadBranchOptions()
     selectedBranchId.value = null
-    branchPickerOpen.value = true
+    // Decision 17: the branch is settled BEFORE the editor opens (the pin, or
+    // the branch whose «Yangi chizma» was tapped), so the client editor never
+    // opens a picker of its own. A pin-less URL is a route-guard redirect to
+    // Ustaxonalarim; the empty state below is the last-resort recovery when
+    // that guard has not run.
+    branchPickerOpen.value = !isClientEditor.value
     await loadMaterials()
     return
   }
@@ -1843,9 +2108,12 @@ onMounted(async () => {
     })
     void nextTick(() => autosave.schedule())
   }
-  // Only the client app asks in-editor. In the workshop the branch comes from
-  // the app, and there are no options to show — an empty modal was a dead end.
-  if (!selectedBranchId.value && !appSuppliesBranch.value) branchPickerOpen.value = true
+  // The workshop takes its branch from the app context and has no options to
+  // show; the client's branch is settled before the editor opens (decision 17).
+  // Neither raises a picker here any more.
+  if (!selectedBranchId.value && !appSuppliesBranch.value && !isClientEditor.value) {
+    branchPickerOpen.value = true
+  }
   await loadMaterials()
 })
 
@@ -1936,7 +2204,71 @@ onBeforeRouteLeave(async () => {
       </template>
     </OrderWizardHead>
 
-    <div v-else class="client-page-head">
+    <!-- §7.0, phones: the draft NAME is the page title — inline-editable, with
+         the saved chip beside it and delete demoted into a ⋯ menu. There is no
+         «Chizma» H1 above it: two titles for one screen, one of them generic,
+         is the duplicate the phone shell explicitly drops. Desktop keeps the
+         H1 + name + outline delete the canvas draws. -->
+    <div v-else-if="isClientEditor" class="mb-3 flex items-center gap-2.5 md:hidden">
+      <input
+        v-if="draftNameEditing"
+        v-model="draftNameValue"
+        class="mp-input min-w-0 flex-1 text-lg font-bold"
+        maxlength="64"
+        :placeholder="$t('cutting.editor.namePlaceholder')"
+        :aria-label="$t('cutting.editor.namePlaceholder')"
+        autofocus
+        @keydown.enter.prevent="commitDraftName"
+        @keydown.esc.prevent="cancelDraftNameEdit"
+        @blur="commitDraftName"
+      />
+      <button
+        v-else-if="!isReadOnly"
+        type="button"
+        class="flex min-w-0 flex-1 items-center gap-1.5 border-b border-dashed border-hairline-strong pb-0.5 text-left font-display text-[22px] font-bold tracking-[-0.02em] text-ink"
+        @click="beginDraftNameEdit"
+      >
+        <span class="min-w-0 truncate">{{
+          isNewDraft
+            ? localDraftName || $t('cutting.editor.untitled')
+            : draft
+              ? draftDisplayName(draft)
+              : $t('cutting.editor.untitled')
+        }}</span>
+        <Icon name="pencil" class="size-4 shrink-0 text-ink-muted" />
+      </button>
+      <span v-else class="min-w-0 flex-1 truncate text-lg font-bold text-ink">{{
+        draft ? draftDisplayName(draft) : $t('cutting.editor.untitled')
+      }}</span>
+      <span
+        v-if="!isNewDraft && !isReadOnly"
+        class="mp-chip shrink-0"
+        :class="{
+          'bg-success-soft text-success': saveState === 'saved',
+          'bg-info-soft text-info': saveState === 'saving' || saveState === 'editing',
+          'bg-danger-soft text-danger': saveState === 'error',
+        }"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="mp-dot" aria-hidden="true"></span>
+        {{ saveLabel() }}
+      </span>
+      <!-- Decision 20: the drawing's ⋯ stays a single item. -->
+      <ActionMenu
+        v-if="!isNewDraft && !isReadOnly"
+        :label="$t('cutting.editor.draftActionsAria')"
+        trigger-class="mp-action-icon-button size-9 min-h-0 shrink-0 text-ink-muted"
+        :items="[{ label: $t('cutting.editor.deleteDraft'), icon: 'trash', danger: true }]"
+        @select="requestDeleteDraft"
+      />
+    </div>
+
+    <div
+      v-if="!inOrderWizard"
+      class="client-page-head"
+      :class="isClientEditor ? 'max-md:hidden' : ''"
+    >
       <div>
         <h1>{{ $t('cutting.editor.title') }}</h1>
       </div>
@@ -2079,7 +2411,11 @@ onBeforeRouteLeave(async () => {
                is a second title for a thing the operator has not saved as a
                drawing yet. It comes back on the standalone editor, where the
                name is how a saved drawing is found again. -->
-          <section v-if="!inOrderWizard" class="mb-3 flex items-center gap-2">
+          <section
+            v-if="!inOrderWizard"
+            class="mb-3 flex items-center gap-2"
+            :class="isClientEditor ? 'max-md:hidden' : ''"
+          >
             <input
               v-if="draftNameEditing"
               v-model="draftNameValue"
@@ -2122,13 +2458,20 @@ onBeforeRouteLeave(async () => {
             >
               i
             </span>
+            <!-- Decision 17: read-only. The branch is fixed at creation — the
+                 pin, or the branch whose «Yangi chizma» started this drawing —
+                 so there is no «O'zgartirish» and no picker here. Decision 16
+                 gives the name: workshop first, branch only when the workshop
+                 has more than one. -->
             <div class="min-w-0 flex-1">
-              <b class="text-ink">
-                {{ `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}` }}
-              </b>
+              <b class="text-ink">{{
+                isClientEditor
+                  ? clientBranchLabel
+                  : `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+              }}</b>
             </div>
             <button
-              v-if="preferredBranch"
+              v-if="!isClientEditor"
               type="button"
               class="mp-button mp-button-outline"
               @click="branchPickerOpen = true"
@@ -2147,9 +2490,29 @@ onBeforeRouteLeave(async () => {
              inside a number cell. `.stop` so it does not travel on to the
              wizard's own cancel — the operator is dismissing the panel, not
              the order. -->
-        <div ref="stepShell" @keydown.esc.stop="inOrderWizard && clearActivePart()">
-          <div :class="inOrderWizard ? 'flex flex-wrap items-start gap-[18px]' : ''">
-            <div :class="inOrderWizard ? 'shrink' : 'contents'">
+        <div ref="stepShell" @keydown.esc.stop="docksKromka && clearActivePart()">
+          <!-- §7.5: on the client this is a real two-column grid at `lg`
+               (`minmax(0,1fr) 340px`), not the wizard's measured wrap — the
+               client board is fluid, so there is no knowable width to wrap
+               against, and the docked card wants a fixed column. -->
+          <div
+            :class="
+              inOrderWizard
+                ? 'flex flex-wrap items-start gap-[18px]'
+                : isClientEditor && activePart
+                  ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]'
+                  : ''
+            "
+          >
+            <!-- `contents` normally dissolves this wrapper so the card and the
+                 sticky bar are siblings of the page. Under the client's docked
+                 grid it must stay a real box, or both would become grid items
+                 and the bar would land in the kromka column. -->
+            <div
+              :class="
+                inOrderWizard ? 'shrink' : isClientEditor && activePart ? 'min-w-0' : 'contents'
+              "
+            >
               <!-- A panel, not a bordered block: `.client-card` also sets
              `overflow: hidden`, which would trap the row grid's own horizontal
              scroller on a narrow viewport. `w-max` is what makes the wrap work:
@@ -2208,9 +2571,12 @@ onBeforeRouteLeave(async () => {
                     </button>
                     <!-- Outside the wizard the two entry modes are a segmented pair.
                    Inside it the import lives with the other "add something"
-                   actions at the foot of the list, where the design puts it. -->
+                   actions at the foot of the list, where the design puts it.
+                   Decision 18 / §7.6: the CLIENT app has no import surface at
+                   all — no mode switch, no flag, no workshop setting. The
+                   wizard and the backend parsers stay for the walk-in flow. -->
                     <div
-                      v-if="!inOrderWizard"
+                      v-if="!inOrderWizard && !isClientEditor"
                       class="inline-flex rounded-lg border border-hairline bg-sunk p-1"
                     >
                       <button
@@ -2309,7 +2675,11 @@ onBeforeRouteLeave(async () => {
                         class="mp-button mp-button-primary"
                         @click="openNewMaterial"
                       >
-                        + {{ $t('cutting.editor.emptyAction') }}
+                        {{
+                          isClientEditor
+                            ? $t('cutting.editor.addMaterialClient')
+                            : `+ ${$t('cutting.editor.emptyAction')}`
+                        }}
                       </button>
                       <!-- The import is a first-run path, not an advanced one: a shop
                      that already keeps its cut lists in a file should not have
@@ -2414,9 +2784,23 @@ onBeforeRouteLeave(async () => {
                             "
                             aria-hidden="true"
                           ></span>
+                          <!-- §7.3: on the client the decor's own picture takes
+                               the colour dot's place — a 6px dot of a hashed
+                               pastel never told anyone which board this is.
+                               No image → the shared swatch, at the same size,
+                               so the row never loses its leading mark. -->
+                          <AuthFileImage
+                            v-else-if="isClientEditor && groupDecorImageId(group.materialId)"
+                            :file-id="groupDecorImageId(group.materialId)"
+                            alt=""
+                            class="size-6 shrink-0 rounded-md border border-hairline object-cover"
+                          />
                           <span
                             v-else
-                            class="size-3 shrink-0 rounded-full"
+                            class="shrink-0 rounded-full"
+                            :class="
+                              isClientEditor ? 'size-6 rounded-md border border-hairline' : 'size-3'
+                            "
                             :style="
                               group.materialId
                                 ? groupSwatchStyle(group.materialId)
@@ -2495,6 +2879,7 @@ onBeforeRouteLeave(async () => {
                         v-if="!isReadOnly"
                         type="button"
                         class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint"
+                        :class="isClientEditor ? 'max-md:hidden' : ''"
                         @click="addGroupRow(group)"
                       >
                         <Icon name="plus" class="size-3.5" />
@@ -2527,12 +2912,30 @@ onBeforeRouteLeave(async () => {
                         <span aria-hidden="true"></span>
                       </div>
                     </div>
+                    <!-- §7.1: on the client the registry line is REPLACED by the
+                         group's tape line — it names one tape decor and the
+                         thicknesses the branch stocks it in, and it is itself
+                         the control that changes them. A numbering has nothing
+                         left to number once a material group carries one tape. -->
+                    <CuttingGroupTapeLine
+                      v-if="isClientEditor && group.materialId"
+                      :id="`group-tape-${group.materialId}`"
+                      :decor="groupTapeFor(group.materialId)"
+                      :armed="gateGroupKey === group.materialId"
+                      :dense="false"
+                      @open="openTapePicker(group.materialId)"
+                    />
+
                     <!-- The registry names every tape in the drawing; on the parts
                          screen it is a second list of things the operator is not
                          editing here. The kromka panel names the tape it is
                          setting, and step 3 totals them. -->
                     <div
-                      v-if="!inOrderWizard && groupEdgeRegistryEntries(group).length > 0"
+                      v-if="
+                        !inOrderWizard &&
+                        !isClientEditor &&
+                        groupEdgeRegistryEntries(group).length > 0
+                      "
                       class="border-t border-hairline px-3 pb-2 pt-1.5"
                     >
                       <CuttingEdgeTapeRegistry
@@ -2542,9 +2945,40 @@ onBeforeRouteLeave(async () => {
                         @replace="openRegistryReplace"
                       />
                     </div>
+                    <!-- §7.0: the phone list is read-only cards that open the
+                         «Detal» sheet; the table below is the same parts at
+                         `md` and up, where a mouse and a keyboard make eight
+                         live columns the faster shape. -->
+                    <div
+                      v-if="isClientEditor && !collapsedGroupKeys.has(group.key)"
+                      class="grid gap-2 p-2 md:hidden"
+                    >
+                      <CuttingPartCard
+                        v-for="{ part, index } in group.parts"
+                        :key="part.part_ref"
+                        :part="part"
+                        :index="index"
+                        :display-index="displayPartIndex.get(part.part_ref)"
+                        :has-error="rowHasError(part, index)"
+                        @open="openPartSheet(part)"
+                      />
+                      <button
+                        v-if="!isReadOnly"
+                        type="button"
+                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13.5px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
+                        @click="addGroupRow(group)"
+                      >
+                        <Icon name="plus" class="size-4" />
+                        {{ $t('cutting.editor.addPart') }}
+                      </button>
+                    </div>
+
                     <div
                       v-if="!collapsedGroupKeys.has(group.key)"
-                      :class="inOrderWizard ? 'overflow-visible' : 'overflow-visible bg-elevated'"
+                      :class="[
+                        inOrderWizard ? 'overflow-visible' : 'overflow-visible bg-elevated',
+                        isClientEditor ? 'max-md:hidden' : '',
+                      ]"
                     >
                       <CuttingPartRow
                         v-for="{ part, index } in group.parts"
@@ -2558,8 +2992,8 @@ onBeforeRouteLeave(async () => {
                         :optimize-error="rowOptimizeError(part, index)"
                         :edge-registry="edgeRegistry"
                         :bare-index="inOrderWizard"
-                        :selected="inOrderWizard && activePartRef === part.part_ref"
-                        @select="inOrderWizard && selectPart(part)"
+                        :selected="docksKromka && activePartRef === part.part_ref"
+                        @select="docksKromka && selectPart(part)"
                         @toggle-select="toggleSelect(part.part_ref)"
                         @update:name="setPartName(part, $event)"
                         @update:length="part.length_mm = $event"
@@ -2571,9 +3005,7 @@ onBeforeRouteLeave(async () => {
                         @delete="deleteRow(index)"
                         @open-edge-picker="
                           (event, side) =>
-                            inOrderWizard
-                              ? selectPart(part, side)
-                              : openEdgePicker(part, event, side)
+                            docksKromka ? selectPart(part, side) : openEdgePicker(part, event, side)
                         "
                         @apply-edge-number="
                           (side, number) => applyEdgeNumberToPartSide(part, side, number)
@@ -2603,7 +3035,13 @@ onBeforeRouteLeave(async () => {
                       @click="openNewMaterial"
                     >
                       <Icon name="plus" class="size-4" />
-                      {{ $t('cutting.editor.addMaterial') }}
+                      <!-- §7.0 fixes the client's label to «+ Material» on both
+                           breakpoints; the workshop keeps «Boshqa material». -->
+                      {{
+                        isClientEditor
+                          ? $t('cutting.editor.addMaterialClient')
+                          : $t('cutting.editor.addMaterial')
+                      }}
                     </button>
                     <button
                       v-if="inOrderWizard"
@@ -2711,6 +3149,30 @@ onBeforeRouteLeave(async () => {
               @edges-change="onPanelEdgesChange"
               @close="clearActivePart"
             />
+
+            <!-- §7.5, client: the same docked card carrying §7.1's reduced
+                 block. Hidden below `lg`, where the phone sheet owns kromka —
+                 a 340px column has nowhere to go on a narrow viewport, and the
+                 sheet is the better control there anyway. -->
+            <CuttingKromkaPanel
+              v-if="isClientEditor && activePart"
+              variant="client"
+              class="max-lg:hidden"
+              :part="activePart"
+              :part-number="(displayPartIndex.get(activePart.part_ref) ?? 0) + 1"
+              :panel-material="materialById(activePart.material_id)"
+              :edge-options="cutting.edgeOptions"
+              :edge-registry="edgeRegistry"
+              :flash-side="activeSide"
+              :group-tape-decor="groupTapeFor(activePart.material_id)"
+              :selected-thickness-mm="armedThicknessFor(groupTapeFor(activePart.material_id))"
+              :foreign-tape-label="foreignTapeLabel"
+              @update:selected-thickness-mm="armedThicknessMm = $event"
+              @set-side="(side, materialId) => setPartSide(activePart!, side, materialId)"
+              @need-tape="openTapePicker(activePart.material_id)"
+              @open-group-tape="openTapePicker(activePart.material_id)"
+              @close="clearActivePart"
+            />
           </div>
         </div>
       </fieldset>
@@ -2740,7 +3202,10 @@ onBeforeRouteLeave(async () => {
       </p>
     </ConfirmDialog>
 
+    <!-- Workshop-only mount (§7.6). Not merely hidden: the client app must not
+         carry the wizard's state, its store calls or its copy at all. -->
     <CuttingImportWizard
+      v-if="!isClientEditor"
       :open="importWizardOpen"
       :panel-choices="panelChoices"
       :edge-choices="edgeChoices"
@@ -2866,8 +3331,60 @@ onBeforeRouteLeave(async () => {
       </div>
     </div>
 
+    <!-- ── The client's three overlays (§7.0, §7.2, §7.3) ─────────────────── -->
+    <CuttingPartSheet
+      v-if="isClientEditor && sheetPart"
+      :open="Boolean(sheetPart)"
+      :part="sheetPart"
+      :index="sheetPartIndex"
+      :display-index="displayPartIndex.get(sheetPart.part_ref) ?? sheetPartIndex"
+      :decor="sheetGroupTape"
+      :selected-thickness-mm="armedThicknessFor(sheetGroupTape)"
+      :foreign-tape-label="foreignTapeLabel"
+      @close="closePartSheet"
+      @save="closePartSheet"
+      @save-and-next="savePartAndNext"
+      @delete="deleteRow(sheetPartIndex)"
+      @update:name="setPartName(sheetPart, $event)"
+      @update:length="sheetPart.length_mm = $event"
+      @update:width="sheetPart.width_mm = $event"
+      @update:quantity="sheetPart.quantity = $event"
+      @update:follow-grain="setFollowGrain(sheetPart, $event)"
+      @update:selected-thickness-mm="armedThicknessMm = $event"
+      @set-side="(side, materialId) => setPartSide(sheetPart!, side, materialId)"
+      @need-tape="openTapePicker(sheetPart.material_id)"
+      @open-group-tape="openTapePicker(sheetPart.material_id)"
+    />
+
+    <CuttingTapePicker
+      v-if="isClientEditor"
+      :open="Boolean(tapePickerGroupKey)"
+      :decors="tapeDecors"
+      :panel="tapePickerPanel"
+      :panel-image-file-id="tapePickerPanel?.image_file_id ?? null"
+      :current-key="tapePickerCurrentKey"
+      :caption="tapeCatalogCaption"
+      @close="closeTapePicker"
+      @pick="applyGroupTape"
+    />
+
+    <CuttingMaterialPicker
+      v-if="isClientEditor"
+      :open="Boolean(materialPickerTarget)"
+      :materials="cutting.panelOptions"
+      :loading="cutting.materialsLoading"
+      :current-id="materialPickerCurrentId"
+      :search="materialPickerSearch"
+      :caption="materialCatalogCaption"
+      @close="closeMaterialPicker"
+      @update:search="materialPickerSearch = $event"
+      @pick="applyMaterialPicker"
+    />
+
+    <!-- The workshop's own picker: the customer-board tab and the format list
+         it has always had. The client never mounts it. -->
     <div
-      v-if="materialPickerTarget"
+      v-if="materialPickerTarget && !isClientEditor"
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
