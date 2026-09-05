@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 70
 ---
 
@@ -130,6 +130,9 @@ customers — cut, order, track), **workshop** (workshop owner & staff — every
 **superadmin** (platform operators — provisioning, blocks, jobs console, error monitor). The
 three audiences barely overlap, and a marketing page needs to be indexable — a single SPA can't
 do both well. Shared primitives, the API client, design tokens, and i18n live once in the repo.
+The **client SPA is phone-first responsive** — a bottom tab bar below `md`, the desktop header
+above it — and there is **no native wrapper**: a store build is a distribution decision, not a
+capability the product needs, and nothing in the client app may assume one.
 Design system: web/DESIGN.md
 
 ## Data-model invariants

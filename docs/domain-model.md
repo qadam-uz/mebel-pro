@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-08-22
+updated: 2026-09-05
 order: 45
 ---
 
@@ -19,8 +19,11 @@ per bounded context.
   grants; the owner is one of these, with full scope. **There is no separate "worker"
   entity and no role** — a cutter or edge bander is just a workshop user holding the
   production grant; one person may hold every grant. The system stores no pay rates.
-- **Client** — the workshop's customer; global to the platform, picks a branch per order.
-  Optionally carries a preferred branch that seeds new cutting drafts.
+- **Client** — the workshop's customer; global to the platform. Optionally **pinned** to one
+  branch, which seeds new cutting drafts and scopes what the client app offers.
+- **Client workshop entry** — one row per (client, workshop) the client has entered through a
+  link: the stored half of the client's own workshop list
+  ([`ref/features/client-entry.md`](ref/features/client-entry.md)).
 - **Workshop** — one furniture-cutting business; the tenant. Has many branches.
 - **Branch** — a physical location of a workshop. Owns its stock, its prices, and which of
   the platform's decor formats it carries.

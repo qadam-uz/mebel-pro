@@ -1058,7 +1058,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await expect(page.getByRole('link', { name: '+ Kirim', exact: true })).toBeVisible()
 })
 
-test('client browses the workshop directory without catalog or stock details', async ({ page, request }, testInfo) => {
+test('client browses Ustaxonalarim without prices or stock details', async ({ page, request }, testInfo) => {
   const id = runId(testInfo)
   const adminLogin = `p3-admin-${id}`
   await seedPlatform(adminLogin)
@@ -1094,16 +1094,21 @@ test('client browses the workshop directory without catalog or stock details', a
 
   await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
   await expect(page.getByRole('heading', { name: /Ustaxonalar/ })).toBeVisible()
-  const branchCard = page.locator('article.client-card').filter({
+  // The card is a <section> (the branch rows are a list inside it, so the head
+  // is a link and the card is not).
+  const workshopCard = page.locator('section.client-card').filter({
     has: page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),
   })
-  await expect(branchCard).toBeVisible()
-  // The workshops page is a directory now (the CB-13 client material preview was
-  // removed): neither the catalog (material label / price) nor any internal
-  // stock/supplier detail surfaces — materials are browsed in the cutting editor.
-  await expect(branchCard.getByText(material.label)).toHaveCount(0)
-  await expect(branchCard.getByText(dekor.label)).toHaveCount(0)
-  await expect(branchCard.getByText(/UZS\s*2[, ]500/)).toHaveCount(0)
+  await expect(workshopCard).toBeVisible()
+  // Ustaxonalarim is pickup and contact information: the branch row carries the
+  // pin star and the two actions, and no price or material of its own. The
+  // client's read-only price list lives one tap away behind «Katalog» (spec
+  // §6.2) — this page never previews it, and nothing internal (stock levels,
+  // suppliers) is reachable from the client app at all.
+  await expect(workshopCard.getByRole('link', { name: 'Katalog' }).first()).toBeVisible()
+  await expect(workshopCard.getByText(material.label)).toHaveCount(0)
+  await expect(workshopCard.getByText(dekor.label)).toHaveCount(0)
+  await expect(workshopCard.getByText(/UZS\s*2[, ]500/)).toHaveCount(0)
   await expect(page.getByText('low stock')).toHaveCount(0)
   await expect(page.getByText(/Supplier/)).toHaveCount(0)
 })

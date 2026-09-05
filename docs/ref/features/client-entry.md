@@ -2,18 +2,18 @@
 title: Client entry & workshop links
 status: draft
 owner: shape
-updated: 2026-09-02
+updated: 2026-09-05
 order: 25
 ---
 
 # Client entry & workshop links
 
 How a client arrives in the client app: a workshop hands out a link or a printed QR, the
-client follows it, and the app is **pinned** to that workshop from then on. This page owns
-the workshop code, the entry flow, the pin and the workshops derived around it, and the
-scoping the pin imposes on the rest of the client app. The screens the pin narrows keep
-their own specs — the cutting editor's branch picker in [`cutting.md`](cutting.md), the
-client home dashboard in [`orders.md`](orders.md#ux-client-app).
+client follows it, and the app is **pinned to one of its branches** from then on. This page
+owns the workshop code, the entry flow, the pin, the client's own workshops and their
+profiles, and the scoping the pin imposes on the rest of the client app. The screens it
+narrows keep their own homes — the drawing's branch in [`cutting.md`](cutting.md), the client
+home dashboard and order screens in [`orders.md`](orders.md#ux-client-app).
 
 ## Problem
 
@@ -34,10 +34,22 @@ find that shop in a list of strangers.
 - **The client enters through a workshop's door, not through a market.** The only way to
   reach another workshop is that workshop's own link. The app offers no cross-workshop
   browsing, search, or comparison surface anywhere — not a tab, not a "see more".
-- **No storefront.** The link lands as close to value as possible: the ordinary home, already
-  pinned. Workshop identity is a slim trust cue (name, branch, address, phone), never a
-  profile page with a browsable catalog — the catalog lives inside the editor, where
-  materials are actually picked.
+- **No *cross-workshop* storefront.** The link lands as close to value as possible: the
+  ordinary home, already pinned. A client may see the profile and the price list of the
+  workshops they **already deal with** — that is the shop they are standing in showing them
+  its own prices, which passes the owner-flinch test — but there is no surface anywhere that
+  puts two workshops side by side. (Until 2026-09-05 the rule was the broader "no storefront";
+  the owner narrowed it after the client-UX review, on the reasoning that hiding a workshop's
+  own prices from its own client protects nobody.)
+- **The client is pinned to a branch, never to a workshop — and the UI calls that branch
+  «Ustaxonangiz».** To a client a branch *is* a workshop: they collect from a counter, at a
+  price that counter set. The word «filialingiz» therefore appears nowhere in the client app,
+  and there is no `preferred_workshop_id`.
+- **Naming rule, system-wide.** A workshop with **one** branch is named by the workshop alone;
+  its branch name never appears. A workshop with **several** is named
+  **«{Workshop} · {Branch}»**, always in that order. A branch name is never shown alone.
+  Address and phone are always the branch's. One rule, so the same shop reads the same way on
+  home, in the editor, on an order and in a notification.
 - **The marketplace is a later phase**, and a deliberate one: public workshop cards and open
   price comparison start only when the platform itself brings the demand that would justify
   them. Nothing here builds it early; nothing here makes it harder. Until then it stays an
@@ -64,11 +76,11 @@ by being read off paper by a human, which is exactly the case worth rescuing.
 
 | Form | Who prints it | What it does |
 |---|---|---|
-| `/w/{code}` | the workshop — business cards, Telegram bio | pins the workshop; one visible branch pins straight to it, several ask which |
-| `/w/{code}/{branch_no}` | a branch — the QR on its counter | pins that branch, no choice step |
+| `/w/{code}` | the workshop — business cards, Telegram bio | adds the workshop to Ustaxonalarim; pins its branch **only** when it has exactly one visible branch |
+| `/w/{code}/{branch_no}` | a branch — the QR on its counter | adds the workshop and pins that branch |
 
-`branch_no` is the existing per-workshop number that already appears in every order number,
-so a branch's link is derivable from paperwork it already prints.
+`branch_no` is the branch's own permanent number ([`workshop.md`](../entities/workshop.md)),
+so a branch's link is derivable from paperwork the branch already prints.
 
 **Resolving a link is public** — unauthenticated and IP-throttled, because it has to work
 before the client has an account. It returns the minimum the landing needs: workshop name and
@@ -80,23 +92,35 @@ branch link whose `branch_no` no longer resolves falls back to the workshop-leve
 of the same code rather than dying, and says so, because the printed QR outlives branch
 reshuffles.
 
-### The pin
+### What entry writes
 
-**The pin is the client's `preferred_branch_id`**
-([`identity.md`](../entities/identity.md#client)) — no new entity, no second column. The
-**pinned workshop** is the workshop of that branch, and every scoping rule below derives from
-it at read time.
+Applying an entry writes **two things**, and they answer two different questions.
+
+1. **Always a row in `client_workshop_entries`** (`client_id`, `workshop_id`,
+   `last_entered_at`; one row per pair, upserted — [`identity.md`](../entities/identity.md#client-workshop-entry)).
+   This is *the relationship*, and it is what puts the workshop on Ustaxonalarim before the
+   client has drawn anything.
+2. **The pin — `preferred_branch_id` — only when the branch is *certain***: a branch link, or
+   a workshop link to a workshop with exactly one visible branch. A multi-branch workshop link
+   leaves the pin exactly as it was.
+
+**Certainty is the whole rule for the pin.** A branch link names its counter; a one-branch
+workshop has only one counter to name; a multi-branch link names none, and nothing may guess
+which counter the client stood at — so that client is asked on Ustaxonalarim instead, where
+each branch row's **Yangi chizma** pins as it starts. The earlier "pin the workshop now, the
+branch later" state is gone with the workshop-level pin it needed.
 
 - **Entry is the one path that writes the pin.** The client sends the code and the branch
   together; the server re-resolves the code, cross-checks that the branch belongs to it and
   is visible, then sets the pin, audited like any other client profile write. A refusal
   leaves the previous pin untouched. A bare branch id can never pin — the **code is the
   capability** that names the workshop.
-- **Latest entry wins**, with no confirmation friction: entering a door means walking through
-  it. Re-following the same link is idempotent.
-- **The pin seeds, it does not enforce.** New cutting drafts still take their branch from it,
-  and changing a draft's branch still never writes back to the profile — the seeding rule
-  that makes the pin reach the editor for free is unchanged.
+- **Latest choice wins**, with no confirmation friction: entering a door means walking through
+  it. Re-following the same link is idempotent. Besides a link, the pin moves through
+  **Asosiy qilish** on a branch row and through **Yangi chizma** on a non-pinned branch row;
+  the editor itself never re-pins.
+- **The pin seeds, it does not enforce.** New cutting drafts take their branch from it, and a
+  drawing keeps its own branch for life — nothing written in the editor reaches the profile.
 - **A blocked workshop unpins in effect.** The session read that carries the pinned workshop
   and branch names returns them as null while the workshop is `blocked`, and that pair is the
   app's whole "is pinned" signal — so scoping silently stops applying rather than trapping the
@@ -104,30 +128,41 @@ it at read time.
 
 ### Related workshops
 
-The workshops a client sees on **Ustaxonalarim** are **derived on read, never stored**: the
-pinned workshop, plus the workshop of every branch the client has an order or a cutting draft
-on (staff-minted walk-in drafts included, so a client registered at a counter finds that shop
-waiting for them). `blocked` workshops are excluded.
+The workshops a client sees on **Ustaxonalarim** are **stored ∪ derived**: every workshop with
+a `client_workshop_entries` row, plus the pinned branch's workshop, plus the workshop of every
+branch the client has an order or a cutting draft on (staff-minted walk-in drafts included, so
+a client registered at a counter finds that shop waiting for them). `blocked` workshops are
+excluded from both halves. Order is the **pinned workshop first**, then the rest by the most
+recent thing that happened with them — an entry, an order, a drawing — newest first.
 
-Derivation over a stored relationship is the point: a client who followed a link, never drew
-anything, and then followed another workshop's link simply loses the first — no relationship
-ever existed to keep. A workshop the client does have history with survives even when it has
-no visible branch left; it stays listed with its branch list empty rather than vanishing
-mid-history.
+*Why the stored half exists.* Derivation alone was tried first, on the reasoning that a client
+who followed a link and drew nothing had no relationship worth keeping. That was wrong in the
+one case that matters: they scan the counter QR, get interrupted, scan another shop's QR a week
+later, and the first shop — whose paper they are holding — is gone from the app. The
+relationship existed in the world and nowhere in the data. The table records relationships
+rather than scans, so it stays the size of the former. A workshop the client has history with
+still survives losing every visible branch; it stays listed with an empty branch list rather
+than vanishing mid-history.
 
 ### What the pin scopes
 
 Scoping is **read-time and offer-side only**: the server's client read scope is unchanged,
 and the pin narrows what the app *offers*, never what data it can render.
 
-- **Pinned** → every new branch choice is scoped to the pinned workshop's branches. Picking
-  among them is a pickup decision, not a comparison.
-- **Not pinned** (organic signup, cleared storage, legacy accounts) → the cross-workshop
-  picker stays exactly as it was. This population shrinks as links spread, and the
-  marketplace phase will design for it deliberately rather than by default.
-- **An existing draft keeps its own branch** even when that branch is outside the pinned
-  workshop, and still renders normally. The pin scopes *new* choices; it never rewrites data
-  or hides a drawing the client already made.
+- **Pinned** → home shows the **Ustaxonangiz** card and its **+ Yangi chizma**, which starts a
+  drawing at the pinned branch. The Ustaxona tab opens that workshop's profile directly when
+  the client deals with exactly one workshop, and Ustaxonalarim when there are several.
+- **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → **there is no
+  drawing action anywhere**: home's card is replaced by the **Ustaxona tanlang** prompt into
+  Ustaxonalarim, and a direct URL to the new-drawing route is redirected there before any
+  editor renders. A drawing needs a branch, and Ustaxonalarim is where a branch is chosen.
+- **A drawing only ever starts from a workshop** — the pin, or a branch row's **Yangi
+  chizma**. The editor holds no workshop or branch state of its own, so *"which branch will
+  you collect from?"* is answered by the button that started the drawing and never asked
+  again ([`cutting.md`](cutting.md)).
+- **An existing draft keeps its own branch** even when that branch is outside the current pin,
+  and still renders normally. The pin scopes *new* choices; it never rewrites data or hides a
+  drawing the client already made.
 
 ## User stories
 
@@ -139,6 +174,8 @@ and the pin narrows what the app *offers*, never what data it can render.
   competitors.
 - As a client with more than one workshop behind me, I want to see the ones I actually deal
   with, with their addresses and phones, and switch which one the app is set to.
+- As a client, I want to see my workshop's own price list before I draw, so that I know what a
+  sheet costs without ringing them.
 
 ## UX
 
@@ -146,15 +183,22 @@ and the pin narrows what the app *offers*, never what data it can render.
 flowchart TD
     QR[Scan QR / open link] --> R{Code resolves?}
     R -->|no| D["Dead-link screen<br/>way into the normal home"]
-    R -->|yes| B{Branch known?}
-    B -->|"no — several branches"| C["Qaysi filialdan olib ketasiz?"]
-    C --> S
-    B -->|yes| S{Signed in?}
-    S -->|yes| A[Apply entry]
-    S -->|no| L["Entry screen<br/>workshop · branch · Kirish"]
+    R -->|yes| S{Signed in?}
+    S -->|no| L["Entry screen<br/>workshop · branch or «N ta filial»<br/>Kirish"]
     L --> T[Telegram bot login] --> A
-    A --> H["Client home<br/>connected toast · pinned subtitle"]
+    S -->|yes| A["Apply entry<br/>always: client_workshop_entries row"]
+    A --> P{Branch certain?}
+    P -->|"branch link, or one visible branch"| PIN[Pin that branch]
+    P -->|"multi-branch workshop link"| NOPIN[Pin untouched]
+    PIN --> H["Client home<br/>connected toast · Ustaxonangiz card"]
+    NOPIN --> H2["Client home<br/>«Ustaxona tanlang» → Ustaxonalarim"]
 ```
+
+**There is no branch-choice step at entry.** It was asked here until 2026-09-05, on a
+workshop-level link with several branches, and it was the wrong moment: the client has not
+drawn anything, does not yet know what they are collecting, and the question only matters when
+a drawing starts. It is now answered by the per-branch **Yangi chizma** buttons on
+Ustaxonalarim and the workshop profile, which pin as they open the editor.
 
 ### Landing (`/w/…`)
 
@@ -165,14 +209,11 @@ be scanned again.
 
 - **Signed in** → the entry applies immediately and the client lands on home.
 - **Signed out** → a slim entry screen: workshop name, the greeting *"{workshop} sizni taklif
-  qilmoqda"*, the branch line, and the standard **Kirish** action into the existing Telegram
+  qilmoqda"*, and the standard **Kirish** action into the existing Telegram
   login ([`access-management.md`](access-management.md)). The entry applies once the session
-  exists.
-- **Branch choice** (workshop-level link, several branches) → one small list of *that
-  workshop's* visible branches — name, address, status — under **"Qaysi filialdan olib
-  ketasiz?"**. One tap continues. A `temporarily_closed` branch shows its reason and stays
-  choosable; ordering from it is gated later, exactly as it is today. A branch link never
-  shows this step.
+  exists. The line under the greeting names the branch when the link settles one, and
+  otherwise says how many there are — *"{n} ta filial · {names}"* — which is context, not a
+  question: nothing is chosen here.
 - **Dead link** → **"Havola topilmadi"** with the plain-language body and a way into the
   normal client home. Never a raw 404; a throttled lookup gets the transient variant with a
   retry rather than a raw 429.
@@ -184,32 +225,68 @@ be scanned again.
 
 ### After entry
 
-Entry lands on the **existing home dashboard** — no profile page, no storefront. Two things
-carry the trust cue:
+Entry lands on the **existing home dashboard** — no storefront, no interstitial. The trust cue
+is a one-time toast, *"Siz {workshop} ustaxonasiga ulandingiz"*, and then the
+**Ustaxonangiz** card at the top of home: logo, the workshop named by the naming rule, the
+branch's address and tap-to-call phone, a pill only when the branch is `temporarily_closed`,
+and a chevron — the card body links to that workshop's profile
+([`orders.md`](orders.md#ux-client-app) owns the rest of the page).
 
-- a one-time toast, *"Siz {workshop} ustaxonasiga ulandingiz"*;
-- the home header's pinned line, `{workshop} · {branch}`, linking to Ustaxonalarim. It
-  **joins** the usual counts subtitle rather than replacing it (owner decision, 2026-09-02):
-  where the app is scoped and what is waiting are two different questions, and the counts line
-  is the one the client came for. With no pin the header is unchanged.
+*Superseding the 2026-09-02 decision.* The header used to carry a pinned line,
+`{workshop} · {branch}`, beside a counts subtitle. Both are gone: the pinned line read like a
+staff badge on a client's own home — the client is not the workshop's employee — and a line of
+text is a weaker cue than a card that shows the shop's logo and dials its phone. With no pin
+there is no card; the **Ustaxona tanlang** prompt takes its place.
 
 ### Ustaxonalarim (`/c/branches`)
 
-The old platform-wide branch directory, repurposed at the same route under a new name. It
-lists the client's **related workshops**, pinned first with an **Asosiy** badge: workshop name
-and logo, then that workshop's visible branches as rows — name, address, primary phone
-(tap-to-call), status with reason. Exactly the pickup and contact information a client needs,
-and nothing else: no prices, no catalogs, no CTAs into the editor.
+The old platform-wide branch directory, repurposed at the same route under a new name. One
+card per **related workshop**, **pinned workshop first**: the head is the logo or monogram and
+the workshop name, and is itself the link to that workshop's profile. Under it, one row per
+visible branch — the same row the profile uses.
 
-Any listed workshop can be made the pin (**Asosiy qilish**), which runs the same entry
-operation as the link — the page carries each workshop's code for it — asking which branch
-when the workshop has several. Switching among workshops the client already deals with is
-their own history, not discovery.
+**The branch row is where the pin and the actions live**, because the pin is a branch. Its
+title line names the branch (or the workshop, for a one-branch workshop — the naming rule),
+with a status pill and reason only when `temporarily_closed`; then address, tap-to-call phone
+and **Xaritada ko'rish** when the branch has coordinates; then two small buttons, primary
+**Yangi chizma** and outline **Katalog**.
+
+The mark is a **star**: the pinned row carries a filled one, labelled *Asosiy*; every other row
+carries an outline star **button**, *Asosiy qilish*, which pins that branch in place — the star
+fills, the previous empties, a toast names it, and nothing navigates. **Yangi chizma** on a
+non-pinned row re-pins as it opens the editor. There is no «Asosiy» pill and no
+«Asosiy qilish» text button: a star is the affordance people already know for this, and it
+fits on a row that also has to hold two buttons on a phone.
 
 Empty state (**"Hali ustaxona ulanmagan"**) explains that the app is joined through a
-workshop's link or QR, and keeps the plain "start a cutting" action for the organic path.
+workshop's link or QR — and offers no drawing action, because a drawing needs a branch.
 **The platform-wide directory is gone**, and nothing in the client app links to a list of all
 workshops any more.
+
+### Workshop profile and catalog
+
+Both are **only for related workshops** — the set described under [Related
+workshops](#related-workshops). Any other workshop id renders the ordinary not-found view.
+
+- **Profile** (`/c/workshops/:workshopId`) — the logo or monogram and the workshop name, with
+  no badge and no action of its own (the pin belongs to a branch, so it is on the branch row),
+  then **Filiallar**: exactly the rows described above. A one-branch workshop shows a single
+  row titled by the workshop name. No description, hours or rating — the workshop entity has
+  none, and none are added to fill a page.
+- **Catalog** (`/c/workshops/:workshopId/catalog?branch=…`) — one branch's **read-only price
+  list**: the branch as a dropdown in the head, a search field, a decor-type chip row, and
+  decor-first rows exactly as the editor's material picker draws them — a decor thumbnail that
+  opens a lightbox on tap, the decor name, a grain mark, and the price where a concrete format
+  is named (per sheet for panels, per metre for tape; a decor carried in several formats lists
+  them beneath itself, each with its own size and price). `discontinued` materials are not
+  listed. There is **no add-to-draft and no drawing CTA** — the page is a price list, and the
+  one **Yangi chizma** is a tap back on the profile.
+
+*Why read-only, and why only inside the client's own workshops.* The marketplace stays a later
+phase ([`scope.md`](../../scope.md)); a price list of the shop the client already stands in is
+a trust cue, not discovery. A client who can see what a sheet costs before drawing does not
+have to ring the counter to find out, and the workshop showing them is showing its own prices
+to its own customer.
 
 ### Where the workshop gets its link
 
@@ -232,13 +309,16 @@ the Telegram bot uses for its links.
 - **Unknown code, blocked workshop, or workshop with no visible branch** → one identical
   dead-link screen; the lookup never distinguishes the causes.
 - **Branch link whose `branch_no` is gone or invisible** → falls back to the workshop-level
-  behaviour of the same code (branch choice, or a single-branch pin), flagged as a fallback.
-- **Pinned branch later goes `inactive`** → the pin is not scope-enforced; the editor still
-  offers the workshop's other visible branches, and with none visible its existing
-  pick-a-workshop gate takes over. Ustaxonalarim keeps showing the workshop with its status.
+  behaviour of the same code (a single-branch pin, or no pin), flagged as a fallback.
+- **Multi-branch workshop link** → the workshop lands on Ustaxonalarim, the pin is untouched,
+  and home shows **Ustaxona tanlang**. This is the designed outcome, not a failure.
+- **Pinned branch later goes `inactive`** → the pin is not scope-enforced. Ustaxonalarim and
+  the profile keep showing the workshop, list its remaining visible branches, and any of them
+  can be starred or drawn from.
 - **Pinned workshop later blocked** → the session read nulls the pinned names, so the app
-  behaves as un-pinned: the cross-workshop picker returns and the workshop drops off
-  Ustaxonalarim. The stored `preferred_branch_id` is left alone and revives on unblock.
+  behaves as un-pinned: home shows **Ustaxona tanlang** and the workshop drops off
+  Ustaxonalarim (its profile and catalog answer not-found too). The stored
+  `preferred_branch_id` is left alone and revives on unblock.
 - **Entry while a draft is open elsewhere** → the pin changes; the open draft keeps its
   branch. No draft is ever re-branched implicitly.
 - **Same link followed twice** → idempotent; the toast shows again, nothing else changes.
@@ -249,12 +329,16 @@ the Telegram bot uses for its links.
 - **Staff walk-in flow** → unaffected. It is locked to the staffer's selected branch and never
   consults the client's pin ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)).
 - **Related workshop with zero visible branches** → stays listed with an empty branch list;
-  history is not erased by a branch reshuffle.
+  history is not erased by a branch reshuffle. Its catalog is unreachable, since a catalog is
+  a branch's.
+- **Catalog of a branch that is not the workshop's, or not visible** → not-found, like any
+  other unrelated id; the branch is re-checked against the workshop on every read.
 - **Lost browser storage between landing and login** → an ordinary un-pinned login; the client
   scans again.
 
 ## Next
 
-- [`cutting.md`](cutting.md) — the editor and the branch picker the pin scopes.
+- [`cutting.md`](cutting.md) — the drawing whose branch the pin settles.
+- [`orders.md`](orders.md#ux-client-app) — the home, list and order screens the pin feeds.
 - [`workshop.md`](workshop.md) — the branch and settings screens that publish the link.
 - [`identity.md`](../entities/identity.md#client) — the client record the pin lives on.

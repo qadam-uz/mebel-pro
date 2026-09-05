@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-05
 order: 20
 ---
 
@@ -59,16 +59,16 @@ whether clients see it and order from it.
 |---|---|---|
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required |
-| `branch_no` | int | platform-wide unique, assigned at creation as `max + 1` under an advisory lock. **Immutable** — it is the middle segment of every order number the branch prints ([`sales.md`](sales.md)), so changing it would orphan printed cutting maps. Not settable or patchable through any API |
+| `branch_no` | int | platform-wide unique, assigned at creation as `max + 1` under an advisory lock. **Immutable** — it addresses the branch in its own client link and printed QR (`/w/{code}/{branch_no}`, [`client-entry.md`](../features/client-entry.md)), and it is the middle segment of the **legacy** order numbers this branch printed before numbers went global ([`sales.md`](sales.md)); changing it would rot counter QRs and orphan printed cutting maps. Not settable or patchable through any API |
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX`. `phone` is the **primary** number — the one compact surfaces (order card, order detail, PDF) and every order record carry |
 | `additional_phones` | json | ordered list of extra published numbers, 0–3; same `+998XXXXXXXXX` rule; no duplicates, including against `phone`. Array order is display order. Shown alongside the primary on the client-facing branch page only |
-| `latitude` / `longitude` | numeric? | optional coordinate pair (no geocoder in v1; **not collected via the UI** in v1, but the columns/API fields remain); both are null when unknown |
+| `latitude` / `longitude` | numeric? | optional coordinate pair, both null when unknown. No geocoder: the owner places the pin on the branch form's map ([`workshop.md`](../features/workshop.md#branches)), and where a client is shown a branch the pair renders a **Xaritada ko'rish** link into Yandex Maps — absent when the pair is null |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |
 | `kerf_mm` | int | the branch saw's kerf width; 1–20 mm; default `4`. Resolved into every cutting optimisation run scoped to this branch ([`cutting.md`](../features/cutting.md)) |
 | `edge_trim_mm` | int | edge trim per side (usable panel area = panel − 2× this); 0–50 mm; default `5` |
 | `edge_overhang_mm` | int | the bander's glue-and-trim allowance per banded **side** — tape is glued long and cut flush by hand, so consumed length = geometric length + this, once per side; 0–100 mm; default `30`. Drives what the client is billed and what stock is decremented ([`orders.md`](../features/orders.md#pricing)) |
-| `own_material_allowed` | bool | whether a **client** may claim their own sheets self-serve in the app; default `false`. Off until the owner turns it on — accepting client material changes what the shop stores and what has to arrive before the saw starts, so it is opted into, never inherited. Gates the client's cutting editor and the client write path on the server. **Not** a shop-floor ban: staff always may arrange client material — in the staff editor and on a placed order ([`orders.md`](../features/orders.md#pricing)) |
+| `own_material_allowed` | bool | whether a **client** may claim their own sheets self-serve in the app; default `false`. Off until the owner turns it on — accepting client material changes what the shop stores and what has to arrive before the saw starts, so it is opted into, never inherited. Gates the client write path on the server; the client app itself shows no own-material control in the MVP whatever the flag says ([`cutting.md`](../features/cutting.md#parts-and-materials)). **Not** a shop-floor ban: staff always may arrange client material — in the staff editor and on a placed order ([`orders.md`](../features/orders.md#pricing)) |
 | `production_mode` | enum | `simple` / `full`; **default `simple`**, for existing branches as well as new ones — owner opt-in either way, never inherited from a backfill. Decides whether production is one **Tayyor** tap or the per-stage choreography; read at the moment of each action and never stamped on an order, so switching migrates nothing ([`orders.md`](../features/orders.md#production-mode)) |
 | `created_at` / `updated_at` | timestamp | |
 
