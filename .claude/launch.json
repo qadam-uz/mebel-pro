@@ -2,14 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "cd web && exec node_modules/.bin/vite --port 5199 --strictPort"
-      ],
-      "port": 5199,
-      "autoPort": false
+      "name": "web-c",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "pnpm@10.29.3", "exec", "vite", "--port", "5201", "--strictPort"],
+      "port": 5201,
+      "cwd": "web"
     }
   ]
 }
