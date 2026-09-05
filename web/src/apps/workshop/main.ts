@@ -2,11 +2,13 @@ import WorkshopShell from '@/apps/workshop/WorkshopShell.vue'
 import { workshopRoutes } from '@/apps/workshop/routes'
 import { mountRoleApp } from '@/shared/app/createRoleApp'
 import { workshopConfig } from '@/shared/app/roleConfig'
+import { workshopCatalog } from '@/shared/i18n/catalogs/workshop'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 mountRoleApp(workshopConfig, workshopRoutes, '/workshop', {
   shell: WorkshopShell,
+  catalog: workshopCatalog,
   // The shared cutting store defaults to the client API surface ('/client/*');
   // the workshop SPA flips it to the '/workshop/*' mirror once at bootstrap.
   // Each SPA owns its Pinia instance, so this can never leak across apps.

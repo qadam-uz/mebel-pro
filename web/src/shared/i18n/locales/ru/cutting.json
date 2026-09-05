@@ -465,5 +465,13 @@
     "save": "Сохранить",
     "saveAndNext": "Сохранить и ещё",
     "delete": "Удалить"
+  },
+  "branchRow": {
+    "closed": "временно закрыт",
+    "active": "активен",
+    "cuttingService": "Услуга распила: {amount}",
+    "materials": "Материалы: {amount}",
+    "edgeBanding": "Приклейка кромки: {amount}",
+    "unit": "сум · {n} лист | сум · {n} листа | сум · {n} листов"
   }
 }

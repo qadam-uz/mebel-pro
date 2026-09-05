@@ -355,14 +355,6 @@
     "logoutAllConfirm": "Hammasini chiqarish",
     "logoutAllBusy": "Chiqilmoqda"
   },
-  "branchRow": {
-    "closed": "vaqtincha yopiq",
-    "active": "faol",
-    "cuttingService": "Kesish xizmati: {amount}",
-    "materials": "Materiallar: {amount}",
-    "edgeBanding": "Kromka yopishtirish: {amount}",
-    "unit": "so'm · {n} list"
-  },
   "phones": {
     "legend": "Qo'shimcha telefonlar",
     "hint": "Filial sahifasida mijozlarga ko'rinadi. Buyurtmalarda faqat asosiy raqam ishlatiladi.",

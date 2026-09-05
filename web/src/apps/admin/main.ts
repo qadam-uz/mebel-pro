@@ -2,6 +2,7 @@ import AdminShell from '@/apps/admin/AdminShell.vue'
 import { adminRoutes } from '@/apps/admin/routes'
 import { mountRoleApp } from '@/shared/app/createRoleApp'
 import { adminConfig } from '@/shared/app/roleConfig'
+import { adminCatalog } from '@/shared/i18n/catalogs/admin'
 
 /** The platform shell's `<main>` is the skip-link target; moving focus there on
  *  every navigation is what keeps a keyboard user out of the sidebar after a
@@ -15,5 +16,6 @@ function focusAdminContent(toMeta: Record<string, unknown>) {
 
 mountRoleApp(adminConfig, adminRoutes, '/admin', {
   shell: AdminShell,
+  catalog: adminCatalog,
   onAfterNavigate: (to) => focusAdminContent(to.meta),
 })

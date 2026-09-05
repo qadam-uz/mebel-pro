@@ -13,7 +13,7 @@ import {
 } from 'vue-router'
 
 import { configureSession } from '@/shared/api/client'
-import { i18n, initialLocale, setLocale } from '@/shared/i18n'
+import { i18n, initialLocale, installCatalog, setLocale, type RoleCatalog } from '@/shared/i18n'
 import {
   roleConfigKey,
   roleMessageKey,
@@ -247,6 +247,10 @@ export function clearStaleChunkMark(storage: Storage | null = tabStorage()): voi
 export interface RoleAppOptions {
   /** The role's shell component (`src/apps/<role>/<Role>Shell.vue`). */
   shell: Component
+  /** The role's slice of the message catalog
+   *  (`src/shared/i18n/catalogs/<role>.ts`) — the namespaces this SPA renders,
+   *  and nothing else. */
+  catalog: RoleCatalog
   /** Runs once after Pinia exists, before the router is created. */
   onBoot?: (pinia: Pinia) => void
   /** Extra revalidation after `auth.refreshMe()` on a 403 (QAD-172). */
@@ -261,6 +265,9 @@ export async function mountRoleApp(
   localBase: string,
   options: RoleAppOptions,
 ) {
+  // Messages first — `setLocale` derives uz-Cyrl from the installed uz
+  // catalog, so an empty i18n here would transliterate nothing.
+  installCatalog(options.catalog)
   // Before anything renders: a locale switched in a previous session must be in
   // place for the first paint, not applied over an Uzbek flash.
   await setLocale(initialLocale())
