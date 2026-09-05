@@ -6,17 +6,20 @@ paint about 1700 px of image.
 """
 
 import io
+import uuid
 
 import pytest
 from app.models.enums import AuthenticatedPrincipalType
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client
 from app.modules.support.api import InMemoryFileStorage
+from app.modules.support.contracts import File as StoredFile
 from app.modules.support.files import file_storage
 from app.modules.support.image_variants import (
     VARIANT_CONTENT_TYPE,
     ImageDecodeError,
     ImageVariant,
+    VariantChoice,
     resize_image,
     resolve_variant,
     variant_storage_key,
@@ -97,44 +100,63 @@ def test_variant_key_hangs_off_the_original_key() -> None:
 class TestResolveVariant:
     """What a read actually serves, given what exists."""
 
-    original = ("uploads/a/x.png", "image/png")
+    key = "uploads/a/x.png"
+    content_type = "image/png"
+
+    def _resolve(
+        self, *, requested: ImageVariant | None, variant_keys: dict[str, str] | None
+    ) -> VariantChoice:
+        return resolve_variant(
+            requested=requested,
+            variant_keys=variant_keys,
+            original_key=self.key,
+            original_content_type=self.content_type,
+        )
 
     def test_no_size_requested_serves_the_original(self) -> None:
-        assert (
-            resolve_variant(
-                requested=None,
-                variant_keys={"sm": "uploads/a/x.png.sm.webp"},
-                original_key=self.original[0],
-                original_content_type=self.original[1],
-            )
-            == self.original
-        )
+        choice = self._resolve(requested=None, variant_keys={"sm": "uploads/a/x.png.sm.webp"})
+
+        assert (choice.key, choice.content_type) == (self.key, self.content_type)
+        assert choice.needs_render is False
 
     def test_a_requested_rendition_that_exists_is_served(self) -> None:
-        assert resolve_variant(
-            requested=ImageVariant.SM,
-            variant_keys={"sm": "uploads/a/x.png.sm.webp"},
-            original_key=self.original[0],
-            original_content_type=self.original[1],
-        ) == ("uploads/a/x.png.sm.webp", VARIANT_CONTENT_TYPE)
-
-    @pytest.mark.parametrize("variant_keys", [None, {}, {"md": "uploads/a/x.png.md.webp"}])
-    def test_a_missing_rendition_falls_back_to_the_original(
-        self, variant_keys: dict[str, str] | None
-    ) -> None:
-        """This fallback is why `?size=sm` is safe to ship before any backfill.
-
-        It also covers PDFs and images too small to have renditions.
-        """
-        assert (
-            resolve_variant(
-                requested=ImageVariant.SM,
-                variant_keys=variant_keys,
-                original_key=self.original[0],
-                original_content_type=self.original[1],
-            )
-            == self.original
+        choice = self._resolve(
+            requested=ImageVariant.SM, variant_keys={"sm": "uploads/a/x.png.sm.webp"}
         )
+
+        assert choice.key == "uploads/a/x.png.sm.webp"
+        assert choice.content_type == VARIANT_CONTENT_TYPE
+        assert choice.needs_render is False
+
+    @pytest.mark.parametrize("variant_keys", [{}, {"md": "uploads/a/x.png.md.webp"}])
+    def test_a_settled_file_without_this_rendition_serves_the_original(
+        self, variant_keys: dict[str, str]
+    ) -> None:
+        """Safe *because* it is settled: `resize_image` only skips a rendition
+        when the source already fits inside its budget, so the original served
+        here is never larger than what was asked for."""
+        choice = self._resolve(requested=ImageVariant.SM, variant_keys=variant_keys)
+
+        assert (choice.key, choice.content_type) == (self.key, self.content_type)
+        assert choice.needs_render is False
+
+    def test_an_image_nobody_has_rendered_asks_to_be_rendered(self) -> None:
+        """The bug decision 21 is about: NULL is not "no renditions needed", it
+        is "unknown", and the original behind it can be 1.5 MB."""
+        choice = self._resolve(requested=ImageVariant.SM, variant_keys=None)
+
+        assert choice.needs_render is True
+
+    def test_a_pdf_is_never_a_render_candidate(self) -> None:
+        choice = resolve_variant(
+            requested=ImageVariant.SM,
+            variant_keys=None,
+            original_key="uploads/a/receipt.pdf",
+            original_content_type="application/pdf",
+        )
+
+        assert (choice.key, choice.content_type) == ("uploads/a/receipt.pdf", "application/pdf")
+        assert choice.needs_render is False
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -310,3 +332,146 @@ async def test_an_unreadable_image_still_uploads(
     assert served.status_code == 200
     # No rendition was made, so the read falls back to exactly what was stored.
     assert served.content == b"not really a png"
+    # And the failure is *recorded* as settled, so no read ever tries again.
+    row = await db_session.get(StoredFile, uuid.UUID(file_id))
+    assert row is not None
+    assert row.variant_keys == {}
+
+
+async def _unrendered_upload(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    storage: InMemoryFileStorage,
+    token: str,
+) -> str:
+    """An image in the state every file uploaded before renditions shipped is in.
+
+    Produced by uploading normally and then erasing every trace of the rendition
+    step — `variant_keys` back to NULL, the rendition objects gone — so the row
+    is byte-for-byte what a pre-feature upload left behind.
+    """
+    file_id = await _upload_large_png(client, token)
+    row = await db_session.get(StoredFile, uuid.UUID(file_id))
+    assert row is not None
+    for key in list(storage.contents):
+        if key != row.storage_key:
+            storage.delete(key)
+    row.variant_keys = None
+    await db_session.flush()
+    return file_id
+
+
+async def test_a_never_rendered_image_is_rendered_on_its_first_sized_read(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Decision 21's actual bug, and its fix.
+
+    Every file uploaded before renditions existed carries `variant_keys IS NULL`,
+    and the read path used to answer `?size=sm` for those with the full original
+    — which is why a catalog page stayed slow with `size="sm"` already shipped in
+    the frontend. Now the first such read renders the set, stores it, and records
+    the keys: the cost is paid once, by one request, not by every list draw.
+    """
+    from app.main import app
+
+    storage = InMemoryFileStorage()
+    app.dependency_overrides[file_storage] = lambda: storage
+    token = await _owner_token(db_session)
+    file_id = await _unrendered_upload(client, db_session, storage, token)
+
+    served = await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
+
+    assert served.status_code == 200
+    # The rendition, not the 2160x2160 original the swatch never needed.
+    assert served.headers["content-type"].startswith(VARIANT_CONTENT_TYPE)
+    assert Image.open(io.BytesIO(served.content)).size == (160, 160)
+    row = await db_session.get(StoredFile, uuid.UUID(file_id))
+    assert row is not None
+    assert set(row.variant_keys or {}) == {"sm", "md"}
+
+
+async def test_the_rendering_happens_once_not_per_request(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The point of storing the result: a second reader pays nothing.
+
+    Counting writes is the honest check — a per-request render would show up as
+    two more `put`s and would be exactly the "generated on the request path"
+    that decision 21 rules out.
+    """
+    from app.main import app
+
+    storage = InMemoryFileStorage()
+    app.dependency_overrides[file_storage] = lambda: storage
+    token = await _owner_token(db_session)
+    file_id = await _unrendered_upload(client, db_session, storage, token)
+
+    first = await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
+    writes_after_first = len(storage.objects)
+    second = await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
+    third = await client.get(f"/api/v1/files/{file_id}?size=md", headers=_auth(token))
+
+    assert first.content == second.content
+    assert third.headers["content-type"].startswith(VARIANT_CONTENT_TYPE)
+    # original + sm + md, and nothing added by the reads that followed.
+    assert writes_after_first == 3
+    assert len(storage.objects) == 3
+
+
+async def test_a_sized_read_never_serves_an_original_bigger_than_it_asked_for(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The invariant behind the fallback.
+
+    An original is only served in answer to `?size=` once the file is settled,
+    and `resize_image` skips a rendition exactly when the source already fits
+    inside that budget — so the bytes a list gets are bounded either way. Here
+    the source is 400 px: `sm` renders, `md` legitimately does not, and the `md`
+    read gets a 400 px original, not a surprise.
+    """
+    from app.main import app
+
+    storage = InMemoryFileStorage()
+    app.dependency_overrides[file_storage] = lambda: storage
+    token = await _owner_token(db_session)
+    uploaded = await client.post(
+        "/api/v1/files",
+        headers=_auth(token),
+        files={"upload": ("medium.png", png_bytes(400, 400), "image/png")},
+    )
+    file_id = uploaded.json()["id"]
+
+    small = await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
+    medium = await client.get(f"/api/v1/files/{file_id}?size=md", headers=_auth(token))
+
+    assert Image.open(io.BytesIO(small.content)).size == (160, 160)
+    assert medium.headers["content-type"].startswith("image/png")
+    assert Image.open(io.BytesIO(medium.content)).size == (400, 400)
+
+
+async def test_a_download_still_gets_the_untouched_original(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Rendering on read must not change what "the file" means."""
+    from app.main import app
+
+    storage = InMemoryFileStorage()
+    app.dependency_overrides[file_storage] = lambda: storage
+    token = await _owner_token(db_session)
+    source = png_bytes(2160, 2160)
+    uploaded = await client.post(
+        "/api/v1/files",
+        headers=_auth(token),
+        files={"upload": ("swatch.png", source, "image/png")},
+    )
+    file_id = uploaded.json()["id"]
+
+    await client.get(f"/api/v1/files/{file_id}?size=sm", headers=_auth(token))
+    full = await client.get(f"/api/v1/files/{file_id}", headers=_auth(token))
+
+    assert full.content == source
+    assert full.headers["content-type"].startswith("image/png")

@@ -11,7 +11,10 @@ Two of them, because there are two jobs:
     sm  160 px  grids, list rows, swatches (34-40 px at up to 3x DPR)
     md  640 px  upload previews and detail panes (up to ~200 px at 3x DPR)
 
-The original is always kept, untouched, and stays what a download returns.
+The original is always kept, untouched, and stays what a download returns — and
+it is served in answer to a `?size=` only when it is *provably* no bigger than
+the rendition asked for. An image nobody has rendered yet is not that case, so
+it is rendered first (see `VariantChoice.needs_render`) rather than streamed.
 
 WebP for both renditions: it carries alpha (the PNG swatches need it) and lands
 well under JPEG at the same visual quality, which is the whole point on the
@@ -37,6 +40,10 @@ MAX_SOURCE_PIXELS = 50_000_000
 
 WEBP_QUALITY = 82
 VARIANT_CONTENT_TYPE = "image/webp"
+
+#: Uploads that have renditions at all. Everything else (PDFs) is served as
+#: stored, whatever `?size=` says.
+RENDERABLE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 
 
 class ImageVariant(StrEnum):
@@ -73,26 +80,51 @@ def variant_storage_key(original_key: str, variant: ImageVariant) -> str:
     return f"{original_key}.{variant.value}.webp"
 
 
+@dataclass(frozen=True)
+class VariantChoice:
+    """What a read serves, and whether the renditions still have to be made."""
+
+    key: str
+    content_type: str
+    #: The file is an image nothing has ever rendered — `variant_keys` is NULL,
+    #: not an empty map. Serving `key` here would stream the full original into
+    #: a 34 px swatch, so the read path renders and stores the renditions once
+    #: before answering, and this is how it knows to.
+    needs_render: bool = False
+
+
 def resolve_variant(
     *,
     requested: ImageVariant | None,
     variant_keys: dict[str, str] | None,
     original_key: str,
     original_content_type: str,
-) -> tuple[str, str]:
+) -> VariantChoice:
     """The (storage key, content type) a read should actually serve.
 
-    Falls back to the original whenever the requested rendition does not exist —
-    which covers PDFs, images already small enough to have none, and everything
-    uploaded before the backfill ran. That fallback is why `?size=sm` is safe to
-    ship in the frontend before any backfill has happened.
+    Three states, and the difference between the last two is the whole point:
+
+    * the rendition exists — serve it;
+    * the file has been *processed* and this rendition legitimately does not
+      exist (a PDF, or an image whose longest edge already fits the budget) —
+      serve the original, which `resize_image` guarantees is no larger than
+      what was asked for;
+    * the file has never been processed (`variant_keys IS NULL`) — say so. The
+      original here can be any size at all, so serving it is the bug decision 21
+      is about: the caller renders the renditions once and stores them instead.
     """
-    if requested is None or not variant_keys:
-        return original_key, original_content_type
+    if requested is None:
+        return VariantChoice(original_key, original_content_type)
+    if variant_keys is None:
+        return VariantChoice(
+            original_key,
+            original_content_type,
+            needs_render=original_content_type in RENDERABLE_CONTENT_TYPES,
+        )
     key = variant_keys.get(requested.value)
     if key is None:
-        return original_key, original_content_type
-    return key, VARIANT_CONTENT_TYPE
+        return VariantChoice(original_key, original_content_type)
+    return VariantChoice(key, VARIANT_CONTENT_TYPE)
 
 
 def resize_image(content: bytes) -> list[RenderedVariant]:

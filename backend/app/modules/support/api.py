@@ -12,6 +12,7 @@ from app.modules.support.audit import (
 )
 from app.modules.support.image_variants import (
     ImageVariant,
+    VariantChoice,
     resolve_variant,
 )
 from app.modules.support.notifications import (
@@ -83,6 +84,7 @@ __all__ = [
     "PendingTelegramMessage",
     "S3FileStorage",
     "StoredObject",
+    "VariantChoice",
     "attach_file",
     "build_image_variants",
     "create_uploaded_file",

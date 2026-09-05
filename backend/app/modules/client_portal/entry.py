@@ -167,13 +167,15 @@ async def workshop_link_logo(
     row = await get_stored_file(db, file_id=workshop.logo_file_id)
     if row is None:
         raise _link_not_found()
-    # `sm` (160px) with the usual fallback to the original: the landing draws it
-    # at 56px, and this is the one request a signed-out scan makes for bytes.
+    # `sm` (160px): the landing draws it at 56px, and this is the one request a
+    # signed-out scan makes for bytes. `db` is passed so a logo that predates
+    # renditions renders itself here too rather than shipping the full original.
     return await serve_stored_file(
         row=row,
         storage=storage,
         if_none_match=if_none_match,
         size=ImageVariant.SM,
+        db=db,
     )
 
 

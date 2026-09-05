@@ -35,11 +35,20 @@ class File(UUIDPrimaryKey, Timestamped, Base):
     # Which downscaled renditions exist for this image, as {"sm": "<key>", ...}.
     # Recorded rather than probed: without it every `?size=sm` read would have to
     # ask the object store for a key that may not exist, 404, and retry with the
-    # original — an extra round trip per thumbnail on a page holding fifty. Empty
-    # for PDFs, for images already smaller than a rendition, and for anything
-    # uploaded before the backfill ran.
+    # original — an extra round trip per thumbnail on a page holding fifty.
+    #
+    # `{}` and NULL are different answers and the difference is load-bearing:
+    # `{}` means settled with nothing to serve but the original (a source already
+    # smaller than every budget), NULL means nobody has looked yet — a file the
+    # read path renders before it answers, rather than shipping the full original
+    # into a swatch.
+    #
+    # `none_as_null` because that distinction has to survive the round trip: the
+    # JSON type's default persists Python `None` as the JSON string `null`, which
+    # reads back as `None` but does not match `IS NULL` — so the backfill would
+    # silently skip exactly the rows whose rendition write failed.
     variant_keys: Mapped[dict[str, str] | None] = mapped_column(
-        JSON().with_variant(JSONB, "postgresql")
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
     )
     uploaded_by_type: Mapped[AuthenticatedPrincipalType] = mapped_column(
         enum_type(AuthenticatedPrincipalType, "authenticated_principal_type"),
