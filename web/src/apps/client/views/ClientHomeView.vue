@@ -10,7 +10,6 @@ import {
   clientStatusPillClass,
   draftDisplayName,
   formatPhone,
-  formatRelativeDate,
   isClientPinned,
   workshopBranchName,
 } from '@/shared/app/clientUi'
@@ -20,7 +19,7 @@ import Icon from '@/shared/components/AppIcon.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatClientDateTime, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -162,7 +161,7 @@ function draftMeta(draft: CuttingDraft) {
   return [
     `${parts} ${t('client.unit.part', parts)}`,
     `${panels || '—'} ${t('client.unit.sheet', panels)}`,
-    formatRelativeDate(draft.updated_at),
+    formatClientDateTime(draft.updated_at),
   ].join(' · ')
 }
 

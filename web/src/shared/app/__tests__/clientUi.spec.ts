@@ -17,8 +17,6 @@ import {
   clientStatusLabel,
   clientStatusPillClass,
   formatPercent,
-  formatFullDate,
-  formatRelativeDate,
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
@@ -163,17 +161,6 @@ describe('client UI helpers', () => {
     expect(formatPercent(null)).toBe('-')
     expect(formatPercent('')).toBe('-')
     expect(formatPercent('abc')).toBe('-')
-  })
-
-  it('uses stable numeric compact dates', () => {
-    expect(formatRelativeDate(new Date(2026, 5, 2, 9, 4))).toBe('02.06 09:04')
-  })
-
-  // Same clock, plus the year — order history spans years, where `02.06` alone
-  // does not say which one.
-  it('spells the year out in full dates', () => {
-    expect(formatFullDate(new Date(2026, 5, 2, 9, 4))).toBe('02.06.2026 09:04')
-    expect(formatFullDate(new Date(2025, 11, 31, 23, 59))).toBe('31.12.2025 23:59')
   })
 
   it('maps client error codes to Uzbek copy, never leaking raw codes', () => {

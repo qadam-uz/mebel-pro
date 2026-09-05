@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 30
 ---
 
@@ -565,6 +565,15 @@ The client app is **phone-first**: below `md` a five-tab bottom bar (Bosh sahifa
 Buyurtmalar · Ustaxona · Profil) replaces the desktop header nav, and the focused screens —
 the cutting editor, the result stage, the order confirmation, the entry landing, login — carry
 no shell chrome at all, because each already has its own way back.
+
+**One date format, everywhere the client looks**: `26-aprel 2026, 09:32` — day, month name,
+year, comma, 24-hour clock (`26 апреля 2026, 09:32` in Russian, `26-апрел 2026, 09:32` in
+uz-Cyrl). It is the shape on the orders card, on saved drawings, in Bildirishnomalar and on
+Profil's sessions alike. No `dd.mm.yyyy`, and **no relative ages** — *kecha*, *3 kun oldin*:
+a client reads a handful of dates a week and needs to know which day, not how long ago, and
+two shapes on adjacent cards read as two different kinds of date. The workshop and admin apps
+keep the compact numeric form; their screens are dense tables where a spelled-out month costs
+a column. The order detail shows no date at all (see below).
 
 Home (`/c`) leads with **what needs attention now**, and on every list here **the row or card
 is the link** — no per-row **Batafsil** or **Kuzatish** button, and no second tap target

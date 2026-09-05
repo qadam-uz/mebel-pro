@@ -10,7 +10,7 @@ import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
-import { formatDate, formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatClientDateTime, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 /**
@@ -286,7 +286,7 @@ onMounted(() => {
             {{ $t('client.unit.part', order.item_count) }} ·
             <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
             {{ $t('client.unit.sheet', order.planned_panels) }} ·
-            {{ formatDate(order.created_at) }}
+            {{ formatClientDateTime(order.created_at) }}
           </p>
         </div>
 

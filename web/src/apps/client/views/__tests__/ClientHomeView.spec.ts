@@ -267,6 +267,52 @@ describe('ClientHomeView — the connected toast', () => {
  * rule and a drawing of two parts read «2 деталь». One drawing per Russian
  * class: 1 → one, 2 → few, 5 → many.
  */
+// Decision 22: the drawing's meta line ends in the one client date format —
+// never «kecha» / «3 kun oldin», and never the old `dd.mm hh:mm`. The fixture
+// timestamp is zone-less on purpose, so it parses as local time and the
+// assertion is about shape rather than about the runner's timezone.
+describe('ClientHomeView — the drawing date (decision 22)', () => {
+  function withDatedDraft() {
+    const drafts = [
+      {
+        id: 'draft-dated',
+        name: 'Oshxona shkafi',
+        parts_snapshot: [],
+        results: [],
+        chosen_result_id: null,
+        updated_at: '2026-04-26T09:32:00',
+      },
+    ]
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/cutting-drafts') ? drafts : [],
+    )
+  }
+
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  it('spells the date out in Uzbek and shows no relative age', async () => {
+    withDatedDraft()
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text().replace(/\s+/g, ' ')
+    expect(text).toContain('26-aprel 2026, 09:32')
+    expect(text).not.toContain('26.04')
+    expect(text).not.toMatch(/kecha|kun oldin/)
+  })
+
+  it('uses the Russian genitive month', async () => {
+    withDatedDraft()
+    await setLocale('ru')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
+})
+
 describe('ClientHomeView — the drawing meta line agrees with its numbers', () => {
   /** Three drawings sized 1, 2 and 5 — one per Russian plural class — each with
    *  as many sheets as parts, so one line exercises both units. */

@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
+import { setLocale } from '@/shared/i18n'
 import {
+  formatClientDateTime,
   formatDate,
   formatDateInputValue,
   formatDateTime,
@@ -59,6 +61,44 @@ describe('shared formatters', () => {
     expect(formatDayMonthWeekday(new Date(2026, 0, 4))).toBe('4 yanvar, yakshanba')
     // Date-only strings keep the same calendar day the rest of the app shows.
     expect(formatDayMonthWeekday('2026-03-02')).toBe('2 mart, dushanba')
+  })
+
+  // Decision 22 — the one date the client app shows. Asserted in all three
+  // locales because the shape itself is catalog copy (uz hyphenates the day to
+  // the month, ru does not) and uz-Cyrl is derived from uz, not written.
+  describe('formatClientDateTime', () => {
+    afterAll(async () => {
+      await setLocale('uz')
+    })
+
+    it('reads day, month name, year and a 24h clock in Uzbek', async () => {
+      await setLocale('uz')
+      expect(formatClientDateTime(new Date(2026, 3, 26, 9, 32))).toBe('26-aprel 2026, 09:32')
+      // The 1st is not zero-padded — this is a spoken date, not a column.
+      expect(formatClientDateTime(new Date(2026, 3, 1, 9, 5))).toBe('1-aprel 2026, 09:05')
+      // Midnight is 00:00, never blank and never 12:00.
+      expect(formatClientDateTime(new Date(2026, 0, 1, 0, 0))).toBe('1-yanvar 2026, 00:00')
+    })
+
+    it('uses the Russian genitive month and no hyphen', async () => {
+      await setLocale('ru')
+      expect(formatClientDateTime(new Date(2026, 3, 26, 9, 32))).toBe('26 апреля 2026, 09:32')
+      expect(formatClientDateTime(new Date(2026, 3, 1, 9, 5))).toBe('1 апреля 2026, 09:05')
+      expect(formatClientDateTime(new Date(2026, 0, 1, 0, 0))).toBe('1 января 2026, 00:00')
+    })
+
+    it('transliterates the Uzbek shape for uz-Cyrl', async () => {
+      await setLocale('uz-Cyrl')
+      expect(formatClientDateTime(new Date(2026, 3, 26, 9, 32))).toBe('26-апрел 2026, 09:32')
+      expect(formatClientDateTime(new Date(2026, 3, 1, 9, 5))).toBe('1-апрел 2026, 09:05')
+      expect(formatClientDateTime(new Date(2026, 0, 1, 0, 0))).toBe('1-январ 2026, 00:00')
+    })
+
+    it('is never a relative age, whatever the distance', async () => {
+      await setLocale('uz')
+      const now = new Date()
+      expect(formatClientDateTime(now)).not.toMatch(/bugun|kecha|oldin/)
+    })
   })
 
   it('signs a percent change itself, so no caller concatenates a plus', () => {

@@ -192,6 +192,40 @@ export function formatDayMonthWeekday(value: string | Date): string {
   })
 }
 
+/**
+ * The one date the client app shows — "26-aprel 2026, 09:32".
+ *
+ * Decision 22: every date on a client screen reads this way, in every locale —
+ * `26 апреля 2026, 09:32` in ru, `26-апрел 2026, 09:32` in uz-Cyrl (derived
+ * from uz by the transliteration). No `dd.mm.yyyy` and no relative age
+ * («kecha», «3 kun oldin») anywhere the client can reach: a client reads a
+ * handful of dates a week and needs to know *which day*, not how long ago —
+ * and two shapes on adjacent cards read as two different kinds of date.
+ *
+ * Built the same way `formatDayMonthWeekday` is, and for the same reason: ICU's
+ * month tables are trimmed on some runtimes and fall back to English, so the
+ * words come from the catalog. The separator between day and month differs per
+ * language (uz hyphenates, ru does not), so the whole shape is a catalog
+ * template rather than a concatenation here. Russian needs the genitive month,
+ * which is exactly what `formats.monthOf.*` holds.
+ *
+ * Workshop and admin keep `formatDate` / `formatDateTime`: their screens are
+ * dense tables where a spelled-out month costs a column.
+ */
+export function formatClientDateTime(value: string | Date): string {
+  const date = parseDateValue(value)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return translate('formats.clientDateTime', {
+    day: date.getDate(),
+    month: translate(`formats.monthOf.${MONTH_KEYS[date.getMonth()]}`),
+    // A string, not the number: a year run through a number formatter picks up
+    // the locale's group separator and renders "2 026".
+    year: String(date.getFullYear()),
+    time: `${hours}:${minutes}`,
+  })
+}
+
 // A signed percentage for a delta pill — "+18%", "−12%". The sign comes from the
 // number formatter, not from a concatenated glyph, so the locale picks its own
 // minus and its own spacing before the sign ("+18 %" in Russian).

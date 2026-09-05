@@ -82,6 +82,40 @@ afterEach(async () => {
 })
 
 /**
+ * Decision 22 — the card's fourth line ends in the one client date format. The
+ * fixture's timestamp carries no zone so it parses as local time: the assertion
+ * is about the shape, and a `Z` would make it drift a day either side of UTC.
+ */
+describe('ClientOrdersView — the card date (decision 22)', () => {
+  function datedOrder() {
+    vi.mocked(api.get).mockImplementation(
+      async () => [{ ...order(2, 1), created_at: '2026-04-26T09:32:00' }] as never,
+    )
+  }
+
+  it('spells the month out and keeps the 24h clock in Uzbek', async () => {
+    datedOrder()
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    const text = view.text().replace(/\s+/g, ' ')
+    expect(text).toContain('26-aprel 2026, 09:32')
+    // The numeric shape this replaced must be gone, not merely unused.
+    expect(text).not.toContain('26.04.2026')
+  })
+
+  it('uses the Russian genitive month', async () => {
+    datedOrder()
+    await setLocale('ru')
+
+    const view = await mountOrders()
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
+})
+
+/**
  * An order card's counts line is `N деталь · N лист · дата`, and Russian agrees
  * both nouns with the number in front of them. Both used to be rendered by
  * `$t('client.unit.part')` with no count, so vue-i18n never reached the plural

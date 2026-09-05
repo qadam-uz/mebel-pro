@@ -7,7 +7,7 @@ import { apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { traceLine } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
-import { formatDate } from '@/shared/formatters'
+import { formatClientDateTime } from '@/shared/formatters'
 import Icon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
@@ -256,7 +256,7 @@ onMounted(reloadProfile)
                     }}</span>
                   </div>
                   <div class="text-sm text-ink-muted">
-                    {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
+                    {{ formatClientDateTime(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
                   </div>
                 </div>
               </div>

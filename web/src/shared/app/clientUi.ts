@@ -211,26 +211,6 @@ export function isUzPhone(value: string): boolean {
   return /^\+998\d{9}$/.test(normalizeUzPhone(value))
 }
 
-export function formatRelativeDate(value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value
-  const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${day}.${month} ${hour}:${minute}`
-}
-
-/** Same clock as `formatRelativeDate` but with the year — for lists that
- *  accumulate across years, where a bare `12.07` is ambiguous. */
-export function formatFullDate(value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value
-  const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${day}.${month}.${date.getFullYear()} ${hour}:${minute}`
-}
-
 export function formatPercent(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '-'
   const numeric = Number(value)
