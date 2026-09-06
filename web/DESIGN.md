@@ -307,15 +307,26 @@ border. Coloured glows are gone: nothing separates with a tinted halo any more.
 
 **The overlay z-ladder** — pick the tier that matches what the surface sits above, and don't
 invent new ones: inline listboxes **z-30/40** · teleported dropdown/listbox panels **z-50** ·
-the action menu and the onboarding spotlight **z-60** · admin modal scrim **z-70** · the
-modal layer **z-80** · `DateField`'s calendar over a modal **z-84** · anything **raised from
-inside** a modal or a sheet — `ConfirmDialog`, the action menu, a second `CuttingBottomSheet` —
-**z-85** · toasts and `SearchCombobox`'s panel **z-90**. That raised tier is not optional
-decoration: two surfaces on the same tier tie, and the tie goes to DOM order, which for a
-teleported panel is the order its `Teleport` was created — so the overlay a sheet opens can land
-*behind* it. The action menu takes the tier from the body scroll lock
-(`body.modal-open .mp-action-menu`), a sheet takes it from its `raised` prop.
-Scroll-locking and overlay positioning mechanics are `AGENTS.md`'s sections.
+the action menu and the onboarding spotlight **z-60** · a hand-rolled modal's scrim **z-70** ·
+**the overlay stack, z-80 upward** · toasts **z-200**.
+
+The stack is the part that has to be computed rather than written down. Every overlay here
+teleports to `<body>`, so two on the same tier tie, and the tie goes to DOM order — which for a
+teleported panel is the order its `Teleport` was created, not the order the user opened things.
+An always-mounted child therefore beats the sheet that opens it, and a hand-set "raised" tier
+only moves the tie one step along: it is what put the tape picker behind the «Detal» sheet, and
+then the decor lightbox behind the tape picker. So an overlay **registers while it is open** and
+reads its tier off its depth (`useOverlayLayer`, `shared/app/overlayStack`): the first is the
+modal layer **z-80**, each one opened from inside another clears it by **5** (85, 90, …),
+capped at **150**. `AppModal`, `CuttingBottomSheet`, `ConfirmDialog` and `CuttingEdgePickerModal`
+all take their tier this way — no call site passes one. Depth also decides who answers **Escape**:
+only the innermost overlay does, so a lightbox closes without taking the picker under it.
+
+A popover that hangs off a *control* rather than being an overlay of its own — the action menu,
+`DateField`'s calendar, `SearchCombobox`'s listbox — is not a stack level. It takes
+`useAttachedOverlayZIndex(base)`: its own base tier on a plain page, lifted to **4 above the
+innermost open overlay** when it belongs to one. Over its host, still under anything that host
+raises. Scroll-locking and overlay positioning mechanics are `AGENTS.md`'s sections.
 
 Desktop paints at `zoom: 90%` on the root (≥769px) — the density the back-office is designed
 for. Everything about measuring, positioning, viewport units, and breakpoints under the zoom

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import { useAttachedOverlayZIndex } from '@/shared/app/overlayStack'
 import { foldIncludes } from '@/shared/app/searchFold'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
@@ -98,6 +99,9 @@ const PANEL_GUTTER = 8
 const PANEL_MIN_WIDTH = 420
 const PANEL_MAX_HEIGHT = 288
 const panelStyle = ref<CSSProperties>({})
+// This listbox is nearly always inside a modal or a sheet, so its tier follows
+// the innermost open overlay rather than sitting at one fixed number.
+const panelZIndex = useAttachedOverlayZIndex(90)
 
 function updatePanelPosition() {
   const trigger = inputRef.value
@@ -477,8 +481,8 @@ onBeforeUnmount(() => {
           :id="`${id}-listbox`"
           ref="listRef"
           role="listbox"
-          class="fixed z-[90] overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
-          :style="panelStyle"
+          class="fixed overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)]"
+          :style="[panelStyle, { zIndex: panelZIndex }]"
           :aria-labelledby="`${id}-label`"
           @keydown.esc.stop.prevent="closeList(true)"
         >

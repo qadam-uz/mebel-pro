@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { isoDate } from '@/shared/app/dateRange'
 import { nextStableId } from '@/shared/app/listboxNav'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import { useAttachedOverlayZIndex } from '@/shared/app/overlayStack'
 import CalendarMonths from '@/shared/components/CalendarMonths.vue'
 
 // Single-date form control. A native `<input type="date">` renders in the
@@ -51,6 +52,9 @@ const panelRef = ref<HTMLDivElement | null>(null)
 const panelId = nextStableId('mp-datefield')
 const open = ref(false)
 const panelStyle = ref<Record<string, string>>({})
+// A calendar opened from a form inside a modal must clear that modal; the base
+// keeps it over the page's own dropdown tiers when no overlay is open.
+const panelZIndex = useAttachedOverlayZIndex(84)
 const text = ref('')
 const GUTTER = 8
 
@@ -326,8 +330,10 @@ onBeforeUnmount(() => {
     </small>
 
     <Teleport to="body">
-      <!-- z-[84]: above the app modal layer (z-[80]) these forms live in, below
-           ConfirmDialog (z-[85]) and toasts (z-[90]). -->
+      <!-- The calendar is a popover attached to a field, not an overlay of its
+           own: base tier on a plain page, lifted just over the innermost open
+           overlay when the form it belongs to is inside one
+           (shared/app/overlayStack). -->
       <div
         v-if="open"
         :id="panelId"
@@ -335,8 +341,8 @@ onBeforeUnmount(() => {
         role="dialog"
         :aria-label="$t('forms.date.pickDay')"
         tabindex="-1"
-        class="fixed z-[84] max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)] outline-none"
-        :style="panelStyle"
+        class="fixed max-h-[calc(100dvh-16px)] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-hairline-strong bg-elevated p-3 shadow-[0_18px_44px_-16px_color-mix(in_srgb,var(--color-ink)_35%,transparent)] outline-none"
+        :style="[panelStyle, { zIndex: panelZIndex }]"
         @keydown="onPanelKeydown"
       >
         <CalendarMonths

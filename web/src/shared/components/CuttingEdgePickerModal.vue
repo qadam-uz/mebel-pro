@@ -19,6 +19,7 @@ import {
   type EdgeRegistryColorStyle,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
+import { useOverlayLayer } from '@/shared/app/overlayStack'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import { filterByQuery } from '@/shared/app/searchFold'
 import { useCuttingStore, type CuttingEdgeBand, type CuttingPart } from '@/shared/stores/cutting'
@@ -56,6 +57,11 @@ const emit = defineEmits<{
 
 const cutting = useCuttingStore()
 const { t } = useI18n()
+
+// This dialog rolls its own scrim/panel/scroll-lock, so it registers with the
+// overlay stack by hand: it is a real overlay, and everything raised from
+// inside it — a ConfirmDialog, a decor lightbox — must land above it.
+const layer = useOverlayLayer(computed(() => props.part !== null))
 
 const edgePickerState = ref<Record<EdgeField, CuttingEdgeBand | null>>(blankEdgeState())
 const edgePickerSearch = ref('')
@@ -471,6 +477,9 @@ function trapEdgeFocus(event: KeyboardEvent) {
 function onDocumentKeydown(event: KeyboardEvent) {
   if (!props.part) return
   if (event.key === 'Escape') {
+    // Only the innermost overlay answers Escape — a ConfirmDialog raised from
+    // inside this dialog used to close both with one keypress.
+    if (!layer.isTopmost.value) return
     emit('close')
     return
   }
@@ -527,10 +536,18 @@ onBeforeUnmount(() => {
 
 <template>
   <template v-if="part">
-    <div class="client-modal-scrim" @click="emit('close')"></div>
+    <!-- Tiers from the overlay stack rather than the `.client-*` classes'
+         defaults, so anything raised from inside this dialog lands above it
+         (shared/app/overlayStack). -->
+    <div
+      class="client-modal-scrim"
+      :style="{ zIndex: layer.zIndex.value - 10 }"
+      @click="emit('close')"
+    ></div>
     <section
       ref="edgeDialogRef"
       class="client-edge-modal"
+      :style="{ zIndex: layer.zIndex.value }"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edge-picker-title"

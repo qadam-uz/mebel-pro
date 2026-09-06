@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } f
 
 import { nextStableId } from '@/shared/app/listboxNav'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import { useOverlayLayer } from '@/shared/app/overlayStack'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import Icon from '@/shared/components/AppIcon.vue'
 
@@ -41,16 +42,8 @@ const props = withDefaults(
     sheetTopClass?: string
     /** The control that opened this — turns on the anchored frame at `md`. */
     anchor?: HTMLElement | null
-    /**
-     * Raised from inside another sheet. Two sheets both at the modal layer tie
-     * on z-index, and the tie is broken by the order their `Teleport` anchors
-     * were created — which put the always-mounted tape picker *behind* the
-     * part sheet that opens it, so §7.1's «kromka tanlang» gate opened onto
-     * nothing. This is the ladder's raised-from-a-modal tier (DESIGN.md).
-     */
-    raised?: boolean
   }>(),
-  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3', anchor: null, raised: false },
+  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3', anchor: null },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -79,6 +72,12 @@ const anchored = computed(() => Boolean(props.anchor) && wide.value)
 // focus below, so the trap must not also lock the body behind it.
 const trapOpen = computed(() => props.open && !anchored.value)
 const trap = useFocusTrap(panelRef, trapOpen, () => emit('close'))
+// The anchored frame skips the trap, so it registers with the overlay stack
+// itself — otherwise a lightbox opened from a row inside it would read as the
+// *first* overlay on screen and paint underneath. `trapOpen` and this are
+// mutually exclusive, so the sheet only ever holds one slot in the stack.
+const anchoredOpen = computed(() => props.open && anchored.value)
+const anchoredLayer = useOverlayLayer(anchoredOpen)
 
 const PANEL_GUTTER = 8
 const PANEL_MIN_WIDTH = 420
@@ -177,7 +176,8 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <!-- The anchored frame (`md` and up, with a trigger): a popover, so no
-         scrim, and z-[90] — the layer `SearchCombobox`'s own panel uses.
+         scrim. Its tier still comes from the overlay stack, so the decor
+         lightbox a row opens lands above it (shared/app/overlayStack).
          The single explicit `minmax(0,1fr)` column is load-bearing on every
          frame here: with one explicit column, row-flow auto-placement can only
          ever open implicit *rows*, so no region can be shunted sideways, and a
@@ -189,8 +189,8 @@ onBeforeUnmount(() => {
       role="dialog"
       :aria-labelledby="`${id}-title`"
       tabindex="-1"
-      class="fixed z-[90] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
-      :style="panelStyle"
+      class="fixed grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
+      :style="[panelStyle, { zIndex: anchoredLayer.zIndex.value }]"
     >
       <header
         class="row-start-1 flex items-start justify-between gap-3 border-b border-hairline px-4 py-3"
@@ -224,12 +224,14 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- z-[80] is the app modal layer, shared with AppModal — a ConfirmDialog
-         raised from inside one still lands above at z-[85]. -->
+    <!-- The tier is this sheet's depth in the overlay stack: the modal layer
+         when it is the only thing open, one step up when the «Detal» sheet
+         raised it, and whatever a lightbox opened from a row here needs is one
+         step above that again. No caller has to say so. -->
     <div
       v-else-if="open"
       class="fixed inset-0 sm:grid sm:place-items-center sm:p-4"
-      :class="raised ? 'z-[85]' : 'z-[80]'"
+      :style="{ zIndex: trap.zIndex.value }"
     >
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true" @click="emit('close')"></div>
       <section
