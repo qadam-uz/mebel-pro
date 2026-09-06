@@ -5,10 +5,10 @@ import {
   deriveSnapshotEdgeRegistry,
   offcutLabelMode,
   orphanPartIndexByRef,
+  drawnSheetSize,
 } from '@/shared/app/cuttingResultsDisplay'
 import { partDisplayName, registryEntryForBand } from '@/shared/app/cuttingEditorDerived'
 import { nextStableId } from '@/shared/app/listboxNav'
-import { snapshotValue } from '@/shared/app/materialLabel'
 import type { EdgeField } from '@/shared/app/cuttingDisplay'
 import type {
   CuttingOffcut,
@@ -73,16 +73,13 @@ const emit = defineEmits<{
   'clear-selection': []
 }>()
 
-const material = computed(() => props.result.material_snapshots[props.panel.material_id] ?? {})
-// Frozen history: a pre-reshape snapshot only carries panel_length_mm/panel_width_mm.
-// Without the legacy read the 1000×700 fallbacks below would silently draw every
-// historical sheet at the wrong aspect ratio, placements spilling outside it.
-const panelLength = computed(() =>
-  numberSnapshot(snapshotValue(material.value, 'length_mm', 'uzunlik_mm', 'panel_length_mm'), 1000),
-)
-const panelWidth = computed(() =>
-  numberSnapshot(snapshotValue(material.value, 'width_mm', 'eni_mm', 'panel_width_mm'), 700),
-)
+// One resolver, shared with the PDF's: snapshot in any of the three frozen
+// vocabularies, else the layout's own extent — never a constant. The viewBox is
+// then widened to hold anything sticking out of the recorded sheet, so a
+// snapshot that disagrees with its own placements still draws them all.
+const sheetSize = computed(() => drawnSheetSize(props.result, props.panel))
+const panelLength = computed(() => sheetSize.value.length)
+const panelWidth = computed(() => sheetSize.value.width)
 const viewBox = computed(() => `0 0 ${panelLength.value} ${panelWidth.value}`)
 const normScale = computed(() => (props.renderWidthPx ?? NORM_WIDTH) / panelLength.value)
 const labelFontSize = computed(() => LABEL_FONT / normScale.value)
@@ -91,9 +88,9 @@ const grainStrokeWidth = computed(() => GRAIN_STROKE / normScale.value)
 const grainGap = computed(() => GRAIN_GAP / normScale.value)
 // The sheet's texture runs along its long side, and the viewBox maps that side
 // to x — so the hairlines are horizontal on an ordinary landscape sheet. Read
-// from the snapshot rather than assumed: `panelLength`/`panelWidth` fall back
-// to 1000×700 and accept a legacy key vocabulary, so a portrait snapshot is
-// representable and would otherwise get its grain drawn across the board.
+// from the snapshot rather than assumed: `drawnSheetSize` resolves a portrait
+// sheet as readily as a landscape one, and assuming landscape would draw its
+// grain across the board rather than along it.
 const grainHorizontal = computed(() => panelLength.value >= panelWidth.value)
 // One pattern per mounted panel. Only one mounts per page today, but a
 // hardcoded id would fail silently — as a wrong-scaled fill, not an error —
@@ -124,12 +121,6 @@ const orphanIndex = computed(() => orphanPartIndexByRef(props.result))
 
 type PhysicalSide = 'top' | 'bottom' | 'left' | 'right'
 type BandedSide = { physical: PhysicalSide; field: EdgeField }
-
-function numberSnapshot(value: unknown, fallback: number) {
-  if (typeof value === 'number') return value
-  if (typeof value === 'string' && value.trim()) return Number(value)
-  return fallback
-}
 
 function svgY(placement: CuttingPlacement) {
   return panelWidth.value - placement.y_mm - placement.width_mm
