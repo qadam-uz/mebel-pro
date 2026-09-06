@@ -176,7 +176,9 @@ On `/start` with a valid pending token:
     confirm. There is no separate name step — the name is editable in the profile.
 
 `/start` without a token, or with an expired / used one, gets a short help message pointing at
-the login page, carrying the keyboard for the account's state (below). Bot copy is Uzbek-only in
+the login page, carrying the keyboard for the account's state (below). Its closing line names
+the button underneath it, so it follows that same state: an unlinked account is told to share
+its number first, a linked one to press **Kirish kodi**. Bot copy is Uzbek-only in
 v1 — the bot has no reliable locale channel, matching the server-rendered documents rule in
 [`architecture.md`](../../architecture.md).
 

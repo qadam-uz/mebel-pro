@@ -22,7 +22,8 @@ from app.modules.access.telegram_bot import (
     DECLINED_TEXT,
     EXPIRED_TEXT,
     FOREIGN_CONTACT_TEXT,
-    HELP_TEXT,
+    HELP_LINKED_TEXT,
+    HELP_UNLINKED_TEXT,
     LOGIN_CODE_ACTION,
 )
 from httpx import AsyncClient
@@ -197,8 +198,9 @@ async def test_bare_start_offers_help_and_the_code_keyboard_to_a_linked_account(
     response = await client.post(WEBHOOK_URL, json=_start(), headers=HEADERS)
 
     assert response.status_code == 204
-    assert _texts(bot_calls) == [HELP_TEXT]
-    # The number is already shared — asking for it again is the bug this fixes.
+    # The number is already shared — asking for it again is the bug this fixes,
+    # in the closing line of the copy as much as in the keyboard below it.
+    assert _texts(bot_calls) == [HELP_LINKED_TEXT]
     assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
     # Pressing Start un-blocks the bot by definition — the stale 403 flag clears.
     await db_session.refresh(person)
@@ -211,7 +213,9 @@ async def test_bare_start_offers_the_contact_keyboard_to_an_unlinked_account(
 ) -> None:
     await client.post(WEBHOOK_URL, json=_start(), headers=HEADERS)
 
-    assert _texts(bot_calls) == [HELP_TEXT]
+    # The button below this copy is the contact request, so the copy asks for
+    # the number rather than for a code button the account can't reach yet.
+    assert _texts(bot_calls) == [HELP_UNLINKED_TEXT]
     markup = _last_markup(bot_calls)
     assert _keyboard_labels(markup) == [CONTACT_BUTTON_TEXT]
     assert markup["keyboard"][0][0]["request_contact"] is True

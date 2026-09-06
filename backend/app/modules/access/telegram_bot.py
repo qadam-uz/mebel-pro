@@ -17,6 +17,9 @@ prompt spends its slot on the inline Tasdiqlash/Bekor qilish pair and leaves the
 sticky keyboard alone — every path that links an account ends in a
 keyboard-bearing message (`CODE_TEXT` / `CONFIRMED_TEXT`), so by the time a
 linked account can be deep-linked its chat already shows the code keyboard.
+
+The help copy follows the same state, because its closing line names the button
+below it: unlinked → share the number first, linked → press «Kirish kodi».
 """
 
 import uuid
@@ -52,11 +55,20 @@ CONFIRM_PREFIX = "confirm:"
 DECLINE_PREFIX = "decline:"
 LOGIN_CODE_ACTION = "login_code"
 
-HELP_TEXT = (
+_HELP_INTRO = (
     "MebelPro botiga xush kelibsiz.\n\n"
     "Saytga kirish uchun kirish sahifasidagi QR kodni skanerlang yoki "
     '"Telegram orqali kirish" tugmasini bosing.\n\n'
-    "QR ni skanerlay olmasangiz, quyidagi tugma orqali kirish kodini oling."
+)
+# The closing line names the button the same reply carries, so it follows the
+# keyboard's state: an unlinked account's button is the contact request, and
+# telling it to press «Kirish kodi» would point at a button that isn't there.
+HELP_UNLINKED_TEXT = _HELP_INTRO + (
+    "QR ni skanerlay olmasangiz, avval quyidagi tugma bilan telefon raqamingizni "
+    "ulashing — keyin kirish kodini olasiz."
+)
+HELP_LINKED_TEXT = _HELP_INTRO + (
+    "QR ni skanerlay olmasangiz, quyidagi «Kirish kodi» tugmasini bosing."
 )
 EXPIRED_TEXT = "Muddat tugadi. Saytdagi QR ni yangilang."
 CONFIRMED_TEXT = "Tasdiqlandi. Saytga qayting."
@@ -143,7 +155,7 @@ async def _handle_message(db: AsyncSession, message: dict[str, Any], *, now: dat
     if isinstance(text, str) and _is_code_button(text):
         await _start_code_flow(db, sender_id=sender_id, chat_id=chat_id, now=now)
         return
-    await _reply(chat_id, HELP_TEXT, reply_markup=await _state_keyboard(db, sender_id))
+    await _reply_help(db, sender_id=sender_id, chat_id=chat_id)
 
 
 async def _handle_start(
@@ -157,7 +169,7 @@ async def _handle_start(
     # Pressing Start un-blocks the bot by definition, so any earlier 403 is stale.
     await _clear_unreachable(db, sender_id=sender_id)
     if not token:
-        await _reply(chat_id, HELP_TEXT, reply_markup=await _state_keyboard(db, sender_id))
+        await _reply_help(db, sender_id=sender_id, chat_id=chat_id)
         return
     row = await find_login_token(db, token=token)
     if row is None or not _is_open(row, now=now):
@@ -352,6 +364,18 @@ async def _clear_unreachable(db: AsyncSession, *, sender_id: int) -> None:
     if client is not None and client.telegram_unreachable_at is not None:
         client.telegram_unreachable_at = None
         await db.flush()
+
+
+async def _reply_help(db: AsyncSession, *, sender_id: int, chat_id: int) -> None:
+    """Send the help copy together with the keyboard it describes.
+
+    Both come from one state read, so the closing line can never name a button
+    the message doesn't carry. A blocked account gets no keyboard at all; it
+    reads the unlinked copy, which at least points at nothing it already has.
+    """
+    keyboard = await _state_keyboard(db, sender_id)
+    text = HELP_LINKED_TEXT if keyboard is _CODE_KEYBOARD else HELP_UNLINKED_TEXT
+    await _reply(chat_id, text, reply_markup=keyboard)
 
 
 async def _state_keyboard(db: AsyncSession, sender_id: int) -> dict[str, Any]:
