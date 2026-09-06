@@ -18,6 +18,9 @@ export interface WorkshopSummary {
   id: string
   name: string
   status: 'active' | 'blocked'
+  // The `/w/{code}` client-entry code — the head of every client link this
+  // workshop and its branches publish (client-entry.md).
+  public_code: string
   owner_user_id: string
   created_at: string
 }

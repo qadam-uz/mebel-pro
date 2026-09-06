@@ -1,14 +1,16 @@
 /**
- * Absolute `/w/{code}` URLs, built from the **workshop** app.
+ * Absolute `/w/{code}` URLs, built from a **staff** app.
  *
- * The "Mijoz havolasi" card renders inside the workshop SPA, and the link it
- * prints opens the **client** SPA — a different place in both environments, so
- * `window.location.origin` on its own is wrong in both:
+ * The "Mijoz havolasi" card renders inside the workshop SPA and the platform
+ * SPA, and the link it prints opens the **client** SPA — a different place in
+ * both environments, so `window.location.origin` on its own is wrong in both:
  *
  * - **production** — the Caddy edge routes by subdomain (`deploy/Caddyfile`):
- *   the workshop app is `workshop.<domain>`, the client app is `app.<domain>`.
+ *   the workshop app is `workshop.<domain>`, the platform app `admin.<domain>`,
+ *   the client app `app.<domain>`.
  * - **dev** — one Vite server hosts all three SPAs under a role base path, so
- *   the workshop app is `/workshop/...` and the client app is `/client/...`.
+ *   the staff app is `/workshop/...` or `/admin/...` and the client app is
+ *   `/client/...`.
  *
  * Derived rather than configured, deliberately: the host scheme is the deploy's
  * contract, and `web/.env.*.example` still needs no public build-time config.
@@ -16,9 +18,9 @@
  * origin, which is at worst a link the owner can see is wrong.
  */
 
-const WORKSHOP_HOST_PREFIX = 'workshop.'
+const STAFF_HOST_PREFIXES = ['workshop.', 'admin.']
 const CLIENT_HOST_PREFIX = 'app.'
-const WORKSHOP_DEV_BASE = '/workshop'
+const STAFF_DEV_BASES = ['/workshop', '/admin']
 const CLIENT_DEV_BASE = '/client'
 
 export function clientAppBase(
@@ -27,14 +29,16 @@ export function clientAppBase(
   isDev: boolean = import.meta.env.DEV,
 ): string {
   if (isDev) {
-    const mountedUnderRoleBase =
-      pathname === WORKSHOP_DEV_BASE || pathname.startsWith(`${WORKSHOP_DEV_BASE}/`)
+    const mountedUnderRoleBase = STAFF_DEV_BASES.some(
+      (base) => pathname === base || pathname.startsWith(`${base}/`),
+    )
     return mountedUnderRoleBase ? `${origin}${CLIENT_DEV_BASE}` : origin
   }
   try {
     const url = new URL(origin)
-    if (url.hostname.startsWith(WORKSHOP_HOST_PREFIX)) {
-      url.hostname = `${CLIENT_HOST_PREFIX}${url.hostname.slice(WORKSHOP_HOST_PREFIX.length)}`
+    const prefix = STAFF_HOST_PREFIXES.find((candidate) => url.hostname.startsWith(candidate))
+    if (prefix) {
+      url.hostname = `${CLIENT_HOST_PREFIX}${url.hostname.slice(prefix.length)}`
       return url.origin
     }
   } catch {
@@ -44,8 +48,8 @@ export function clientAppBase(
 }
 
 /**
- * The link a workshop prints. Omit `branchNo` for the workshop-level link that
- * settings shows; pass it for the QR a branch puts on its counter.
+ * The link a workshop hands a client. Omit `branchNo` for the workshop-level
+ * link; pass it for the QR a branch puts on its counter.
  */
 export function workshopLinkUrl(
   code: string,
