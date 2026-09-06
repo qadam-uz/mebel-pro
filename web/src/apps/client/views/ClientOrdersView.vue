@@ -286,13 +286,21 @@ onMounted(() => {
           <p class="mt-1 text-[12.5px] leading-[1.4] text-ink-soft md:mt-[5px] md:text-sm">
             {{ cardWhere(order) }}
           </p>
-          <p class="mt-0.5 text-[12.5px] leading-[1.4] text-ink-soft md:text-sm">
-            <b class="font-semibold text-ink">{{ order.item_count }}</b>
-            {{ $t('client.unit.part', order.item_count) }} ·
-            <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
-            {{ $t('client.unit.sheet', order.planned_panels) }} ·
-            {{ formatClientDateTime(order.created_at) }}
-          </p>
+          <!-- Counts and date: joined by «·» from `md` up, the date on its own
+               line under them on a phone (decision 22, amended 2026-09-06
+               evening) — joined, the date wrapped in the middle at 375px. -->
+          <div
+            class="mt-0.5 flex flex-col text-[12.5px] leading-[1.4] text-ink-soft md:flex-row md:items-baseline md:gap-x-[3px] md:text-sm"
+          >
+            <p>
+              <b class="font-semibold text-ink">{{ order.item_count }}</b>
+              {{ $t('client.unit.part', order.item_count) }} ·
+              <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
+              {{ $t('client.unit.sheet', order.planned_panels) }}
+            </p>
+            <span class="hidden shrink-0 md:inline" aria-hidden="true">·</span>
+            <p class="whitespace-nowrap">{{ formatClientDateTime(order.created_at) }}</p>
+          </div>
         </div>
 
         <div class="flex shrink-0 flex-col items-end gap-[5px] md:gap-[7px]">

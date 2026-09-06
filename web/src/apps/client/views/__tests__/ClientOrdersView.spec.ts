@@ -134,6 +134,31 @@ describe('ClientOrdersView — the card date (decision 22)', () => {
     expect(text).not.toContain('26.04.2026')
   })
 
+  // Amended 2026-09-06 evening: on a phone the date is its own line under the
+  // counts, never the third «·»-joined item on them — joined, it wrapped
+  // mid-date at 375px. jsdom resolves no breakpoints, so what is pinned here
+  // is the markup that carries the split: the counts and the date are separate
+  // paragraphs, and the «·» between them from `md` up is `md:`-gated.
+  it('gives the date its own paragraph, not the counts line', async () => {
+    datedOrder()
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    const paragraphs = view.findAll('p')
+    const dateEl = paragraphs.find((el) => el.text().trim() === '26-aprel 2026, 09:32')
+    expect(dateEl).toBeDefined()
+    expect(dateEl?.classes()).toContain('whitespace-nowrap')
+
+    const counts = paragraphs.find((el) => el.text().includes('detal'))
+    expect(counts?.text()).toContain('list')
+    expect(counts?.text()).not.toContain('2026')
+
+    const separator = view.findAll('span').find((el) => el.text().trim() === '·')
+    expect(separator?.classes()).toContain('hidden')
+    expect(separator?.classes()).toContain('md:inline')
+  })
+
   it('uses the Russian genitive month', async () => {
     datedOrder()
     await setLocale('ru')
