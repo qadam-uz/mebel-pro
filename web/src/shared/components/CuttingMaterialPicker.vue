@@ -34,8 +34,9 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
  * vocabulary. It is the one cut a client makes before colour — "I need an
  * 18 mm LDSP", not "I need something beige" — and on a phone it is the
  * difference between a list of six decors and a list of forty. The chips filter
- * **formats**, so a decor is listed only while it has one of that type and its
- * «{n} ta format» line counts only those.
+ * **formats**, so a decor is listed only while it has one of that type, its
+ * «{n} ta format» line counts only those, and the caption above the chips
+ * counts the rows the chip left on screen.
  *
  * The workshop keeps its own picker in `CuttingEditorView` — this component is
  * mounted on the client path only.
@@ -48,8 +49,12 @@ const props = withDefaults(
     /** The format currently on the part/group, so its row reads as chosen. */
     currentId: string | null
     search: string
-    /** `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` */
-    caption: string
+    /**
+     * The shelf the list belongs to — `Mebel Master · Yunusobod filiali`. Only
+     * the name: the count in the caption beside it is the picker's own, because
+     * only the picker knows what the armed chip left on screen.
+     */
+    branch: string
     /**
      * The control that opened the picker. With one, `md` and up renders the
      * anchored panel and focus returns here on close; without one (or on a
@@ -147,6 +152,17 @@ const rows = computed<DecorRow[]>(() => {
   }
   return list
 })
+
+/**
+ * `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` — the line under the
+ * search field. The count is **what is listed**, not what the branch carries:
+ * the search narrows the list from the server and the type chip narrows it here,
+ * and a caption that kept saying "16 ta dekor" over six rows would read as a
+ * broken list rather than a filtered one.
+ */
+const caption = computed(() =>
+  t('cutting.editor.catalogCaption', { workshopBranch: props.branch, n: rows.value.length }),
+)
 
 /** `18 mm · 2800×2070 mm` — the format line, in the order the canvas prints it. */
 function formatLabel(material: ClientCatalogMaterialOption): string {
@@ -349,20 +365,33 @@ function rowIsCurrent(row: DecorRow) {
               "
               aria-hidden="true"
             ></span>
-            <span class="min-w-0 flex-1 text-[13.5px] font-semibold text-ink">
-              {{ formatLabel(format) }}
-            </span>
-            <span
-              v-if="hasPrice(format)"
-              class="shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
-            >
-              {{ price(format)
-              }}<span class="font-normal text-ink-muted">
-                {{ $t('cutting.material.perSheet') }}</span
+            <!-- Size and price on one line where the width allows, and two
+                 lines where it does not — «18 mm · 2800×2070 mm» beside
+                 «315 000 so'm / list» is wider than a 375px sheet. `flex-wrap`
+                 makes that the row's own decision: both parts keep their full
+                 width and the price drops to a second line, right-aligned under
+                 the size, instead of the size breaking mid-label. `flex-auto`
+                 (not `flex-1`) is what makes it: a zero flex basis would leave
+                 the wrap unreachable and truncate the size away instead. -->
+            <span class="flex min-w-0 flex-auto flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span class="min-w-0 flex-auto truncate text-[13.5px] font-semibold text-ink">
+                {{ formatLabel(format) }}
+              </span>
+              <span
+                v-if="hasPrice(format)"
+                class="ml-auto shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
               >
-            </span>
-            <span v-else class="shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
-              {{ $t('cutting.material.priceOnRequest') }}
+                <!-- `&nbsp;`, not a template space: the compiler condenses the
+                     whitespace around an interpolation away, and on its own
+                     line the price then read «315 000 so'm/ list». -->
+                {{ price(format)
+                }}<span class="font-normal text-ink-muted"
+                  >&nbsp;{{ $t('cutting.material.perSheet') }}</span
+                >
+              </span>
+              <span v-else class="ml-auto shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
+                {{ $t('cutting.material.priceOnRequest') }}
+              </span>
             </span>
           </button>
         </div>

@@ -49,7 +49,7 @@ function mountPicker(materials: ClientCatalogMaterialOption[], currentId: string
       loading: false,
       currentId,
       search: '',
-      caption: 'Mebel Master katalogi · 2 ta dekor',
+      branch: 'Mebel Master',
     },
     global: { stubs: { Icon: true, AuthFileImage: true, AppModal: true, ...sheetStub } },
   })
@@ -226,6 +226,32 @@ describe('CuttingMaterialPicker — the board-type filter', () => {
     expect(text).toContain('2 ta format')
     expect(text).not.toContain('Oq')
     expect(text).not.toContain('Qayin')
+  })
+
+  /**
+   * The caption counts what is on screen. A branch total held over a narrowed
+   * list reads as a broken list — the client counts three rows under a line
+   * that promises four.
+   */
+  it('counts the decors the chip left, not the branch total', async () => {
+    const wrapper = mountPicker(shelf())
+    // Dub Sonoma, Oq, Qayin — the whole shelf folded by decor.
+    expect(wrapper.text()).toContain('Mebel Master katalogi · 3 ta dekor')
+
+    await chip(wrapper, 'MDF').trigger('click')
+    // Dub Sonoma and Oq carry an MDF board; Qayin does not.
+    expect(wrapper.text()).toContain('Mebel Master katalogi · 2 ta dekor')
+
+    await chip(wrapper, 'Fanera').trigger('click')
+    expect(wrapper.text()).toContain('Mebel Master katalogi · 1 ta dekor')
+
+    // The search narrows the same count, and the chip still cuts what it hands
+    // back: one Fanera hit under the Fanera chip.
+    await wrapper.setProps({
+      search: 'qayin',
+      materials: [option({ id: 'm-qayin', type: 'fanera', code: 'F1', name: 'Qayin' })],
+    })
+    expect(wrapper.text()).toContain('Mebel Master katalogi · 1 ta dekor')
   })
 
   it('picks silently when the chip leaves a decor with a single format', async () => {

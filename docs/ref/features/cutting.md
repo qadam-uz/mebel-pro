@@ -579,7 +579,15 @@ or `{n} ta format` and no price on the row, expanded into one selectable row per
 carrying its own size and price. Nothing is pre-picked in the multi-format case; the decor row
 is not chosen until a format row is. **Tapping the thumbnail opens the full-size lightbox**
 instead of selecting — a client picks a board by looking at it, and the 40 px square is not
-enough to decide on.
+enough to decide on. Under the search sits a **board-type chip row** — `Barchasi` plus one
+chip per substrate the branch actually carries (`LDSP`, `MDF`, … ; hidden when there is only
+one, since a filter with nothing to choose is not a control). It cuts **formats**, so a decor
+is listed only while it holds one of that type and its `{n} ta format` line counts only
+those. The caption above the chips — `{branch} katalogi · {n} ta dekor` — counts the decors
+**currently listed**, so it follows both the search and the armed chip; a branch total held
+over a narrowed list reads as a broken list rather than a filtered one. Arming a chip is not
+remembered across openings: the picker reopens on `Barchasi`, because a chip left armed would
+silently hide most of the catalog next time.
 
 **Edge picker** — three surfaces, one behaviour:
 

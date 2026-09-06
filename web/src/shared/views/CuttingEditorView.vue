@@ -1674,14 +1674,9 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
-// `{workshop} katalogi · N ta dekor` — the picker's foot line, so the client
-// can see WHOSE prices these are without leaving the sheet.
-const materialCatalogCaption = computed(() =>
-  t('cutting.editor.catalogCaption', {
-    workshopBranch: clientBranchLabel.value,
-    n: materialPickerGroups.value.length,
-  }),
-)
+// The material picker composes its own `{workshop} katalogi · N ta dekor` from
+// this name, because the count has to follow the type chip it owns; the tape
+// picker has no such filter, so its caption is still written here.
 const tapeCatalogCaption = computed(() =>
   t('cutting.editor.tapeCatalogCaption', {
     workshopBranch: clientBranchLabel.value,
@@ -3696,7 +3691,7 @@ onBeforeRouteLeave(async () => {
       :loading="cutting.materialsLoading"
       :current-id="materialPickerCurrentId"
       :search="materialPickerSearch"
-      :caption="materialCatalogCaption"
+      :branch="clientBranchLabel"
       :anchor="materialPickerAnchor"
       @close="closeMaterialPicker"
       @update:search="materialPickerSearch = $event"
