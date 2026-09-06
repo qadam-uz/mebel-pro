@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { isAbortError } from '@/shared/api/client'
 import { sanitizeWholeNumberInput } from '@/shared/app/inputSanitizers'
 import { safeRedirectPath } from '@/shared/app/redirect'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -25,6 +26,17 @@ const router = useRouter()
 // Two seconds: the handshake lives five minutes, so this costs ~150 requests at
 // the very worst and still reads as instant when the client presses Tasdiqlash.
 const POLL_INTERVAL_MS = 2_000
+// A ceiling on one poll. `fetch` has none of its own, and a phone that freezes
+// this page while the client is in Telegram routinely leaves the in-flight
+// request never settling — which is exactly the request that must not be allowed
+// to own the loop. Generous against the 2s cadence, short enough that a request
+// stuck behind a dead connection is replaced within one screen's worth of waiting.
+const POLL_TIMEOUT_MS = 8_000
+// Coming back to a phone's browser fires `visibilitychange`, `focus` and
+// sometimes `pageshow` within the same few milliseconds. They are one event as
+// far as this card is concerned: whichever lands first asks, the rest are
+// swallowed. Wide enough to cover the burst, far below the poll interval.
+const RESUME_WINDOW_MS = 400
 // Both ways into the bot are on the card at once; only the tab that *opens*
 // first follows the device — a phone leads with the button that opens Telegram,
 // everything else with the QR another device scans.
@@ -57,6 +69,14 @@ const isMobile = ref(false)
 // device answer at mount instead would freeze whatever the very first
 // `matchMedia` read said, which is not reliably the final viewport.
 const chosenTab = ref<LoginTab | null>(null)
+// The client has been handed to Telegram and this page is now the thing they
+// must come back to. Set on the tap rather than waited for, because the bot's
+// `/start` can land seconds later — or never, if they tap and hesitate — and the
+// instruction "come back here" is what they need in either case.
+const linkOpened = ref(false)
+// A poll is out. Only the manual check reads it: the automatic loop supersedes
+// its own requests, so it never has to ask.
+const pollBusy = ref(false)
 const codeOpen = ref(false)
 const code = ref('')
 const codeError = ref<string | null>(null)
@@ -69,7 +89,14 @@ const { left: codeRetryLeft, start: startCodeRetry, stop: stopCodeRetry } = useC
 // devtools snapshot or a template.
 let pollSecret: string | null = null
 let pollTimer: number | undefined
-let pollInFlight = false
+// Every poll gets a number. The newest one owns the card: an answer arriving
+// under an older number is dropped rather than applied, which is what lets a
+// request be abandoned instead of waited on. A boolean latch cannot do this — a
+// poll that never settles never clears it, and the loop stays wedged until the
+// page is reloaded (the reported "I confirmed in Telegram and had to refresh").
+let pollSeq = 0
+let pollAbort: AbortController | null = null
+let lastResumeAt = 0
 let unmounted = false
 let viewportQuery: MediaQueryList | undefined
 
@@ -175,6 +202,45 @@ const tabs = computed(() => [
 const botLink = computed(() => (botUsername.value ? `https://t.me/${botUsername.value}` : ''))
 const botHandle = computed(() => `@${botUsername.value}`)
 
+// The same handshake as a native scheme. `https://t.me/…` on a phone lands on
+// Telegram's own "Open in Telegram" interstitial *page* first, and the client
+// comes back to that tab rather than to this one — which is where they tapped
+// the bot a second time instead of finding themselves signed in. `tg://` hands
+// the OS the app directly, with no page in between. Empty when the deep link
+// does not parse, which leaves the https form as the only affordance.
+const appLink = computed(() => {
+  if (!deepLink.value) return ''
+  try {
+    const url = new URL(deepLink.value)
+    const domain = url.pathname.replace(/^\//, '')
+    const start = url.searchParams.get('start')
+    if (!domain || !start) return ''
+    return `tg://resolve?domain=${encodeURIComponent(domain)}&start=${encodeURIComponent(start)}`
+  } catch {
+    return ''
+  }
+})
+// Desktop keeps the https link in a new tab: there is no guaranteed `tg://`
+// handler on a laptop, and a same-tab scheme that does nothing would look
+// broken. On a phone the scheme either opens the app or is ignored outright —
+// neither navigates this page away, so the card and its poll survive the tap.
+const opensAway = computed(() => !(isMobile.value && appLink.value))
+const telegramHref = computed(() => (opensAway.value ? deepLink.value : appLink.value))
+// The client is in Telegram (or has been sent there) and this page is what they
+// must come back to. Scoped to the Telegram tab because that is the only tab
+// anyone leaves the page from: the QR reader never went anywhere, so "return to
+// this page" and a "check now" button would both be noise under a QR.
+const awaitingReturn = computed(
+  () =>
+    activeTab.value === 'telegram' &&
+    isLive.value &&
+    (linkOpened.value || phase.value === 'started'),
+)
+const statusLine = computed(() => {
+  if (awaitingReturn.value) return t('client.login.confirmInTelegram')
+  return phase.value === 'started' ? t('client.login.confirmOnPhone') : t('client.login.waiting')
+})
+
 // The token budget is measured in hours, so its `retry_after_seconds` arrives as
 // a four-digit number — "3061 soniyadan keyin" is a figure nobody converts. Under
 // a minute the seconds are the useful unit; above it, minutes are.
@@ -248,6 +314,9 @@ async function mintToken() {
   clearHandshake()
   stopRetry()
   tokenError.value = null
+  // A fresh handshake is a fresh trip: whatever the client did with the previous
+  // link, this one has not been opened.
+  linkOpened.value = false
   phase.value = 'loading'
   try {
     const issued = await auth.createClientLoginToken()
@@ -297,30 +366,62 @@ function stopPolling() {
   pollTimer = undefined
 }
 
+/**
+ * Drop the request that is out, if any. Called when this card stops caring about
+ * the answer — the tab is going away to Telegram, a newer poll has taken over,
+ * or the card is unmounting. Aborting is what frees a request a frozen page
+ * would otherwise leave hanging for the life of the tab.
+ */
+function abortPoll() {
+  pollAbort?.abort()
+  pollAbort = null
+}
+
 async function runPoll() {
   const secret = pollSecret
-  // One request at a time: two in flight could both read `confirmed`, and only
-  // one can win the session — the loser would then paint an error over a card
-  // that is already signing in.
-  if (!secret || pollInFlight) return
-  pollInFlight = true
+  if (!secret) return
+  // A poll already out is superseded, never waited on. Two answers cannot both
+  // paint — only the newest sequence number is allowed to — so the old request
+  // is free to be abandoned, which is the whole point: on a phone it may never
+  // settle at all.
+  abortPoll()
+  pollSeq += 1
+  const seq = pollSeq
+  const controller = new AbortController()
+  pollAbort = controller
+  pollBusy.value = true
+  const stale = () => unmounted || seq !== pollSeq || secret !== pollSecret
   try {
-    const response = await auth.pollClientLogin(secret)
-    if (unmounted || secret !== pollSecret) return
+    const response = await auth.pollClientLogin(secret, {
+      signal: controller.signal,
+      timeoutMs: POLL_TIMEOUT_MS,
+    })
+    if (stale()) return
     if ('access_token' in response) {
       await finish()
       return
     }
     applyPollState(response)
-  } catch {
-    if (unmounted || secret !== pollSecret) return
+  } catch (error) {
+    if (stale() || isAbortError(error)) return
     // The handshake row is gone (pruned, or burned by another tab): a fresh one
-    // is the only way forward. Anything else is a transport hiccup — keep
-    // polling, the next tick usually lands.
+    // is the only way forward. Anything else — a timeout, a dropped connection —
+    // is a transport hiccup; keep polling, the next tick usually lands.
     if (auth.lastError === 'invalid_poll_secret') await mintToken()
   } finally {
-    pollInFlight = false
+    // Only the poll that still owns the card clears the flag; a superseded one
+    // would otherwise hand the manual check button back mid-request.
+    if (seq === pollSeq) {
+      pollBusy.value = false
+      pollAbort = null
+    }
   }
+}
+
+/** «Tasdiqladim, tekshirish» — one poll now, for the client who cannot wait. */
+function checkNow() {
+  if (pollBusy.value) return
+  void runPoll()
 }
 
 function applyPollState(poll: ClientLoginPoll) {
@@ -347,7 +448,9 @@ function applyPollState(poll: ClientLoginPoll) {
 
 function expire() {
   stopPolling()
+  abortPoll()
   pollSecret = null
+  linkOpened.value = false
   clearHandshake()
   declined.value = false
   phase.value = 'expired'
@@ -370,22 +473,49 @@ function resumeHandshake(): boolean {
   // The page is usually back precisely because the client finished in the bot,
   // so ask now rather than up to two seconds from now. `startPolling` is the
   // hidden-tab guard for both — a hidden tab arms nothing and this poll is the
-  // one `onVisibilityChange` will fire on return.
+  // one the return to the tab will fire.
   if (typeof document === 'undefined' || !document.hidden) void runPoll()
   startPolling()
   return true
 }
 
+/**
+ * The tab is in front again — ask now rather than up to two seconds from now,
+ * because it is usually in front precisely because the client just finished in
+ * the bot. Three browser events say this (`visibilitychange`, `focus`,
+ * `pageshow`) and a phone fires them together, so the first one through wins the
+ * window and the rest are swallowed: one return, one request.
+ */
+function resumePolling() {
+  if (!isLive.value) return
+  if (typeof document !== 'undefined' && document.hidden) return
+  const now = Date.now()
+  if (now - lastResumeAt < RESUME_WINDOW_MS) return
+  lastResumeAt = now
+  void runPoll()
+  startPolling()
+}
+
 function onVisibilityChange() {
   if (document.hidden) {
     stopPolling()
+    // The request that is out belongs to a page the browser is about to freeze;
+    // on a phone it can simply never settle. Drop it here so the poll that runs
+    // on the way back is a fresh one and not a queue behind a dead socket.
+    abortPoll()
+    pollBusy.value = false
     return
   }
-  if (!isLive.value) return
-  // Coming back from Telegram is exactly when the answer is ready — ask now
-  // rather than up to two seconds from now.
-  void runPoll()
-  startPolling()
+  resumePolling()
+}
+
+/** A bfcache restore — no mount, no `visibilitychange` on some browsers. */
+function onPageShow(event: PageTransitionEvent) {
+  if (event.persisted) resumePolling()
+}
+
+function onDeepLinkOpen() {
+  if (phase.value !== 'loading') linkOpened.value = true
 }
 
 function onViewportChange(event: MediaQueryList | MediaQueryListEvent) {
@@ -426,6 +556,8 @@ onMounted(() => {
     viewportQuery.addEventListener('change', onViewportChange)
   }
   document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('focus', resumePolling)
+  window.addEventListener('pageshow', onPageShow)
   // Resume before minting: a token this tab is already holding is the one the
   // client is answering in the bot.
   if (!resumeHandshake()) void mintToken()
@@ -436,12 +568,15 @@ onBeforeUnmount(() => {
   stopPolling()
   stopRetry()
   stopCodeRetry()
+  abortPoll()
   pollSecret = null
   // The stored handshake deliberately outlives the card: unmounting is not the
   // handshake ending, it is this tab being re-created around a login the client
   // is still completing in the bot. Only a terminal answer clears it.
   viewportQuery?.removeEventListener('change', onViewportChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('focus', resumePolling)
+  window.removeEventListener('pageshow', onPageShow)
 })
 </script>
 
@@ -509,7 +644,11 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else>
-          <p class="text-sm text-ink-muted">
+          <!-- "Go to the bot and confirm" is the instruction until they have
+               gone. After that the status line carries the one that matters
+               ("come back here"), and leaving both up would have the card asking
+               for something already done. -->
+          <p v-if="!awaitingReturn" class="text-sm text-ink-muted">
             {{ activeTab === 'qr' ? $t('client.login.qrHint') : $t('client.login.telegramHint') }}
           </p>
 
@@ -523,27 +662,67 @@ onBeforeUnmount(() => {
             <QrCode v-else :value="deepLink" :label="$t('client.login.qrLabel')" />
           </div>
 
-          <!-- A new tab, not this one. Navigating this tab to `t.me` tears the
-               card down mid-handshake: the poll stops, nothing redeems the token
-               the client is about to confirm, and coming back mints a second
-               one. The same reason the code fallback's @bot link opens away. -->
-          <a
-            v-else
-            class="mp-button mp-button-primary mt-4 min-h-[46px] w-full"
-            :class="phase === 'loading' ? 'pointer-events-none opacity-50' : ''"
-            :href="deepLink || undefined"
-            :aria-disabled="phase === 'loading' ? 'true' : undefined"
-            target="_blank"
-            rel="noopener"
-          >
-            {{ $t('client.login.telegramButton') }}
-          </a>
+          <!-- On a laptop: a new tab, never this one. Navigating this tab to
+               `t.me` tears the card down mid-handshake — the poll stops, nothing
+               redeems the token the client is about to confirm, and coming back
+               mints a second one. On a phone the href is the `tg://` scheme
+               instead, which hands the OS the app without loading a page, so the
+               same tab is safe and the client comes back to *this* card rather
+               than to Telegram's interstitial. Once they have gone, the button
+               is their way back and steps down to secondary — the action that
+               matters now is happening in Telegram. -->
+          <template v-else>
+            <a
+              id="client-login-telegram"
+              class="mp-button mt-4 min-h-[46px] w-full"
+              :class="[
+                awaitingReturn ? 'mp-button-outline' : 'mp-button-primary',
+                phase === 'loading' ? 'pointer-events-none opacity-50' : '',
+              ]"
+              :href="telegramHref || undefined"
+              :aria-disabled="phase === 'loading' ? 'true' : undefined"
+              :target="opensAway ? '_blank' : undefined"
+              :rel="opensAway ? 'noopener' : undefined"
+              @click="onDeepLinkOpen"
+            >
+              {{
+                awaitingReturn
+                  ? $t('client.login.telegramReturn')
+                  : $t('client.login.telegramButton')
+              }}
+            </a>
+
+            <!-- The phone with no Telegram app installed: the scheme above did
+                 nothing at all and left no error behind, so the way out has to
+                 be visible before it is needed. -->
+            <a
+              v-if="!opensAway"
+              class="mx-auto mt-2 block w-fit py-2 text-center text-sm text-accent-deep underline underline-offset-2"
+              :href="deepLink"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ $t('client.login.appFallback') }}
+            </a>
+          </template>
 
           <p class="mt-4 text-center text-sm text-ink-soft" role="status">
-            {{
-              phase === 'started' ? $t('client.login.confirmOnPhone') : $t('client.login.waiting')
-            }}
+            {{ statusLine }}
           </p>
+
+          <!-- The poll answers on its own within two seconds; this is for the
+               client who is back, sees a waiting line, and would otherwise tap
+               through to the bot a second time. -->
+          <button
+            v-if="awaitingReturn"
+            id="client-login-check"
+            type="button"
+            class="mx-auto mt-3 block text-sm font-bold text-accent-deep disabled:opacity-50"
+            :disabled="pollBusy"
+            @click="checkNow"
+          >
+            {{ $t('client.login.checkNow') }}
+          </button>
         </template>
 
         <!-- The camera-less way in: the client opens the bot by hand, presses

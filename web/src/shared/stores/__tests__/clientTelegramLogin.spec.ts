@@ -73,9 +73,42 @@ describe('client Telegram sign-in (auth store)', () => {
 
     const answer = await auth.pollClientLogin('secret')
 
-    expect(post).toHaveBeenCalledWith('/auth/client/telegram/poll', { poll_secret: 'secret' })
+    expect(post).toHaveBeenCalledWith(
+      '/auth/client/telegram/poll',
+      { poll_secret: 'secret' },
+      undefined,
+    )
     expect(answer).toEqual({ status: 'started', expired: false })
     expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('passes the caller its own abort signal and ceiling', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ status: 'pending', expired: false })
+    const auth = useAuthStore()
+    const controller = new AbortController()
+
+    await auth.pollClientLogin('secret', { signal: controller.signal, timeoutMs: 8_000 })
+
+    expect(post).toHaveBeenCalledWith(
+      '/auth/client/telegram/poll',
+      { poll_secret: 'secret' },
+      { signal: controller.signal, timeoutMs: 8_000 },
+    )
+  })
+
+  it('records a failed poll but not a cancelled one', async () => {
+    const auth = useAuthStore()
+
+    vi.spyOn(api, 'post').mockRejectedValueOnce(new ApiError(404, { code: 'invalid_poll_secret' }))
+    await expect(auth.pollClientLogin('secret')).rejects.toBeInstanceOf(ApiError)
+    expect(auth.lastError).toBe('invalid_poll_secret')
+
+    // The login card drops the poll it has in flight when the tab goes to
+    // Telegram. Nothing failed, and nothing is waiting for that answer, so it
+    // must not leave an error behind for the next screen to render.
+    vi.spyOn(api, 'post').mockRejectedValueOnce(new DOMException('aborted', 'AbortError'))
+    await expect(auth.pollClientLogin('secret')).rejects.toBeInstanceOf(DOMException)
+    expect(auth.lastError).toBe('invalid_poll_secret')
   })
 
   it('signs in when the poll answers with a session', async () => {
