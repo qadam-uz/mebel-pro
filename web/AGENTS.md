@@ -57,7 +57,12 @@ not the preview. Both proxy `/api` to a backend that must be up separately on :8
   no header, and on the client no bottom tab bar (the cutting editor, the result stage, the
   order confirmation; each carries its own back affordance). It is not `layout: 'auth'`, which
   also turns the auth guard off, nor `layout: 'print'`, which is a document rather than a
-  screen; shells ask `isChromelessRoute(route.meta)`, never the layout alone. For links inside shared
+  screen; shells ask `isChromelessRoute(route.meta)`, never the layout alone. Chromeless drops the
+  chrome, **not the page column**: `ClientShell` wraps a `meta.chromeless` route in
+  `main.client-container.client-focus-page` (`isFocusedFlowRoute`), so the editor and its
+  siblings keep the 16px phone gutter and the centred 1220px desktop column every other client
+  page has — a chromeless view must not add horizontal page padding of its own. The
+  `layout: 'auth'`/`'print'` half gets no wrapper: those lay themselves out. For links inside shared
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
   production is host-routed. Inside a role route file, write **absolute production paths**
