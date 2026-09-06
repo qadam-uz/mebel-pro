@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import { decorTitle, tapeDecorSearchKey, type TapeDecor } from '@/shared/app/cuttingGroupTape'
 import { formatMm } from '@/shared/app/materialLabel'
 import {
@@ -45,6 +46,14 @@ const props = defineProps<{
    * what the query left on screen.
    */
   branch: string
+  /**
+   * The board's thickness, when the caller wants narrow tapes flagged. It is
+   * the workshop editor that passes it: a tape narrower than the edge cannot
+   * cover it, and staff are the ones answerable for the spec that reaches the
+   * shop floor. Null (the client) simply renders no mark — the warning moved
+   * here from the edge-tape registry the workshop editor dropped in §13 W2.
+   */
+  panelThicknessMm?: number | null
 }>()
 
 const emit = defineEmits<{ close: []; pick: [decorKey: string] }>()
@@ -151,6 +160,12 @@ function variantLines(decor: TapeDecor): string[] {
     return `${thickness} · ${formatSom(variant.material.price_tiyin)} ${t('cutting.edge.perMetre')}`
   })
 }
+
+/** Every variant of this decor is narrower than the board's edge. */
+function decorTooNarrow(decor: TapeDecor): boolean {
+  if (props.panelThicknessMm == null) return false
+  return decor.variants.every((variant) => edgeTooNarrow(props.panelThicknessMm, variant.material))
+}
 </script>
 
 <template>
@@ -225,9 +240,19 @@ function variantLines(decor: TapeDecor): string[] {
           @click="selectedKey = decor.key"
         >
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-[13.5px] font-bold text-ink md:text-sm">{{
-              decor.label
-            }}</span>
+            <span class="flex min-w-0 items-center gap-1.5">
+              <span class="min-w-0 truncate text-[13.5px] font-bold text-ink md:text-sm">{{
+                decor.label
+              }}</span>
+              <!-- Narrower than the board's edge: the tape cannot cover it. A
+                   mark, not a block — a shop that knows what it is doing may
+                   still band a rebate with a narrow tape. -->
+              <span
+                v-if="decorTooNarrow(decor)"
+                class="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-black text-warning"
+                >{{ $t('cutting.edge.tooNarrow') }}</span
+              >
+            </span>
             <span class="mt-0.5 block text-[12.5px] leading-[1.35] text-ink-muted">
               <span
                 v-for="(line, index) in variantLines(decor)"

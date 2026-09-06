@@ -212,25 +212,6 @@ export function syncEdgeAssignments(assignments: Map<string, number>, parts: Cut
   for (const [index, key] of orderedKeys.entries()) assignments.set(key, index + 1)
 }
 
-export function previewEdgeAssignments(
-  assignments: ReadonlyMap<string, number>,
-  keys: string[],
-): Map<string, number> {
-  const preview = new Map<string, number>()
-  let nextNumber = Math.max(0, ...assignments.values()) + 1
-  for (const key of keys) {
-    if (preview.has(key)) continue
-    const existing = assignments.get(key)
-    if (existing != null) {
-      preview.set(key, existing)
-    } else {
-      preview.set(key, nextNumber)
-      nextNumber += 1
-    }
-  }
-  return preview
-}
-
 export function deriveEdgeRegistry(
   parts: CuttingPart[],
   assignments: ReadonlyMap<string, number>,

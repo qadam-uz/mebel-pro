@@ -7,7 +7,6 @@ import {
   groupCuttingParts,
   isGeometryNeutralEdit,
   partDisplayName,
-  previewEdgeAssignments,
   registryColorStyle,
   shortMaterialName,
   syncEdgeAssignments,
@@ -207,22 +206,6 @@ describe('cuttingEditorDerived', () => {
       [edgeRegistryKey('edge-a', 'shop'), 1],
       [edgeRegistryKey('edge-b', 'shop'), 2],
     ])
-  })
-
-  it('previews new edge numbers without mutating the live assignments', () => {
-    const assignments = new Map<string, number>([[edgeRegistryKey('edge-a', 'shop'), 2]])
-    const preview = previewEdgeAssignments(assignments, [
-      edgeRegistryKey('edge-new', 'shop'),
-      edgeRegistryKey('edge-a', 'shop'),
-      edgeRegistryKey('edge-other', 'shop'),
-    ])
-
-    expect([...preview.entries()]).toEqual([
-      [edgeRegistryKey('edge-new', 'shop'), 3],
-      [edgeRegistryKey('edge-a', 'shop'), 2],
-      [edgeRegistryKey('edge-other', 'shop'), 4],
-    ])
-    expect([...assignments.entries()]).toEqual([[edgeRegistryKey('edge-a', 'shop'), 2]])
   })
 
   it('uses fixed registry colours first and generated colours after ten entries', () => {
