@@ -922,31 +922,48 @@
     background: currentColor;
   }
 
+  /* The client's five order states, in phase order. Unlike the workshop's
+     seven-stage ladder the client sees one word per phase, so each phase gets
+     one hue and the live ones stay apart at a glance: waiting is blue, work in
+     progress is amber, done is green. Every pair clears the 4.5:1 text floor —
+     ratios noted per rule. */
+
+  /* «Yangi» — waiting on the workshop, nothing is happening yet: 5.09:1. */
   .client-pill-new {
-    background: var(--color-neutral-soft);
-    color: var(--color-ink-nav);
+    background: var(--color-info-soft);
+    color: var(--color-info);
   }
 
-  /* The client's production phase («Tayyorlanmoqda»): the taupe pair, so `info`
-     stays a real informational colour. */
-  .client-pill-info {
-    background: var(--color-taupe-soft);
-    color: var(--color-taupe);
+  /* «Tayyorlanmoqda» — the three production statuses under one word: 4.68:1. */
+  .client-pill-progress {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
   }
 
+  /* «Tayyor» — 4.80:1. */
   .client-pill-ready {
     background: var(--color-success-soft);
     color: var(--color-success);
   }
 
+  /* «Olib ketildi» — closed and archived, so it recedes: 5.90:1. */
   .client-pill-done {
     background: var(--color-neutral-soft);
     color: var(--color-ink-soft);
   }
 
+  /* «Bekor qilingan» — 4.66:1. */
   .client-pill-danger {
     background: var(--color-danger-soft);
     color: var(--color-danger);
+  }
+
+  /* Not a status: the annotation pill («Yopiq» on a branch, «Ustaxona yaratgan»
+     on an order card). Taupe keeps it outside the status palette above, so it
+     never reads as a phase — 6.07:1. */
+  .client-pill-info {
+    background: var(--color-taupe-soft);
+    color: var(--color-taupe);
   }
 
   .client-row-item {

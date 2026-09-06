@@ -102,7 +102,7 @@ export function clientStatusPillClass(status: OrderStatus): string {
   // The three production statuses carry one word on the client side, so they
   // must carry one colour too — two tones under the same label read as a bug.
   if (status === 'confirmed' || status === 'cutting' || status === 'edge_banding')
-    return 'client-pill client-pill-info'
+    return 'client-pill client-pill-progress'
   return 'client-pill client-pill-new'
 }
 

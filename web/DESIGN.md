@@ -189,6 +189,16 @@ semantic `--color-*` tokens.
   `Kromkada` (`accent-tint` / `accent-strong`) → `Tayyor` (`success-soft` / `success`), with
   `Olib ketildi` (`neutral-soft` / `ink-soft`) and `Bekor qilingan` (`danger-soft` / `danger`) off
   to the side. The chip always carries the stage's word.
+- **Client order states** collapse those seven stages into five words, so they take **five
+  hues, not one warming ramp** — a client scanning their own list has no ladder to read the
+  ramp against, and neighbouring warm tints there just read as the same grey.
+  `Yangi` (`info-soft` / `info`, waiting on the workshop) → `Tayyorlanmoqda`
+  (`warning-soft` / `warning`, the three production statuses under one word) →
+  `Tayyor` (`success-soft` / `success`), with `Olib ketildi` (`neutral-soft` / `ink-soft`,
+  closed and receding) and `Bekor qilingan` (`danger-soft` / `danger`) off to the side. The
+  classes are `.client-pill-{new,progress,ready,done,danger}` in `main.css`;
+  `.client-pill-info` is **not** a state — it is the taupe annotation pill («Yopiq»,
+  «Ustaxona yaratgan»), kept outside the palette above so it never reads as a phase.
 - **Derived values** — shadows/scrims tint from `ink`, focus rings from `accent`, via
   `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a retheme must
   stay a token-file change.
