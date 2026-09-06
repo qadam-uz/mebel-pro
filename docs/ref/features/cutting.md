@@ -170,34 +170,44 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   - The `Teksturali material` checkbox names the board and its snapshot; it does **not** lock
     the layout. Rotation is decided per part by `Burilish`, as on any other material.
 - **Edge tape is a branch material too** — a `kromka` format (one thickness × tape width) the
-  branch carries. Each side of a part is either `null` (no banding) or one of those formats. The picker UX
-  pins decor-matching edges at the top of one material list, then prefers tape widths that
-  cover the selected panel thickness with the closest fit. Narrow tapes sink to the bottom and
-  show a warning, but stay selectable (see _UX_).
-- **In the client editor the tape *decor* belongs to the material group and only the
-  *thickness* belongs to the side.** Adding a material attaches the branch's tape of the same
+  branch carries. Each side of a part is either `null` (no banding) or one of those formats.
+  A tape narrower than the panel it has to cover is marked in the tape picker but stays
+  selectable; a tape whose width the branch never recorded is unknown, not narrow, and is
+  marked as neither.
+- **The tape *decor* belongs to the material group and only the *thickness* belongs to the
+  side** — in **both** editors since 2026-09-06 (owner: the workshop web editor adopts the
+  client model). Adding a material attaches the branch's tape of the same
   decor to the group, with every thickness variant the branch carries in it; a part then
   chooses sides and one of those thicknesses, and one part may carry 2 mm on a visible side
   and 0.4 mm on a hidden one. This is the shop floor's own rule — one tape decor per board,
-  thick where it shows — so the screen asks the question the client can answer and skips the
+  thick where it shows — so the screen asks the question the user can answer and skips the
   one they cannot. **Storage is unchanged**: each side still stores the `kromka` material id
-  resolved from (tape decor, thickness), so the optimiser, pricing, the PDF and the workshop
-  side see exactly what they saw before. A decor the branch carries no tape for is the one
+  resolved from (tape decor, thickness), so the optimiser, pricing, the PDF and production
+  see exactly what they saw before. A decor the branch carries no tape for is the one
   case that asks: the group's tape is picked once, and until it is, banding a side is blocked
   rather than guessed. There is **no per-part tape override** — a contrasting tape on one part
-  is settled with the workshop by phone, and every banded side therefore resolves to a
-  concrete tape at placement, so no order is ever placed with a price still pending.
+  is settled by phone (or, for staff, by revising the drawing), and every banded side therefore
+  resolves to a concrete tape at placement, so no order is ever placed with a price still pending.
+- **A mixed group keeps every band it has.** A drawing banded before this model — or one the
+  file-import wizard mapped edge by edge, which still maps tapes its own way — can carry two
+  tape decors in one material group. Nothing is rewritten on open: the group resolves to the
+  **first decor its sides use**, the head marks itself **«aralash»**, and the parts that carry
+  another tape name it read-only. Picking a colour on the group line is the deliberate way
+  out: it re-points **every** banded side of the group, keeping each side's thickness where
+  the new decor has it and falling back to the nearest one — with a one-time toast — where it
+  does not.
 - **Thickening (`УТ`) is an instruction, not geometry.** A part may be flagged `thickened`
   (utolshenie / obmanka): the workshop glues a strip of the same panel underneath so the
   visible edge reads twice as thick. The strip is **never planned** — it is not placed, not
   counted in panels used, not priced, and flipping the flag does not invalidate a result.
   What it does change is the tape: the banded edge is now 2× the panel thickness, so the
-  picker ranks and warns against the doubled figure. The flag is **per part**, not per side,
+  tape has twice as much to cover. The flag is **per part**, not per side,
   so every banded side of a thickened part is judged against that doubled edge — a
   deliberate simplification, since a part thickened on one side only is the rarer case and
-  the drawing shows which sides carry tape. It is set in the edge dialog (the tape it forces
-  is that dialog's subject) and stamped `УТ` in the parts list glyph, at the centre of the
-  part on the drawing, and at the centre of the part on the PDF map.
+  the drawing shows which sides carry tape. It is **staff-only** — a client never orders
+  thickening — and is set on the kromka card beside the sides it affects, then stamped `УТ`
+  in the parts list glyph, at the centre of the part on the drawing, and at the centre of the
+  part on the PDF map.
 
 ### The optimiser
 
@@ -441,23 +451,25 @@ Every column except the row number is fixed-width, `Nomi` included. Left to stre
 ends and the leftover width stays empty — or, in the staff wizard, carries the kromka panel
 beside it.
 
-**Workshop editor — the edge-tape registry.** Each material group shows its own registry under
-the material name. Distinct `(edge material_id, source)` pairs get one number and colour in
-their first-use order; row edge cells, group registries, and the edge picker all render that
-same identity. Applying a tape to more sides never changes its number or colour. When a tape
-is removed, the remaining tapes are compacted back to consecutive `1..N` numbers, so the next
-tape takes a deleted number and its matching colour. The visible group registry lists only
-tapes currently used in that group, sorted by this drawing-wide number.
-
-**Client editor — one tape line per group, no registry.** In its place the group head carries
+**One tape line per group, in both editors.** The group head carries
 a single line naming the group's tape and the thicknesses it exists in at this branch —
 **«Kromka: Egger H1145 · 0.4 / 2 mm»**. The line *is* the control: the tape name carries the
 same dashed underline the material name does and a tap anywhere on the row opens the tape
 picker. A group whose decor the branch carries no tape for reads
 **«Kromka: rangi mos lentani tanlang»** in the warning colour, and nothing is forced until a
-side is actually banded — a client who never bands never meets the picker. **Hisoblash**
+side is actually banded — someone who never bands never meets the picker. A group whose sides
+carry more than one decor adds an **«aralash»** mark (see _Domain rules_). **Hisoblash**
 re-checks and scrolls to a group that has banded sides and no tape. Numbers and colours are
-absent because there is nothing to number: one material group has exactly one tape decor.
+absent from the head because there is nothing to number there: one material group has exactly
+one tape decor.
+
+The **drawing-wide tape numbering** behind the row glyph, the parts table and the PDF is
+unchanged. Distinct `(edge material_id, source)` pairs get one number and colour in their
+first-use order; the row edge cell, the order's parts table and the printed sheet all render
+that same identity. Applying a tape to more sides never changes its number or colour, and
+removing one compacts the rest back to consecutive `1..N`. What went away is only the ①②
+*panel* that used to list it per group in the workshop editor — a second list of things the
+operator was not editing there.
 
 **Both editors' group heads lead with the decor image** rather than a coloured dot — the
 picker one step back is a wall of photographs, so the group is recognised the same way it was
@@ -531,7 +543,10 @@ The review screen carries four blocks:
 - **Materials** — the one decision that always needs a person. Materials from the file become
   groups only; the user picks one of the branch's panel formats for every panel group and one
   of its tape formats for every edge group, and there is deliberately no automatic matching. A `Толщина`/thickness
-  value from CSV or XML shows as a muted hint on the group. An unpicked group carries an accent
+  value from CSV or XML shows as a muted hint on the group. The wizard maps **tape formats**,
+  not the group tape decors the editor works in, so a commit can leave one material group
+  holding two decors — the editor names that a mixed group and offers the one way out (see
+  _Domain rules_) rather than rewriting the file's own mapping. An unpicked group carries an accent
   border, so the reason the commit is blocked is visible on the thing blocking it. For MAP
   imports the panel-size match verdict renders as a chip on the card, since the whole layout
   survives or dies on it.
@@ -566,7 +581,7 @@ The parts table:
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Edges**    | per-side summary — a small panel diagram (line weight signals thickness) + a one-line label (e.g. `H1334 · 0.4 mm` · `T·B · H1334 2.0` · `Mixed · 2 edges` · `None`). Tap → edge picker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Edges**    | display-only sides glyph — a small panel rectangle whose banded sides are drawn heavy, filled in the tape's registry colour, stamped `УТ` when the part is thickened. Tap → selects the row, which raises the kromka card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Delete**   | a trash icon button removes the row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 The grain toggle (small arrow + `Tekstura`) appears on the row.
@@ -622,9 +637,9 @@ customer-board form (see _Parts and materials_). It is a form rather than a row,
 as its own dialog; the picker closes behind it, because recording a board adds a row of its
 own and there is nothing to come back to.
 
-**Edge picker** — three surfaces, one behaviour:
+**Kromka editing** — one model, three frames:
 
-- **The client editor docks a card on desktop and opens a sheet on phones.** Its content is
+- **A docked card on desktop, the part sheet on a phone.** Its content is
   the part's own kromka block and nothing else: the part's name and size, the group-tape line,
   the four-side diagram, and the **Qalinlik** chips — exactly the thicknesses the group's tape
   decor exists in at this branch, so a decor carried only in 0.4 and 2 mm offers two chips. The
@@ -633,13 +648,16 @@ own and there is nothing to come back to.
   say the same thing. With more than one thickness in use, the diagram's sides and the chips
   are coloured per thickness so a part banded 2 mm at the front and 0.4 mm at the back reads at
   a glance; with one thickness everything stays ink. Banding a side of a group with no tape
-  opens the **tape picker** first. A legacy drawing whose side carries a tape outside the
+  opens the **tape picker** first. A drawing whose side carries a tape outside the
   group's decor keeps it, named read-only as «Boshqa rang: {name}»; re-tapping that side uses
-  the group tape.
-- **The client's tape picker chooses a decor, never a format.** It pins the group material's
+  the group tape. **Staff see one control the client does not**: the `УТ` thickening toggle,
+  under the sides it changes.
+- **The tape picker chooses a decor, never a format.** It pins the group material's
   own decor and image at the top for comparison («Plita rangi»), and lists one row per tape
   decor the branch carries — thumbnail, name, and the thickness variants with their per-metre
-  prices shown as information rather than as choices. Changing the group tape re-resolves every
+  prices shown as information rather than as choices. In the workshop it also marks a decor
+  the branch stocks only in widths too narrow for this board. Changing the group tape
+  re-resolves every
   banded side of the group into the new decor at the same thickness, falling back to the
   nearest thickness the new decor has and saying so once. It is the one picker that filters its
   list **in the browser** — the branch's whole tape list is a few hundred rows and is already
@@ -647,7 +665,8 @@ own and there is nothing to come back to.
   ([`catalog-inventory.md`](catalog-inventory.md#bilingual-search)): «сонома», `h1145` and a
   one-letter typo find the same rows here as on any server-searched surface. The placeholder
   carries a Cyrillic example, because a picker that can take one should say so.
-- **The staff order wizard docks it.** In step 2 of the staff new-order flow, banding is a
+- **The staff order wizard docks the same card beside the board.** In step 2 of the staff
+  new-order flow, banding is a
   300px panel beside the parts board rather than a modal. The board is sized to its own
   columns, so the panel either fits next to it or wraps underneath — a wrap, not a
   breakpoint. It appears only while a row is selected and has no empty state: with nothing
@@ -659,45 +678,29 @@ own and there is nothing to come back to.
   long board the selected row can be most of a screen down, and a panel at the top would have
   the operator reading two places at once. Nothing opens and nothing closes — each next detal
   costs one click instead of open → toggle → close. There is no backdrop, no focus trap and
-  no scroll lock; the board stays scrollable and keyboard-reachable beside it.
-- **What the panel holds**, top to bottom: the detal's number, name and size; four side
-  buttons, each carrying a small rectangle with its own edge drawn heavy so the glyph says
-  which side the button means; two glyph buttons beside them for the whole-part patterns
-  (band every side, band none); and the tape row, which expands into the same searchable,
-  ranked catalog the modal uses. Every toggle writes through immediately — there is no Apply.
-- **In the standalone workshop editor it stays a modal**, described below. The registry, the
-  arming ladder and the two in-dialog panels belong to that modal alone — the client's card
-  and sheet carry none of them, because the client's tape is settled one level up, on the
-  material group.
-- **One modal, two in-dialog panels.** The compact glyph is display-only: its four borders
-  show banding state, while the whole glyph opens this modal on desktop and mobile alike.
-  Panel 1 is the marking view. Its tape list contains only tapes already used in this drawing:
-  first the part's sides, then its material group, then other groups. The arming ladder uses
-  those draft-scoped sources only; it never falls through to a catalog recommendation. With
-  nothing armed, sides and **4 tomon** are disabled and the dialog says
-  `Avval kromka tanlang — keyin tomonlarni bosing.`; **Kromkasiz** remains available. The visible
-  tape rows are ordered by their registry number, not by number of banded sides.
-- **Marking view.** The diagram centre shows the row name (`D{n}` when unnamed) and its
-  dimensions. Side bars show only the side name and registry-number badge. The only whole-part
-  patterns, next to the diagram, are **4 tomon** and **Kromkasiz**. Side and pattern changes apply
-  immediately; the dialog closes with its close control, Escape, or the backdrop.
-  A new tape is tentative (`Yangi`) until it is committed into the drawing registry, preserving
-  that registry's sticky number and colour identity.
-- **Catalog panel.** `+ Yana kromka qo'shish` opens panel 2. It narrows the branch's carried
-  tape formats with an in-dialog search field and single-select thickness chips (the list is
-  already branch-scoped, so this filtering is local to what is loaded). `Shu panelga mos`
-  contains decor matches; all remaining choices are under `Boshqa kromkalar`. Tapes already on the drawing are
-  excluded, with an explicit already-added hint. A tape narrower than the panel remains selectable
-  but carries the width warning. Selecting one returns to panel 1 armed, without changing sides.
-  A fresh drawing with no banded sides starts directly in this catalog panel.
-  **Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
-  column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
-  **Apply edges** (opens the edge picker seeded from the first selected row and writes the
-  applied side pattern / tape to every selected row), **Change material** (a small
-  picker that sets one panel material on every selected row), and **Delete**. This is the
-  list-level path for re-banding or re-materialing many identical parts without N picker
-  round-trips — a desktop power feature; on mobile each row is edited individually (its own
-  fields plus the per-row delete button).
+  no scroll lock; the board stays scrollable and keyboard-reachable beside it. Elsewhere —
+  the standalone drawing editor, a revision — the same card is the second column of a
+  `1fr 340px` grid, and stacks under the board on a narrow window (the client hides it there
+  instead, because its part sheet already owns kromka on a phone).
+- **The compact glyph in the row is display-only.** Its four borders show which sides are
+  banded and its fill is the tape's registry colour; clicking it selects the row, which is
+  what raises the card.
+
+**History (superseded 2026-09-06).** The workshop editor used to carry a per-part **edge
+picker modal** with its own arming ladder, whole-part patterns and a two-panel tape catalog,
+plus an ①② **tape registry** listed under each material group and a bulk «apply edges» action
+over selected rows. All of it is gone: with one tape decor per material group there is no
+per-part tape to arm, nothing to number in the head, and "apply this tape to N rows" is the
+group line one row up. `SPEC_CUTTING_EDGE_PICKER_DIALOG.md` and
+`SPEC_CUTTING_EDGE_REGISTRY_IDENTITY.md` describe that retired UI only; the numbering they
+defined lives on behind the row glyph, the parts table and the PDF.
+
+**Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
+column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
+**Change material** (a small picker that sets one panel material on every selected row) and
+**Delete** — the list-level path for re-materialing or clearing many identical parts without
+N picker round-trips. A desktop power feature; on mobile each row is edited individually (its
+own fields plus the per-row delete button).
 
 Per-row inline validation; when something blocks the optimiser the reason is shown inline
 next to the (disabled) **Optimise** button in the sticky bar — there is no separate roll-up
@@ -951,8 +954,7 @@ walk-in client (name + phone). The strip is rehydrated when a saved draft is **r
 just during the continuous create flow), so a re-opened draft still names who it's for. A
 draft that somehow carries no branch falls back to the current branch context rather than
 demanding a fresh pick. Everything else — parts editor, optimise, results — is this page,
-unchanged; the edge picker is the one exception, docked as a panel here rather than opened as a
-modal.
+unchanged.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
 unfinished walk-in cuttings, reached from a **Chizmalar** entry at the right end of the Orders
@@ -1011,10 +1013,10 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
   (concurrent placement, or back-navigation after placing) → redirect to its detail.
 - **Algorithm replaced later** — old `confirmed` results stay exactly as they were,
   stamped with the old algorithm version; their PDFs are not regenerated.
-- **A workshop deactivates an edge material that's set as a per-side preference on an
-  in-flight draft** — same handling as a deactivated panel: row flagged on next open, edge
-  side cleared with a one-tap "pick replacement" affordance that opens the edge picker with
-  that side active.
+- **A workshop deactivates an edge material a draft's sides are banded with** — the bands stay
+  exactly as saved. The group tape line stops naming that decor (it is no longer in the branch
+  catalog), the affected sides read as a foreign tape on the part's kromka block, and picking a
+  colour on the group line re-points them all.
 
 ## Next
 

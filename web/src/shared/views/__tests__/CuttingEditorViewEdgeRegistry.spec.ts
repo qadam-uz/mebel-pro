@@ -78,8 +78,8 @@ function draft(parts: CuttingPart[]): CuttingDraft {
     own_panel_counts: {},
     own_edge_material_ids: [],
     chosen_result_id: null,
-    // A revision draft, so kromka is edited in the modal rather than docked in
-    // the side panel — the modal is the seam these tests band a side through.
+    // A revision draft: a workshop editor that is not the order wizard, which
+    // is the layout the docked kromka card takes outside it.
     revision_of_order_id: 'order-9',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -118,35 +118,30 @@ async function mountEditor(parts: CuttingPart[]) {
         Icon: true,
         AppModal: true,
         CuttingBranchPicker: true,
-        CuttingEdgeTapeRegistry: true,
         CuttingResultsSection: true,
         SearchCombobox: true,
         CuttingImportWizard: true,
-        CuttingEdgePickerModal: {
-          name: 'CuttingEdgePickerModalStub',
-          emits: ['edges-change'],
+        // The docked kromka card is the seam a side is banded through (§13 W2);
+        // it writes one side at a time, which is what the editor's `set-side`
+        // handler does.
+        CuttingKromkaPanel: {
+          name: 'CuttingKromkaPanelStub',
+          props: ['part', 'partNumber', 'groupTapeDecor', 'selectedThicknessMm'],
+          emits: ['set-side', 'close'],
           template: `
-            <button
-              data-test="band-top"
-              @click="$emit('edges-change', {
-                edges: {
-                  edge_top: { material_id: 'edge-2', source: 'shop' },
-                  edge_bottom: null,
-                  edge_left: null,
-                  edge_right: null,
-                },
-                rememberedMaterialId: 'edge-2',
-              })"
-            />
+            <div>
+              <button data-test="band-top" @click="$emit('set-side', 'edge_top', 'edge-2')" />
+              <button data-test="clear-left" @click="$emit('set-side', 'edge_left', null)" />
+            </div>
           `,
         },
         CuttingPartRow: {
           name: 'CuttingPartRowStub',
           props: ['part', 'index', 'edgeRegistry'],
-          emits: ['open-edge-picker', 'update:length', 'update:name', 'delete', 'duplicate'],
+          emits: ['select', 'update:length', 'update:name', 'delete', 'duplicate'],
           template: `
             <div>
-              <button data-test="open-edge-picker" @click="$emit('open-edge-picker')" />
+              <button data-test="select-row" @click="$emit('select')" />
               <button data-test="edit-length" @click="$emit('update:length', part.length_mm + 1)" />
               <button data-test="edit-name" @click="$emit('update:name', 'Eshik')" />
               <button data-test="duplicate" @click="$emit('duplicate')" />
@@ -193,13 +188,22 @@ describe('CuttingEditorView tape registry watch', () => {
       part({ part_ref: 'p1', edge_left: { material_id: 'edge-1', source: 'shop' } }),
     ])
 
-    await wrapper.get('[data-test="open-edge-picker"]').trigger('click')
+    await wrapper.get('[data-test="select-row"]').trigger('click')
     await wrapper.get('[data-test="band-top"]').trigger('click')
     await flushPromises()
 
     expect(syncCalls.count).toBeGreaterThan(0)
-    // edge-1 left the drawing (the picker replaced every side), so the new tape
-    // takes #1 rather than inheriting the removed one's number.
+    // The second tape appends behind the first — a new tape never displaces the
+    // number and colour a tape already in the drawing carries.
+    expect(rowRegistryNumbers(wrapper)).toEqual(['edge-1#1', 'edge-2#2'])
+
+    syncCalls.count = 0
+    await wrapper.get('[data-test="clear-left"]').trigger('click')
+    await flushPromises()
+
+    // edge-1 left the drawing, so the survivor compacts back to #1 rather than
+    // holding a gap at the top of the numbering.
+    expect(syncCalls.count).toBeGreaterThan(0)
     expect(rowRegistryNumbers(wrapper)).toEqual(['edge-2#1'])
   })
 
