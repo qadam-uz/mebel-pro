@@ -760,15 +760,19 @@ authoritative reading of the result. 768px is the app's own desktop boundary (th
 at `zoom: 90%` from 769px), so the switch lands where the layout already changes character
 rather than inventing a third regime.
 
-**The wizard's result leads with six figures.** Above the per-material rows, step 3 opens with a
-strip of headline numbers — sheets to cut, parts placed, average sheet utilisation, tape metres,
-usable offcut area, propil length — value first, unit and label beneath. They are the figures an
-operator reads out loud when the customer asks what this costs, and they were previously a
-label/value list in a side column, where they read as a footnote to the materials rather than as
-the result of the whole optimisation. The rules between the cells are drawn by the grid gap over
-a divider-coloured backdrop, so the strip reflows at any cell count without a doubled or
-orphaned border. Each material then gets one row: swatch, name and size, source chip, and its
-own fill bar with the sheet count.
+**The wizard's result leads with the five figures the result stage carries.** Above the
+per-material rows, step 3 opens with a strip of `Detallar`, `Listlar`, `Kromka`,
+`Foydali qoldiq` and `Chiqim` — label first, value beneath — composed by the same helper the
+client app calls, so a figure cannot be worded one way at the counter and another way at home.
+They are the figures an operator reads out loud when the customer asks what this costs, and they
+were previously a label/value list in a side column, where they read as a footnote to the
+materials rather than as the result of the whole optimisation. A value now carries its own unit
+and, for the offcut, its count («2 dona · 2.50 m²»), which is a phrase rather than a headline
+numeral — hence the label leads and the cell floors at 150px, so no figure wraps mid-phrase and
+reads as two. The rules between the cells are drawn by the grid gap over a divider-coloured
+backdrop, so the strip reflows at any cell count without a doubled or orphaned border. Each
+material then gets one row: swatch, name and size, source chip, and its own fill bar with the
+sheet count.
 
 **The staff order flow adds a third surface, and it is not a third reading of the same thing.**
 On step 3 of the wizard a **Kesish xaritasi** card below the result shows *every* sheet at once
@@ -842,18 +846,22 @@ instead, so fewer labels print and the ones that do are legible.
      saying so on every row is noise, and per-material utilisation is a yield question the shop
      answers (the per-sheet figure on the sheet's own label already covers what a client asks).
    - Under the tape list, a block carries the order-level figures that otherwise only
-     existed on the order detail screen: `Detallar` (placed against requested — the shortfall
-     spelled out and coloured when the layout could not take everything), `Listlar`,
-     `Arra yo'li` (the propil length), `Kromka lentasi` (shop plus own consumed tape, `—` when
-     the drawing has no banding) and `Foydali qoldiq` (count and m² of the offcuts the drawing
-     marks green). Every value is derived from the result payload — no field was added to the
-     API for it. On a placed order in the client app this block's first row is the only
-     shortage signal on the screen, which is why the shortfall is stated in words and not by
-     colour alone.
-   - **The client reads four of those five**: `Detallar`, `Listlar`, `Kromka` and
-     `Foydali qoldiq`. `Arra yo'li` is a saw metric the shop plans around and `Chiqim` is the
-     shop's yield; a client quoted a fixed price can act on neither. The same four appear
-     wherever this component does on the client path — the result stage, the order
+     existed on the order detail screen: `Detallar` (the placed count — turning into
+     placed-against-requested with the shortfall spelled out and coloured when the layout could
+     not take everything), `Listlar`, `Kromka` (shop plus own consumed tape, `—` when the
+     drawing has no banding), `Foydali qoldiq` (count and m² of the offcuts the drawing marks
+     green) and, on the workshop only, `Chiqim`. Every value is derived from the result
+     payload — no field was added to the API for it. On a placed order in the client app this
+     block's first row is the only shortage signal on the screen, which is why the shortfall is
+     stated in words and not by colour alone.
+   - **The client reads four of those five, and `Arra yo'li` is gone from both.** The propil
+     length was a saw-planning number nobody read off a summary; `Chiqim` — the share of the
+     sheets the layout turns into parts, area-weighted across them so a small offcut-heavy
+     board cannot outvote the ones the money is in — is the shop's own fifth figure (owner,
+     2026-09-06), and a client quoted a fixed price cannot act on it. Both apps compose their
+     figures from one helper and print them in the same order and the same formats, so the
+     workshop's copy differs from the client's by exactly that one row. The client's four
+     appear wherever this component does on the client path — the result stage, the order
      confirmation summary and the order detail's Chizma tab — and on phones they render as a
      2×2 grid under the price, so the phone and the desktop say the same things.
    - Below 768px the per-sheet rail is replaced by a **`Detallar` parts list directly beneath

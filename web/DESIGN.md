@@ -560,6 +560,7 @@ Russian and appear in the Russian column on purpose.
 | A distinct part size on a drawing      | `xil`               | `типоразмер`         | `qator`, `tur`                    |
 | A saved cutting drawing                | `chizma`            | `раскрой`            | `eskiz`, `draft`                  |
 | A panel sheet                          | `list`              | `лист`               | `plita`, `panel`                  |
+| A layout's material yield              | `chiqim`            | `выход`              | `vixod`, `foyda`                  |
 | One buyable size of a dekor            | `o'lcham`           | `размер`             | `format`                          |
 | A sheet's length × width               | `list o'lchami`     | `размер листа`       | bare `o'lcham`                    |
 | A tape's width                         | `lenta eni`         | `ширина ленты`       | bare `o'lcham`, `eni`             |

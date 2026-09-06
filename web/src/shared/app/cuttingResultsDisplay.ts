@@ -85,10 +85,49 @@ export function drawnSheetSize(result: CuttingResult, panel: CuttingPanel): Shee
   }
 }
 
-export function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
+/** One sheet's area in mm², through `panelSheetSize` — so a fill percent is
+ *  read off exactly the rectangle the map and the PDF draw, in every snapshot
+ *  vocabulary and, failing all of them, off the placements + offcuts extent.
+ *  0 only when there is nothing to measure at all (no recorded size *and* an
+ *  empty sheet), which every caller renders as "no figure" rather than as
+ *  zero — never as a fabricated 100%. */
+function panelSheetAreaMm2(result: CuttingResult, panel: CuttingPanel) {
   const { length, width } = panelSheetSize(result, panel)
-  if (length <= 0 || width <= 0) return '-'
-  return `${Math.max(0, 100 - (panel.waste_area_mm2 / (length * width)) * 100).toFixed(1)}%`
+  if (length <= 0 || width <= 0) return 0
+  return length * width
+}
+
+export function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
+  const area = panelSheetAreaMm2(result, panel)
+  if (area <= 0) return '-'
+  return `${Math.max(0, 100 - (panel.waste_area_mm2 / area) * 100).toFixed(1)}%`
+}
+
+/**
+ * «Chiqim» — the share of the sheets this layout actually turns into parts,
+ * 0–100, and the workshop's fifth figure (§13 W3).
+ *
+ * Area-weighted across the panels rather than averaged over the material rows:
+ * two materials on one result cut different sheet sizes, and an unweighted mean
+ * lets one small offcut-heavy sheet outvote the boards the money is in.
+ *
+ * `null` — the em dash the caller prints — is now the **empty-result** case
+ * alone, not a history case: since the sheet size falls back to the placements +
+ * offcuts extent, a result with anything laid on a sheet always measures, frozen
+ * pre-reshape snapshots included. Nothing on any sheet is the only way through
+ * here, and for that there is no yield to state.
+ */
+export function resultFillPercent(result: CuttingResult): number | null {
+  let sheetArea = 0
+  let waste = 0
+  for (const panel of result.panels) {
+    const area = panelSheetAreaMm2(result, panel)
+    if (area <= 0) continue
+    sheetArea += area
+    waste += panel.waste_area_mm2
+  }
+  if (sheetArea <= 0) return null
+  return Math.max(0, Math.min(100, 100 - (waste / sheetArea) * 100))
 }
 
 export function panelDisplayIndex(result: CuttingResult, panel: CuttingPanel) {
@@ -108,7 +147,6 @@ export interface CuttingResultTotals {
   placedParts: number
   requestedParts: number
   sheets: number
-  cutLengthMm: number
   edgeConsumedMm: number
   usableOffcutCount: number
   usableOffcutAreaMm2: number
@@ -148,7 +186,6 @@ export function resultTotals(result: CuttingResult): CuttingResultTotals {
     // instead of throwing on the read.
     requestedParts: (result.parts_snapshot ?? []).reduce((sum, part) => sum + part.quantity, 0),
     sheets: resultPanelCount(result),
-    cutLengthMm: result.total_cut_length_mm,
     edgeConsumedMm:
       sumValues(result.edge_consumed_shop_by_material) +
       sumValues(result.edge_consumed_own_by_material),
@@ -404,9 +441,9 @@ export function edgeRegistryEntryByMaterial(
   return edgeRegistry.find((entry) => entry.key === key) ?? null
 }
 
-/** One of the client's four result figures (§7.7). */
-export interface ClientResultFigure {
-  key: 'parts' | 'sheets' | 'edge' | 'offcuts'
+/** One result figure — a label and an already-formatted value (§7.7, §13 W3). */
+export interface ResultFigure {
+  key: 'parts' | 'sheets' | 'edge' | 'offcuts' | 'yield'
   label: string
   value: string
 }
@@ -418,11 +455,12 @@ export interface ClientResultFigure {
  *
  * One composer for all three so they cannot drift: a phone card and a desktop
  * tally saying different things about the same layout is the complaint this
- * replaces. «Arra yo'li» and «Chiqim» are absent by construction rather than
- * filtered per call site — they are saw and yield metrics the shop plans
- * around, and a client quoted a fixed price cannot act on either.
+ * replaces. «Arra yo'li» is absent by construction rather than filtered per call
+ * site — the propil length is a saw metric a client quoted a fixed price cannot
+ * act on, and it is now gone from the workshop's figures too (§13 W3); «Chiqim»
+ * the workshop keeps, which `workshopResultFigures` adds on the end.
  */
-export function clientResultFigures(result: CuttingResult): ClientResultFigure[] {
+export function clientResultFigures(result: CuttingResult): ResultFigure[] {
   const totals = resultTotals(result)
   return [
     {
@@ -451,6 +489,31 @@ export function clientResultFigures(result: CuttingResult): ClientResultFigure[]
             area: squareMetres(totals.usableOffcutAreaMm2),
           })
         : '—',
+    },
+  ]
+}
+
+/**
+ * The workshop's five: the client's four, in the client's order and the client's
+ * formats, plus **Chiqim** (§13 W3). One composer behind both apps, so they
+ * cannot drift into «Detallar 2 / 2» on one screen and «Detallar 2 ta» on the
+ * other — the shop's yield is then the single line of difference between them.
+ *
+ * «Arra yo'li» left both apps with this. The propil length is a saw-planning
+ * number nobody reads off a summary; yield is what the operator quotes when the
+ * customer asks how much board the job eats.
+ */
+export function workshopResultFigures(result: CuttingResult): ResultFigure[] {
+  const fill = resultFillPercent(result)
+  return [
+    ...clientResultFigures(result),
+    {
+      key: 'yield',
+      label: translate('cutting.result.summaryYield'),
+      // Whole percent: the tenth the sheet badges carry is a per-sheet reading,
+      // and a result-wide yield printed to one decimal claims a precision the
+      // offcut geometry behind it does not have.
+      value: fill === null ? '—' : `${Math.round(fill)}%`,
     },
   ]
 }
