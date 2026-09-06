@@ -169,7 +169,11 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <!-- The anchored frame (`md` and up, with a trigger): a popover, so no
-         scrim, and z-[90] — the layer `SearchCombobox`'s own panel uses. -->
+         scrim, and z-[90] — the layer `SearchCombobox`'s own panel uses.
+         The single explicit `minmax(0,1fr)` column is load-bearing on every
+         frame here: with one explicit column, row-flow auto-placement can only
+         ever open implicit *rows*, so no region can be shunted sideways, and a
+         `truncate`d child can never widen the panel past its measured width. -->
     <section
       v-if="open && anchored"
       :id="id"
@@ -177,7 +181,7 @@ onBeforeUnmount(() => {
       role="dialog"
       :aria-labelledby="`${id}-title`"
       tabindex="-1"
-      class="fixed z-[90] grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
+      class="fixed z-[90] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
       :style="panelStyle"
     >
       <header
@@ -201,7 +205,9 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </header>
-      <div class="row-start-2 grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div
+        class="row-start-2 grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]"
+      >
         <div v-if="$slots.pinned"><slot name="pinned"></slot></div>
         <div class="mp-scroll min-h-0 overflow-y-auto px-4 py-3"><slot></slot></div>
       </div>
@@ -221,18 +227,23 @@ onBeforeUnmount(() => {
         aria-modal="true"
         :aria-labelledby="`${id}-title`"
         tabindex="-1"
-        class="absolute inset-x-0 bottom-0 grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-[18px] border-t border-hairline-strong bg-elevated shadow-[0_-28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)] sm:static sm:max-h-[min(calc(var(--app-vh)*0.9),44rem)] sm:w-full sm:rounded-2xl sm:border sm:shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
+        class="absolute inset-x-0 bottom-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-[18px] border-t border-hairline-strong bg-elevated shadow-[0_-28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)] sm:static sm:max-h-[min(calc(var(--app-vh)*0.9),44rem)] sm:w-full sm:rounded-2xl sm:border sm:shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
         :class="[sheetTopClass, maxWidth]"
         @keydown="trap.onKeydown"
       >
         <!-- The grab handle is the phone affordance and says nothing on a
-             desktop modal, where the frame is already a dialog. -->
-        <div class="row-start-1 sm:hidden" aria-hidden="true">
+             desktop modal, where the frame is already a dialog. It owns row 1
+             of its own: sharing a row with the header auto-placed the header
+             into an implicit *second column*, which halved the sheet and pushed
+             the close button off a phone screen. Four explicit rows, one
+             explicit `minmax(0,1fr)` column — every region stays in column 1,
+             and at `sm` the hidden handle simply leaves row 1 empty. -->
+        <div class="col-start-1 row-start-1 sm:hidden" aria-hidden="true">
           <span class="mx-auto mt-2 block h-1 w-9 rounded-full bg-hairline-strong"></span>
         </div>
 
         <header
-          class="row-start-1 flex items-start justify-between gap-3 border-b border-hairline px-4 pb-3 pt-2.5 sm:px-5 sm:py-4"
+          class="col-start-1 row-start-2 flex items-start justify-between gap-3 border-b border-hairline px-4 pb-3 pt-2.5 sm:px-5 sm:py-4"
         >
           <div class="min-w-0">
             <h2
@@ -261,7 +272,13 @@ onBeforeUnmount(() => {
         <!-- `pinned` renders between the head and the scrolling body: the tape
              picker's «Plita rangi» strip and each picker's search field stay in
              view while the list under them scrolls. -->
-        <div class="row-start-2 grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        <!-- The inner grid needs the explicit column as much as the frame does:
+             an implicit `auto` track sizes to the *widest* thing the pinned
+             strip or the list can name — a decor label — and pushed the tape
+             picker's whole body past the right edge of the phone. -->
+        <div
+          class="col-start-1 row-start-3 grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]"
+        >
           <div v-if="$slots.pinned"><slot name="pinned"></slot></div>
           <div class="mp-scroll min-h-0 overflow-y-auto px-4 py-3.5 sm:px-5 sm:py-4">
             <slot></slot>
@@ -274,7 +291,7 @@ onBeforeUnmount(() => {
              indicator. -->
         <div
           v-if="$slots.foot"
-          class="row-start-3 border-t border-hairline bg-elevated px-4 pt-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] sm:px-5 sm:py-4 sm:shadow-none"
+          class="col-start-1 row-start-4 border-t border-hairline bg-elevated px-4 pt-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] sm:px-5 sm:py-4 sm:shadow-none"
           style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))"
         >
           <slot name="foot"></slot>
