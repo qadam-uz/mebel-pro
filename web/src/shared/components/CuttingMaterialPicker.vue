@@ -13,7 +13,7 @@ import type { DecorType } from '@/shared/stores/admin'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
 /**
- * The client's material picker (§7.3): **decor first, format second.**
+ * The cutting editor's material picker (§7.3): **decor first, format second.**
  *
  * The catalog's identity is the format (thickness × length × width) and that is
  * still what a part stores — but a client shops by colour, so the list is one
@@ -38,8 +38,20 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
  * «{n} ta format» line counts only those, and the caption above the chips
  * counts the rows the chip left on screen.
  *
- * The workshop keeps its own picker in `CuttingEditorView` — this component is
- * mounted on the client path only.
+ * **One picker, two option payloads.** Both editors mount this component; what
+ * differs is the list the server hands it. The client listing hides nothing but
+ * prices everything it can; the workshop listing (`include_unpriced`) also
+ * carries the formats the branch has registered and not yet priced, the formats
+ * the platform has retired, and this drawing's own customer-supplied boards.
+ * None of that is a second component — it is three row states: «Narx
+ * kelishiladi» where there is no price to print, a muted «Ishlab chiqarishdan
+ * chiqqan» badge on a retired format (a hint, not a block — the branch may well
+ * be cutting the last of it), and «Mijoz materiali» where the sheet is the
+ * walk-in's own and its number is a substitute price rather than an offer.
+ *
+ * The staff-only affordance that is *not* a row — recording a board the customer
+ * carried in — is handed in through the `foot` slot by the editor, because it
+ * opens a form rather than picking from this list.
  */
 const props = withDefaults(
   defineProps<{
@@ -56,13 +68,20 @@ const props = withDefaults(
      */
     branch: string
     /**
+     * A line under the title naming what the pick applies to — «Ushbu guruhdagi
+     * 4 detal uchun». The workshop's three triggers (a new group, a group's
+     * material, the bulk bar) all target something the list itself cannot name;
+     * the client's picker has one trigger per group head and leaves it empty.
+     */
+    subtitle?: string | null
+    /**
      * The control that opened the picker. With one, `md` and up renders the
      * anchored panel and focus returns here on close; without one (or on a
      * phone) the sheet is the frame.
      */
     anchor?: HTMLElement | null
   }>(),
-  { anchor: null },
+  { anchor: null, subtitle: null },
 )
 
 const emit = defineEmits<{
@@ -182,13 +201,22 @@ function price(material: ClientCatalogMaterialOption): string {
 }
 
 /**
- * A branch registers its whole format list long before it prices it, and the
- * client endpoint deliberately returns the unpriced rows (`price_unset`) so the
- * shelf reads as the shelf. What it must not do is print «0 so'm»: that is a
- * price, and a wrong one. The catalog page says the same thing here.
+ * What the right-hand column of a format row says.
+ *
+ * - `price` — a real number per sheet.
+ * - `own` — a sheet the walk-in carried in (workshop listing only). Its
+ *   `price_tiyin` is the branch's price for the same size, kept so a shortfall
+ *   can price itself; it is not what this sheet costs the customer, so the row
+ *   names whose board it is instead of quoting a figure at all.
+ * - `unset` — «Narx kelishiladi». A branch registers its whole format list long
+ *   before it prices it, and both endpoints deliberately return the unpriced
+ *   rows so the shelf reads as the shelf (the workshop's more of them, since
+ *   staff are the ones who still have to price them). What neither may do is
+ *   print «0 so'm»: that is a price, and a wrong one.
  */
-function hasPrice(material: ClientCatalogMaterialOption): boolean {
-  return !material.price_unset && material.price_tiyin > 0
+function priceState(material: ClientCatalogMaterialOption): 'price' | 'own' | 'unset' {
+  if (material.customer_supplied) return 'own'
+  return !material.price_unset && material.price_tiyin > 0 ? 'price' : 'unset'
 }
 
 // Which multi-format decor is expanded. A decor is not chosen until one of its
@@ -248,6 +276,8 @@ function rowIsCurrent(row: DecorRow) {
     :anchor="anchor"
     @close="emit('close')"
   >
+    <template v-if="subtitle" #subtitle>{{ subtitle }}</template>
+
     <template #pinned>
       <div class="border-b border-hairline px-4 pb-3 pt-1 sm:px-5">
         <label class="sr-only" for="cutting-material-picker-search">
@@ -313,19 +343,30 @@ function rowIsCurrent(row: DecorRow) {
           >
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm font-bold text-ink">{{ row.title }}</span>
-              <span class="mt-0.5 block text-[12.5px] text-ink-muted">
-                {{
-                  row.formats.length > 1
-                    ? $t('cutting.material.formatCount', { n: row.formats.length })
-                    : formatLabel(row.formats[0])
-                }}
+              <span class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-ink-muted">
+                <span class="min-w-0 truncate">
+                  {{
+                    row.formats.length > 1
+                      ? $t('cutting.material.formatCount', { n: row.formats.length })
+                      : formatLabel(row.formats[0])
+                  }}
+                </span>
+                <!-- Retired by the platform, still on the shelf: a hint, not a
+                     block — staff may well be cutting the last of it. Only the
+                     workshop listing ever carries one. -->
+                <span
+                  v-if="row.formats.length === 1 && row.formats[0].discontinued"
+                  class="shrink-0 rounded-full bg-sunk px-1.5 py-0.5 text-[11.5px] font-semibold text-ink-muted"
+                >
+                  {{ $t('cutting.material.discontinued') }}
+                </span>
               </span>
             </span>
             <!-- One format → the row IS that format, so it carries its price.
                  Several → the price lives on the format rows, because there is
                  no single number this row could honestly print. -->
             <span v-if="row.formats.length === 1" class="shrink-0 text-right">
-              <template v-if="hasPrice(row.formats[0])">
+              <template v-if="priceState(row.formats[0]) === 'price'">
                 <span class="block whitespace-nowrap text-sm font-bold text-ink">
                   {{ price(row.formats[0]) }}
                 </span>
@@ -334,7 +375,11 @@ function rowIsCurrent(row: DecorRow) {
                 </span>
               </template>
               <span v-else class="block whitespace-nowrap text-[12.5px] text-ink-muted">
-                {{ $t('cutting.material.priceOnRequest') }}
+                {{
+                  priceState(row.formats[0]) === 'own'
+                    ? $t('cutting.source.own')
+                    : $t('cutting.material.priceOnRequest')
+                }}
               </span>
             </span>
             <Icon
@@ -378,7 +423,13 @@ function rowIsCurrent(row: DecorRow) {
                 {{ formatLabel(format) }}
               </span>
               <span
-                v-if="hasPrice(format)"
+                v-if="format.discontinued"
+                class="shrink-0 rounded-full bg-sunk px-1.5 py-0.5 text-[11.5px] font-semibold text-ink-muted"
+              >
+                {{ $t('cutting.material.discontinued') }}
+              </span>
+              <span
+                v-if="priceState(format) === 'price'"
                 class="ml-auto shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
               >
                 <!-- `&nbsp;`, not a template space: the compiler condenses the
@@ -390,12 +441,21 @@ function rowIsCurrent(row: DecorRow) {
                 >
               </span>
               <span v-else class="ml-auto shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
-                {{ $t('cutting.material.priceOnRequest') }}
+                {{
+                  priceState(format) === 'own'
+                    ? $t('cutting.source.own')
+                    : $t('cutting.material.priceOnRequest')
+                }}
               </span>
             </span>
           </button>
         </div>
       </div>
     </div>
+
+    <!-- Workshop only: recording a board the customer carried in is not a row in
+         this list — it is a form — so the editor hands the entry point down and
+         owns the dialog behind it. -->
+    <template v-if="$slots.foot" #foot><slot name="foot"></slot></template>
   </CuttingBottomSheet>
 </template>

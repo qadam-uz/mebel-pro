@@ -139,9 +139,9 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   come off the material demand and never touch stock, while cutting and banding labour are
   charged on every sheet and every banded millimetre regardless of who supplied them
   ([`orders.md`](orders.md#pricing)).
-- **A customer may bring a sheet the branch does not sell.** The editor's material picker has a
-  second tab, `Mijoz materiali`, where staff type the board's size, its thickness, how many the
-  customer brought, and whether it is textured. The board becomes a
+- **A customer may bring a sheet the branch does not sell.** Under the workshop editor's
+  material picker sits `+ Mijoz materiali`, opening a dialog where staff type the board's size,
+  its thickness, how many the customer brought, and whether it is textured. The board becomes a
   **[customer board](../entities/cutting.md#customer-board)** — its own row in
   `customer_boards`, belonging to the drawing and then to the order: `source_draft_id` says
   whose it is, and only this drawing's picker sees it. Nothing about it reaches a catalog.
@@ -459,9 +459,11 @@ side is actually banded — a client who never bands never meets the picker. **H
 re-checks and scrolls to a group that has banded sides and no tape. Numbers and colours are
 absent because there is nothing to number: one material group has exactly one tape decor.
 
-The client's group head also replaces the coloured dot with the **decor image**, and states
-`{n} detal · {area} m²` on a muted second line; counts are pieces everywhere, so the header
-total and the group sums agree.
+**Both editors' group heads lead with the decor image** rather than a coloured dot — the
+picker one step back is a wall of photographs, so the group is recognised the same way it was
+chosen; a decor with no picture keeps the hashed swatch at the same box. The client's head
+additionally states `{n} detal · {area} m²` on a muted second line; counts are pieces
+everywhere, so the header total and the group sums agree.
 
 ### Results
 
@@ -559,7 +561,7 @@ The parts table:
 | Column       | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Panel**    | opens the material picker — the branch's carried panel formats, **grouped by decor**: one photo + identity line per decor, its formats as the selectable rows beneath, exactly as the workshop's catalog table draws them. Selection is still **one format, one click**; grouping changes how the list is drawn, not how many steps it takes. There is no manufacturer / type / thickness / sort bar (it duplicated the identity line and added clutter), and no widen-to-full-catalog toggle — a branch is required before the editor opens and the list is always the branch's own. Selected row shows the picked format's label (e.g. `LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm`) |
+| **Panel**    | opens the material picker described under _Material picking_ below — the same decor-first panel both editors use. There is no manufacturer / thickness / sort bar (it duplicated the identity line and added clutter) and no widen-to-full-catalog toggle: a branch is required before the editor opens and the list is always the branch's own. Selected row shows the picked format's label (e.g. `LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm`) |
 | **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the decor's `has_grain` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -571,15 +573,23 @@ The grain toggle (small arrow + `Tekstura`) appears on the row.
 Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
 `follow_grain=false` and the optimiser may rotate it.
 
-**The client's material picker leads with the decor, and prices the format.** One row per
-decor the branch carries as a panel: a 40 px decor image (the swatch fallback where there is
-none), the decor name, and — because the price belongs to a concrete format and to nothing
-else — either the single format's size on a sub-line with its price per sheet at the right,
-or `{n} ta format` and no price on the row, expanded into one selectable row per format each
-carrying its own size and price. Nothing is pre-picked in the multi-format case; the decor row
-is not chosen until a format row is. **Tapping the thumbnail opens the full-size lightbox**
-instead of selecting — a client picks a board by looking at it, and the 40 px square is not
-enough to decide on. **The search is the server's**, so it is the catalog matcher in full
+#### Material picking
+
+**One picker, two option payloads.** Both editors open the same panel on «+ Material» and on a
+group head's material name; what differs is the listing the server hands it — the client's,
+and the workshop's `include_unpriced` staff listing. A second component was the shape until
+2026-09 and it cost the workshop the photographs, the prices and the type filter for nothing:
+the differences are row states, not a different list.
+
+**It leads with the decor, and prices the format.** One row per decor the branch carries as a
+panel: a 40 px decor image (the swatch fallback where there is none), the decor name, and —
+because the price belongs to a concrete format and to nothing else — either the single
+format's size on a sub-line with its price per sheet at the right, or `{n} ta format` and no
+price on the row, expanded into one selectable row per format each carrying its own size and
+price. Nothing is pre-picked in the multi-format case; the decor row is not chosen until a
+format row is. **Tapping the thumbnail opens the full-size lightbox** instead of selecting —
+a board is chosen by looking at it, and the 40 px square is not enough to decide on.
+**The search is the server's**, so it is the catalog matcher in full
 ([`catalog-inventory.md`](catalog-inventory.md#bilingual-search)): «сонома» and `sonoma` are
 one query, `egger sonoma` narrows by two words in either order, `18` and `2800x2070` find the
 formats sold in those sizes, and a typo still lands. The placeholder stays
@@ -592,6 +602,25 @@ those. The caption above the chips — `{branch} katalogi · {n} ta dekor` — c
 over a narrowed list reads as a broken list rather than a filtered one. Arming a chip is not
 remembered across openings: the picker reopens on `Barchasi`, because a chip left armed would
 silently hide most of the catalog next time.
+
+**The frame** is a full-height sheet on phones and, from `md` up, a panel anchored to the
+control that opened it — not a centred modal: changing one group's board is a picker on a row,
+not a decision that earns a scrim over the whole drawing. The workshop app is desktop, so it
+always sees the anchored panel.
+
+**Three rows only the staff listing produces**, each a state of the same row rather than a
+second list:
+
+| Row | What it shows | Why |
+| --- | --- | --- |
+| Unpriced format (`price_unset`) | «Narx kelishiladi» in place of a figure, and it is still selectable | A branch registers its whole format list long before it prices it. Staff are the ones who must price it, so hiding it from them hides the work; printing «0 so'm» would be a price, and a wrong one |
+| Retired format (`discontinued`) | a muted badge beside the size | The platform retired it; the branch may still be cutting the last of it. A hint, not a block |
+| [Customer board](../entities/cutting.md#customer-board) | «Mijoz materiali» in place of a figure | Its `price_tiyin` is the branch's number for the same size, kept so a shortfall can price itself — not what this sheet costs the walk-in |
+
+Under the list, and only for staff, sits **«+ Mijoz materiali»** — the entry to the
+customer-board form (see _Parts and materials_). It is a form rather than a row, so it opens
+as its own dialog; the picker closes behind it, because recording a board adds a row of its
+own and there is nothing to come back to.
 
 **Edge picker** — three surfaces, one behaviour:
 
