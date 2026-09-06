@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 20
 ---
 
@@ -176,9 +176,28 @@ On `/start` with a valid pending token:
     confirm. There is no separate name step — the name is editable in the profile.
 
 `/start` without a token, or with an expired / used one, gets a short help message pointing at
-the login page, plus a **Kirish kodi** button for the fallback below. Bot copy is Uzbek-only in
+the login page, carrying the keyboard for the account's state (below). Bot copy is Uzbek-only in
 v1 — the bot has no reliable locale channel, matching the server-rendered documents rule in
 [`architecture.md`](../../architecture.md).
+
+**The reply keyboard is account state, not decoration.** Telegram keeps the last reply keyboard
+in the chat until a later message replaces or removes it, so a keyboard sent once outlives the
+step that needed it. The bot therefore sends the keyboard for the sender's *current* state with
+every plain reply — help, expired, the code, confirmed, declined:
+
+| Sender's state | Keyboard |
+| --- | --- |
+| No client linked to the Telegram id | **📱 Raqamni ulashish** (`request_contact`), one-time |
+| Linked, `active` | **🔑 Kirish kodi**, persistent — pressing it runs the fallback below |
+| Linked, `blocked` | none (the keyboard is removed) |
+
+That is what swaps «Raqamni ulashish» out the moment a contact share links the account, instead
+of leaving it in the chat forever. A message may carry only one keyboard, so the confirm prompt
+spends its slot on the inline **Tasdiqlash** / **Bekor qilish** pair and leaves the sticky
+keyboard as it stands — safe because every path that links an account ends in a keyboard-bearing
+message, so a linked account's chat already shows the code keyboard by the time a deep link can
+reach it. The contact keyboard is never shown to a linked account except as the retry after a
+forwarded contact.
 
 There is no account-existence oracle: the exists / new branch is revealed only after a verified
 contact, which itself proves possession of the number.
@@ -186,8 +205,8 @@ contact, which itself proves possession of the number.
 ### Fallback: a code from the bot
 
 For the client who reached the bot without a deep link (opened it by hand, camera unavailable):
-the **Kirish kodi** button runs the same identification as above (confirm; contact share if the
-account is unknown), then issues a [login code](../entities/identity.md#telegram-login-code) —
+the **🔑 Kirish kodi** keyboard button runs the same identification as above (contact share if
+the account is unknown), then issues a [login code](../entities/identity.md#telegram-login-code) —
 6 digits shown in the chat, single-use, 5-minute TTL, bound to the now-identified client. The
 login card's collapsed "Kod bilan kirish" input redeems it and receives the session directly.
 
