@@ -22,18 +22,8 @@ import {
   cuttingEditorAdapterKey,
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
-import {
-  colorForMaterial,
-  edgeFields,
-  materialSwatchStyle,
-  type EdgeField,
-} from '@/shared/app/cuttingDisplay'
-import {
-  formatMm,
-  isTape,
-  materialIdentityLabel,
-  snapshotMaterialLabel,
-} from '@/shared/app/materialLabel'
+import { edgeFields, materialSwatchStyle, type EdgeField } from '@/shared/app/cuttingDisplay'
+import { materialIdentityLabel } from '@/shared/app/materialLabel'
 import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import { formatOrderNumber } from '@/shared/formatters'
 import {
@@ -74,7 +64,6 @@ import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
-import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
   materialLabel,
@@ -371,6 +360,22 @@ const clientBranchLabel = computed(() => {
     (option) => option.workshop_id === branch.workshop_id,
   ).length
   return siblings > 1 ? `${branch.workshop_name} · ${branch.branch_name}` : branch.workshop_name
+})
+/**
+ * The shelf the material picker's caption names — `{this} katalogi · N ta dekor`.
+ *
+ * The client says it the way a client says it (decision 16, above). Staff are
+ * inside one workshop and pick between its branches, so their line is the
+ * branch first, exactly as the editor's own locked-branch strip prints it; with
+ * no branch row loaded yet it falls back to the name the app context froze,
+ * because a caption reading « katalogi» is worse than one naming the branch
+ * twice.
+ */
+const pickerBranchLabel = computed(() => {
+  if (isClientEditor.value) return clientBranchLabel.value
+  const branch = preferredBranch.value
+  if (branch) return `${branch.branch_name} · ${branch.workshop_name}`
+  return lockedBranchName.value ?? ''
 })
 // What the in-page picker should start on. A draft already bound to a branch
 // keeps it — the topbar must never retarget an in-progress drawing. Only when
@@ -1089,12 +1094,16 @@ function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
 // picked, which would show no trace of it. No confirmation: nothing is
 // destroyed, and DESIGN.md rules a nag out where there is nothing to lose.
 // ── Customer-supplied board ─────────────────────────────────────────────────
-// The picker's second tab. Workshop only, and only once a draft exists on the
-// server: the board is recorded against that draft, so it is what scopes the
-// row to this customer instead of offering it to the whole branch.
-type MaterialPickerMode = 'shop' | 'own'
-
-const materialPickerMode = ref<MaterialPickerMode>('shop')
+// Raised from the material picker's foot. Workshop only, and only once a draft
+// exists on the server: the board is recorded against that draft, so it is what
+// scopes the row to this customer instead of offering it to the whole branch.
+//
+// It used to be the picker's second tab, behind a segmented control. The picker
+// is now the shared decor-first panel, anchored to its trigger at 420px — a
+// five-field form does not belong in a popover, and «Ombordan | Mijoz
+// materiali» framed a rare escape hatch as half of every material choice. One
+// button under the list, one dialog behind it.
+const customerBoardOpen = ref(false)
 const customerBoardSaving = ref(false)
 const customerBoardError = ref<string | null>(null)
 const customerBoard = ref({
@@ -1115,13 +1124,22 @@ const boardScopeDraftId = computed(() =>
 const canAddCustomerBoard = computed(
   () => isWorkshopScope.value && !isReadOnly.value && Boolean(activeBranchId.value),
 )
-const materialPickerModes = computed(() => [
-  { value: 'shop', label: t('cutting.source.shop') },
-  { value: 'own', label: t('cutting.source.own') },
-])
+function openCustomerBoard() {
+  // The picker is a popover at z-90 and this is a modal at z-80, so the two
+  // cannot share the screen — and there is nothing to come back to anyway, since
+  // recording a board adds a row of its own.
+  closeMaterialPicker()
+  // Always from empty: a dialog reopened on the last attempt's half-typed sizes
+  // would be recording the previous customer's sheet.
+  resetCustomerBoard()
+  customerBoardOpen.value = true
+}
+
+function closeCustomerBoard() {
+  customerBoardOpen.value = false
+}
 
 function resetCustomerBoard() {
-  materialPickerMode.value = 'shop'
   customerBoardError.value = null
   customerBoardSaving.value = false
   customerBoard.value = {
@@ -1180,7 +1198,7 @@ async function submitCustomerBoard() {
       sheets,
       has_grain: customerBoard.value.has_grain,
     })
-    closeMaterialPicker()
+    closeCustomerBoard()
     addRow(option.id, null)
   } catch (caught) {
     customerBoardError.value =
@@ -1529,7 +1547,6 @@ const materialPickerSearch = ref('')
 let materialSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(materialPickerTarget, (target) => {
-  resetCustomerBoard()
   // Each open starts from the whole list; a query left over from the previous
   // open would silently hide materials.
   if (!target) return
@@ -1562,74 +1579,6 @@ async function reloadPanelOptions(search: string) {
   })
 }
 
-// The picker reads like the catalog table: one photo + identity line per decor,
-// its formats listed beneath as the selectable rows. Grouping only changes how
-// the same list is drawn — picking is still one format, one click.
-interface MaterialPickerGroup {
-  key: string
-  imageFileId: string | null
-  title: string
-  grainLabel: string
-  materials: ClientCatalogMaterialOption[]
-}
-
-// `ClientCatalogMaterialOption` carries no `decor_id`, so the decor is keyed by
-// the tuple that identifies one: manufacturer + type + code/name.
-function decorKey(material: ClientCatalogMaterialOption) {
-  return [material.manufacturer_id, material.type, material.code ?? '', material.name].join('|')
-}
-
-// The identity half of the canonical label — the same composer the format rows
-// use, handed a snapshot with no dimensions so it stops after «· name».
-function decorTitle(material: ClientCatalogMaterialOption) {
-  return snapshotMaterialLabel(
-    {
-      manufacturer_name: material.manufacturer_name,
-      type: material.type,
-      code: material.code,
-      name: material.name,
-    },
-    material.name || material.id.slice(0, 8),
-  )
-}
-
-function materialFormatLabel(material: ClientCatalogMaterialOption) {
-  const thickness = formatMm(material.thickness_mm)
-  if (isTape(material.type) && material.tape_width_mm != null) {
-    return t('catalog.meta.tapeFormat', { thickness, width: material.tape_width_mm })
-  }
-  if (material.length_mm != null && material.width_mm != null) {
-    return t('catalog.meta.panelFormat', {
-      length: material.length_mm,
-      width: material.width_mm,
-      thickness,
-    })
-  }
-  return thickness ? `${thickness} mm` : materialLabel(material)
-}
-
-const materialPickerGroups = computed<MaterialPickerGroup[]>(() => {
-  const groups: MaterialPickerGroup[] = []
-  const indexByKey = new Map<string, number>()
-  for (const material of cutting.panelOptions) {
-    const key = decorKey(material)
-    let group = groups[indexByKey.get(key) ?? -1]
-    if (!group) {
-      group = {
-        key,
-        imageFileId: material.image_file_id,
-        title: decorTitle(material),
-        grainLabel: materialPickerGrainLabel(material),
-        materials: [],
-      }
-      indexByKey.set(key, groups.length)
-      groups.push(group)
-    }
-    group.materials.push(material)
-  }
-  return groups
-})
-
 const materialPickerCurrentId = computed(() => {
   const target = materialPickerTarget.value
   if (!target) return null
@@ -1648,7 +1597,8 @@ const materialPickerSubtitle = computed(() => {
     const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
     return t('cutting.material.forGroup', { n: count }, count)
   }
-  if (target.type === 'new') return t('cutting.material.pick')
+  // Nothing to name: the panel's own title already says «Material tanlang».
+  if (target.type === 'new') return ''
   const selected = selectedParts.value.length
   return t('cutting.material.forSelection', { n: selected }, selected)
 })
@@ -1674,14 +1624,6 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
-// Both pickers compose their own `{workshop} · N ta dekor` from this name: the
-// count has to follow whatever narrowed the list — the material picker's type
-// chip, the tape picker's search — and only the picker knows that.
-
-function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
-  return material.has_grain ? t('cutting.material.grained') : t('cutting.material.grainless')
-}
-
 function groupDecorImageId(materialId: string | null) {
   return materialById(materialId)?.image_file_id ?? null
 }
@@ -1692,12 +1634,6 @@ function groupSwatchStyle(materialId: string) {
     name: material?.name ?? null,
     customer_supplied: material?.customer_supplied === true,
   })
-}
-
-function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
-  return {
-    background: colorForMaterial(material.name || material.id),
-  }
 }
 
 function openRegistryReplace(entry: EdgeRegistryEntry) {
@@ -3059,42 +2995,34 @@ onBeforeRouteLeave(async () => {
                             class="size-4 shrink-0 text-ink-muted"
                             aria-hidden="true"
                           />
-                          <!-- One decor, one colour, all the way through: this swatch,
-                         the picker one step back and the result one step on all
-                         hash the decor's `name`. Hashing the composed label here
-                         instead would repaint the same board between two screens
-                         of the same wizard. -->
+                          <!-- §7.3, and the same for the workshop since the two
+                               editors share one picker: the decor's own picture
+                               takes the colour dot's place — a 6px dot of a
+                               hashed pastel never told anyone which board this
+                               is, and the operator has just chosen this one by
+                               its photo one step back.
+                               No image → the shared swatch, at the same box, so
+                               the row never loses its leading mark. One decor,
+                               one colour, all the way through: this swatch, the
+                               picker one step back and the result one step on
+                               all hash the decor's `name`. Hashing the composed
+                               label here instead would repaint the same board
+                               between two screens of the same wizard. -->
+                          <AuthFileImage
+                            v-if="groupDecorImageId(group.materialId)"
+                            :file-id="groupDecorImageId(group.materialId)"
+                            alt=""
+                            class="shrink-0 border border-hairline object-cover"
+                            :class="inOrderWizard ? 'size-[30px] rounded-lg' : 'size-6 rounded-md'"
+                          />
                           <span
-                            v-if="inOrderWizard"
-                            class="size-[30px] shrink-0 rounded-lg border border-hairline"
+                            v-else
+                            class="shrink-0 border border-hairline"
+                            :class="inOrderWizard ? 'size-[30px] rounded-lg' : 'size-6 rounded-md'"
                             :style="
                               group.materialId
                                 ? groupSwatchStyle(group.materialId)
                                 : { background: 'var(--color-sunk)' }
-                            "
-                            aria-hidden="true"
-                          ></span>
-                          <!-- §7.3: on the client the decor's own picture takes
-                               the colour dot's place — a 6px dot of a hashed
-                               pastel never told anyone which board this is.
-                               No image → the shared swatch, at the same size,
-                               so the row never loses its leading mark. -->
-                          <AuthFileImage
-                            v-else-if="isClientEditor && groupDecorImageId(group.materialId)"
-                            :file-id="groupDecorImageId(group.materialId)"
-                            alt=""
-                            class="size-6 shrink-0 rounded-md border border-hairline object-cover"
-                          />
-                          <span
-                            v-else
-                            class="shrink-0 rounded-full"
-                            :class="
-                              isClientEditor ? 'size-6 rounded-md border border-hairline' : 'size-3'
-                            "
-                            :style="
-                              group.materialId
-                                ? groupSwatchStyle(group.materialId)
-                                : { background: 'var(--color-ink-muted)' }
                             "
                             aria-hidden="true"
                           ></span>
@@ -3678,260 +3606,130 @@ onBeforeRouteLeave(async () => {
       @pick="applyGroupTape"
     />
 
+    <!-- One picker, both editors. The workshop's list is the staff payload —
+         unpriced formats, retired formats and this drawing's customer boards —
+         and the only extra control it needs is the entry to the board form. -->
     <CuttingMaterialPicker
-      v-if="isClientEditor"
       :open="Boolean(materialPickerTarget)"
       :materials="cutting.panelOptions"
       :loading="cutting.materialsLoading"
       :current-id="materialPickerCurrentId"
       :search="materialPickerSearch"
-      :branch="clientBranchLabel"
+      :branch="pickerBranchLabel"
+      :subtitle="isClientEditor ? null : materialPickerSubtitle"
       :anchor="materialPickerAnchor"
       @close="closeMaterialPicker"
       @update:search="materialPickerSearch = $event"
       @pick="applyMaterialPicker"
-    />
-
-    <!-- The workshop's own picker: the customer-board tab and the format list
-         it has always had. The client never mounts it. -->
-    <div
-      v-if="materialPickerTarget && !isClientEditor"
-      class="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="$t('cutting.material.replaceTitle')"
-      @keydown.esc="closeMaterialPicker"
     >
-      <div
-        class="absolute inset-0 bg-ink/45 backdrop-blur-[2px]"
-        @click="closeMaterialPicker"
-      ></div>
-      <div
-        class="relative z-10 w-[min(460px,100%)] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_60px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
-      >
-        <div class="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
-          <div>
-            <h3 class="text-base font-extrabold text-ink">
-              {{ $t('cutting.material.replaceTitle') }}
-            </h3>
-            <p class="mt-1 text-sm text-ink-muted">{{ materialPickerSubtitle }}</p>
-          </div>
-          <button
-            type="button"
-            class="client-edge-close"
-            :aria-label="$t('cutting.action.close')"
-            @click="closeMaterialPicker"
-          >
-            ×
-          </button>
-        </div>
-        <div class="border-b border-hairline px-5 py-3">
-          <!-- Workshop only: the client SPA has no counter to hand a board
-               across, and no draft of its own to scope one to. -->
-          <SegmentedControl
-            v-if="canAddCustomerBoard"
-            v-model="materialPickerMode"
-            class="mb-3"
-            hide-label
-            :label="$t('cutting.customerBoard.modeLabel')"
-            :options="materialPickerModes"
-          />
-          <template v-if="materialPickerMode === 'shop'">
-            <label class="sr-only" for="material-picker-search">
-              {{ $t('cutting.material.searchLabel') }}
-            </label>
-            <input
-              id="material-picker-search"
-              v-model="materialPickerSearch"
-              type="search"
-              class="mp-input w-full"
-              :placeholder="$t('cutting.material.searchPlaceholder')"
-            />
-          </template>
-        </div>
+      <template v-if="canAddCustomerBoard" #foot>
+        <button
+          type="button"
+          class="flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline-strong text-[13px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
+          @click="openCustomerBoard"
+        >
+          <Icon name="plus" class="size-4" />
+          {{ $t('cutting.customerBoard.add') }}
+        </button>
+      </template>
+    </CuttingMaterialPicker>
 
-        <!-- `v-if`, never `v-show`: the stock list's own assertions count the
-             dialog's sections, and a hidden panel is still in the tree. -->
-        <div v-if="materialPickerMode === 'own'" class="grid gap-3 p-5">
-          <p class="text-sm leading-[1.45] text-ink-soft">
-            {{ $t('cutting.customerBoard.intro') }}
-          </p>
+    <!-- The customer-supplied board (workshop only), raised from the picker's
+         foot. It is a form, not a row in a list: a five-field dialog inside an
+         anchored 420px popover would be a worse home for it than the modal it
+         has always been, so the picker closes and this takes the screen. -->
+    <AppModal
+      :open="customerBoardOpen"
+      :title="$t('cutting.source.own')"
+      max-width="max-w-md"
+      @close="closeCustomerBoard"
+    >
+      <div class="grid gap-3">
+        <p class="text-sm leading-[1.45] text-ink-soft">
+          {{ $t('cutting.customerBoard.intro') }}
+        </p>
+        <label class="field !mb-0">
+          <span
+            >{{ $t('cutting.customerBoard.nameLabel') }}
+            <small class="text-ink-muted">{{ $t('cutting.customerBoard.optional') }}</small></span
+          >
+          <input
+            v-model="customerBoard.name"
+            class="mp-input"
+            maxlength="80"
+            :placeholder="$t('cutting.customerBoard.namePlaceholder')"
+          />
+        </label>
+        <div class="grid grid-cols-2 gap-3">
           <label class="field !mb-0">
-            <span
-              >{{ $t('cutting.customerBoard.nameLabel') }}
-              <small class="text-ink-muted">{{ $t('cutting.customerBoard.optional') }}</small></span
-            >
+            <span>{{ $t('cutting.customerBoard.length') }}</span>
             <input
-              v-model="customerBoard.name"
+              v-model="customerBoard.uzunlik"
               class="mp-input"
-              maxlength="80"
-              :placeholder="$t('cutting.customerBoard.namePlaceholder')"
+              inputmode="numeric"
+              placeholder="2750"
             />
           </label>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="field !mb-0">
-              <span>{{ $t('cutting.customerBoard.length') }}</span>
-              <input
-                v-model="customerBoard.uzunlik"
-                class="mp-input"
-                inputmode="numeric"
-                placeholder="2750"
-              />
-            </label>
-            <label class="field !mb-0">
-              <span>{{ $t('cutting.customerBoard.width') }}</span>
-              <input
-                v-model="customerBoard.eni"
-                class="mp-input"
-                inputmode="numeric"
-                placeholder="1830"
-              />
-            </label>
-            <label class="field !mb-0">
-              <span>{{ $t('cutting.customerBoard.thickness') }}</span>
-              <input
-                v-model="customerBoard.qalinlik"
-                class="mp-input"
-                inputmode="decimal"
-                placeholder="16"
-              />
-            </label>
-            <label class="field !mb-0">
-              <span>{{ $t('cutting.customerBoard.sheets') }}</span>
-              <input
-                v-model="customerBoard.sheets"
-                class="mp-input"
-                inputmode="numeric"
-                placeholder="2"
-              />
-            </label>
-          </div>
+          <label class="field !mb-0">
+            <span>{{ $t('cutting.customerBoard.width') }}</span>
+            <input
+              v-model="customerBoard.eni"
+              class="mp-input"
+              inputmode="numeric"
+              placeholder="1830"
+            />
+          </label>
+          <label class="field !mb-0">
+            <span>{{ $t('cutting.customerBoard.thickness') }}</span>
+            <input
+              v-model="customerBoard.qalinlik"
+              class="mp-input"
+              inputmode="decimal"
+              placeholder="16"
+            />
+          </label>
+          <label class="field !mb-0">
+            <span>{{ $t('cutting.customerBoard.sheets') }}</span>
+            <input
+              v-model="customerBoard.sheets"
+              class="mp-input"
+              inputmode="numeric"
+              placeholder="2"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-[38px] w-fit items-center gap-2 rounded-lg border border-hairline px-3.5 text-[13.5px] font-semibold transition"
+          :class="
+            customerBoard.has_grain
+              ? 'bg-accent-soft text-accent-strong'
+              : 'bg-elevated text-ink hover:bg-sunk'
+          "
+          :aria-pressed="customerBoard.has_grain"
+          @click="customerBoard.has_grain = !customerBoard.has_grain"
+        >
+          {{ $t('cutting.customerBoard.textured') }}
+        </button>
+        <p v-if="customerBoardError" class="mp-field-error !mt-0">{{ customerBoardError }}</p>
+        <div class="mt-1 flex justify-end gap-2.5">
+          <button type="button" class="mp-button mp-button-outline" @click="closeCustomerBoard">
+            {{ $t('cutting.action.cancel') }}
+          </button>
           <button
             type="button"
-            class="inline-flex h-[38px] w-fit items-center gap-2 rounded-lg border border-hairline px-3.5 text-[13.5px] font-semibold transition"
-            :class="
-              customerBoard.has_grain
-                ? 'bg-accent-soft text-accent-strong'
-                : 'bg-elevated text-ink hover:bg-sunk'
-            "
-            :aria-pressed="customerBoard.has_grain"
-            @click="customerBoard.has_grain = !customerBoard.has_grain"
-          >
-            {{ $t('cutting.customerBoard.textured') }}
-          </button>
-          <p v-if="customerBoardError" class="mp-field-error !mt-0">{{ customerBoardError }}</p>
-          <div class="mt-1 flex justify-end gap-2.5">
-            <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
-              {{ $t('cutting.action.cancel') }}
-            </button>
-            <button
-              type="button"
-              class="mp-button mp-button-primary"
-              :disabled="customerBoardSaving"
-              @click="submitCustomerBoard"
-            >
-              {{
-                customerBoardSaving
-                  ? $t('cutting.editor.saveSaving')
-                  : $t('cutting.customerBoard.submit')
-              }}
-            </button>
-          </div>
-        </div>
-        <div v-if="materialPickerMode === 'shop'" class="grid max-h-[52vh] gap-3 overflow-auto p-3">
-          <p
-            v-if="materialPickerGroups.length === 0"
-            class="px-2 py-6 text-center text-sm text-ink-muted"
+            class="mp-button mp-button-primary"
+            :disabled="customerBoardSaving"
+            @click="submitCustomerBoard"
           >
             {{
-              materialPickerSearch.trim()
-                ? $t('cutting.material.searchEmpty')
-                : $t('cutting.material.pickerEmpty')
+              customerBoardSaving
+                ? $t('cutting.editor.saveSaving')
+                : $t('cutting.customerBoard.submit')
             }}
-          </p>
-          <section
-            v-for="group in materialPickerGroups"
-            :key="group.key"
-            class="grid gap-1.5 rounded-lg border border-hairline bg-elevated p-2"
-          >
-            <header class="flex items-center gap-3 px-1 pt-1">
-              <AuthFileImage
-                v-if="group.imageFileId"
-                :file-id="group.imageFileId"
-                :alt="group.title"
-                class="size-10 shrink-0 rounded-md object-cover shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-ink)_12%,transparent)]"
-              />
-              <span
-                v-else
-                class="size-10 shrink-0 rounded-md shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-ink)_12%,transparent)]"
-                :style="materialPickerSwatchStyle(group.materials[0])"
-                aria-hidden="true"
-              ></span>
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-extrabold text-ink">{{
-                  group.title
-                }}</span>
-                <span class="mt-0.5 block text-xs font-semibold text-ink-muted">
-                  {{ group.grainLabel }}
-                </span>
-              </span>
-            </header>
-            <button
-              v-for="material in group.materials"
-              :key="material.id"
-              type="button"
-              class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition hover:border-accent-tint hover:bg-sunk"
-              :class="
-                material.id === materialPickerCurrentId
-                  ? 'border-accent-tint bg-accent-soft'
-                  : 'border-hairline'
-              "
-              @click="applyMaterialPicker(material.id)"
-            >
-              <span class="flex min-w-0 flex-wrap items-center gap-2">
-                <span class="truncate text-sm font-bold text-ink">
-                  {{ materialFormatLabel(material) }}
-                </span>
-                <span
-                  v-if="material.price_unset"
-                  class="rounded-full bg-warning-soft px-2 py-0.5 text-[12.5px] font-semibold text-warning"
-                >
-                  {{ $t('cutting.material.priceUnset') }}
-                </span>
-                <!-- Retired by the platform, still on the shelf: a hint, not a
-                     block — the operator may well be cutting the last of it. -->
-                <span
-                  v-if="material.discontinued"
-                  class="rounded-full bg-sunk px-2 py-0.5 text-[12.5px] font-semibold text-ink-muted"
-                >
-                  {{ $t('cutting.material.discontinued') }}
-                </span>
-              </span>
-              <span
-                v-if="material.id === materialPickerCurrentId"
-                class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent-strong"
-                :aria-label="$t('cutting.material.selected')"
-              >
-                <Icon name="check" class="size-3.5" />
-              </span>
-            </button>
-          </section>
-          <p v-if="materialPickerGroups.length === 0" class="p-4 text-sm text-ink-muted">
-            {{ $t('cutting.material.emptyInBranch') }}
-          </p>
-        </div>
-        <!-- The own tab carries its own Bekor qilish beside its primary, where
-             a form's actions belong; a second one under it would be two ways to
-             do the same thing on one short dialog. -->
-        <div
-          v-if="materialPickerMode === 'shop'"
-          class="flex justify-end border-t border-hairline px-5 py-3"
-        >
-          <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
-            {{ $t('cutting.action.cancel') }}
           </button>
         </div>
       </div>
-    </div>
+    </AppModal>
   </section>
 </template>

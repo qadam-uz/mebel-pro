@@ -520,14 +520,35 @@ describe('CuttingEditorView app-supplied branch', () => {
   })
 })
 
-// The picker reads like the catalog table: one photo + identity line per decor,
-// its formats listed beneath. Selection is unchanged — one format, one click, no
-// extra step — and there is no "this branch does not carry it" state left, because
-// the catalog endpoint is branch-scoped.
+// One picker, two option payloads. Both editors open the same decor-first panel
+// on «+ Material»; what differs is the list the server hands it and, in the
+// workshop, the customer-board entry under it. Selection is one format, one
+// click on both, and there is no "this branch does not carry it" state left,
+// because the catalog endpoint is branch-scoped.
 describe('CuttingEditorView material picker', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
+
+  // The picker lives in a teleported sheet; a transparent stub keeps it
+  // reachable through the wrapper and lets us read what it is handed — the
+  // list, the caption's branch, the subtitle, and whatever the editor puts in
+  // its foot.
+  const pickerStub = {
+    props: ['open', 'materials', 'currentId', 'branch', 'subtitle'],
+    emits: ['pick'],
+    template: `<section v-if="open" data-test="material-picker">
+      <span data-test="picker-branch">{{ branch }}</span>
+      <span data-test="picker-subtitle">{{ subtitle }}</span>
+      <button
+        v-for="material in materials"
+        :key="material.id"
+        :data-test="'pick-' + material.id"
+        @click="$emit('pick', material.id)"
+      />
+      <div data-test="picker-foot"><slot name="foot" /></div>
+    </section>`,
+  }
 
   function option(overrides: Partial<ClientCatalogMaterialOption> = {}) {
     return {
@@ -554,23 +575,7 @@ describe('CuttingEditorView material picker', () => {
     const { wrapper, cutting } = await mountEditor(
       '/c/cutting/draft-1',
       draft({ preferred_branch_id: 'branch-1' }),
-      {
-        // The picker lives in a teleported sheet; a transparent stub keeps it
-        // reachable through the wrapper and lets us read what it is handed.
-        CuttingMaterialPicker: {
-          props: ['open', 'materials', 'currentId', 'caption'],
-          emits: ['pick'],
-          template: `<section v-if="open" data-test="material-picker">
-            <span data-test="caption">{{ caption }}</span>
-            <button
-              v-for="material in materials"
-              :key="material.id"
-              :data-test="'pick-' + material.id"
-              @click="$emit('pick', material.id)"
-            />
-          </section>`,
-        },
-      },
+      { CuttingMaterialPicker: pickerStub },
     )
     cutting.panelOptions = [
       option({ id: 'm-18' }),
@@ -594,6 +599,55 @@ describe('CuttingEditorView material picker', () => {
 
     expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(false)
     expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
+  })
+
+  /**
+   * The workshop opens the same panel — including the unpriced formats only its
+   * listing carries, which staff must be able to pick (they are the ones who
+   * still have to price them). It also gets the one control the client's picker
+   * has no use for: the entry to the customer-board form.
+   */
+  it('opens the same picker in the workshop, with the staff list and the customer-board entry', async () => {
+    const { wrapper, cutting } = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-1' }),
+      { CuttingMaterialPicker: pickerStub },
+      'workshop',
+    )
+    cutting.panelOptions = [
+      option({ id: 'm-18' }),
+      // The staff payload's own row: registered, not yet priced.
+      option({ id: 'm-16', thickness_mm: '16', price_tiyin: 0, price_unset: true }),
+    ]
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('+ Material'))!
+      .trigger('click')
+
+    const picker = wrapper.get('[data-test="material-picker"]')
+    expect(wrapper.findAll('[data-test^="pick-"]')).toHaveLength(2)
+    // «Mijoz materiali» is still one click from «+ Material».
+    expect(picker.get('[data-test="picker-foot"]').text()).toContain('Mijoz materiali')
+
+    // The unpriced format is pickable, not merely visible.
+    await wrapper.get('[data-test="pick-m-16"]').trigger('click')
+
+    expect(wrapper.find('[data-test="material-picker"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-test="edit-length"]')).toHaveLength(1)
+
+    // Changing that group's material names the parts it lands on — the client
+    // picker has one trigger per group head and needs no such line.
+    // The group head's material name is the trigger. It sits inside the collapse
+    // button that also carries the name, so the innermost match is the one — the
+    // outer one only folds the group.
+    const nameButtons = wrapper.findAll('button').filter((b) => b.text().includes('Dub Sonoma'))
+    await nameButtons[nameButtons.length - 1].trigger('click')
+
+    expect(wrapper.get('[data-test="picker-subtitle"]').text()).toBe(
+      'Ushbu guruhdagi 1 detal uchun',
+    )
   })
 })
 

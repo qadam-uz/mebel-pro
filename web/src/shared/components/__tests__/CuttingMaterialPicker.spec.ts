@@ -14,7 +14,8 @@ const sheetStub = {
   CuttingBottomSheet: {
     props: ['open', 'title'],
     template: `<section v-if="open">
-      <h2>{{ title }}</h2><slot name="pinned" /><slot /><slot name="foot" />
+      <h2>{{ title }}</h2><p><slot name="subtitle" /></p>
+      <slot name="pinned" /><slot /><slot name="foot" />
     </section>`,
   },
 }
@@ -40,7 +41,11 @@ function option(overrides: Partial<ClientCatalogMaterialOption> = {}) {
   } as ClientCatalogMaterialOption
 }
 
-function mountPicker(materials: ClientCatalogMaterialOption[], currentId: string | null = null) {
+function mountPicker(
+  materials: ClientCatalogMaterialOption[],
+  currentId: string | null = null,
+  extra: { props?: Record<string, unknown>; slots?: Record<string, string> } = {},
+) {
   return mount(CuttingMaterialPicker, {
     attachTo: document.body,
     props: {
@@ -50,7 +55,9 @@ function mountPicker(materials: ClientCatalogMaterialOption[], currentId: string
       currentId,
       search: '',
       branch: 'Mebel Master',
+      ...extra.props,
     },
+    slots: extra.slots,
     global: { stubs: { Icon: true, AuthFileImage: true, AppModal: true, ...sheetStub } },
   })
 }
@@ -69,6 +76,13 @@ function chip(wrapper: ReturnType<typeof mountPicker>, label: string) {
  *  decor has an image, so positions shift with the fixture. */
 function buttonWith(wrapper: ReturnType<typeof mountPicker>, text: string) {
   return wrapper.findAll('button').find((button) => button.text().includes(text))!
+}
+
+/** The sheet's text with every flavour of space (the price formatter's no-break
+ *  ones included) folded to a plain one, so a copy assertion can be written the
+ *  way the screen reads. */
+function spaced(wrapper: ReturnType<typeof mountPicker>) {
+  return wrapper.text().replace(/[\s\u00a0\u202f\u2009]+/g, ' ')
 }
 
 describe('CuttingMaterialPicker (spec §7.3)', () => {
@@ -307,5 +321,93 @@ describe('CuttingMaterialPicker — the board-type filter', () => {
 
     expect(chips(wrapper)[0].attributes('aria-checked')).toBe('true')
     expect(wrapper.text()).toContain('Qayin')
+  })
+})
+
+/**
+ * The staff payload. Both editors mount this picker; the workshop's listing
+ * (`include_unpriced`) additionally carries formats the branch has registered
+ * and not yet priced, formats the platform has retired, and this drawing's own
+ * customer-supplied boards. Each is a row state, not a second component — and
+ * none of the three may print a number that is not what the sheet costs.
+ */
+describe('CuttingMaterialPicker — the workshop listing', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    document.body.innerHTML = ''
+  })
+
+  it("says «Narx kelishiladi» on an unpriced format instead of «0 so'm», and still picks it", async () => {
+    const wrapper = mountPicker([option({ id: 'm-18', price_tiyin: 0, price_unset: true })])
+
+    expect(wrapper.text()).toContain('Narx kelishiladi')
+    expect(wrapper.text()).not.toContain("0 so'm")
+
+    await buttonWith(wrapper, 'Dub Sonoma').trigger('click')
+    expect(wrapper.emitted('pick')).toEqual([['m-18']])
+  })
+
+  it('prices the formats it can and flags the one it cannot, side by side', async () => {
+    const wrapper = mountPicker([
+      option({ id: 'm-18' }),
+      option({
+        id: 'm-16',
+        thickness_mm: '16',
+        length_mm: 2750,
+        width_mm: 1830,
+        price_tiyin: 0,
+        price_unset: true,
+      }),
+    ])
+
+    await buttonWith(wrapper, 'Dub Sonoma').trigger('click')
+
+    const text = spaced(wrapper)
+    expect(text).toContain("285 000 so'm")
+    expect(text).toContain('Narx kelishiladi')
+
+    await buttonWith(wrapper, '16 mm').trigger('click')
+    expect(wrapper.emitted('pick')?.[0]).toEqual(['m-16'])
+  })
+
+  // Retired by the platform, still on the shelf: a hint, not a block — the
+  // branch may well be cutting the last of it.
+  it('marks a discontinued format without taking it away', async () => {
+    const wrapper = mountPicker([option({ id: 'm-18', discontinued: true })])
+
+    expect(wrapper.text()).toContain('Ishlab chiqarishdan chiqqan')
+
+    await buttonWith(wrapper, 'Dub Sonoma').trigger('click')
+    expect(wrapper.emitted('pick')).toEqual([['m-18']])
+  })
+
+  /**
+   * A customer board's `price_tiyin` is the branch's price for the same size —
+   * kept so a shortfall can price itself, not what this sheet costs the walk-in.
+   * Quoting it on the row would be inventing a charge.
+   */
+  it('names the owner of a customer-supplied board instead of quoting its substitute price', () => {
+    const wrapper = mountPicker([
+      option({
+        id: 'board-1',
+        name: 'Mijoz listi',
+        code: null,
+        customer_supplied: true,
+        price_tiyin: 28_500_000,
+      }),
+    ])
+
+    expect(wrapper.text()).toContain('Mijoz materiali')
+    expect(spaced(wrapper)).not.toContain("285 000 so'm")
+  })
+
+  it("carries the caller's subtitle and its foot affordance", () => {
+    const wrapper = mountPicker([option()], null, {
+      props: { subtitle: 'Ushbu guruhdagi 4 detal uchun' },
+      slots: { foot: '<button type="button">+ Mijoz materiali</button>' },
+    })
+
+    expect(wrapper.text()).toContain('Ushbu guruhdagi 4 detal uchun')
+    expect(buttonWith(wrapper, '+ Mijoz materiali').exists()).toBe(true)
   })
 })
