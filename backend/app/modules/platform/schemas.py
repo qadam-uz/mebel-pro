@@ -52,6 +52,12 @@ class WorkshopSummary(APIModel):
     name: str
     status: WorkshopStatus
     currency: Currency
+    # The `/w/{code}` client-entry code (client-entry.md). Carried on every
+    # operator-facing workshop payload so the admin can hand a workshop or one
+    # of its branches its own client link without a second request — the same
+    # artifact the owner copies in the workshop app. Not a secret: it is printed
+    # on counter QR codes.
+    public_code: str
     owner_user_id: uuid.UUID
     created_at: datetime
 
