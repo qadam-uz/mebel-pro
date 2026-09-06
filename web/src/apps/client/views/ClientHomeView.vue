@@ -425,8 +425,10 @@ onMounted(() => {
         <section v-if="visibleActiveOrders.length > 0" class="mb-5 md:mb-0">
           <div class="client-section-title">
             <h2>{{ $t('client.home.activeOrders') }}</h2>
+            <!-- No `?status=active`: Faol is the orders page's default chip
+                 (decision 28), so the bare path already lands on this list. -->
             <RouterLink
-              :to="rolePath('/c/orders?status=active')"
+              :to="rolePath('/c/orders')"
               class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
             >
               {{ $t('client.common.viewAll') }} →

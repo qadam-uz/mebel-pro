@@ -27,24 +27,34 @@ const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
 
-const STATUSES = ['all', 'active', 'ready', 'completed', 'cancelled'] as const
+/**
+ * Chip order and default (decision 28). **Faol first and default**: the list a
+ * client opens is the orders they are waiting on, not an archive that grows for
+ * ever. «Hammasi» is last and explicit — it is the way back to history, never
+ * the landing state. There is no «Bekor» chip: a cancelled order is read from
+ * Hammasi, and a filter nobody arms is a chip stealing width from the four that
+ * matter on a 375px row.
+ */
+const DEFAULT_STATUS = 'active'
+const STATUSES = ['active', 'ready', 'completed', 'all'] as const
 type StatusFilter = (typeof STATUSES)[number]
 
 function readStatus(value: unknown): StatusFilter {
-  const raw = String(value ?? 'all')
-  return (STATUSES as readonly string[]).includes(raw) ? (raw as StatusFilter) : 'all'
+  const raw = String(value ?? DEFAULT_STATUS)
+  return (STATUSES as readonly string[]).includes(raw) ? (raw as StatusFilter) : DEFAULT_STATUS
 }
 
 /**
- * The filter lives in the URL, not only in the component: home's «Barchasi →»
- * links straight to `?status=active`, and the browser's back button has to land
- * on the filter the client left rather than resetting to Hammasi.
+ * The filter lives in the URL, not only in the component, so the browser's back
+ * button lands on the filter the client left. Only a non-default chip is
+ * written: no `?status` **is** Faol, which keeps home's «Barchasi →» a plain
+ * `/c/orders` and the address bar clean on the view everybody opens.
  */
 const status = computed({
   get: () => readStatus(route.query.status),
   set: (value: string) => {
     const query = { ...route.query }
-    if (value === 'all') delete query.status
+    if (value === DEFAULT_STATUS) delete query.status
     else query.status = value
     void router.replace({ query })
   },
@@ -61,7 +71,10 @@ const statusOptions = computed(() =>
 )
 
 const visibleOrders = computed(() => orders.clientOrders)
+/** Hammasi with no search: an empty list here means the client has no orders. */
 const noFilter = computed(() => status.value === 'all' && !search.value)
+/** The landing view — its empty state offers Hammasi rather than first-run copy. */
+const isDefaultView = computed(() => status.value === DEFAULT_STATUS && !search.value)
 const isTrueEmpty = computed(
   () => !orders.loading && !orders.error && visibleOrders.value.length === 0 && noFilter.value,
 )
@@ -231,6 +244,16 @@ onMounted(() => {
         <p>{{ $t('client.orders.emptyBody') }}</p>
         <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
           {{ $t('client.common.newOrder') }}
+        </RouterLink>
+      </template>
+      <!-- The landing chip empties for every client who is between orders, so
+           it says so plainly and hands over the one filter that still has
+           rows — not «no results», which reads like a broken search. -->
+      <template v-else-if="isDefaultView">
+        <h3>{{ $t('client.orders.emptyActiveTitle') }}</h3>
+        <p>{{ $t('client.orders.emptyActiveBody') }}</p>
+        <RouterLink :to="{ query: { status: 'all' } }" class="mp-button mp-button-outline mt-4">
+          {{ $t('client.orders.viewAllStatuses') }}
         </RouterLink>
       </template>
       <template v-else>

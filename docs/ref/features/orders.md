@@ -630,7 +630,8 @@ inbox rows written before that (`order.status_changed`) still render
   **+ Yangi chizma** directly under the card and outside it, a **ready-for-pickup** banner for
   the first `ready` order (number, branch, total, a *yana N ta tayyor* hint — and **no
   action**, because «Olib ketdi» is the workshop's mark at the counter, so the banner informs
-  and links), **Faol buyurtmalar** (at most four rows, `Barchasi →` to the filtered list) and
+  and links), **Faol buyurtmalar** (at most four rows, `Barchasi →` to `/c/orders`, which
+  opens on the same filter) and
   **Davom ettirish** (at most three drafts; a chosen result opens the result stage, otherwise
   the editor). Empty sections are omitted rather than shown empty, and a pinned client with
   nothing active and no drafts gets one first-run prompt under the card.
@@ -672,21 +673,30 @@ inbox rows written before that (`order.status_changed`) still render
   success → `/c/orders/:id` with a banner: *"Buyurtma berildi — ustaxona ko'rib chiqib siz
   bilan bog'lanadi."*
 
-- **My orders** (`/c/orders`) — a segmented chip row (**Hammasi · Faol · Tayyor ·
-  Yakunlangan · Bekor**) mirrored into `?status=`, so the home's `Barchasi →` and the browser
-  back button both land on the right filter, plus a search icon-button that expands into the
-  input (drawing names are searchable too, so the field stays plain text). **The card is the
-  link**: left column `№ 482 917` in bold, the draft name as the headline **only when there is
-  one** (an untitled drawing shows no headline — a grey "Nomsiz chizma" placeholder was the
-  worst thing on the card), the `created_via_workshop` pill after it, then the workshop by the
-  **naming rule** ([`client-entry.md`](client-entry.md)) — its own name alone when it has one
-  visible branch, `{workshop} · {branch}` when it has several — and
-  `{n} detal · {m} list · {sana}` as two short lines. Right column,
-  top-aligned: the status pill and the **frozen total** beneath it — shown from placement, never
-  "price after confirm", since pricing is frozen at creation. No button of any kind, and no
-  cancel: cancelling lives on the detail page alone. A filter change keeps the old rows visible
-  at reduced opacity while the new page loads instead of blanking the list. Empty: *"Buyurtma
-  yo'q"*; filtered-empty offers to clear the filters.
+- **My orders** (`/c/orders`) — a chip row **Faol · Tayyor · Yakunlangan · Hammasi**, with
+  **Faol first and the default**: the list a client opens is what they are waiting on, not an
+  archive that only grows. The chip is mirrored into `?status=` **only when it is not Faol**,
+  so `/c/orders` is the active list, `?status=all` the archive, and the browser back button
+  still lands on the filter the client left; the home's `Barchasi →` is the bare path. There is
+  no **Bekor** chip — a cancelled order is read from Hammasi, and a filter nobody arms steals
+  width from the four that matter on a phone. Beside the chips a search icon-button expands
+  into the input (drawing names are searchable too, so the field stays plain text) and searches
+  across whichever chip is armed. **The card is the link**: left column `№ 482 917` at
+  15px/700 — the identity, and the largest thing in the column — the draft name under it as a
+  14px/600 truncated subtitle **only when there is one** (an untitled drawing shows no subtitle
+  — a grey "Nomsiz chizma" placeholder was the worst thing on the card), the
+  `created_via_workshop` pill after it, then the workshop by the **naming rule**
+  ([`client-entry.md`](client-entry.md)) — its own name alone when it has one visible branch,
+  `{workshop} · {branch}` when it has several — at 13.5px/500 in `ink-soft`, readable rather
+  than muted, and last `{n} detal · {m} list` at 12.5px in `ink-muted` with `{sana}` on its own
+  line on phones. Right column, top-aligned: the status pill and the **frozen total** beneath
+  it — shown from placement, never "price after confirm", since pricing is frozen at creation.
+  No button of any kind, and no cancel: cancelling lives on the detail page alone. A filter
+  change keeps the old rows visible at reduced opacity while the new page loads instead of
+  blanking the list. Three empty states: Hammasi with no search is first-run (*"Buyurtma
+  yo'q"*); **Faol** with no search is *"Faol buyurtma yo'q"* with a **Hammasini ko'rish** link
+  — not "no results", which reads as a broken search on the view every client lands on; any
+  other filter offers to clear the filters.
 - **Order detail** (`/c/orders/:id`) — four blocks, top to bottom. **Header card**: the number,
   the draft name under it when there is one, the status pill, the total right-aligned under a
   *jami narx* caption, and — only while `new` — a **Bekor qilish** outline-danger action with

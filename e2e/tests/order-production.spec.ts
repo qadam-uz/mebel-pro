@@ -581,7 +581,12 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
   await workshopContext.close();
 
+  // The list opens on «Faol» (spec decision 28), and a collected order is not
+  // active — so it is «Yakunlangan» that holds it, one chip away.
   await page.goto("/client/c/orders");
+  await expect(page.getByText("Faol buyurtma yo'q")).toBeVisible();
+  await expect(page.getByText(orderNumber as string)).toHaveCount(0);
+  await page.getByRole("radio", { name: "Yakunlangan" }).first().click();
   await expect(page.getByText(orderNumber as string).first()).toBeVisible();
   // The client track is four phases, mode-independent (orders.md): the final
   // one reads «Olib ketildi» whichever way the workshop ran the floor — the

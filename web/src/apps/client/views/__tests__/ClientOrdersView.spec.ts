@@ -82,6 +82,108 @@ afterEach(async () => {
   await setLocale(DEFAULT_LOCALE)
 })
 
+/** The URL the store asked the API for, from the last `api.get` call. */
+function lastRequest() {
+  const calls = vi.mocked(api.get).mock.calls
+  return String(calls[calls.length - 1]?.[0] ?? '')
+}
+
+/**
+ * The chips render twice — the scrolling `ClientChipFilter` under `md`, the
+ * `SegmentedControl` from `md` up — and jsdom resolves no breakpoints, so both
+ * are in the tree. Reading the first radiogroup keeps the assertions about one
+ * row rather than a doubled list.
+ */
+function chips(view: VueWrapper) {
+  const group = view.findAll('[role="radiogroup"]')[0]
+  return group?.findAll('[role="radio"]') ?? []
+}
+
+/**
+ * Decision 28 — Faol is the chip a client lands on, and the URL stays clean
+ * while it is armed. The rule is small and entirely invisible to typecheck: a
+ * default that silently reverts to Hammasi turns the page every client opens
+ * back into an archive that only grows.
+ */
+describe('ClientOrdersView — the status chips (decision 28)', () => {
+  it('opens on Faol, with no status in the URL and none asked of the API', async () => {
+    const view = await mountOrders()
+
+    expect(router.currentRoute.value.query.status).toBeUndefined()
+    expect(lastRequest()).toContain('status=active')
+    expect(chips(view)[0]?.attributes('aria-checked')).toBe('true')
+  })
+
+  it('lands on Faol from a status the chips no longer offer', async () => {
+    // «Bekor» was dropped from the row; a bookmark carrying it must not leave
+    // the page with no chip lit.
+    router = createRouter({ history: createMemoryHistory(), routes })
+    await router.push('/c/orders?status=cancelled')
+    await router.isReady()
+    const view = mount(ClientOrdersView, {
+      global: { plugins: [router], provide: { [roleConfigKey as symbol]: clientConfig } },
+    })
+    wrapper = view
+    await flushPromises()
+
+    expect(chips(view)[0]?.attributes('aria-checked')).toBe('true')
+    expect(lastRequest()).toContain('status=active')
+  })
+
+  it('orders the row Faol → Tayyor → Yakunlangan → Hammasi and offers no Bekor', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    expect(chips(view).map((chip) => chip.text())).toEqual([
+      'Faol',
+      'Tayyor',
+      'Yakunlangan',
+      'Hammasi',
+    ])
+  })
+
+  it('writes ?status=all for Hammasi and clears the query again on Faol', async () => {
+    const view = await mountOrders()
+
+    await chips(view)[3]?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.status).toBe('all')
+
+    await chips(view)[0]?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.status).toBeUndefined()
+  })
+})
+
+/**
+ * The landing chip empties for every client who is between orders, so its empty
+ * state has to hand over the filter that still has rows — «no results» copy on
+ * the default view reads as a broken search.
+ */
+describe('ClientOrdersView — the Faol empty state (decision 28)', () => {
+  it('offers Hammasi as a link, not first-run copy', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    expect(view.text()).toContain("Faol buyurtma yo'q")
+    const link = view.findAll('a').find((el) => el.text().includes("Hammasini ko'rish"))
+    expect(link?.attributes('href')).toBe('/c/orders?status=all')
+  })
+
+  it('keeps the first-run empty state for Hammasi with nothing at all', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+    await chips(view)[3]?.trigger('click')
+    await flushPromises()
+
+    expect(view.text()).toContain("Buyurtma yo'q")
+    expect(view.text()).not.toContain("Faol buyurtma yo'q")
+  })
+})
+
 // Decision 23 — the card's third line follows the naming rule off the payload's
 // own branch count, so a client of a single-counter workshop never reads a
 // branch name they have no use for.

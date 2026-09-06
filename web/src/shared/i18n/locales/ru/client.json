@@ -81,14 +81,16 @@
     "cancelReasonDefault": "Клиент отменил заказ до подтверждения",
     "filter": {
       "label": "Фильтр по статусу",
-      "all": "Все",
       "active": "Активные",
       "ready": "Готовые",
       "completed": "Завершённые",
-      "cancelled": "Отменённые"
+      "all": "Все"
     },
     "searchToggle": "Открыть поиск",
     "searchClose": "Закрыть поиск",
+    "emptyActiveTitle": "Активных заказов нет",
+    "emptyActiveBody": "Готовые и завершённые заказы — в списке «Все».",
+    "viewAllStatuses": "Показать все",
     "emptyFilteredTitle": "По этому фильтру заказов нет",
     "emptyFilteredHint": "Выберите другой статус или сбросьте фильтры."
   },
