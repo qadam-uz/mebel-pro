@@ -69,6 +69,8 @@
     "searchLabel": "Поиск материала",
     "searchPlaceholder": "Название или код декора — Sonoma, H1145, сонома",
     "searchEmpty": "По этому запросу материалов не найдено.",
+    "typeFilter": "Тип материала",
+    "typeAll": "Все",
     "pickerEmpty": "В этом филиале нет материалов.",
     "discontinued": "Снят с производства",
     "perSheet": "/ лист",
