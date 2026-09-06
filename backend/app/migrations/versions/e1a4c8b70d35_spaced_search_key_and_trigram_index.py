@@ -66,6 +66,37 @@ def downgrade() -> None:
     rebuild_search_keys(bind, spaced=False)
 
 
+# Minimal Core tables for the data step. Typed `Uuid` columns so ids survive the
+# round trip on both dialects; `status` and `type` are read as plain text and
+# filtered in Python, because comparing a Postgres enum column against a string
+# bind parameter is exactly the kind of thing that only fails in production.
+_METADATA = sa.MetaData()
+
+_DECORS = sa.Table(
+    "decors",
+    _METADATA,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("manufacturer_id", sa.Uuid()),
+    sa.Column("code", sa.String()),
+    sa.Column("name", sa.String()),
+    sa.Column("search_key", sa.String()),
+)
+_MANUFACTURERS = sa.Table(
+    "manufacturers",
+    _METADATA,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("name", sa.String()),
+)
+_DECOR_FORMATS = sa.Table(
+    "decor_formats",
+    _METADATA,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("decor_id", sa.Uuid()),
+    sa.Column("type", sa.String()),
+    sa.Column("status", sa.String()),
+)
+
+
 def rebuild_search_keys(bind: sa.engine.Connection, *, spaced: bool = True) -> None:
     """Recompute every decor's `search_key` from its own columns.
 
@@ -76,35 +107,40 @@ def rebuild_search_keys(bind: sa.engine.Connection, *, spaced: bool = True) -> N
     downgrade a real downgrade rather than a no-op.
     """
 
-    decors = bind.execute(sa.text("SELECT id, name, code, manufacturer_id FROM decors")).mappings()
     manufacturers = {
-        row["id"]: row["name"]
-        for row in bind.execute(sa.text("SELECT id, name FROM manufacturers")).mappings()
+        row.id: row.name
+        for row in bind.execute(sa.select(_MANUFACTURERS.c.id, _MANUFACTURERS.c.name))
     }
-    type_words: dict[object, list[str]] = {}
+    type_words: dict[object, set[str]] = {}
     for row in bind.execute(
-        sa.text("SELECT DISTINCT decor_id, type FROM decor_formats WHERE status = 'active'")
-    ).mappings():
-        type_words.setdefault(row["decor_id"], []).append(str(row["type"]))
+        sa.select(_DECOR_FORMATS.c.decor_id, _DECOR_FORMATS.c.type, _DECOR_FORMATS.c.status)
+    ):
+        if str(row.status) != "active":
+            continue
+        type_words.setdefault(row.decor_id, set()).add(str(row.type))
 
     updates = []
-    for decor in decors:
-        manufacturer_name = manufacturers.get(decor["manufacturer_id"], "")
+    for decor in bind.execute(
+        sa.select(_DECORS.c.id, _DECORS.c.name, _DECORS.c.code, _DECORS.c.manufacturer_id)
+    ):
+        manufacturer_name = manufacturers.get(decor.manufacturer_id, "")
         if spaced:
             key = build_search_key(
-                decor["name"],
-                decor["code"],
+                decor.name,
+                decor.code,
                 manufacturer_name,
-                *sorted(type_words.get(decor["id"], [])),
+                *sorted(type_words.get(decor.id, ())),
             )
         else:
-            key = _legacy_key(decor["name"], decor["code"], manufacturer_name)
-        updates.append({"decor_id": decor["id"], "search_key": key})
+            key = _legacy_key(decor.name, decor.code, manufacturer_name)
+        updates.append({"target_id": decor.id, "key": key})
 
     if not updates:
         return
     bind.execute(
-        sa.text("UPDATE decors SET search_key = :search_key WHERE id = :decor_id"),
+        _DECORS.update()
+        .where(_DECORS.c.id == sa.bindparam("target_id"))
+        .values(search_key=sa.bindparam("key")),
         updates,
     )
 

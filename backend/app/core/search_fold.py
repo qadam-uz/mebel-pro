@@ -17,12 +17,17 @@ Steps, in this order (the order is load-bearing — see `_LATIN_CONFUSABLES`):
 
 1. `casefold`
 2. Cyrillic to Latin, longest match first
-3. drop every apostrophe shape: ``' ʻ ʼ ‘ ’ ` ``
-4. drop every remaining non-alphanumeric character
-5. fold confusable Latin pairs: ``q -> k``, ``x -> h``
+3. strip diacritics — `yonģoq` and `yongoq` are the same word typed on two
+   keyboards, and the Latin-with-cedilla spellings circulate widely enough that
+   a catalog entered in one is unfindable from the other
+4. drop every apostrophe shape: ``' ʻ ʼ ‘ ’ ` ``
+5. drop every remaining non-alphanumeric character
+6. fold confusable Latin pairs: ``q -> k``, ``x -> h``
 
-Step 5 must run *after* step 2, so that Cyrillic `қ` (-> `q` -> `k`) and Latin
-`q` land on the same letter.
+Step 6 must run *after* step 2, so that Cyrillic `қ` (-> `q` -> `k`) and Latin
+`q` land on the same letter. Step 3 must run after it too: `ё` is a precomposed
+character whose decomposition is `е` + a mark, and it has to have become `yo`
+before anything strips marks.
 
 This module deliberately has no imports from `app.modules` — it is imported by
 an Alembic revision, which runs before the model registry is usable.
@@ -32,6 +37,8 @@ an Alembic revision, which runs before the model registry is usable.
 # Cyrillic and Latin letters on purpose; that is the whole point of the module.
 
 from __future__ import annotations
+
+import unicodedata
 
 # Cyrillic -> Latin. Multi-character Latin outputs (sh, ch, ya, ...) are why
 # lookups run longest-key-first rather than through a per-character dict.
@@ -89,8 +96,11 @@ def fold(text: str) -> str:
     """Return the folded form of one token — empty string for empty input."""
     lowered = text.casefold()
     transliterated = _transliterate(lowered)
+    decomposed = unicodedata.normalize("NFD", transliterated)
     stripped = "".join(
-        char for char in transliterated if char not in _APOSTROPHES and char.isalnum()
+        char
+        for char in decomposed
+        if char not in _APOSTROPHES and char.isalnum() and not unicodedata.combining(char)
     )
     return stripped.translate(_LATIN_CONFUSABLES)
 
