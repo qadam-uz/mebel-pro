@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
 import ClientOrderNewView from '@/apps/client/views/ClientOrderNewView.vue'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
+import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
 
@@ -129,6 +130,11 @@ async function mountConfirmation(profilePhone: string) {
   vi.spyOn(orders, 'quoteForDraft').mockResolvedValue(quote())
   const create = vi.spyOn(orders, 'createClientOrder').mockResolvedValue({ id: 'order-1' } as never)
 
+  // The pin moves to the order's branch on the server (decision 25); both reads
+  // that render «Ustaxonangiz» have to catch up, so both are watched here.
+  const refreshMe = vi.spyOn(auth, 'refreshMe').mockResolvedValue()
+  const reloadWorkshops = vi.spyOn(useClientEntryStore(), 'loadMyWorkshops').mockResolvedValue()
+
   const wrapper = mount(ClientOrderNewView, {
     global: {
       plugins: [router],
@@ -137,7 +143,7 @@ async function mountConfirmation(profilePhone: string) {
     },
   })
   await flushPromises()
-  return { wrapper, create }
+  return { wrapper, create, refreshMe, reloadWorkshops }
 }
 
 function phoneField(wrapper: Awaited<ReturnType<typeof mountConfirmation>>['wrapper']) {
@@ -210,6 +216,18 @@ describe('ClientOrderNewView — Uzbek numbers only (§7.7)', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ contact_phone: '+998901112233', contact_name: 'Dilshod' }),
     )
+  })
+
+  // Decision 25: the order pinned its branch, and home is one tap away — it
+  // must not need a reload to name the new Ustaxonangiz.
+  it('re-reads the principal and Ustaxonalarim once the order is placed', async () => {
+    const { wrapper, refreshMe, reloadWorkshops } = await mountConfirmation('+998901112233')
+
+    await submitButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(refreshMe).toHaveBeenCalled()
+    expect(reloadWorkshops).toHaveBeenCalled()
   })
 
   it('carries the four figures and no «Chiqim»', async () => {

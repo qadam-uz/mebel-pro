@@ -6,6 +6,7 @@ from app.modules.client_portal.entry import (
     my_workshops,
     record_workshop_entry,
     resolve_workshop_link,
+    visible_branch_counts,
     workshop_link_logo,
     workshop_link_throttle,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "resolve_workshop_link",
     "update_client_profile",
     "visible_branch",
+    "visible_branch_counts",
     "workshop_link_logo",
     "workshop_link_throttle",
 ]

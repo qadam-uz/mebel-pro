@@ -10,17 +10,17 @@ import {
   clientStatusPillClass,
   draftDisplayName,
   formatPhone,
-  formatRelativeDate,
   isClientPinned,
   workshopBranchName,
 } from '@/shared/app/clientUi'
+import { branchPhoneList } from '@/shared/app/branchPhones'
 import { takeEntryToast } from '@/shared/app/clientEntry'
 import { useRolePath } from '@/shared/app/paths'
 import Icon from '@/shared/components/AppIcon.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatClientDateTime, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -95,6 +95,23 @@ const workshopCardName = computed(() => {
   }
   return workshopBranchName(auth.me?.pinned_workshop_name, auth.me?.pinned_branch_name)
 })
+/** The ready banner names the counter by the same rule the card does — one
+ *  branch and the workshop's own name is the whole answer (decision 23). */
+const readyWhere = computed(() =>
+  primaryReady.value
+    ? workshopBranchName(
+        primaryReady.value.workshop_name,
+        primaryReady.value.branch_name,
+        primaryReady.value.workshop_branch_count,
+      )
+    : '',
+)
+/** Decision 24 — the card lists every number the counter publishes, not just
+ *  the first. Each stays its own tap target inside a card that is itself a
+ *  link, so each keeps the `@click.stop` the single one had. */
+const pinnedPhones = computed(() =>
+  branchPhoneList(pinnedBranch.value?.branch.phone, pinnedBranch.value?.branch.additional_phones),
+)
 const workshopInitial = computed(() =>
   (workshopCardName.value.trim().slice(0, 1) || 'M').toUpperCase(),
 )
@@ -162,7 +179,7 @@ function draftMeta(draft: CuttingDraft) {
   return [
     `${parts} ${t('client.unit.part', parts)}`,
     `${panels || '—'} ${t('client.unit.sheet', panels)}`,
-    formatRelativeDate(draft.updated_at),
+    formatClientDateTime(draft.updated_at),
   ].join(' · ')
 }
 
@@ -209,7 +226,12 @@ onMounted(() => {
         >
           {{ $t('client.home.yourWorkshop') }}
         </div>
-        <div class="mt-2 flex items-center gap-3 md:mt-0 md:gap-4">
+        <!-- Top-aligned below `md`: with every published number on the card
+             (decision 24) the text column runs to four lines on a phone, and a
+             centred monogram then sits beside a phone number rather than beside
+             the workshop it identifies. At `md` the numbers fit on one line and
+             centring still reads right. -->
+        <div class="mt-2 flex items-start gap-3 md:mt-0 md:items-center md:gap-4">
           <AuthFileImage
             v-if="pinnedBranch?.workshop.logo_file_id"
             :file-id="pinnedBranch.workshop.logo_file_id"
@@ -244,14 +266,17 @@ onMounted(() => {
             <!-- Tap-to-call sits inside a card that is itself a link: the
                  anchor wins the tap on its own 44px row, the card takes the
                  rest. -->
-            <a
-              v-if="pinnedBranch"
-              class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2 md:min-h-9 md:text-sm"
-              :href="`tel:${pinnedBranch.branch.phone}`"
-              @click.stop
-            >
-              {{ formatPhone(pinnedBranch.branch.phone) }}
-            </a>
+            <span class="flex flex-wrap items-center gap-x-3">
+              <a
+                v-for="phone in pinnedPhones"
+                :key="phone"
+                class="inline-flex min-h-11 items-center text-[13px] font-bold text-accent-deep underline underline-offset-2 md:min-h-9 md:text-sm"
+                :href="`tel:${phone}`"
+                @click.stop
+              >
+                {{ formatPhone(phone) }}
+              </a>
+            </span>
           </span>
           <Icon name="chevron-right" class="size-[18px] shrink-0 text-ink-muted md:size-5" />
         </div>
@@ -362,7 +387,7 @@ onMounted(() => {
               {{ formatOrderNumber(primaryReady.order_number) }}
             </span>
             <span class="mt-0.5 hidden text-sm text-ink-muted md:block">
-              {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+              {{ readyWhere }}
               <template v-if="readyOrders.length > 1">
                 · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
               </template>
@@ -380,7 +405,7 @@ onMounted(() => {
           <Icon name="chevron-right" class="size-[18px] shrink-0 text-accent-strong md:size-5" />
         </span>
         <span class="mt-2 block truncate text-[12.5px] text-ink-muted md:hidden">
-          {{ workshopBranchName(primaryReady.workshop_name, primaryReady.branch_name) }}
+          {{ readyWhere }}
           <template v-if="readyOrders.length > 1">
             · {{ $t('client.home.readyMore', readyOrders.length - 1) }}
           </template>

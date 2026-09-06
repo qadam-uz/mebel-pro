@@ -196,6 +196,11 @@ function hasPrice(option: ClientCatalogMaterialOption): boolean {
 }
 
 // --------------------------------------------------------------- lightbox
+//
+// The one place in this view that fetches the full image, and it opens on the
+// `sm` rendition the row already drew: that one is in the browser's cache, so
+// the modal has a picture in it immediately and the original arrives behind it
+// instead of leaving a hole on a phone connection.
 
 function openLightbox(group: DecorGroup, event: MouseEvent | KeyboardEvent) {
   lightboxTrigger = event.currentTarget as HTMLElement
@@ -509,7 +514,8 @@ onBeforeUnmount(() => {
         v-if="lightbox?.fileId"
         :file-id="lightbox.fileId"
         :alt="lightbox.title"
-        size="original"
+        size="sm"
+        upgrade-to="original"
         class="mx-auto block max-h-[70dvh] w-auto rounded-lg object-contain"
       />
       <span

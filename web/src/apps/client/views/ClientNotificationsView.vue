@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
-import { formatRelativeDate } from '@/shared/app/clientUi'
 import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
   notificationBody,
@@ -15,6 +14,7 @@ import {
 } from '@/shared/app/notificationPresenter'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
+import { formatClientDateTime } from '@/shared/formatters'
 import { useToast } from '@/shared/composables/useToast'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
@@ -243,7 +243,7 @@ onMounted(() => {
               <span class="size-2 shrink-0 rounded-full bg-signal" aria-hidden="true"></span>
               <span class="sr-only">{{ $t('shell.notifications.unreadMark') }}</span>
             </template>
-            {{ formatRelativeDate(item.created_at) }}
+            {{ formatClientDateTime(item.created_at) }}
           </span>
         </button>
       </div>

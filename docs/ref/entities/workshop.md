@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 20
 ---
 
@@ -61,7 +61,7 @@ whether clients see it and order from it.
 | `workshop_id` | UUID | required |
 | `branch_no` | int | platform-wide unique, assigned at creation as `max + 1` under an advisory lock. **Immutable** — it addresses the branch in its own client link and printed QR (`/w/{code}/{branch_no}`, [`client-entry.md`](../features/client-entry.md)), and it is the middle segment of the **legacy** order numbers this branch printed before numbers went global ([`sales.md`](sales.md)); changing it would rot counter QRs and orphan printed cutting maps. Not settable or patchable through any API |
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX`. `phone` is the **primary** number — the one compact surfaces (order card, order detail, PDF) and every order record carry |
-| `additional_phones` | json | ordered list of extra published numbers, 0–3; same `+998XXXXXXXXX` rule; no duplicates, including against `phone`. Array order is display order. Shown alongside the primary on the client-facing branch page only |
+| `additional_phones` | json | ordered list of extra published numbers, 0–3; same `+998XXXXXXXXX` rule; no duplicates, including against `phone`. Array order is display order. Shown alongside the primary wherever a client sees the branch ([`client-entry.md`](../features/client-entry.md)) |
 | `latitude` / `longitude` | numeric? | optional coordinate pair, both null when unknown. No geocoder: the owner places the pin on the branch form's map ([`workshop.md`](../features/workshop.md#branches)), and where a client is shown a branch the pair renders a **Xaritada ko'rish** link into Yandex Maps — absent when the pair is null |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |

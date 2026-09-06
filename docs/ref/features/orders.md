@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 30
 ---
 
@@ -566,6 +566,15 @@ Buyurtmalar · Ustaxona · Profil) replaces the desktop header nav, and the focu
 the cutting editor, the result stage, the order confirmation, the entry landing, login — carry
 no shell chrome at all, because each already has its own way back.
 
+**One date format, everywhere the client looks**: `26-aprel 2026, 09:32` — day, month name,
+year, comma, 24-hour clock (`26 апреля 2026, 09:32` in Russian, `26-апрел 2026, 09:32` in
+uz-Cyrl). It is the shape on the orders card, on saved drawings, in Bildirishnomalar and on
+Profil's sessions alike. No `dd.mm.yyyy`, and **no relative ages** — *kecha*, *3 kun oldin*:
+a client reads a handful of dates a week and needs to know which day, not how long ago, and
+two shapes on adjacent cards read as two different kinds of date. The workshop and admin apps
+keep the compact numeric form; their screens are dense tables where a spelled-out month costs
+a column. The order detail shows no date at all (see below).
+
 Home (`/c`) leads with **what needs attention now**, and on every list here **the row or card
 is the link** — no per-row **Batafsil** or **Kuzatish** button, and no second tap target
 inside a card that is one. The order's branch is the one the draft already carries in its
@@ -614,7 +623,8 @@ inbox rows written before that (`order.status_changed`) still render
 (`order.updated`, see [Revising a placed order](#revising-a-placed-order)).
 
 - **Home dashboard** (`/c`) — `Salom, {ism}` alone on the greeting row, then, in order: the
-  **Ustaxonangiz** card (the client's pinned branch — logo, name, address, tap-to-call phone,
+  **Ustaxonangiz** card (the client's pinned branch — logo, name, address, every tap-to-call
+  phone,
   a pill only when the branch is `temporarily_closed`; the card body links to the workshop
   profile, [`client-entry.md`](client-entry.md) owns it), the page's one primary
   **+ Yangi chizma** directly under the card and outside it, a **ready-for-pickup** banner for
@@ -668,8 +678,10 @@ inbox rows written before that (`order.status_changed`) still render
   input (drawing names are searchable too, so the field stays plain text). **The card is the
   link**: left column `№ 482 917` in bold, the draft name as the headline **only when there is
   one** (an untitled drawing shows no headline — a grey "Nomsiz chizma" placeholder was the
-  worst thing on the card), the `created_via_workshop` pill after it, then
-  `{workshop} · {branch}` and `{n} detal · {m} list · {sana}` as two short lines. Right column,
+  worst thing on the card), the `created_via_workshop` pill after it, then the workshop by the
+  **naming rule** ([`client-entry.md`](client-entry.md)) — its own name alone when it has one
+  visible branch, `{workshop} · {branch}` when it has several — and
+  `{n} detal · {m} list · {sana}` as two short lines. Right column,
   top-aligned: the status pill and the **frozen total** beneath it — shown from placement, never
   "price after confirm", since pricing is frozen at creation. No button of any kind, and no
   cancel: cancelling lives on the detail page alone. A filter change keeps the old rows visible
@@ -679,9 +691,10 @@ inbox rows written before that (`order.status_changed`) still render
   the draft name under it when there is one, the status pill, the total right-aligned under a
   *jami narx* caption, and — only while `new` — a **Bekor qilish** outline-danger action with
   its reason dialog. On phones a full-width **Chizmani PDF ochish** follows the card; desktop
-  keeps the PDF link in the Chizma tab head. **Ustaxona card**: workshop and branch by the
-  naming rule, address, **Xaritada ko'rish** when the branch has coordinates, phone (a
-  cancelled order shows the cancel banner and no Ustaxona card). **Narx card**: one receipt —
+  keeps the PDF link in the Chizma tab head. **Ustaxona card**: the workshop name as the title,
+  the branch on a second line **only when the workshop has more than one visible branch** (the
+  same naming rule), the address, **Xaritada ko'rish** when the branch has coordinates, and
+  every published phone (a cancelled order shows the cancel banner and no Ustaxona card). **Narx card**: one receipt —
   Kesish xizmati, Material, Kromka, any Ustama / Chegirma, then **Jami**; at `ready` and
   `completed` two further rows, **To'langan** and **Qoldiq**, with Qoldiq set larger than Jami
   because it is what the client pays at the counter, and one line saying payment is taken at

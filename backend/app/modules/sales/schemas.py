@@ -353,6 +353,11 @@ class OrderSummaryResponse(APIModel):
     contact_phone: str
     workshop_id: uuid.UUID
     workshop_name: str
+    # How many branches this workshop shows a client — the same count
+    # Ustaxonalarim uses. The naming rule turns on it: one branch and the client
+    # sees the workshop name alone, several and it is «{Workshop} · {Branch}».
+    # It travels in the payload so no screen has to guess from the names it has.
+    workshop_branch_count: int
     branch_id: uuid.UUID
     branch_name: str
     branch_address: str

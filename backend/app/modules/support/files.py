@@ -36,8 +36,10 @@ from app.modules.finance.contracts import Expense, Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.support.contracts import File as StoredFile
 from app.modules.support.image_variants import (
+    RENDERABLE_CONTENT_TYPES,
     ImageDecodeError,
     ImageVariant,
+    VariantChoice,
     resize_image,
     resolve_variant,
     variant_storage_key,
@@ -52,7 +54,9 @@ ALLOWED_UPLOAD_CONTENT_TYPES = frozenset(
         "application/pdf",
     }
 )
-IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+# One definition, in the module that decides what can be downscaled: the set an
+# attachment accepts as "an image" and the set that gets renditions must not drift.
+IMAGE_CONTENT_TYPES = RENDERABLE_CONTENT_TYPES
 RECEIPT_CONTENT_TYPES = ALLOWED_UPLOAD_CONTENT_TYPES
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 logger = get_logger(__name__)
@@ -215,10 +219,21 @@ async def build_image_variants(
 ) -> dict[str, str] | None:
     """Store downscaled renditions beside `storage_key`; return their keys.
 
+    The return value is what belongs in `files.variant_keys`, and its three
+    shapes are the three states the read path distinguishes:
+
+    * a map — these renditions exist;
+    * `{}` — settled, and there is nothing to serve but the original: a source
+      already smaller than every budget, or bytes Pillow cannot read. Recorded
+      so neither the backfill nor a read ever tries again;
+    * `None` — *not settled*. Either the file is not an image, or the object
+      store refused a write. Both leave the column NULL; the second is a
+      transient the next backfill run (or the next sized read) retries.
+
     Best effort by design. The original is already saved by the time this runs,
-    and every read falls back to it, so a failure here costs a larger download —
-    never a lost upload. Raising instead would mean one unreadable image could
-    block an operator from attaching a photo at all.
+    so a failure here costs a larger download — never a lost upload. Raising
+    instead would mean one unreadable image could block an operator from
+    attaching a photo at all.
 
     Shared with the backfill command, which is why it takes the key and bytes
     rather than a row.
@@ -230,8 +245,10 @@ async def build_image_variants(
         # milliseconds, and this process runs one event loop for every tenant.
         rendered = await anyio.to_thread.run_sync(resize_image, content)
     except ImageDecodeError as exc:
+        # Permanent: these bytes will not become readable on a retry, and the
+        # original is what every read of them serves from here on.
         logger.warning("image_variant_decode_failed", storage_key=storage_key, reason=str(exc))
-        return None
+        return {}
 
     keys: dict[str, str] = {}
     for item in rendered:
@@ -241,16 +258,17 @@ async def build_image_variants(
                 partial(storage.put, key, item.content, item.content_type)
             )
         except FileStorageUnavailable as exc:
-            # Keep whatever did land: a half-populated map is valid, and the read
-            # path falls back to the original for anything missing.
+            # A half-written set is not a state worth recording: leave the column
+            # NULL so the whole file is rendered again later. The keys are derived
+            # from the original's, so a re-run overwrites rather than orphans.
             logger.warning(
                 "image_variant_write_failed",
                 storage_key=key,
                 storage_error=str(exc),
             )
-            continue
+            return None
         keys[item.variant.value] = key
-    return keys or None
+    return keys
 
 
 def _storage_error_code(exc: Exception) -> str:
@@ -419,12 +437,59 @@ def etag_matches(header: str | None, etag: str) -> bool:
     return any(candidate == "*" or candidate.removeprefix("W/") == etag for candidate in candidates)
 
 
+async def _render_missing_variants(
+    db: AsyncSession,
+    *,
+    row: StoredFile,
+    storage: FileStorage,
+) -> None:
+    """Render an image nobody has rendered yet — once, and record the result.
+
+    The state this exists for is real and was the whole of the reported
+    slowness: every file uploaded before renditions shipped carries
+    `variant_keys IS NULL`, so `?size=sm` quietly served the full original.
+    The backfill command fixes a database on demand; this makes the *first*
+    request for such a file fix it too, so a restored dump, a re-seeded stack or
+    an upload whose rendition write failed cannot leave a catalog page pulling
+    originals for the rest of its life.
+
+    Costs one decode and two resizes, once per file ever. Failures are logged
+    and swallowed: the response still has the original to fall back on, and a
+    read is not the place to fail on account of a thumbnail.
+    """
+    try:
+        content = await anyio.to_thread.run_sync(storage.open, row.storage_key)
+    # Broad on purpose: boto raises a wide family here, and none of it is a
+    # reason to fail a read that has the original to serve.
+    except Exception as exc:
+        logger.warning(
+            "image_variant_lazy_read_failed",
+            storage_key=row.storage_key,
+            storage_error=_storage_error_code(exc),
+        )
+        return
+    keys = await build_image_variants(
+        storage,
+        storage_key=row.storage_key,
+        content_type=row.content_type,
+        content=content,
+    )
+    if keys is None:
+        # Not settled (the store refused a write). Leave the column NULL so this
+        # is retried, rather than pinning the file to the original forever.
+        return
+    row.variant_keys = keys
+    await db.flush()
+    logger.info("image_variants_rendered_on_read", storage_key=row.storage_key, variants=len(keys))
+
+
 async def serve_stored_file(
     *,
     row: StoredFile,
     storage: FileStorage,
     if_none_match: str | None,
     size: ImageVariant | None = None,
+    db: AsyncSession | None = None,
 ) -> Response:
     """Turn a stored file into an HTTP response — bytes, type, validators.
 
@@ -432,16 +497,29 @@ async def serve_stored_file(
     file serves it identically: same rendition fallback, same cache policy, same
     revalidation. Authorisation is the *caller's* job and has to have happened
     before this is reached.
+
+    `db` is what lets an unrendered image heal itself (see `_ensure_renditions`).
+    Without it the renditions cannot be *recorded*, and re-rendering per request
+    would be worse than the download it saves — so a caller with no session gets
+    the old fallback and the backfill command remains the fix.
     """
+
     # Resolved before the validator is built, because the key IS the validator.
     # `sm` and the original are different bytes under one file id, so an ETag that
     # ignored `size` would let a cache answer one with the other.
-    key, media_type = resolve_variant(
-        requested=size,
-        variant_keys=row.variant_keys,
-        original_key=row.storage_key,
-        original_content_type=row.content_type,
-    )
+    def choose() -> VariantChoice:
+        return resolve_variant(
+            requested=size,
+            variant_keys=row.variant_keys,
+            original_key=row.storage_key,
+            original_content_type=row.content_type,
+        )
+
+    choice = choose()
+    if choice.needs_render and db is not None:
+        await _render_missing_variants(db, row=row, storage=storage)
+        choice = choose()
+    key, media_type = choice.key, choice.content_type
     etag = file_etag(key)
     headers = {
         "Cache-Control": FILE_CACHE_CONTROL,

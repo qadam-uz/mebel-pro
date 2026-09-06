@@ -19,6 +19,12 @@ import Icon from '@/shared/components/AppIcon.vue'
  * `AppModal` carries the lightbox rather than a hand-rolled overlay, so Escape,
  * the scrim, the focus trap and focus returned to this thumbnail all come for
  * free and behave the way every other dialog here does.
+ *
+ * The lightbox opens on the `sm` rendition the button beside it just drew — so
+ * it is already in the browser cache and paints in the same frame as the modal —
+ * and upgrades to the original behind it. `md` was the placeholder before, and
+ * nothing on the page caches `md`: it bought a download of its own to show a
+ * picture the row already had.
  */
 const props = withDefaults(
   defineProps<{
@@ -71,7 +77,7 @@ const open = ref(false)
       v-if="fileId"
       :file-id="fileId"
       :alt="props.label"
-      size="md"
+      size="sm"
       upgrade-to="original"
       class="mx-auto block max-h-[min(calc(var(--app-vh)*0.7),36rem)] w-auto rounded-lg border border-hairline object-contain"
     />

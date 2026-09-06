@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { additionalPhoneErrors } from '@/shared/app/branchPhones'
+import { additionalPhoneErrors, branchPhoneList } from '@/shared/app/branchPhones'
 
 const PRIMARY = '+998901111111'
 
@@ -40,5 +40,35 @@ describe('additionalPhoneErrors', () => {
       '+998XXXXXXXXX formatida kiriting.',
       undefined,
     ])
+  })
+})
+
+// Decision 24: every client surface that shows a branch phone shows all of
+// them, in this order.
+describe('branchPhoneList', () => {
+  it('puts the primary first and keeps the extras in their stored order', () => {
+    expect(branchPhoneList(PRIMARY, ['+998903333333', '+998902222222'])).toEqual([
+      PRIMARY,
+      '+998903333333',
+      '+998902222222',
+    ])
+  })
+
+  it('is just the primary when a branch publishes one number', () => {
+    expect(branchPhoneList(PRIMARY)).toEqual([PRIMARY])
+    expect(branchPhoneList(PRIMARY, [])).toEqual([PRIMARY])
+    expect(branchPhoneList(PRIMARY, null)).toEqual([PRIMARY])
+  })
+
+  it('drops blanks and collapses a repeat, so a list keyed by number stays valid', () => {
+    expect(branchPhoneList(PRIMARY, ['', '   ', PRIMARY, '+998902222222'])).toEqual([
+      PRIMARY,
+      '+998902222222',
+    ])
+  })
+
+  it('renders nothing rather than an empty link when there is no number at all', () => {
+    expect(branchPhoneList(null, [])).toEqual([])
+    expect(branchPhoneList('  ')).toEqual([])
   })
 })

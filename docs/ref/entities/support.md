@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-06
 order: 60
 ---
 
@@ -29,6 +29,7 @@ and never touch object storage directly.
 | `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …). A catalog image still stores the literal `material` while `entity_id` points at a **decor** — the reshape re-pointed the id and left the label, so no historical row had to be rewritten |
 | `entity_id` | UUID? | the attached entity's id |
 | `sort_order` | int? | ordering when an entity has several files |
+| `variant_keys` | json? | the downscaled renditions that exist, as `{"sm": "<key>", …}`. `{}` means settled with none — the source already fits every budget, or its bytes will not decode. **NULL means nobody has rendered it yet**, which is a different answer |
 | `uploaded_by_type` / `uploaded_by_id` | enum / UUID | the principal who uploaded it |
 | `created_at` / `updated_at` | timestamp | |
 
@@ -39,6 +40,29 @@ metadata row is kept; the blob may be garbage-collected later). Detaching from a
 Invariants: size and content-type bounds enforced per attach context; a mutating attach/replace
 borrows the caller's DB transaction; other modules reference files only by `id`; download access
 is scope-checked the same way as the referencing entity.
+
+### Renditions
+
+An image is stored once and served at three sizes: the untouched original, `sm` (160 px) and
+`md` (640 px), both WebP, both keyed off the original's `storage_key`. A read picks one with
+`?size=`. The reason is measured, not theoretical — an operator's decor photo arrives at
+2160×2160 and 1.5 MB and is drawn into a 34 px swatch, fifty to a catalog page.
+
+Two invariants carry it:
+
+- **A `?size=` read never returns something larger than it asked for.** A rendition is only
+  skipped when the source already fits inside that budget, so falling back to the original
+  is bounded — *once the file is settled*. A file that has never been rendered is not
+  settled, which is why NULL and `{}` are distinct: on a sized read of a NULL row the service
+  renders the set, stores it, and records the keys before answering. Once per file, never per
+  request. The `backfill-image-variants` CLI does the same work ahead of time, which is what
+  a deploy over an existing catalog runs so no user pays that first request.
+- **A response is immutable per (file id, size).** Nothing mutates a stored object, so each
+  rendition is cached for a year with a strong validator built from the key it was served
+  from — per size, so no cache can answer one size with another's bytes.
+
+Renditions are best effort and never fail an upload: a photo that will not decode is stored,
+marked settled, and served as-is.
 
 ## Notification
 

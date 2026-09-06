@@ -59,4 +59,7 @@ async def files_show(
         storage=storage,
         if_none_match=request.headers.get("if-none-match"),
         size=size,
+        # Lets a file uploaded before renditions existed render itself on its
+        # first sized read instead of serving the original to a list forever.
+        db=db,
     )

@@ -44,6 +44,7 @@
     "nov": "noyabr",
     "dec": "dekabr"
   },
+  "clientDateTime": "{day}-{month} {year}, {time}",
   "dayMonthWeekday": "{day} {month}, {weekday}",
   "weekdayShort": {
     "mon": "Du",

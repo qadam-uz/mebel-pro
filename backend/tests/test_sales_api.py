@@ -325,6 +325,115 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert workshop_page_two.json() == []
 
 
+async def test_placing_an_order_pins_its_branch_and_a_later_order_moves_the_pin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Decision 25: the order's branch becomes «Ustaxonangiz», latest wins.
+
+    Opening the editor from a branch row no longer pins anything, so this is
+    the path that has to carry the move — including away from a branch the
+    client was already pinned to.
+    """
+    _, _, first_branch_id, _ = await _workshop_setup(db_session, login="pin_first")
+    first_panel, first_edge = await _materials(db_session, branch_id=first_branch_id)
+    client_access, client_row = await _client_access(db_session, phone="+998901555777")
+    assert client_row.preferred_branch_id is None
+
+    first_draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=first_branch_id,
+        panel=first_panel,
+        edge=first_edge,
+    )
+    first_order = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": first_draft["id"],
+            "branch_id": str(first_branch_id),
+            "contact_name": "Pin Client",
+            "contact_phone": "+998901555777",
+        },
+    )
+    assert first_order.status_code == 201, first_order.text
+    # Nothing was pinned: the first order settles it.
+    assert client_row.preferred_branch_id == first_branch_id
+
+    _, _, second_branch_id, _ = await _workshop_setup(db_session, login="pin_second")
+    second_panel, second_edge = await _materials(db_session, branch_id=second_branch_id)
+    second_draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=second_branch_id,
+        panel=second_panel,
+        edge=second_edge,
+    )
+    second_order = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": second_draft["id"],
+            "branch_id": str(second_branch_id),
+            "contact_name": "Pin Client",
+            "contact_phone": "+998901555777",
+        },
+    )
+    assert second_order.status_code == 201, second_order.text
+    # And the second order moves it, rather than leaving the first one standing.
+    assert client_row.preferred_branch_id == second_branch_id
+
+
+async def test_client_order_payloads_carry_the_workshop_branch_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The naming rule needs a number, not a guess.
+
+    A workshop with one visible branch is shown by its own name and the branch
+    name never appears; several and it is «{Workshop} · {Branch}». The web has
+    two names and no way to tell the two cases apart, so the count travels —
+    counted with the same visibility predicate Ustaxonalarim uses, which is why
+    an `inactive` branch does not move it.
+    """
+
+    order, client_access, _, workshop_id, _, _ = await _placed_order(
+        client, db_session, login="count_owner"
+    )
+    order_id = str(order["id"])
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+
+    assert listed.status_code == 200
+    assert detail.status_code == 200
+    assert [row["workshop_branch_count"] for row in listed.json()] == [1]
+    assert detail.json()["workshop_branch_count"] == 1
+
+    for name, status in (("Chilonzor", "active"), ("Sergeli", "inactive")):
+        db_session.add(
+            Branch(
+                workshop_id=workshop_id,
+                branch_no=await next_branch_no(db_session),
+                name=name,
+                address=f"Tashkent, {name}",
+                phone="+998901111111",
+                status=status,
+            )
+        )
+    await db_session.flush()
+
+    listed = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+
+    # Two visible counters, not three: the inactive one is invisible to the
+    # client everywhere else too, so it cannot be what makes their order card
+    # start naming a branch.
+    assert [row["workshop_branch_count"] for row in listed.json()] == [2]
+    assert detail.json()["workshop_branch_count"] == 2
+
+
 async def test_client_order_detail_gates_settlement_until_ready(
     client: AsyncClient,
     db_session: AsyncSession,

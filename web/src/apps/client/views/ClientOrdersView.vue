@@ -10,7 +10,7 @@ import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
-import { formatDate, formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatClientDateTime, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 /**
@@ -104,8 +104,13 @@ watch([status, search], () => {
   timer = window.setTimeout(reloadOrders, SEARCH_DEBOUNCE_MS)
 })
 
+// Line 3 of the card, by the naming rule (decision 23): the workshop's own
+// name when it has one counter, «{Workshop} · {Branch}» when it has several.
+// The count is the payload's, never inferred — a client with one branch on
+// screen and a second one they have never ordered from must still read the
+// joined form.
 function cardWhere(order: OrderSummary) {
-  return workshopBranchName(order.workshop_name, order.branch_name)
+  return workshopBranchName(order.workshop_name, order.branch_name, order.workshop_branch_count)
 }
 
 function openOrder(order: OrderSummary) {
@@ -286,7 +291,7 @@ onMounted(() => {
             {{ $t('client.unit.part', order.item_count) }} ·
             <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
             {{ $t('client.unit.sheet', order.planned_panels) }} ·
-            {{ formatDate(order.created_at) }}
+            {{ formatClientDateTime(order.created_at) }}
           </p>
         </div>
 

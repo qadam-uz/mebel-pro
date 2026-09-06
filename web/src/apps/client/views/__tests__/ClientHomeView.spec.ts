@@ -25,6 +25,8 @@ const routes = [
   { path: '/c/cutting/drafts', name: 'client-drafts', component: { template: '<div />' } },
   { path: '/c/orders', name: 'client-orders', component: { template: '<div />' } },
   { path: '/c/orders/:id', name: 'client-order', component: { template: '<div />' } },
+  // The Ustaxonangiz card links here once the workshops list has landed.
+  { path: '/c/workshops/:workshopId', name: 'client-workshop', component: { template: '<div />' } },
 ]
 
 function clientMe(overrides: Partial<MeResponse> = {}): MeResponse {
@@ -124,6 +126,45 @@ afterEach(() => {
 })
 
 describe('ClientHomeView — the Ustaxonangiz card (§3)', () => {
+  // Decision 24 — the card dials every number the counter publishes, not just
+  // the first. Each stays its own tap target inside a card that is itself a
+  // link, so `@click.stop` has to survive the list.
+  it('lists every published phone of the pinned branch, primary first', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/my-workshops')
+        ? [
+            {
+              workshop_id: 'workshop-1',
+              name: 'Mebel Master',
+              logo_file_id: null,
+              public_code: 'ABCD2345',
+              is_pinned: true,
+              branches: [
+                {
+                  id: 'branch-1',
+                  branch_no: 1,
+                  name: 'Chilonzor',
+                  address: 'Chilonzor 12',
+                  phone: '+998901234567',
+                  additional_phones: ['+998902222222'],
+                  status: 'active',
+                  closed_reason: null,
+                  is_pinned: true,
+                },
+              ],
+            },
+          ]
+        : [],
+    )
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.findAll('a[href^="tel:"]').map((link) => link.attributes('href'))).toEqual([
+      'tel:+998901234567',
+      'tel:+998902222222',
+    ])
+  })
+
   // Decision 16: with the branch list not yet in hand the card still has both
   // names off `/auth/me`, so it renders «Workshop · Branch» rather than waiting.
   it('titles the card by the naming rule and links to the workshop', async () => {
@@ -267,6 +308,52 @@ describe('ClientHomeView — the connected toast', () => {
  * rule and a drawing of two parts read «2 деталь». One drawing per Russian
  * class: 1 → one, 2 → few, 5 → many.
  */
+// Decision 22: the drawing's meta line ends in the one client date format —
+// never «kecha» / «3 kun oldin», and never the old `dd.mm hh:mm`. The fixture
+// timestamp is zone-less on purpose, so it parses as local time and the
+// assertion is about shape rather than about the runner's timezone.
+describe('ClientHomeView — the drawing date (decision 22)', () => {
+  function withDatedDraft() {
+    const drafts = [
+      {
+        id: 'draft-dated',
+        name: 'Oshxona shkafi',
+        parts_snapshot: [],
+        results: [],
+        chosen_result_id: null,
+        updated_at: '2026-04-26T09:32:00',
+      },
+    ]
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/cutting-drafts') ? drafts : [],
+    )
+  }
+
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  it('spells the date out in Uzbek and shows no relative age', async () => {
+    withDatedDraft()
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text().replace(/\s+/g, ' ')
+    expect(text).toContain('26-aprel 2026, 09:32')
+    expect(text).not.toContain('26.04')
+    expect(text).not.toMatch(/kecha|kun oldin/)
+  })
+
+  it('uses the Russian genitive month', async () => {
+    withDatedDraft()
+    await setLocale('ru')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
+})
+
 describe('ClientHomeView — the drawing meta line agrees with its numbers', () => {
   /** Three drawings sized 1, 2 and 5 — one per Russian plural class — each with
    *  as many sheets as parts, so one line exercises both units. */

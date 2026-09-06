@@ -4,11 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
-import { clientErrorLabel, draftDisplayName, formatRelativeDate } from '@/shared/app/clientUi'
+import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
+import { formatClientDateTime } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 
@@ -190,7 +191,7 @@ onMounted(() => {
               ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
               {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
             >
-            <span>{{ formatRelativeDate(draft.updated_at) }}</span>
+            <span>{{ formatClientDateTime(draft.updated_at) }}</span>
           </div>
         </div>
         <RouterLink

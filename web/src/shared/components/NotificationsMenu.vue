@@ -13,7 +13,7 @@ import Icon from '@/shared/components/AppIcon.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
-import { formatDate } from '@/shared/formatters'
+import { formatClientDateTime, formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
@@ -55,6 +55,13 @@ function body(item: NotificationItem) {
 
 function iconName(item: NotificationItem) {
   return notificationIconName(item)
+}
+
+// The bell hangs in all three shells, so the row's timestamp follows the role:
+// one client date format everywhere the client looks (decision 22), and the
+// compact `dd.mm.yyyy` the workshop and admin screens use elsewhere.
+function when(item: NotificationItem) {
+  return isClient.value ? formatClientDateTime(item.created_at) : formatDate(item.created_at)
 }
 
 function destination(item: NotificationItem) {
@@ -305,7 +312,7 @@ onBeforeUnmount(() => {
                 {{ body(item) }}
               </span>
               <span class="mt-1 block text-[12.5px] text-ink-muted">
-                {{ formatDate(item.created_at) }}
+                {{ when(item) }}
               </span>
             </span>
             <span

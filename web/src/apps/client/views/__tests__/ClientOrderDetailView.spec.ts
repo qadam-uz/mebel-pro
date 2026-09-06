@@ -29,7 +29,7 @@ const routes = [
  * branch of the template rendering — no cutting result, so the drawing tab and
  * the parts table stay out of the way.
  */
-function orderWith(panels: number): OrderDetail {
+function orderWith(panels: number, overrides: Partial<OrderDetail> = {}): OrderDetail {
   return {
     id: 'order-1',
     order_number: '100001',
@@ -71,18 +71,20 @@ function orderWith(panels: number): OrderDetail {
     ],
     cutting_result: null,
     settlement: null,
+    workshop_branch_count: 1,
+    ...overrides,
   } as unknown as OrderDetail
 }
 
 let router: Router
 let wrapper: VueWrapper | null = null
 
-async function mountDetail(panels: number) {
+async function mountDetail(panels: number, overrides: Partial<OrderDetail> = {}) {
   const auth = useAuthStore()
   auth.accessToken = 'access-1'
   auth.status = 'authenticated'
 
-  vi.mocked(api.get).mockResolvedValue(orderWith(panels) as never)
+  vi.mocked(api.get).mockResolvedValue(orderWith(panels, overrides) as never)
 
   router = createRouter({ history: createMemoryHistory(), routes })
   await router.push('/c/orders/order-1')
@@ -107,6 +109,55 @@ afterEach(async () => {
   wrapper?.unmount()
   wrapper = null
   await setLocale(DEFAULT_LOCALE)
+})
+
+// Decision 24 — the Ustaxona card reaches the counter on every line it
+// publishes, not only the first.
+describe('ClientOrderDetailView — every branch phone is dialable (decision 24)', () => {
+  it('lists the primary first and then the extras, each its own tel: link', async () => {
+    const view = await mountDetail(1, {
+      branch_additional_phones: ['+998902222222', '+998903333333'],
+    } as Partial<OrderDetail>)
+
+    expect(view.findAll('a[href^="tel:"]').map((link) => link.attributes('href'))).toEqual([
+      'tel:+998901234567',
+      'tel:+998902222222',
+      'tel:+998903333333',
+    ])
+  })
+
+  it('renders one link when the branch publishes one number', async () => {
+    const view = await mountDetail(1)
+
+    expect(view.findAll('a[href^="tel:"]')).toHaveLength(1)
+  })
+})
+
+// Decision 23 — the Ustaxona card names the counter the same way the orders
+// list does. The workshop is always the title; the branch earns a second line
+// only where there is more than one branch to tell apart. The branch name in
+// these fixtures is deliberately unlike the address, so an assertion about the
+// name cannot pass on the address line.
+describe('ClientOrderDetailView — the Ustaxona card names the workshop (decision 23)', () => {
+  const named = { branch_name: 'Yunusobod filiali' } as Partial<OrderDetail>
+
+  it('shows the workshop alone when it has one visible branch', async () => {
+    const view = await mountDetail(1, { ...named, workshop_branch_count: 1 })
+
+    const text = view.text()
+    expect(text).toContain('Mebel Master')
+    expect(text).not.toContain('Yunusobod filiali')
+    // The address stays: it is how the client finds the door.
+    expect(text).toContain('Chilonzor 12')
+  })
+
+  it('adds the branch line once the workshop has several', async () => {
+    const view = await mountDetail(1, { ...named, workshop_branch_count: 3 })
+
+    const text = view.text()
+    expect(text).toContain('Mebel Master')
+    expect(text).toContain('Yunusobod filiali')
+  })
 })
 
 /**

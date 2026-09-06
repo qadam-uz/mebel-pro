@@ -199,6 +199,10 @@ export interface OrderSummary {
   contact_phone: string
   workshop_id: string
   workshop_name: string
+  /** Visible branches this workshop has — what `workshopBranchName` decides on
+   *  (one → the workshop name alone). Counted server-side with the same
+   *  predicate Ustaxonalarim uses, so no screen has to infer it from names. */
+  workshop_branch_count: number
   branch_id: string
   branch_name: string
   branch_address: string

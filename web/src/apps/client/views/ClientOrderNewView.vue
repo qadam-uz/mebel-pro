@@ -3,7 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { clientErrorLabel, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import {
+  clientErrorLabel,
+  isUzPhone,
+  normalizeUzPhone,
+  workshopBranchName,
+} from '@/shared/app/clientUi'
 import {
   buildBillRows,
   canPlaceBlocker,
@@ -16,6 +21,7 @@ import BranchContact from '@/shared/components/BranchContact.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useClientEntryStore } from '@/shared/stores/clientEntry'
 import { useCuttingStore } from '@/shared/stores/cutting'
 import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
 
@@ -24,6 +30,7 @@ const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
 const auth = useAuthStore()
+const entry = useClientEntryStore()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
 const toast = useToast()
@@ -133,6 +140,12 @@ async function placeOrder() {
       contact_phone: normalizeUzPhone(contactPhone.value),
     })
     toast.success(t('client.orderNew.placedToast'))
+    // Placing the order moved the pin to its branch (decision 25), and home
+    // reads «Ustaxonangiz» from both the principal's pinned names and the
+    // `is_pinned` flags on Ustaxonalarim — both stale until re-read, and home
+    // is one tap away. A refresh that fails is not worth failing a placed
+    // order over, so neither rejection escapes.
+    await Promise.allSettled([auth.refreshMe(), entry.loadMyWorkshops()])
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
     // createClientOrder captures the failure to actionError/actionTraceId —
@@ -222,9 +235,14 @@ onMounted(async () => {
               {{ $t('client.orderNew.quoteFailed') }}
             </p>
             <!-- Workshop and branch read as one name — "Mebel Master · Yunusobod
-                 filiali" — because that is how the client says it out loud. -->
+                 filiali" — because that is how the client says it out loud.
+                 Through the naming rule, so a workshop with a single counter is
+                 named by itself (decision 23); the quote carries no branch
+                 count, and the joined form is the right answer without one. -->
             <div v-else class="grid gap-2">
-              <div class="client-row-name">{{ quote.workshop_name }} · {{ quote.branch_name }}</div>
+              <div class="client-row-name">
+                {{ workshopBranchName(quote.workshop_name, quote.branch_name) }}
+              </div>
               <BranchContact
                 :address="quote.branch_address"
                 :phone="quote.branch_phone"

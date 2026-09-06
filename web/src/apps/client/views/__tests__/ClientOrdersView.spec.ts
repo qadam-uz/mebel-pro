@@ -31,7 +31,8 @@ function order(parts: number, panels: number): OrderSummary {
     id: `order-${parts}`,
     order_number: String(100_000 + parts),
     workshop_name: 'Mebel Master',
-    branch_name: 'Chilonzor',
+    branch_name: 'Yunusobod filiali',
+    workshop_branch_count: 3,
     status: 'new',
     item_count: parts,
     planned_panels: panels,
@@ -79,6 +80,68 @@ afterEach(async () => {
   wrapper?.unmount()
   wrapper = null
   await setLocale(DEFAULT_LOCALE)
+})
+
+// Decision 23 — the card's third line follows the naming rule off the payload's
+// own branch count, so a client of a single-counter workshop never reads a
+// branch name they have no use for.
+describe('ClientOrdersView — the card names the workshop (decision 23)', () => {
+  function withCount(count: number) {
+    vi.mocked(api.get).mockImplementation(
+      async () => [{ ...order(2, 1), workshop_branch_count: count }] as never,
+    )
+  }
+
+  it('shows the workshop alone when it has one visible branch', async () => {
+    withCount(1)
+
+    const view = await mountOrders()
+
+    expect(view.text()).toContain('Mebel Master')
+    expect(view.text()).not.toContain('Yunusobod filiali')
+  })
+
+  it('joins workshop and branch once it has several', async () => {
+    withCount(2)
+
+    const view = await mountOrders()
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('Mebel Master \u00b7 Yunusobod filiali')
+  })
+})
+
+/**
+ * Decision 22 — the card's fourth line ends in the one client date format. The
+ * fixture's timestamp carries no zone so it parses as local time: the assertion
+ * is about the shape, and a `Z` would make it drift a day either side of UTC.
+ */
+describe('ClientOrdersView — the card date (decision 22)', () => {
+  function datedOrder() {
+    vi.mocked(api.get).mockImplementation(
+      async () => [{ ...order(2, 1), created_at: '2026-04-26T09:32:00' }] as never,
+    )
+  }
+
+  it('spells the month out and keeps the 24h clock in Uzbek', async () => {
+    datedOrder()
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    const text = view.text().replace(/\s+/g, ' ')
+    expect(text).toContain('26-aprel 2026, 09:32')
+    // The numeric shape this replaced must be gone, not merely unused.
+    expect(text).not.toContain('26.04.2026')
+  })
+
+  it('uses the Russian genitive month', async () => {
+    datedOrder()
+    await setLocale('ru')
+
+    const view = await mountOrders()
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
 })
 
 /**

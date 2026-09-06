@@ -72,10 +72,14 @@ export const clientRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/CuttingEditorView.vue'),
     meta: { titleKey: 'routes.newDraft', chromeless: true },
     // A drawing only ever starts from a workshop (spec §2.2): the pin, or the
-    // branch whose «Yangi chizma» was tapped. Without a pin the editor has no
-    // branch and no way to ask for one, so the URL is answered by Ustaxonalarim
-    // instead — the guard runs before any editor screen renders.
-    beforeEnter: async () => {
+    // branch whose «Yangi chizma» was tapped, which arrives as `?branch=`
+    // (decision 25 — that button pins nothing, so the pin cannot be the ticket
+    // in). With neither the editor has no branch and no way to ask for one, so
+    // the URL is answered by Ustaxonalarim instead — the guard runs before any
+    // editor screen renders. The id itself is checked in the editor, against
+    // the client's own branch options.
+    beforeEnter: async (to) => {
+      if (typeof to.query.branch === 'string' && to.query.branch) return true
       const [{ useAuthStore }, { isClientPinned }] = await Promise.all([
         import('@/shared/stores/auth'),
         import('@/shared/app/clientUi'),

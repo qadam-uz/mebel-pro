@@ -212,6 +212,10 @@ async def _backfill_image_variants(*, batch_size: int, limit: int | None) -> Non
     interruption — or after adding a new rendition size — picks up where it left
     off. Safe to run against a live system: it only ever adds objects and fills a
     column the read path already treats as optional.
+
+    The read path renders a missing rendition on its own now, so this is no
+    longer the only cure — but it is the one that costs no user a slow first
+    request, which is why a deploy over old files still runs it.
     """
     from app.models import import_all_models
     from app.modules.support.api import IMAGE_CONTENT_TYPES, build_image_variants, file_storage
@@ -245,6 +249,7 @@ async def _backfill_image_variants(*, batch_size: int, limit: int | None) -> Non
             )
             if not rows:
                 break
+            settled = 0
             for row in rows:
                 try:
                     content = await asyncio.to_thread(storage.open, row.storage_key)
@@ -260,10 +265,17 @@ async def _backfill_image_variants(*, batch_size: int, limit: int | None) -> Non
                     content_type=row.content_type,
                     content=content,
                 )
-                # An image already smaller than every rendition legitimately has
-                # none. Writing `{}` marks it done so the next run skips it —
-                # leaving NULL would make the backfill re-read it forever.
-                row.variant_keys = keys if keys is not None else {}
+                if keys is None:
+                    # The object store refused a write. Leave the column NULL so
+                    # the next run picks this row up again.
+                    failed += 1
+                    print(json.dumps({"id": str(row.id), "status": "write_failed"}))
+                    continue
+                # `{}` is a settled answer, not a failure: an image already
+                # smaller than every rendition legitimately has none, and marking
+                # it done is what stops the next run re-reading it forever.
+                row.variant_keys = keys
+                settled += 1
                 if keys:
                     processed += 1
                 else:
@@ -279,6 +291,11 @@ async def _backfill_image_variants(*, batch_size: int, limit: int | None) -> Non
                 }
             )
         )
+        if settled == 0:
+            # Every row in the batch failed, and a failure leaves the column NULL
+            # — so the next query would hand back exactly these rows again. Stop
+            # instead of spinning; the exit line already says how many failed.
+            break
 
     print(
         json.dumps(

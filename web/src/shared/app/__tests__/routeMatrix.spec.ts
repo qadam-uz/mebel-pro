@@ -583,12 +583,16 @@ describe('role route matrix', () => {
     // no branch state of its own — so a pin-less `/c/cutting/new` is answered by
     // Ustaxonalarim before any editor screen renders.
     describe('the client editor needs a pinned branch', () => {
-      async function newDraftGuard(me: Partial<MeResponse> | null, base = '/') {
+      async function newDraftGuard(
+        me: Partial<MeResponse> | null,
+        base = '/',
+        to: Partial<RouteLocationNormalized> = {},
+      ) {
         setActivePinia(createPinia())
         const { useAuthStore } = await import('@/shared/stores/auth')
         useAuthStore().me = me as MeResponse | null
         const normalized = normalizeRoleRoutes(clientRoutes, '/client', base)
-        return await runGuard(normalized.find((r) => r.path === '/c/cutting/new')?.beforeEnter)
+        return await runGuard(normalized.find((r) => r.path === '/c/cutting/new')?.beforeEnter, to)
       }
 
       it('redirects an un-pinned client to Ustaxonalarim', async () => {
@@ -614,6 +618,21 @@ describe('role route matrix', () => {
             pinned_workshop_name: 'Mebel Master',
           }),
         ).toBe(true)
+      })
+
+      // Decision 25: a branch row's «Yangi chizma» pins nothing, so `?branch=`
+      // — not the pin — is what lets an un-pinned client into the editor.
+      it('lets an un-pinned client through when the URL names a branch', async () => {
+        expect(
+          await newDraftGuard({ pinned_workshop_name: null }, '/', { query: { branch: 'b-2' } }),
+        ).toBe(true)
+      })
+
+      // An empty `?branch=` names nothing; it must not open the door.
+      it('still redirects when the branch query is empty', async () => {
+        expect(
+          await newDraftGuard({ pinned_workshop_name: null }, '/', { query: { branch: '' } }),
+        ).toBe('/c/branches')
       })
 
       // No principal in hand yet: the editor decides, rather than the guard

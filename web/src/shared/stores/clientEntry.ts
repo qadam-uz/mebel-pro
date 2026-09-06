@@ -54,6 +54,9 @@ export interface ClientWorkshopBranch {
   name: string
   address: string
   phone: string
+  /** The branch's other published numbers, in its own order — every client
+   *  surface shows all of them, primary first (decision 24). */
+  additional_phones?: string[]
   status: EntryBranchStatus
   closed_reason: string | null
   is_pinned: boolean
