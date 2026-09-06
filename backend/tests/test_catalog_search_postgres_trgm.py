@@ -101,14 +101,22 @@ async def test_postgres_typo_tier_finds_the_row_the_exact_tiers_missed() -> None
             # The spec's `sanoma`: one letter wrong, no exact match anywhere, and
             # the typo tier is what turns it into a result.
             assert await search("sanoma") == ["Sonoma eman"]
-            # Two letters wrong in a short word is still the same word.
-            assert await search("sonoma emen") == ["Sonoma eman"]
+            # The typo tier is per token, so a query that is one good word plus
+            # one misspelled one still narrows rather than widens. (Trigrams need
+            # letters to work with: a wrong letter in a four-letter word is below
+            # any threshold worth setting, and no tier saves it.)
+            assert await search("egger sanoma") == ["Sonoma eman"]
             # An exact hit never falls through to the fuzzy tier, so it is not
             # joined by the near-misses the fuzzy tier would have admitted.
             assert await search("sonoma") == ["Sonoma eman"]
             # And a query close to nothing still finds nothing — the tier is a
             # fallback, not a "show me everything".
             assert await search("qwertyuiop") == []
+            # Two real words that name no single row stay an honest empty
+            # result. This is why the tier scores whole words of the key rather
+            # than any extent of it: `kronospan` scored exactly at the threshold
+            # against every Egger key under the looser operator.
+            assert await search("egger kronospan") == []
     finally:
         await engine.dispose()
 

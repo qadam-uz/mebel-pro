@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 50
 ---
 
@@ -87,35 +87,80 @@ apostrophe shapes (`o'`, `oʻ`, `o‘`), and the same decor is routinely typed `
 each other, and the operator typing the query has no idea which spelling the catalog was
 entered in.
 
-So every decor stores a **folded search key** — `name`, `code` and the manufacturer name run
-through one folding function — and the incoming query is folded the same way. Search is then a
-plain `ILIKE` over that key. The fold, in order:
+So every decor stores a **folded search key**, and the incoming query is folded the same way.
+The fold, in order:
 
 1. casefold;
 2. Cyrillic → Latin, longest match first (`ш`→`sh`, `ў`→`o`, `ғ`→`g`, `қ`→`q`, `ъ`/`ь`→ dropped, …);
-3. drop every apostrophe shape;
-4. drop every remaining non-alphanumeric character;
-5. fold the confusable Latin pairs **`q`→`k`** and **`x`→`h`**.
+3. strip diacritics, so `yonģoq` and `yongoq` are one word;
+4. drop every apostrophe shape;
+5. drop every remaining non-alphanumeric character;
+6. fold the confusable Latin pairs **`q`→`k`** and **`x`→`h`**.
 
-Step 5 runs **after** step 2 on purpose, so Cyrillic `қ` (→ `q` → `k`) and Latin `q` land on
-the same letter. The visible consequence: `yong'oq` folds to **`yongok`**, not `yongoq` — the
-key is a normalisation, never a readable word, and nothing but the matcher ever sees it. The
-query is **tokenised and ANDed**: the key is a concatenation with its separators folded away,
-so `egger sonoma` as one blob would never match `sonomah1334egger`; each word is matched on its
-own and all must hit.
+Step 6 runs **after** step 2 on purpose, so Cyrillic `қ` (→ `q` → `k`) and Latin `q` land on
+the same letter, and step 3 runs after it too — `ё` decomposes into a letter plus a mark, and
+has to have become `yo` before anything strips marks. The visible consequence: `yong'oq` folds
+to **`yongok`**, not `yongoq` — the key is a normalisation, never a readable word, and nothing
+but the matcher ever sees it.
 
-This is why every catalog **search box over the catalog** posts its query to the server and
-shows what comes back verbatim: re-filtering that page by raw text on the client would
-silently drop the very rows the fold was built to find. One surface still filters locally —
-the cutting editor's edge picker, which loads the branch's whole tape list once and narrows it
-in the dialog ([`cutting.md`](cutting.md)); it therefore does **not** get the fold, and a
-Cyrillic query there finds nothing. Worth closing when that picker next moves.
-The key is recomputed on every decor write and on a manufacturer rename.
+**The key is spaced words, not one blob.** It is `" " + the folded words + " "` of the decor's
+name, code and manufacturer name, plus the **substrate words of its active formats** (`ldsp`,
+`kromka`, …) — which is what makes «лдсп» and `ldsp sonoma` queries on a table whose rows
+carry no substrate of their own. A part with more than one word also contributes its whole
+separator-less fold, so a query `h1145` still finds a code stored `H 1145` or `H-1145`. The
+wrapping spaces are load-bearing: a word start is then a plain `LIKE '% son%'`, which is what
+makes ranking expressible in SQL at all. Because the substrate words are a fact about the
+formats, the key is rebuilt on every decor write, on a manufacturer rename, **and** whenever
+one of the decor's formats is created or changes status.
 
-Chosen over a Postgres trigram index or a search extension because the corpus is hundreds of
-rows per query, the transformation is deterministic, and one pure function is testable without
-a database. Revisit if the catalog reaches the tens of thousands, or if ranked
-relevance (rather than "matches / doesn't") becomes a requirement.
+**One matcher, every surface.** The query is split on whitespace, each token folded, and **all
+tokens must match** — `egger sonoma` and `sonoma egger` both find the same row, and
+`egger kronospan` finds nothing. A token matches when it is a substring of the key **or** when
+it is a dimension the row is sold in, matched by *value*: `18` finds the 18 mm rows and never
+the 1830 mm ones, `2800x2070` (or `×`, or `*`) finds that sheet size in either orientation.
+Where the row is a format — the branch table, the warehouse, both client pickers — the number
+is matched on the row; where the row is a decor — the platform list, the attach picker — it
+means "has an active format like that".
+
+Results are **ranked**, lowest band first, then by the surface's own order:
+
+| Band | Means |
+| --- | --- |
+| 0 | the query **is** the code — `h1145` typed at `H-1145` |
+| 1 | the code starts with the query — `h11` |
+| 2 | every token starts a word in the key — `son` at `Sonoma` |
+| 3 | matched somewhere else: mid-word, or only by a dimension |
+
+**Two fallbacks, and they only run when the first found nothing.** A result never says which
+tier produced it — a fallback result is simply the result.
+
+1. **Keyboard layout.** A query written entirely in one script is retyped through the other
+   keyboard and searched again: «Ыщтщьф» is `Sonoma` with ЙЦУКЕН still active. A mixed-script
+   query is someone typing deliberately and is left alone.
+2. **Typos.** `pg_trgm` *strict* word similarity per token (≥ 0.3): each token is scored
+   against the closest whole word of the key, ordered by similarity, capped at 20 rows — so
+   `sanoma` finds Sonoma while `egger kronospan` stays the empty result it honestly is. Whole
+   words rather than any extent of the key is what makes that second half true. This is the
+   one place the catalog depends on a Postgres extension; where it is absent the tier is
+   skipped and the search reports no rows rather than failing. Trigrams need letters to work
+   with — a wrong letter in a four-letter word is below any threshold worth setting.
+
+*Why the extension is now accepted.* This document used to rule out trigrams on the grounds
+that the corpus is hundreds of rows, the fold is deterministic, and a pure function is
+testable without a database — with the explicit revisit trigger *"if ranked relevance rather
+than 'matches / doesn't' becomes a requirement"*. It did: an operator typing `son` expects
+Sonoma above a decor that merely contains those letters, and a client one letter off expects
+the board anyway. Ranking is still pure SQL over the folded key; only the typo tier needs
+`pg_trgm`, it runs only on the zero-result path, and it is fenced behind a capability check so
+its absence degrades rather than breaks. Revisit if the catalog reaches the tens of thousands
+of decors, where the last tier's cap starts hiding real answers.
+
+**Every catalog search box posts its query to the server** and shows what comes back verbatim:
+re-filtering that page by raw text in the browser would silently drop the very rows the fold
+was built to find. One surface legitimately filters locally — the cutting editor's tape
+picker, which loads the branch's whole tape list once and narrows it in the dialog
+([`cutting.md`](cutting.md)) — and it now runs a TypeScript port of the same fold, tokens and
+ranking, so a Cyrillic query and a typo find there what they find everywhere else.
 
 ## Decor formats (platform-owned)
 

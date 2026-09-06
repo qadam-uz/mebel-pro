@@ -12,8 +12,8 @@ must match (AND) — a token matches when its fold is a substring of the row's
 Matching rows are ordered by a relevance CASE (exact code, code prefix, word
 start, anywhere) before the surface's own ordering. If that finds nothing the
 same search runs again through two fallbacks: the keyboard-layout swap
-(«Ыщтщьф» is `Sonoma` typed on the wrong layout), then `pg_trgm` similarity for
-typos. `run_search_tiers` owns that ladder so no consumer re-implements it.
+(«Ыщтщьф» is `Sonoma` typed on the wrong layout), then `pg_trgm` word similarity
+for typos. `run_search_tiers` owns that ladder so no consumer re-implements it.
 
 Two pure functions — `matches_search_key` and `rank_key` — mirror the SQL for
 the one list that is filtered in the browser (the cutting editor's tape picker,
@@ -40,10 +40,13 @@ from app.core.search_fold import fold
 # answer is "your query matched nothing", not "scroll".
 FUZZY_LIMIT = 20
 
-# `word_similarity(query, key)` scores the query against the closest run of
-# words in the key rather than against the whole key, so a six-letter typo is
-# not drowned by a long key. 0.3 admits one wrong letter in a short word
-# (`sanoma` vs `sonoma` scores 0.4) without admitting unrelated words.
+# `strict_word_similarity(query, key)` scores the query against the closest
+# *whole word* of the key, rather than against the whole key or an arbitrary
+# extent of it, so a six-letter typo is not drowned by a long key. 0.3 admits one
+# wrong letter in a short word (`sanoma` against `sonoma` scores 0.40, `kulrng`
+# against `kulrang` 0.50) and nothing else — the plain `word_similarity` this
+# started as scored `kronospan` at exactly 0.300 against every Egger key, which
+# turned «egger kronospan» from an honest empty result into a page of noise.
 TRIGRAM_THRESHOLD = 0.3
 
 # A folded token is alphanumeric by construction, so no token can ever carry a
@@ -243,14 +246,15 @@ def trigram_predicate(
 ) -> ColumnElement[bool] | None:
     """Every token is *close to* a word of the key — Postgres `pg_trgm` only.
 
-    Per token rather than over the whole query so `egger sanoma` still narrows
-    the way `egger sonoma` does. Returns None when there is nothing to match.
+    Per token rather than over the whole query, so `egger sanoma` narrows the way
+    `egger sonoma` does instead of averaging one good match against one bad one.
+    Returns None when there is nothing to match.
     """
 
     tokens = query_tokens(query)
     if not tokens:
         return None
-    return and_(*[func.word_similarity(token, key_column) >= threshold for token in tokens])
+    return and_(*[func.strict_word_similarity(token, key_column) >= threshold for token in tokens])
 
 
 def trigram_rank_expression(
@@ -261,9 +265,9 @@ def trigram_rank_expression(
     tokens = query_tokens(query)
     if not tokens:
         return literal(0.0)
-    total: Any = func.word_similarity(tokens[0], key_column)
+    total: Any = func.strict_word_similarity(tokens[0], key_column)
     for token in tokens[1:]:
-        total = total + func.word_similarity(token, key_column)
+        total = total + func.strict_word_similarity(token, key_column)
     return cast("ColumnElement[float]", total)
 
 

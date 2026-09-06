@@ -124,6 +124,11 @@ to run without `deploy/.env` and `infra-net`, and prints the fix for each.
 - Auto-HTTPS needs the edge reachable on **80 and 443** from the internet — don't remap them.
 - Pin image tags (`postgres:17-alpine`, `minio/minio:RELEASE.…`, `caddy:2.8-alpine`,
   `nginx:1.27-alpine`, `node:22-slim`); never `latest`.
+- **Postgres must be able to `CREATE EXTENSION pg_trgm`** — migration `e1a4c8b70d35` installs
+  it for the catalog search's typo tier. `postgres:17-alpine` ships it (1.6), so the dev stack
+  and the shared prod instance need nothing extra; a managed Postgres that withholds it leaves
+  the search's last fallback returning no rows instead of erroring, but any *other* Postgres
+  swap has to keep the contrib extensions available.
 - The prod `default` subnet (`172.29.0.0/24`) and `TRUSTED_PROXY_CIDRS` move **together** —
   the backend trusts `X-Forwarded-For` only from that subnet, and the per-IP
   Telegram-login limits are
