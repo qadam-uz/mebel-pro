@@ -6,9 +6,12 @@ routinely typed as `yong'oq`, `yongoq`, `ёнғоқ` or `yongok`. A plain `ILIKE
 over the raw name finds none of those from each other.
 
 `fold` collapses all of them onto one ASCII key. The same function is applied
-to the stored `decors.search_key` and to the incoming query, so search is a
-plain `ILIKE '%' || fold(query) || '%'` — no trigram index, no extension, no
-per-row Python.
+to the stored `decors.search_key` and to the incoming query, so a token match
+is a plain `ILIKE '%' || fold(token) || '%'` — no per-row Python.
+
+`fold` handles one token. `fold_tokens` splits a phrase into folded words and
+`build_search_key` assembles the stored `decors.search_key` from them; the
+matcher that consumes the key lives in `app/core/search_query.py`.
 
 Steps, in this order (the order is load-bearing — see `_LATIN_CONFUSABLES`):
 
@@ -83,7 +86,7 @@ _LATIN_CONFUSABLES = str.maketrans({"q": "k", "x": "h"})
 
 
 def fold(text: str) -> str:
-    """Return the search key for `text` — empty string for empty input."""
+    """Return the folded form of one token — empty string for empty input."""
     lowered = text.casefold()
     transliterated = _transliterate(lowered)
     stripped = "".join(
@@ -107,3 +110,48 @@ def _transliterate(text: str) -> str:
             out.append(text[index])
             index += 1
     return "".join(out)
+
+
+# The key splits on these as well as on whitespace: `H-1145`, `2800/2070` and
+# `Egger (Austria)` all carry word boundaries a plain `str.split()` misses.
+_TOKEN_SEPARATORS = "-_/·,.()"  # noqa: S105 -- separators, not a secret
+
+_SEPARATORS_TO_SPACE = str.maketrans(dict.fromkeys(_TOKEN_SEPARATORS, " "))
+
+
+def fold_tokens(text: str) -> list[str]:
+    """Split `text` on whitespace and `-_/·,.()`, fold each word, drop the empties."""
+
+    return [
+        folded for word in text.translate(_SEPARATORS_TO_SPACE).split() if (folded := fold(word))
+    ]
+
+
+def build_search_key(*parts: str | None) -> str:
+    """The stored `decors.search_key`: `" " + folded words + " "`.
+
+    Wrapped in spaces so a word-start match is a plain `LIKE '% son%'` — that is
+    what makes ranking possible without a tokenizer in the database.
+
+    Every part contributes its **words** and, when it has more than one, its
+    whole separator-less fold as well. Both are load-bearing: the words are what
+    make `egger sonoma` (two tokens, ANDed, in either order) find a row whose
+    key concatenates them, and the whole fold is what keeps a query `h1145`
+    finding a code stored as `H 1145` or `H-1145`.
+
+    Duplicate words are dropped, so the key stays compact and its content is a
+    pure function of the parts it was built from.
+    """
+
+    tokens: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        words = fold_tokens(part)
+        whole = fold(part)
+        for token in (*words, whole):
+            if token and token not in tokens:
+                tokens.append(token)
+    if not tokens:
+        return ""
+    return f" {' '.join(tokens)} "

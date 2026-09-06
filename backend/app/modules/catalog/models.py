@@ -89,6 +89,17 @@ class Decor(UUIDPrimaryKey, Timestamped, Base):
             sqlite_where=text("code IS NULL"),
         ),
         Index("ix_decors_search_key", "search_key"),
+        # The typo tier of the search (`word_similarity`) is only affordable
+        # behind a trigram index. `gin_trgm_ops` and the GIN access method are
+        # Postgres-only; every other dialect ignores the prefixed kwargs and
+        # builds a plain b-tree, which is harmless. Declared here rather than
+        # only in the migration so autogenerate does not offer to drop it.
+        Index(
+            "ix_decors_search_key_trgm",
+            "search_key",
+            postgresql_using="gin",
+            postgresql_ops={"search_key": "gin_trgm_ops"},
+        ),
     )
 
     manufacturer_id: Mapped[uuid.UUID] = mapped_column(
@@ -103,9 +114,11 @@ class Decor(UUIDPrimaryKey, Timestamped, Base):
         default=MaterialStatus.ACTIVE,
         nullable=False,
     )
-    # Script- and apostrophe-insensitive search key, recomputed on every write
-    # of this row AND whenever its manufacturer is renamed (the manufacturer
-    # name is folded into it). See app/core/search_fold.py.
+    # Script- and apostrophe-insensitive search key: `" " + folded words + " "`
+    # of the name, code, manufacturer name and the decor's active format types.
+    # Recomputed on every write of this row, whenever its manufacturer is
+    # renamed, and whenever one of its formats is created or changes status (the
+    # type words move). See app/core/search_fold.py and app/core/search_query.py.
     search_key: Mapped[str] = mapped_column(nullable=False, server_default=text("''"), default="")
 
 

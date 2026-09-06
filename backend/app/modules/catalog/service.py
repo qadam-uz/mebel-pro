@@ -9,6 +9,7 @@ price.
 """
 
 import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -21,7 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import APIError
 from app.core.material_label import edge_label, material_label
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.core.search_fold import fold
+from app.core.search_fold import build_search_key
+from app.core.search_query import (
+    SearchPlan,
+    capped,
+    rank_expression,
+    run_search_tiers,
+    search_predicate,
+    trigram_predicate,
+    trigram_rank_expression,
+)
 from app.models.enums import (
     AuthenticatedPrincipalType,
     DecorType,
@@ -423,26 +433,37 @@ async def list_decors(
     )
     query = _decor_filters(
         query,
-        search=search,
         type_=type_,
         types=types,
         manufacturer_id=manufacturer_id,
         manufacturer_ids=manufacturer_ids,
         status_filter=status_filter,
-    )
-    query = query.group_by(Decor.id, Manufacturer.id).order_by(
-        Manufacturer.name, Decor.name, Decor.id
-    )
-    query = _paginate(query, limit=limit, offset=offset)
-    return [
-        DecorRecord(
-            decor=decor,
-            manufacturer=manufacturer,
-            branch_usage_count=int(usage or 0),
-            format_count=int(formats or 0),
+    ).group_by(Decor.id, Manufacturer.id)
+
+    async def run(plan: SearchPlan) -> list[DecorRecord]:
+        # A number reaches the formats through an EXISTS here: the platform list
+        # is one table up from the dimensions, and `18` should still find the
+        # decors sold in 18 mm.
+        searched = apply_decor_search(
+            query,
+            plan,
+            ordering=(Manufacturer.name, Decor.name, Decor.id),
+            dimension_arms=decor_dimension_arms,
         )
-        for decor, manufacturer, usage, formats in (await db.execute(query)).all()
-    ]
+        rows = (
+            await db.execute(_paginate(searched, limit=capped(limit, plan.limit), offset=offset))
+        ).all()
+        return [
+            DecorRecord(
+                decor=decor,
+                manufacturer=manufacturer,
+                branch_usage_count=int(usage or 0),
+                format_count=int(formats or 0),
+            )
+            for decor, manufacturer, usage, formats in rows
+        ]
+
+    return await run_search_tiers(db, search, run)
 
 
 async def create_decor(
@@ -547,7 +568,7 @@ async def update_decor(
     )
     # Recomputed unconditionally: every input to the key (name, code, maker) is
     # patchable, and an unchanged write costs one fold() call.
-    row.search_key = _search_key(name=row.name, code=row.code, manufacturer_name=manufacturer.name)
+    await _recompute_decor_search_key(db, row, manufacturer.name)
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -668,7 +689,7 @@ async def create_decor_format(
         status=MaterialStatus.ACTIVE,
     )
     db.add(row)
-    await db.flush()
+    await _recompute_search_key_after_format_write(db, record)
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -719,6 +740,7 @@ async def set_decor_format_status(
         return result
     from_status = row.status.value
     row.status = to_status
+    await _recompute_search_key_after_format_write(db, record)
     label = decor_format_label(row, record.decor, record.manufacturer)
     action = await record_action(
         db,
@@ -771,18 +793,12 @@ async def list_branch_catalog_options(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    attachable = _attachable_decors_query()
     filtered = _decor_filters(
-        attachable,
-        search=None,
+        _attachable_decors_query(),
         type_=type_,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
-    # The picker is a branch surface too: the operator is looking for a product
-    # they can see on a price list, so `18` has to find the decors sold in 18 mm.
-    filtered = _catalog_option_search(filtered, search)
-    total = await db.scalar(filtered.with_only_columns(func.count(Decor.id)))
     available = _active_format_count_subquery()
     carried = (
         select(func.count(BranchMaterial.id))
@@ -795,27 +811,41 @@ async def list_branch_catalog_options(
         .correlate(Decor)
         .scalar_subquery()
     )
-    query = _paginate(
-        filtered.with_only_columns(Decor, Manufacturer, carried, available).order_by(
-            Manufacturer.name, Decor.name, Decor.id
-        ),
-        limit=limit,
-        offset=offset,
-    )
-    return BranchCatalogOptionsPage(
-        items=[
-            BranchCatalogOption(
-                decor=decor,
-                manufacturer=manufacturer,
-                carried_format_count=int(carried_count or 0),
-                available_format_count=int(available_count or 0),
-            )
-            for decor, manufacturer, carried_count, available_count in (
-                await db.execute(query)
-            ).all()
-        ],
-        total=int(total or 0),
-    )
+
+    async def run(plan: SearchPlan) -> BranchCatalogOptionsPage:
+        # The picker is a branch surface too: the operator is looking for a
+        # product they can see on a price list, so `18` has to find the decors
+        # sold in 18 mm — through an EXISTS, since the row here is a decor.
+        searched = apply_decor_search(
+            filtered,
+            plan,
+            ordering=(Manufacturer.name, Decor.name, Decor.id),
+            dimension_arms=decor_dimension_arms,
+        )
+        # The total counts what this tier found, so the picker's "N of M" never
+        # describes a tier the reader is not looking at.
+        total = await db.scalar(searched.order_by(None).with_only_columns(func.count(Decor.id)))
+        page = _paginate(
+            searched.with_only_columns(Decor, Manufacturer, carried, available),
+            limit=capped(limit, plan.limit),
+            offset=offset,
+        )
+        return BranchCatalogOptionsPage(
+            items=[
+                BranchCatalogOption(
+                    decor=decor,
+                    manufacturer=manufacturer,
+                    carried_format_count=int(carried_count or 0),
+                    available_format_count=int(available_count or 0),
+                )
+                for decor, manufacturer, carried_count, available_count in (
+                    await db.execute(page)
+                ).all()
+            ],
+            total=int(total or 0),
+        )
+
+    return await run_search_tiers(db, search, run, empty=lambda page: not page.items)
 
 
 async def list_branch_catalog_formats(
@@ -963,16 +993,7 @@ async def list_branch_materials(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    query = (
-        branch_material_join()
-        .where(BranchMaterial.branch_id == scope.branch_id)
-        .order_by(
-            Manufacturer.name,
-            Decor.name,
-            DecorFormat.thickness_mm,
-            BranchMaterial.id,
-        )
-    )
+    query = branch_material_join().where(BranchMaterial.branch_id == scope.branch_id)
     if status_filter is not None:
         query = query.where(BranchMaterial.status == status_filter)
     if decor_id is not None:
@@ -983,93 +1004,103 @@ async def list_branch_materials(
         query = query.where(DecorFormat.type == type_)
     query = _decor_filters(
         query,
-        search=None,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
-    # Search is the branch surface's own: the join already carries the format, so
-    # a token may be an o'lcham number here in a way it cannot be on the platform
-    # decor list.
-    query = _branch_material_search(query, search)
-    query = _paginate(query, limit=limit, offset=offset)
-    return [
-        BranchMaterialRecord(
-            branch_material=bm,
-            decor_format=decor_format,
-            decor=decor,
-            manufacturer=manufacturer,
+
+    async def run(plan: SearchPlan) -> list[BranchMaterialRecord]:
+        # The join already carries the format, so a token may be an o'lcham
+        # number matched on the row itself rather than through an EXISTS.
+        searched = apply_decor_search(
+            query,
+            plan,
+            ordering=(
+                Manufacturer.name,
+                Decor.name,
+                DecorFormat.thickness_mm,
+                BranchMaterial.id,
+            ),
+            dimension_arms=format_dimension_arms,
         )
-        for bm, decor_format, decor, manufacturer in (await db.execute(query)).all()
-    ]
-
-
-def _branch_material_search(query: Any, search: str | None) -> Any:
-    """Each token matches the decor's key **or** the row's own o'lcham numbers.
-
-    `search_key` is a fact about a decor — name, code, manufacturer — so on the
-    platform decor list `18` can never match anything: thickness and dimensions
-    live on the format, one table down. On the branch's own table the format is
-    already joined, and the o'lcham line is most of what the operator reads, so
-    the number they can see is the number they type.
-
-    Matched by **value**, not as a substring: `18` finds the 18 mm rows and not
-    the 1830 mm ones, which a `LIKE '%18%'` could not tell apart. Tokens stay
-    ANDed, so «sonoma 18» narrows to one decor's 18 mm o'lchamlar.
-    """
-
-    for word in (search or "").split():
-        arms: list[Any] = []
-        folded = fold(word)
-        if folded:
-            arms.append(Decor.search_key.ilike(f"%{folded}%"))
-        arms.extend(_dimension_arms(word))
-        if arms:
-            query = query.where(or_(*arms))
-    return query
-
-
-def _catalog_option_search(query: Any, search: str | None) -> Any:
-    """The attach picker's search: a decor token **or** an o'lcham its formats have.
-
-    The picker lists decors, one table up from the dimensions, so a number cannot
-    be matched on the row itself — it is matched as *"has an active format with
-    this thickness or panel dimension"*. Same value-not-substring rule and the
-    same AND across tokens as the branch table: «sonoma 18» finds the decors that
-    are both Sonoma and sold in 18 mm, and step two then lists every format so
-    the 18 mm one can be ticked.
-    """
-
-    for word in (search or "").split():
-        arms: list[Any] = []
-        folded = fold(word)
-        if folded:
-            arms.append(Decor.search_key.ilike(f"%{folded}%"))
-        dimension_arms = _dimension_arms(word)
-        if dimension_arms:
-            arms.append(
-                exists(
-                    select(DecorFormat.id)
-                    .where(
-                        DecorFormat.decor_id == Decor.id,
-                        DecorFormat.status == MaterialStatus.ACTIVE,
-                        or_(*dimension_arms),
-                    )
-                    .correlate(Decor)
-                )
+        rows = (
+            await db.execute(_paginate(searched, limit=capped(limit, plan.limit), offset=offset))
+        ).all()
+        return [
+            BranchMaterialRecord(
+                branch_material=bm,
+                decor_format=decor_format,
+                decor=decor,
+                manufacturer=manufacturer,
             )
-        if arms:
-            query = query.where(or_(*arms))
-    return query
+            for bm, decor_format, decor, manufacturer in rows
+        ]
+
+    return await run_search_tiers(db, search, run)
 
 
-def _dimension_arms(word: str) -> list[Any]:
+def apply_decor_search(
+    query: Any,
+    plan: SearchPlan,
+    *,
+    ordering: Sequence[Any] = (),
+    dimension_arms: Callable[[str], Sequence[Any]] | None = None,
+) -> Any:
+    """Filter and order one tier of a search over a query that has `Decor` in scope.
+
+    The one place a catalog surface meets `app/core/search_query.py`. Every
+    consumer — the platform decor list, the branch table, the attach picker,
+    inventory, both client pickers — hands its base query, the plan the tier
+    ladder handed it, and its own ordering; relevance is prepended to that
+    ordering so a search re-sorts the list and an empty search leaves it exactly
+    as the surface wrote it.
+
+    `dimension_arms` is what the surface lets a *number* mean, and it differs by
+    how far the row is from `decor_formats`: on a branch row the format is
+    joined and matched directly, on a decor list it is an EXISTS. Surfaces pass
+    the matching helper below.
+    """
+
+    if not plan.active:
+        return query.order_by(*ordering) if ordering else query
+    typed = plan.query or ""
+    if plan.fuzzy:
+        # Numbers do not have typos: the fuzzy tier is text-only, and a query
+        # that folds to nothing has nothing to be close to.
+        predicate = trigram_predicate(typed, Decor.search_key)
+        if predicate is None:
+            return query.order_by(*ordering) if ordering else query
+        return query.where(predicate).order_by(
+            trigram_rank_expression(typed, Decor.search_key).desc(), *ordering
+        )
+    predicate = search_predicate(typed, Decor.search_key, dimension_arms=dimension_arms)
+    if predicate is not None:
+        query = query.where(predicate)
+    return query.order_by(rank_expression(typed, Decor.search_key, Decor.code), *ordering)
+
+
+def format_dimension_arms(word: str) -> list[Any]:
     """The `DecorFormat` columns a search token can equal, read as millimetres.
 
-    Matched by value: `18` is a thickness or a tape width, never part of `1830`.
-    The three length columns are integer millimetres, so a fractional token can
-    only ever have been a thickness (`0.4` kromka).
+    For the surfaces whose row **is** a format — the branch table, inventory,
+    both client pickers: the o'lcham line is most of what the reader sees, so
+    the number they can see is the number they can type.
+
+    Matched by **value**, not as a substring: `18` is a thickness or a tape
+    width, never part of `1830`, which a `LIKE '%18%'` could not tell apart. The
+    three length columns are integer millimetres, so a fractional token can only
+    ever have been a thickness (`0.4` kromka). A `2800x2070` pair matches a sheet
+    of that size in either orientation.
     """
 
+    pair = _as_dimension_pair(word)
+    if pair is not None:
+        first, second = pair
+        return [
+            or_(
+                and_(DecorFormat.length_mm == first, DecorFormat.width_mm == second),
+                and_(DecorFormat.length_mm == second, DecorFormat.width_mm == first),
+            )
+        ]
     number = _as_dimension(word)
     if number is None:
         return []
@@ -1080,6 +1111,32 @@ def _dimension_arms(word: str) -> list[Any]:
         arms.append(DecorFormat.width_mm == whole)
         arms.append(DecorFormat.tape_width_mm == whole)
     return arms
+
+
+def decor_dimension_arms(word: str) -> list[Any]:
+    """`format_dimension_arms` as *"has an active format like that"*.
+
+    For the surfaces that list decors — the platform list and the attach picker
+    — where the numbers live one table down and cannot be matched on the row
+    itself. «sonoma 18» finds the decors that are both Sonoma and sold in 18 mm,
+    and the picker's step two then lists every format so the 18 mm one can be
+    ticked.
+    """
+
+    arms = format_dimension_arms(word)
+    if not arms:
+        return []
+    return [
+        exists(
+            select(DecorFormat.id)
+            .where(
+                DecorFormat.decor_id == Decor.id,
+                DecorFormat.status == MaterialStatus.ACTIVE,
+                or_(*arms),
+            )
+            .correlate(Decor)
+        )
+    ]
 
 
 def _as_dimension(word: str) -> Decimal | None:
@@ -1094,6 +1151,29 @@ def _as_dimension(word: str) -> Decimal | None:
     except InvalidOperation:
         return None
     return value if value > 0 and value.is_finite() else None
+
+
+# The four ways a sheet size gets typed: the Latin `x`, the multiplication sign
+# a price list prints, the asterisk a spreadsheet does, and Cyrillic HA -- the
+# same physical key, on the layout half the workshop types in.
+_DIMENSION_PAIR_SEPARATORS = "x\u00d7*\u0445"
+
+
+def _as_dimension_pair(word: str) -> tuple[int, int] | None:
+    """`2800x2070` read as a sheet size, or None if it is not one."""
+
+    lowered = word.casefold()
+    for separator in _DIMENSION_PAIR_SEPARATORS:
+        if lowered.count(separator) != 1:
+            continue
+        left, right = lowered.split(separator)
+        first, second = _as_dimension(left), _as_dimension(right)
+        if first is None or second is None:
+            continue
+        if first != first.to_integral_value() or second != second.to_integral_value():
+            continue
+        return int(first), int(second)
+    return None
 
 
 def branch_material_join() -> Any:
@@ -1554,14 +1634,51 @@ async def _ensure_decor_identity_available(
         )
 
 
+async def _decor_type_words(db: AsyncSession, decor_id: uuid.UUID) -> list[str]:
+    """The substrate words one decor's active formats put into its search key."""
+
+    types = (
+        await db.scalars(
+            select(DecorFormat.type)
+            .where(
+                DecorFormat.decor_id == decor_id,
+                DecorFormat.status == MaterialStatus.ACTIVE,
+            )
+            .distinct()
+        )
+    ).all()
+    return sorted(row.value for row in types)
+
+
+async def _recompute_decor_search_key(
+    db: AsyncSession, decor: Decor, manufacturer_name: str
+) -> None:
+    decor.search_key = _search_key(
+        name=decor.name,
+        code=decor.code,
+        manufacturer_name=manufacturer_name,
+        type_words=await _decor_type_words(db, decor.id),
+    )
+
+
+async def _recompute_search_key_after_format_write(db: AsyncSession, record: DecorRecord) -> None:
+    """A format write can change the decor's substrate set — so it rebuilds the key.
+
+    Creating the decor's first LDSP format is what makes «ldsp sonoma» find it,
+    and deactivating the last one is what should stop it. Flushed first so the
+    format row the key is computed from is the one the caller just wrote.
+    """
+
+    await db.flush()
+    await _recompute_decor_search_key(db, record.decor, record.manufacturer.name)
+
+
 async def _recompute_search_keys_for_manufacturer(
     db: AsyncSession, manufacturer: Manufacturer
 ) -> None:
     rows = (await db.scalars(select(Decor).where(Decor.manufacturer_id == manufacturer.id))).all()
     for decor in rows:
-        decor.search_key = _search_key(
-            name=decor.name, code=decor.code, manufacturer_name=manufacturer.name
-        )
+        await _recompute_decor_search_key(db, decor, manufacturer.name)
 
 
 # --------------------------------------------------------------------------- #
@@ -1648,13 +1765,15 @@ def _has_active_format(types: list[DecorType] | None = None) -> Any:
 def _decor_filters(
     query: Any,
     *,
-    search: str | None,
     manufacturer_id: uuid.UUID | None,
     status_filter: MaterialStatus | None,
     type_: DecorType | None = None,
     types: list[DecorType] | None = None,
     manufacturer_ids: list[uuid.UUID] | None = None,
 ) -> Any:
+    """The non-search decor filters. Search is `apply_decor_search`'s job — it
+    runs per tier, and the tier ladder is above these filters, not inside them."""
+
     wanted = [*([type_] if type_ is not None else []), *(types or [])]
     if wanted:
         query = query.where(_has_active_format(wanted))
@@ -1664,23 +1783,26 @@ def _decor_filters(
         query = query.where(Decor.manufacturer_id.in_(manufacturer_ids))
     if status_filter is not None:
         query = query.where(Decor.status == status_filter)
-    # ILIKEs over the folded key replace the old four-column OR: `сонома`,
-    # `Sonoma` and `sonoma` all fold to the same string, which no per-column
-    # ILIKE over the raw text could match.
-    #
-    # Tokenized and ANDed because `search_key` is a *concatenation* of name, code
-    # and manufacturer with the separators folded away — "egger sonoma" as one
-    # blob would never match "sonomah1334egger", so each word is matched on its
-    # own and all of them must hit.
-    for word in (search or "").split():
-        folded = fold(word)
-        if folded:
-            query = query.where(Decor.search_key.ilike(f"%{folded}%"))
     return query
 
 
-def _search_key(*, name: str, code: str | None, manufacturer_name: str) -> str:
-    return fold(f"{name} {code or ''} {manufacturer_name}")
+def _search_key(
+    *,
+    name: str,
+    code: str | None,
+    manufacturer_name: str,
+    type_words: Sequence[str] = (),
+) -> str:
+    """`decors.search_key` — the decor's identity plus the substrates it sells in.
+
+    The type words are the `DecorType` values of the decor's **active** formats,
+    which is what makes «лдсп» and «ldsp sonoma» work on a table whose rows carry
+    no substrate of their own any more. They are a fact about the formats, not
+    about the decor, so the key is rebuilt whenever a format is created or its
+    status changes as well as on every decor write and manufacturer rename.
+    """
+
+    return build_search_key(name, code, manufacturer_name, *type_words)
 
 
 def validate_decor_format_shape(
