@@ -74,8 +74,20 @@ describe('client UI helpers', () => {
     expect(clientStatusLabel('edge_banding')).toBe('Tayyorlanmoqda')
     expect(clientStatusPillClass('cutting')).toBe(clientStatusPillClass('confirmed'))
     expect(clientStatusPillClass('edge_banding')).toBe(clientStatusPillClass('confirmed'))
+    // one hue per phase, and the live phases must not share one: waiting is
+    // `info`, production is `warning`, ready is `success`
+    expect(clientStatusPillClass('new')).toContain('client-pill-new')
+    expect(clientStatusPillClass('confirmed')).toContain('client-pill-progress')
     expect(clientStatusPillClass('ready')).toContain('client-pill-ready')
+    expect(clientStatusPillClass('completed')).toContain('client-pill-done')
     expect(clientStatusPillClass('cancelled')).toContain('client-pill-danger')
+    expect(
+      new Set(
+        (['new', 'confirmed', 'ready', 'completed', 'cancelled'] as OrderStatus[]).map(
+          clientStatusPillClass,
+        ),
+      ).size,
+    ).toBe(5)
     expect(clientPhaseSubtitle('new')).toBe('Ustaxona tasdiqlashi kutilmoqda')
     expect(clientPhaseSubtitle('edge_banding')).toBe('Ishlab chiqarish jarayonida')
     expect(clientPhaseSubtitle('ready')).toBe('Olib ketishingiz mumkin')
