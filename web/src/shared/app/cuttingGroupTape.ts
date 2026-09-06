@@ -1,5 +1,6 @@
-import { edgeFields } from '@/shared/app/cuttingDisplay'
+import { edgeFields, edgeSearchParts } from '@/shared/app/cuttingDisplay'
 import { formatMm, snapshotMaterialLabel } from '@/shared/app/materialLabel'
+import { buildSearchKey } from '@/shared/app/searchFold'
 import type { ClientCatalogMaterialOption, CuttingPart } from '@/shared/stores/cutting'
 
 /**
@@ -125,6 +126,18 @@ export function groupTapeDecors(edgeOptions: readonly ClientCatalogMaterialOptio
     decor.variants.sort((left, right) => left.thicknessMm - right.thicknessMm)
   }
   return decors
+}
+
+/**
+ * One folded search key for a whole decor row — the union of its variants', which
+ * is what the client is actually looking at: the row says «Egger H1145 · Sonoma
+ * eman» and lists every thickness under it, so a query naming one («0.4») has to
+ * find the row that carries it. `buildSearchKey` de-duplicates, so the shared
+ * half (name, code, manufacturer, the `kromka` type word) is stored once however
+ * many thicknesses the branch stocks.
+ */
+export function tapeDecorSearchKey(decor: TapeDecor): string {
+  return buildSearchKey(decor.variants.flatMap((variant) => edgeSearchParts(variant.material)))
 }
 
 export function findTapeDecor(decors: readonly TapeDecor[], key: string | null): TapeDecor | null {

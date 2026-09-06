@@ -6,20 +6,28 @@ routinely typed as `yong'oq`, `yongoq`, `ёнғоқ` or `yongok`. A plain `ILIKE
 over the raw name finds none of those from each other.
 
 `fold` collapses all of them onto one ASCII key. The same function is applied
-to the stored `decors.search_key` and to the incoming query, so search is a
-plain `ILIKE '%' || fold(query) || '%'` — no trigram index, no extension, no
-per-row Python.
+to the stored `decors.search_key` and to the incoming query, so a token match
+is a plain `ILIKE '%' || fold(token) || '%'` — no per-row Python.
+
+`fold` handles one token. `fold_tokens` splits a phrase into folded words and
+`build_search_key` assembles the stored `decors.search_key` from them; the
+matcher that consumes the key lives in `app/core/search_query.py`.
 
 Steps, in this order (the order is load-bearing — see `_LATIN_CONFUSABLES`):
 
 1. `casefold`
 2. Cyrillic to Latin, longest match first
-3. drop every apostrophe shape: ``' ʻ ʼ ‘ ’ ` ``
-4. drop every remaining non-alphanumeric character
-5. fold confusable Latin pairs: ``q -> k``, ``x -> h``
+3. strip diacritics — `yonģoq` and `yongoq` are the same word typed on two
+   keyboards, and the Latin-with-cedilla spellings circulate widely enough that
+   a catalog entered in one is unfindable from the other
+4. drop every apostrophe shape: ``' ʻ ʼ ‘ ’ ` ``
+5. drop every remaining non-alphanumeric character
+6. fold confusable Latin pairs: ``q -> k``, ``x -> h``
 
-Step 5 must run *after* step 2, so that Cyrillic `қ` (-> `q` -> `k`) and Latin
-`q` land on the same letter.
+Step 6 must run *after* step 2, so that Cyrillic `қ` (-> `q` -> `k`) and Latin
+`q` land on the same letter. Step 3 must run after it too: `ё` is a precomposed
+character whose decomposition is `е` + a mark, and it has to have become `yo`
+before anything strips marks.
 
 This module deliberately has no imports from `app.modules` — it is imported by
 an Alembic revision, which runs before the model registry is usable.
@@ -29,6 +37,8 @@ an Alembic revision, which runs before the model registry is usable.
 # Cyrillic and Latin letters on purpose; that is the whole point of the module.
 
 from __future__ import annotations
+
+import unicodedata
 
 # Cyrillic -> Latin. Multi-character Latin outputs (sh, ch, ya, ...) are why
 # lookups run longest-key-first rather than through a per-character dict.
@@ -83,11 +93,14 @@ _LATIN_CONFUSABLES = str.maketrans({"q": "k", "x": "h"})
 
 
 def fold(text: str) -> str:
-    """Return the search key for `text` — empty string for empty input."""
+    """Return the folded form of one token — empty string for empty input."""
     lowered = text.casefold()
     transliterated = _transliterate(lowered)
+    decomposed = unicodedata.normalize("NFD", transliterated)
     stripped = "".join(
-        char for char in transliterated if char not in _APOSTROPHES and char.isalnum()
+        char
+        for char in decomposed
+        if char not in _APOSTROPHES and char.isalnum() and not unicodedata.combining(char)
     )
     return stripped.translate(_LATIN_CONFUSABLES)
 
@@ -107,3 +120,48 @@ def _transliterate(text: str) -> str:
             out.append(text[index])
             index += 1
     return "".join(out)
+
+
+# The key splits on these as well as on whitespace: `H-1145`, `2800/2070` and
+# `Egger (Austria)` all carry word boundaries a plain `str.split()` misses.
+_TOKEN_SEPARATORS = "-_/·,.()"  # noqa: S105 -- separators, not a secret
+
+_SEPARATORS_TO_SPACE = str.maketrans(dict.fromkeys(_TOKEN_SEPARATORS, " "))
+
+
+def fold_tokens(text: str) -> list[str]:
+    """Split `text` on whitespace and `-_/·,.()`, fold each word, drop the empties."""
+
+    return [
+        folded for word in text.translate(_SEPARATORS_TO_SPACE).split() if (folded := fold(word))
+    ]
+
+
+def build_search_key(*parts: str | None) -> str:
+    """The stored `decors.search_key`: `" " + folded words + " "`.
+
+    Wrapped in spaces so a word-start match is a plain `LIKE '% son%'` — that is
+    what makes ranking possible without a tokenizer in the database.
+
+    Every part contributes its **words** and, when it has more than one, its
+    whole separator-less fold as well. Both are load-bearing: the words are what
+    make `egger sonoma` (two tokens, ANDed, in either order) find a row whose
+    key concatenates them, and the whole fold is what keeps a query `h1145`
+    finding a code stored as `H 1145` or `H-1145`.
+
+    Duplicate words are dropped, so the key stays compact and its content is a
+    pure function of the parts it was built from.
+    """
+
+    tokens: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        words = fold_tokens(part)
+        whole = fold(part)
+        for token in (*words, whole):
+            if token and token not in tokens:
+                tokens.append(token)
+    if not tokens:
+        return ""
+    return f" {' '.join(tokens)} "

@@ -579,7 +579,11 @@ or `{n} ta format` and no price on the row, expanded into one selectable row per
 carrying its own size and price. Nothing is pre-picked in the multi-format case; the decor row
 is not chosen until a format row is. **Tapping the thumbnail opens the full-size lightbox**
 instead of selecting — a client picks a board by looking at it, and the 40 px square is not
-enough to decide on. Under the search sits a **board-type chip row** — `Barchasi` plus one
+enough to decide on. **The search is the server's**, so it is the catalog matcher in full
+([`catalog-inventory.md`](catalog-inventory.md#bilingual-search)): «сонома» and `sonoma` are
+one query, `egger sonoma` narrows by two words in either order, `18` and `2800x2070` find the
+formats sold in those sizes, and a typo still lands. The placeholder stays
+«Dekor nomi yoki kodi — Sonoma, H1145, сонома». Under the search sits a **board-type chip row** — `Barchasi` plus one
 chip per substrate the branch actually carries (`LDSP`, `MDF`, … ; hidden when there is only
 one, since a filter with nothing to choose is not a control). It cuts **formats**, so a decor
 is listed only while it holds one of that type and its `{n} ta format` line counts only
@@ -604,11 +608,16 @@ silently hide most of the catalog next time.
   group's decor keeps it, named read-only as «Boshqa rang: {name}»; re-tapping that side uses
   the group tape.
 - **The client's tape picker chooses a decor, never a format.** It pins the group material's
-  own decor and image at the top for comparison («Plita rangi»), searches by tape name or code,
-  and lists one row per tape decor the branch carries — thumbnail, name, and the thickness
-  variants with their per-metre prices shown as information rather than as choices. Changing
-  the group tape re-resolves every banded side of the group into the new decor at the same
-  thickness, falling back to the nearest thickness the new decor has and saying so once.
+  own decor and image at the top for comparison («Plita rangi»), and lists one row per tape
+  decor the branch carries — thumbnail, name, and the thickness variants with their per-metre
+  prices shown as information rather than as choices. Changing the group tape re-resolves every
+  banded side of the group into the new decor at the same thickness, falling back to the
+  nearest thickness the new decor has and saying so once. It is the one picker that filters its
+  list **in the browser** — the branch's whole tape list is a few hundred rows and is already
+  loaded — so it runs a TypeScript port of the catalog's own fold, tokens and ranking
+  ([`catalog-inventory.md`](catalog-inventory.md#bilingual-search)): «сонома», `h1145` and a
+  one-letter typo find the same rows here as on any server-searched surface. The placeholder
+  carries a Cyrillic example, because a picker that can take one should say so.
 - **The staff order wizard docks it.** In step 2 of the staff new-order flow, banding is a
   300px panel beside the parts board rather than a modal. The board is sized to its own
   columns, so the panel either fits next to it or wraps underneath — a wrap, not a

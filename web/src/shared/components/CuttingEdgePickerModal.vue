@@ -6,7 +6,7 @@ import { edgeTooNarrow, rankedEdges, recommendedEdge } from '@/shared/app/cuttin
 import {
   colorForMaterial,
   edgeFields,
-  edgeSearchText,
+  edgeSearchKey,
   edgeShortLabel,
   materialOptionLabel,
   sideLabels,
@@ -20,6 +20,7 @@ import {
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
+import { filterByQuery } from '@/shared/app/searchFold'
 import { useCuttingStore, type CuttingEdgeBand, type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: the edge-banding modal. The editor owns which part is open
@@ -306,19 +307,17 @@ const catalogExcludedIds = computed(() => {
 const catalogFilteredEdges = computed(() => {
   const part = props.part
   if (!part) return []
-  const query = edgePickerSearch.value.trim().toLowerCase()
   // No carried filter: the catalog endpoint is branch-scoped, so every row it
   // returns is one this branch carries.
-  return rankedEdges(panelForEdgeRanking(), cutting.edgeOptions)
-    .filter(({ material }) =>
-      edgePickerThickness.value !== 'all'
-        ? material.thickness_mm === edgePickerThickness.value
-        : true,
-    )
-    .filter(({ material }) => {
-      if (!query) return true
-      return edgeSearchText(material).includes(query)
-    })
+  const ranked = rankedEdges(panelForEdgeRanking(), cutting.edgeOptions).filter(({ material }) =>
+    edgePickerThickness.value !== 'all'
+      ? material.thickness_mm === edgePickerThickness.value
+      : true,
+  )
+  // Tiers 1–2 of the shared matcher: script- and layout-insensitive, tokens
+  // ANDed. The rows keep `rankedEdges`' order — how close a tape is to the board
+  // is a better answer here than how well it matched the typed letters.
+  return filterByQuery(ranked, edgePickerSearch.value, ({ material }) => edgeSearchKey(material))
 })
 const edgePickerMaterials = computed(() =>
   catalogFilteredEdges.value.filter(({ material }) => !catalogExcludedIds.value.has(material.id)),

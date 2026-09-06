@@ -1674,15 +1674,9 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
-// The material picker composes its own `{workshop} katalogi · N ta dekor` from
-// this name, because the count has to follow the type chip it owns; the tape
-// picker has no such filter, so its caption is still written here.
-const tapeCatalogCaption = computed(() =>
-  t('cutting.editor.tapeCatalogCaption', {
-    workshopBranch: clientBranchLabel.value,
-    n: tapeDecors.value.length,
-  }),
-)
+// Both pickers compose their own `{workshop} · N ta dekor` from this name: the
+// count has to follow whatever narrowed the list — the material picker's type
+// chip, the tape picker's search — and only the picker knows that.
 
 function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
   return material.has_grain ? t('cutting.material.grained') : t('cutting.material.grainless')
@@ -3679,7 +3673,7 @@ onBeforeRouteLeave(async () => {
       :panel="tapePickerPanel"
       :panel-image-file-id="tapePickerPanel?.image_file_id ?? null"
       :current-key="tapePickerCurrentKey"
-      :caption="tapeCatalogCaption"
+      :branch="clientBranchLabel"
       @close="closeTapePicker"
       @pick="applyGroupTape"
     />

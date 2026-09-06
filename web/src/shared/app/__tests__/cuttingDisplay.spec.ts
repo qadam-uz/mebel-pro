@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest'
 import {
   colorForMaterial,
   edgeFields,
-  edgeSearchText,
+  edgeSearchKey,
   edgeShortLabel,
   edgeTinyLabel,
   sideLabels,
 } from '@/shared/app/cuttingDisplay'
+import { matchesQuery } from '@/shared/app/searchFold'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
 function material(
@@ -79,12 +80,26 @@ describe('edgeTinyLabel', () => {
   })
 })
 
-describe('edgeSearchText', () => {
+describe('edgeSearchKey', () => {
   // Kept, not deleted: this narrows the rows already loaded into the open edge
-  // picker (a keyboard jump), it is not the catalog search. `name` left the blob
-  // with the column; `code` and `name` carry the signal now.
-  it('lower-cases a searchable blob of the material fields', () => {
-    expect(edgeSearchText(material())).toBe('egger group white h1334 0.4 19')
-    expect(edgeSearchText(material({ code: null }))).toBe('egger group white  0.4 19')
+  // picker (a keyboard jump), it is not the catalog search. It is now the folded,
+  // space-wrapped key of SPEC_CATALOG_SMART_SEARCH §1 rather than a lower-cased
+  // blob, so «сонома» reaches it the way it reaches the server's own list.
+  it('folds the material fields into a spaced search key', () => {
+    expect(edgeSearchKey(material())).toBe(' egger group eggergroup white h1334 kromka 04 19 ')
+    expect(edgeSearchKey(material({ code: null }))).toBe(
+      ' egger group eggergroup white kromka 04 19 ',
+    )
+  })
+
+  it('is script- and spelling-insensitive, and ANDs the query tokens', () => {
+    const key = edgeSearchKey(material({ manufacturer_name: 'Egger', name: 'Sonoma eman' }))
+    expect(matchesQuery(key, 'сонома')).toBe(true)
+    expect(matchesQuery(key, 'egger sonoma')).toBe(true)
+    expect(matchesQuery(key, 'h1334')).toBe(true)
+    expect(matchesQuery(key, 'kromka')).toBe(true)
+    // The thickness still narrows the list, as the lower-cased blob did.
+    expect(matchesQuery(key, '0.4')).toBe(true)
+    expect(matchesQuery(key, 'kronospan sonoma')).toBe(false)
   })
 })

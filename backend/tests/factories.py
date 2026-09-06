@@ -1,6 +1,7 @@
 """Dev/test seed helpers for foundation fixtures."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -12,7 +13,7 @@ from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Ma
 # The one formula for `decors.search_key`. Tests insert decors straight
 # through the ORM (no service call), so they must fill the key the same way
 # `create_decor` does or every search assertion silently matches nothing.
-from app.modules.catalog.service import _search_key
+from app.modules.catalog.service import _recompute_decor_search_key, _search_key
 from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,13 +89,24 @@ async def seed_workshop_with_owner(
     return workshop, branch, owner
 
 
-def make_search_key(*, name: str, code: str | None, manufacturer_name: str) -> str:
+def make_search_key(
+    *,
+    name: str,
+    code: str | None,
+    manufacturer_name: str,
+    type_words: Sequence[str] = (),
+) -> str:
     """`decors.search_key` for a hand-built Decor row.
 
     Exposed so tests that construct a `Decor` directly (rather than through
     `seed_decor`) still fill the key with the service's formula.
     """
-    return _search_key(name=name, code=code, manufacturer_name=manufacturer_name)
+    return _search_key(
+        name=name,
+        code=code,
+        manufacturer_name=manufacturer_name,
+        type_words=type_words,
+    )
 
 
 @dataclass(frozen=True)
@@ -200,6 +212,12 @@ async def seed_decor_format(
     )
     db.add(row)
     await db.flush()
+    # The decor's key carries the substrate words of its active formats, and the
+    # service rebuilds it on every format write — a fixture that skipped this
+    # would make «ldsp sonoma» findable in production and not in the tests.
+    manufacturer = await db.get(Manufacturer, decor.manufacturer_id)
+    if manufacturer is not None:
+        await _recompute_decor_search_key(db, decor, manufacturer.name)
     return row
 
 

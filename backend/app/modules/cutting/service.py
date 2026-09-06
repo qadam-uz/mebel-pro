@@ -16,14 +16,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.core.search_fold import fold
+from app.core.search_fold import build_search_key
+from app.core.search_query import (
+    SearchPlan,
+    capped,
+    matches_search_key,
+    run_search_tiers,
+)
 from app.models.enums import (
     CuttingResultSource,
     CuttingResultStatus,
     MaterialStatus,
 )
 from app.modules.catalog.api import (
+    apply_decor_search,
     branch_material_snapshot,
+    format_dimension_arms,
     normalize_mm,
 )
 from app.modules.catalog.contracts import (
@@ -788,67 +796,84 @@ async def _catalog_materials(
             Manufacturer.status == MaterialStatus.ACTIVE,
             shape,
         )
-        # There is no stored material name to sort by; maker, then decor, then
-        # thickness is the order the formats read in on the shelf.
-        .order_by(Manufacturer.name, Decor.name, DecorFormat.thickness_mm)
     )
     if not include_unpriced:
         query = query.where(BranchMaterial.price_tiyin > 0)
     if manufacturer_id is not None:
         query = query.where(Decor.manufacturer_id == manufacturer_id)
-    # One folded key on both sides (see app/core/search_fold.py): `сонома`,
-    # `Sonoma` and `sonoma` are the same query, no trigram index needed.
-    folded = fold(search) if search else ""
-    if folded:
-        query = query.where(Decor.search_key.ilike(f"%{folded}%"))
-    # Cap the result set when asked (CB-40). A branch-scoped load stays unlimited
-    # by default (CB-84 filters + CB-19/86 recovery need the full per-branch list
-    # client-side). Deterministic with the ORDER BY above.
-    if limit is not None:
-        query = query.limit(limit)
-    rows = (await db.execute(query)).all()
-    options = [
-        ClientCatalogMaterialOption(
-            id=branch_material.id,
-            type=decor_format.type,
-            manufacturer_id=decor.manufacturer_id,
-            manufacturer_name=manufacturer.name,
-            code=decor.code,
-            name=decor.name,
-            has_grain=decor.has_grain,
-            customer_supplied=False,
-            image_file_id=decor.image_file_id,
-            thickness_mm=normalize_mm(decor_format.thickness_mm),
-            length_mm=decor_format.length_mm,
-            width_mm=decor_format.width_mm,
-            tape_width_mm=decor_format.tape_width_mm,
-            finished_sides=decor_format.finished_sides,
-            discontinued=decor_format.status is MaterialStatus.INACTIVE,
-            price_tiyin=branch_material.price_tiyin,
-            price_unset=branch_material.price_tiyin == 0,
-            display_unit=display_unit(decor_format.type),
+
+    async def run(plan: SearchPlan) -> list[ClientCatalogMaterialOption]:
+        # The catalog's own matcher, so the client's picker and the workshop's
+        # material table find a decor by exactly the same rules — tokens ANDed,
+        # o'lcham numbers by value, relevance first, and the layout/typo tiers
+        # behind it. Under the ranking, there is no stored material name to sort
+        # by; maker, then decor, then thickness is the order the formats read in
+        # on the shelf.
+        searched = apply_decor_search(
+            query,
+            plan,
+            ordering=(Manufacturer.name, Decor.name, DecorFormat.thickness_mm),
+            dimension_arms=format_dimension_arms,
         )
-        for branch_material, decor_format, decor, manufacturer in rows
-    ]
-    # Boards are panel-shaped by construction, carry no manufacturer to filter
-    # on, and are never priced as an offer — so they join only the panel picker,
-    # only for their own drawing, and only when no maker filter is active.
-    if include_draft_id is not None and not tape and manufacturer_id is None:
-        options.extend(
-            await _draft_customer_board_options(db, draft_id=include_draft_id, search=folded)
-        )
-        if limit is not None:
-            options = options[:limit]
-    return options
+        # Cap the result set when asked (CB-40). A branch-scoped load stays
+        # unlimited by default (CB-84 filters + CB-19/86 recovery need the full
+        # per-branch list client-side). Deterministic with the ORDER BY above.
+        page = capped(limit, plan.limit)
+        if page is not None:
+            searched = searched.limit(page)
+        rows = (await db.execute(searched)).all()
+        options = [
+            ClientCatalogMaterialOption(
+                id=branch_material.id,
+                type=decor_format.type,
+                manufacturer_id=decor.manufacturer_id,
+                manufacturer_name=manufacturer.name,
+                code=decor.code,
+                name=decor.name,
+                has_grain=decor.has_grain,
+                customer_supplied=False,
+                image_file_id=decor.image_file_id,
+                thickness_mm=normalize_mm(decor_format.thickness_mm),
+                length_mm=decor_format.length_mm,
+                width_mm=decor_format.width_mm,
+                tape_width_mm=decor_format.tape_width_mm,
+                finished_sides=decor_format.finished_sides,
+                discontinued=decor_format.status is MaterialStatus.INACTIVE,
+                price_tiyin=branch_material.price_tiyin,
+                price_unset=branch_material.price_tiyin == 0,
+                display_unit=display_unit(decor_format.type),
+            )
+            for branch_material, decor_format, decor, manufacturer in rows
+        ]
+        # Boards are panel-shaped by construction, carry no manufacturer to
+        # filter on, and are never priced as an offer — so they join only the
+        # panel picker, only for their own drawing, and only when no maker filter
+        # is active.
+        if include_draft_id is not None and not tape and manufacturer_id is None:
+            options.extend(
+                await _draft_customer_board_options(
+                    db, draft_id=include_draft_id, search=plan.query if not plan.fuzzy else None
+                )
+            )
+            if page is not None:
+                options = options[:page]
+        return options
+
+    return await run_search_tiers(db, search, run)
 
 
 async def _draft_customer_board_options(
     db: AsyncSession,
     *,
     draft_id: uuid.UUID,
-    search: str,
+    search: str | None,
 ) -> list[ClientCatalogMaterialOption]:
-    """The walk-in's own sheets, as the panel picker sees them."""
+    """The walk-in's own sheets, as the panel picker sees them.
+
+    A handful of rows with no `search_key` of their own, so they are filtered in
+    Python — but through the same matcher the SQL uses, over a key built the same
+    way, so «сонома» reaches a board named `Sonoma` here too.
+    """
 
     boards = (
         await db.scalars(
@@ -884,8 +909,14 @@ async def _draft_customer_board_options(
         )
         for board in boards
         if not search
-        or search
-        in fold(f"{board.name or CUSTOMER_BOARD_DEFAULT_NAME} {CUSTOMER_BOARD_MANUFACTURER_NAME}")
+        or matches_search_key(
+            build_search_key(
+                board.name or CUSTOMER_BOARD_DEFAULT_NAME,
+                CUSTOMER_BOARD_MANUFACTURER_NAME,
+                board.type.value,
+            ),
+            search,
+        )
     ]
 
 
