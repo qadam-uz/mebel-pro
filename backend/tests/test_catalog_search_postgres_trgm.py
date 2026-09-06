@@ -37,7 +37,6 @@ from app.modules.inventory.api import (
     ensure_stock_item_for_branch_material,
     list_stock,
 )
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tests.factories import (
@@ -63,10 +62,9 @@ async def test_postgres_typo_tier_finds_the_row_the_exact_tiers_missed() -> None
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        # The extension the migration installs. `create_all` builds the schema
-        # from the models and knows nothing about extensions, so the suite has
-        # to stand it up the way the migration would.
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        # `pg_trgm` is installed by the `before_create` listener on
+        # `Base.metadata` (app/models/base.py) — every `create_all` on Postgres
+        # brings its own extension, so no suite has to remember to.
         await conn.run_sync(Base.metadata.create_all)
     try:
         async with maker() as db:
@@ -134,7 +132,6 @@ async def test_postgres_every_surface_runs_its_search_sql() -> None:
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
     try:
         async with maker() as db:
