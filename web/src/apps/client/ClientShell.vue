@@ -5,7 +5,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
-import { iconPath, isChromelessRoute } from '@/shared/app/shellChrome'
+import { iconPath, isChromelessRoute, isFocusedFlowRoute } from '@/shared/app/shellChrome'
 import BrandMark from '@/shared/components/BrandMark.vue'
 import LocaleSwitcher from '@/shared/components/LocaleSwitcher.vue'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
@@ -30,6 +30,12 @@ const rolePath = useRolePath()
 const { t } = useI18n()
 
 const isChromeless = computed(() => isChromelessRoute(route.meta))
+/** A chromeless route that is still a page of the app — the editor, the result
+ *  stage, the order confirmation. It loses the header and the tab bar, not the
+ *  page column: without one the back link, the title and the cards sat on the
+ *  viewport edge on phones and at x=0 on desktop. The auth/entry screens (the
+ *  other half of `isChromeless`) lay themselves out and get no wrapper. */
+const isFocusedFlow = computed(() => isFocusedFlowRoute(route.meta))
 const clientInitial = computed(() =>
   (auth.displayName.trim().slice(0, 1) || auth.me?.phone?.slice(-1) || 'M').toUpperCase(),
 )
@@ -113,7 +119,16 @@ watch([isChromeless, () => auth.accessToken], primeWorkshops)
 
 <template>
   <div v-if="isChromeless" class="min-h-[var(--app-vh)] bg-bg text-ink">
-    <RouterView />
+    <!-- Same `client-container` as the chromed routes — 16px gutters on a
+         phone, the centred 1220px column on a desktop — so a focused flow is
+         the same page column with the chrome lifted off, not a full-bleed
+         screen. The full-bleed things it does own (the parts sheet, the edge
+         picker) are modals teleported past this wrapper, so they keep their
+         edges. -->
+    <main v-if="isFocusedFlow" class="client-container client-focus-page">
+      <RouterView />
+    </main>
+    <RouterView v-else />
   </div>
 
   <div v-else class="min-h-[var(--app-vh)] bg-bg text-ink">

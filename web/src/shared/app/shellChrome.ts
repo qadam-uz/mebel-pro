@@ -33,6 +33,20 @@ export function isChromelessRoute(meta: RouteMeta): boolean {
 }
 
 /**
+ * The half of `isChromelessRoute` that is still an ordinary *page*.
+ *
+ * A `meta.chromeless` route drops the chrome but keeps everything else about
+ * the app around it — it reads as the same product, one level deeper. So it
+ * still wants the page column the header and the lists sit in. The
+ * `isChromelessLayout` half does not: the signed-out card centres itself in the
+ * viewport and a print document owns the paper, and a page gutter around either
+ * would be wrong.
+ */
+export function isFocusedFlowRoute(meta: RouteMeta): boolean {
+  return meta.chromeless === true && !isChromelessLayout(meta.layout)
+}
+
+/**
  * Sidebar sections for the workshop and platform shells. One grouping for both —
  * they only ever differed in the fallback for an item with no group, and no item
  * ships without one.

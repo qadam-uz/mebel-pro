@@ -693,6 +693,23 @@
     padding-block: 24px 64px;
   }
 
+  /* The client's chromeless flows — cutting editor, result stage, order
+     confirmation. `.client-page`'s sibling, on the same column: only the top
+     is tighter, because there is no 56px header above it to push away from
+     and the back link is the first thing on the screen (canvas: 12px on the
+     phone artboards, 24px on the desktop ones). The tail is shorter too —
+     these screens end in their own sticky action bar rather than in a list
+     that has to clear the tab bar. */
+  .client-focus-page {
+    padding-block: 12px 24px;
+  }
+
+  @media (min-width: 768px) {
+    .client-focus-page {
+      padding-block: 24px 48px;
+    }
+  }
+
   .client-page-head {
     display: flex;
     flex-wrap: wrap;
