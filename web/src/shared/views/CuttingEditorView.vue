@@ -2865,7 +2865,28 @@ onBeforeRouteLeave(async () => {
                   </div>
                 </div>
 
-                <div v-else class="@container grid gap-3 p-4">
+                <!-- `grid-cols-[minmax(0,1fr)]` outside the wizard, and it is not
+                     cosmetic: the group head's material name is `truncate`
+                     (`white-space: nowrap`), so its min-content is the *whole*
+                     decor string — «LDSP Egger H1145 · Sonoma eman ·
+                     2800×2070×18 mm», ~465px. Nothing between it and here caps
+                     that (`min-w-0` lifts a flex item's automatic minimum but
+                     not its min-content contribution, and a percentage
+                     `max-w-full` is ignored during intrinsic sizing), so the
+                     grid's *implicit* `auto` track sized to it and every group
+                     — head, kromka line, part cards, «+ Detal» — grew past the
+                     card, which clips (`.client-card` is `overflow: hidden`).
+                     An explicit `minmax(0,1fr)` track can never exceed the card,
+                     and its `0` min turns off the grid items' automatic minimum
+                     with it, so the name truncates as designed.
+                     The wizard keeps the intrinsic track on purpose: there the
+                     board is `w-max` inside its own `overflow-x-auto` scroller,
+                     and the fixed-width row columns are what it scrolls. -->
+                <div
+                  v-else
+                  class="@container grid gap-3 p-4"
+                  :class="inOrderWizard ? '' : 'grid-cols-[minmax(0,1fr)]'"
+                >
                   <!-- Desktop column header: same border + p-3 + grid template as a
                  CuttingPartRow card, so the columns line up; hidden below the
                  single-row fit width, where each row keeps its own field labels.
