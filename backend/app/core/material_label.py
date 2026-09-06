@@ -97,12 +97,7 @@ def material_label(snapshot: dict[str, Any], material_id: object) -> str:
     decor_name = _decor_name(snapshot)
     identity = _identity(snapshot, decor_name)
     thickness = _snapshot_text(snapshot, "thickness_mm", "qalinlik_mm")
-    length = _int_snapshot(
-        _snapshot_value(snapshot, "length_mm", "uzunlik_mm", "panel_length_mm"), fallback=0
-    )
-    width = _int_snapshot(
-        _snapshot_value(snapshot, "width_mm", "eni_mm", "panel_width_mm"), fallback=0
-    )
+    length, width = snapshot_sheet_size(snapshot)
 
     base = " ".join(part for part in [type_label, manufacturer, identity] if part)
     if not base:
@@ -121,6 +116,23 @@ def material_label(snapshot: dict[str, Any], material_id: object) -> str:
     if _int_snapshot(_snapshot_value(snapshot, "finished_sides"), fallback=0) == 1:
         details.append(_ONE_SIDED_LABEL)
     return " · ".join([base, *details])
+
+
+def snapshot_sheet_size(snapshot: dict[str, Any]) -> tuple[int, int]:
+    """`(length_mm, width_mm)` of the sheet a snapshot describes, `0` when absent.
+
+    The single reader of the sheet-size slots — every vocabulary in the table
+    above, newest first. Callers that draw the sheet must not re-implement it:
+    a reader that forgets a column does not fail, it silently returns `0` (or,
+    worse, a constant) and rescales the whole drawing.
+    """
+    length = _int_snapshot(
+        _snapshot_value(snapshot, "length_mm", "uzunlik_mm", "panel_length_mm"), fallback=0
+    )
+    width = _int_snapshot(
+        _snapshot_value(snapshot, "width_mm", "eni_mm", "panel_width_mm"), fallback=0
+    )
+    return max(0, length), max(0, width)
 
 
 def edge_label(snapshot: dict[str, Any], material_id: object) -> str:

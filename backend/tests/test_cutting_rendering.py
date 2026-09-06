@@ -75,6 +75,154 @@ def test_sheet_transform_fits_and_centres_the_sheet() -> None:
     assert origin_y + 2070 * scale <= 20 + frame_height + 1e-6
 
 
+# --- sheet size resolution ------------------------------------------------
+
+
+def _sized_panel(*, length: int = 2800, width: int = 2070) -> SimpleNamespace:
+    """A full 2800×2070 sheet: three parts down the left, offcuts filling the
+    rest — the shape the optimizer actually emits."""
+    return SimpleNamespace(
+        material_id="m",
+        placements=[
+            _placement(x_mm=0, y_mm=0, length_mm=1200, width_mm=900),
+            _placement(x_mm=0, y_mm=900, length_mm=1200, width_mm=900),
+            _placement(x_mm=1200, y_mm=0, length_mm=800, width_mm=600),
+        ],
+        offcuts=[
+            CuttingOffcutResponse(
+                x_mm=1200, y_mm=600, length_mm=length - 1200, width_mm=width - 600, usable=True
+            ),
+            CuttingOffcutResponse(
+                x_mm=2000, y_mm=0, length_mm=length - 2000, width_mm=600, usable=False
+            ),
+            CuttingOffcutResponse(
+                x_mm=0, y_mm=1800, length_mm=1200, width_mm=width - 1800, usable=False
+            ),
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        pytest.param({"length_mm": 2800, "width_mm": 2070}, id="current"),
+        pytest.param({"panel_length_mm": 2800, "panel_width_mm": 2070}, id="pre-reshape"),
+        pytest.param({"uzunlik_mm": 2800, "eni_mm": 2070}, id="uzbek"),
+    ],
+)
+def test_sheet_size_reads_every_snapshot_vocabulary(snapshot: dict[str, Any]) -> None:
+    """Regression: `material_snapshots` is frozen history, so the DB holds every
+    vocabulary the app ever wrote. The renderer read two of the three and fell
+    back to a flat 1000×700 for the rest — drawing a 2800×2070 layout at 2.8×,
+    off the frame and off the page."""
+    result = SimpleNamespace(parts_snapshot=[], material_snapshots={"m": snapshot})
+    panel = _sized_panel()
+
+    assert rendering.sheet_size(result, panel) == (2800, 2070)  # type: ignore[arg-type]
+
+
+def test_sheet_size_falls_back_to_the_layouts_own_extent_not_a_constant() -> None:
+    """A snapshot with no size at all must still scale to the real sheet.
+
+    Offcuts fill everything the parts leave, so the bounding extent of
+    placements + offcuts *is* the sheet, give or take the edge trim. Any
+    constant here is a silent 2.8× error on a standard board.
+    """
+    result = SimpleNamespace(parts_snapshot=[], material_snapshots={"m": {"nomi": "Sonoma"}})
+
+    assert rendering.sheet_size(result, _sized_panel()) == (2800, 2070)  # type: ignore[arg-type]
+    # A portrait sheet resolves to its own extent too — not to a landscape guess.
+    portrait = SimpleNamespace(
+        material_id="m",
+        placements=[_placement(x_mm=0, y_mm=0, length_mm=1200, width_mm=900)],
+        offcuts=[
+            CuttingOffcutResponse(x_mm=1200, y_mm=0, length_mm=630, width_mm=900, usable=True),
+            CuttingOffcutResponse(x_mm=0, y_mm=900, length_mm=1830, width_mm=1850, usable=True),
+        ],
+    )
+    assert rendering.sheet_size(result, portrait) == (1830, 2750)  # type: ignore[arg-type]
+
+
+def test_sheet_size_never_returns_zero_for_an_empty_panel() -> None:
+    """`_sheet_transform` divides by these; an empty panel has no extent either."""
+    result = SimpleNamespace(parts_snapshot=[], material_snapshots={})
+    panel = SimpleNamespace(material_id="m", placements=[], offcuts=[])
+
+    assert rendering.sheet_size(result, panel) == (1, 1)  # type: ignore[arg-type]
+
+
+def _drawn_rects(
+    result: SimpleNamespace, panel: SimpleNamespace, frame: tuple[float, float, float, float]
+) -> list[tuple[float, float, float, float]]:
+    rects: list[tuple[float, float, float, float]] = []
+    pdf = canvas.Canvas(BytesIO(), pagesize=(frame[2] + 2 * frame[0], frame[3] + 2 * frame[1]))
+    original = pdf.rect
+
+    def spy(x: float, y: float, w: float, h: float, *args: Any, **kwargs: Any) -> None:
+        rects.append((x, y, w, h))
+        original(x, y, w, h, *args, **kwargs)
+
+    pdf.rect = spy  # type: ignore[method-assign]
+    rendering.draw_sheet_map(pdf, frame, result, panel)  # type: ignore[arg-type]
+    return rects
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        pytest.param({"uzunlik_mm": 2800, "eni_mm": 2070}, id="uzbek"),
+        pytest.param({"nomi": "Sonoma"}, id="no-size-at-all"),
+    ],
+)
+def test_a_sizeless_snapshot_still_draws_every_part_inside_the_frame(
+    snapshot: dict[str, Any],
+) -> None:
+    """The bug the owner reported: parts drawn far too large, off the page.
+
+    The first drawn rect is the sheet outline; every rect after it is a
+    placement or an offcut and must sit inside it, which in turn sits inside
+    the frame it was handed.
+    """
+    result = SimpleNamespace(parts_snapshot=[], material_snapshots={"m": snapshot})
+    frame = (10.0, 20.0, 560.0, 360.0)
+    rects = _drawn_rects(result, _sized_panel(), frame)
+
+    sheet_x, sheet_y, sheet_w, sheet_h = rects[0]
+    assert sheet_x >= frame[0] - 1e-6
+    assert sheet_y >= frame[1] - 1e-6
+    assert sheet_x + sheet_w <= frame[0] + frame[2] + 1e-6
+    assert sheet_y + sheet_h <= frame[1] + frame[3] + 1e-6
+    assert len(rects) == 1 + 3 + 3
+    for x, y, w, h in rects[1:]:
+        assert x >= sheet_x - 1e-6
+        assert y >= sheet_y - 1e-6
+        assert x + w <= sheet_x + sheet_w + 1e-6
+        assert y + h <= sheet_y + sheet_h + 1e-6
+
+
+def test_a_snapshot_smaller_than_its_own_layout_is_clamped_to_the_extent() -> None:
+    """Defensive: a snapshot may disagree with the placements it was frozen
+    beside (a format edited after the fact, a hand-built fixture). Report the
+    recorded size, but never draw outside the frame because of it."""
+    result = SimpleNamespace(
+        parts_snapshot=[], material_snapshots={"m": {"length_mm": 900, "width_mm": 600}}
+    )
+    panel = _sized_panel()
+    frame = (0.0, 0.0, 560.0, 360.0)
+
+    # The resolver still reports what the snapshot says — that is the document's
+    # claim about the sheet, and the summary tables print it.
+    assert rendering.sheet_size(result, panel) == (900, 600)  # type: ignore[arg-type]
+
+    rects = _drawn_rects(result, panel, frame)
+    sheet_x, sheet_y, sheet_w, sheet_h = rects[0]
+    # …but the map scales to the extent, so nothing leaves the sheet outline.
+    assert sheet_w / sheet_h == pytest.approx(2800 / 2070)
+    for x, y, w, h in rects[1:]:
+        assert x + w <= sheet_x + sheet_w + 1e-6
+        assert y + h <= sheet_y + sheet_h + 1e-6
+
+
 # --- labels ---------------------------------------------------------------
 
 
