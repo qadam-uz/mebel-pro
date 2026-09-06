@@ -16,11 +16,14 @@ from app.modules.access.contracts import Client, TelegramLoginCode, TelegramLogi
 from app.modules.access.telegram_bot import (
     ASK_CONTACT_TEXT,
     BLOCKED_TEXT,
+    CODE_BUTTON_TEXT,
     CONFIRMED_TEXT,
+    CONTACT_BUTTON_TEXT,
     DECLINED_TEXT,
     EXPIRED_TEXT,
     FOREIGN_CONTACT_TEXT,
-    HELP_TEXT,
+    HELP_LINKED_TEXT,
+    HELP_UNLINKED_TEXT,
     LOGIN_CODE_ACTION,
 )
 from httpx import AsyncClient
@@ -63,6 +66,16 @@ def _last_markup(calls: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     sends = [payload for method, payload in calls if method == "sendMessage"]
     markup = sends[-1].get("reply_markup")
     return markup if isinstance(markup, dict) else {}
+
+
+def _keyboard_labels(markup: dict[str, Any]) -> list[str]:
+    """The reply-keyboard button labels, ignoring inline keyboards."""
+    return [button["text"] for row in markup.get("keyboard", []) for button in row]
+
+
+def _text(body: str, *, sender: dict[str, Any] | None = None) -> dict[str, Any]:
+    person = sender or SENDER
+    return {"message": {"from": person, "chat": {"id": person["id"]}, "text": body}}
 
 
 def _start(token: str | None = None, *, sender: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -167,7 +180,7 @@ async def test_webhook_refuses_everything_while_the_secret_is_unset(
 # --- /start ------------------------------------------------------------------
 
 
-async def test_bare_start_offers_help_and_the_code_button(
+async def test_bare_start_offers_help_and_the_code_keyboard_to_a_linked_account(
     client: AsyncClient,
     db_session: AsyncSession,
     bot_calls: list[tuple[str, dict[str, Any]]],
@@ -185,12 +198,27 @@ async def test_bare_start_offers_help_and_the_code_button(
     response = await client.post(WEBHOOK_URL, json=_start(), headers=HEADERS)
 
     assert response.status_code == 204
-    assert _texts(bot_calls) == [HELP_TEXT]
-    buttons = _last_markup(bot_calls)["inline_keyboard"][0]
-    assert buttons[0]["callback_data"] == LOGIN_CODE_ACTION
+    # The number is already shared — asking for it again is the bug this fixes,
+    # in the closing line of the copy as much as in the keyboard below it.
+    assert _texts(bot_calls) == [HELP_LINKED_TEXT]
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
     # Pressing Start un-blocks the bot by definition — the stale 403 flag clears.
     await db_session.refresh(person)
     assert person.telegram_unreachable_at is None
+
+
+async def test_bare_start_offers_the_contact_keyboard_to_an_unlinked_account(
+    client: AsyncClient,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    await client.post(WEBHOOK_URL, json=_start(), headers=HEADERS)
+
+    # The button below this copy is the contact request, so the copy asks for
+    # the number rather than for a code button the account can't reach yet.
+    assert _texts(bot_calls) == [HELP_UNLINKED_TEXT]
+    markup = _last_markup(bot_calls)
+    assert _keyboard_labels(markup) == [CONTACT_BUTTON_TEXT]
+    assert markup["keyboard"][0][0]["request_contact"] is True
 
 
 async def test_start_with_a_known_account_asks_for_one_confirmation(
@@ -244,6 +272,8 @@ async def test_blocked_account_is_told_so_and_the_token_dies(
     await client.post(WEBHOOK_URL, json=_start(token), headers=HEADERS)
 
     assert _texts(bot_calls) == [BLOCKED_TEXT]
+    # A blocked account has nothing left to press — the keyboard goes away.
+    assert _last_markup(bot_calls) == {"remove_keyboard": True}
     assert (await _token_row(db_session)).status is TelegramLoginTokenStatus.DECLINED
 
 
@@ -267,6 +297,7 @@ async def test_known_account_confirms_and_the_browser_can_redeem(
     assert confirmed.client_id == person.id
     assert confirmed.confirmed_at is not None
     assert _texts(bot_calls)[-1] == CONFIRMED_TEXT
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
 
 
 async def test_declining_ends_the_handshake(
@@ -486,6 +517,7 @@ async def test_the_code_button_identifies_an_unknown_account_first(
     """No deep link in play — the contact share alone identifies, then a code."""
     await client.post(WEBHOOK_URL, json=_callback(LOGIN_CODE_ACTION), headers=HEADERS)
     assert _texts(bot_calls)[-1] == ASK_CONTACT_TEXT
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CONTACT_BUTTON_TEXT]
     assert await db_session.scalar(select(TelegramLoginCode)) is None
 
     await client.post(WEBHOOK_URL, json=_contact("+998907654321"), headers=HEADERS)
@@ -497,3 +529,88 @@ async def test_the_code_button_identifies_an_unknown_account_first(
     assert row is not None
     assert row.client_id == person.id
     assert "Kirish kodi: " in _texts(bot_calls)[-1]
+    # The account is linked now: the ask-for-your-number button is replaced.
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
+
+
+# --- The state of the reply keyboard -----------------------------------------
+
+
+async def test_the_code_keyboard_button_issues_a_code_to_a_linked_account(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    person = await _seed_client(db_session, phone="+998901234567", telegram_user_id=SENDER_ID)
+
+    await client.post(WEBHOOK_URL, json=_text(CODE_BUTTON_TEXT), headers=HEADERS)
+
+    row = await db_session.scalar(select(TelegramLoginCode))
+    assert row is not None
+    assert row.client_id == person.id
+    assert "Kirish kodi: " in _texts(bot_calls)[-1]
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
+
+
+async def test_the_code_button_label_is_recognized_without_its_emoji(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Retyped, copy-pasted, or sent by an older keyboard — same request."""
+    await _seed_client(db_session, phone="+998901234567", telegram_user_id=SENDER_ID)
+
+    await client.post(WEBHOOK_URL, json=_text("  kirish kodi "), headers=HEADERS)
+
+    assert await db_session.scalar(select(TelegramLoginCode)) is not None
+    assert "Kirish kodi: " in _texts(bot_calls)[-1]
+
+
+async def test_the_code_keyboard_button_identifies_an_unlinked_account_first(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """A code keyboard left over from an account that was since unlinked."""
+    await client.post(WEBHOOK_URL, json=_text(CODE_BUTTON_TEXT), headers=HEADERS)
+
+    assert _texts(bot_calls)[-1] == ASK_CONTACT_TEXT
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CONTACT_BUTTON_TEXT]
+    assert await db_session.scalar(select(TelegramLoginCode)) is None
+
+
+async def test_a_stale_contact_button_press_still_issues_a_code(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """The old keyboard lingers in real chats; sharing again must still work."""
+    person = await _seed_client(db_session, phone="+998901234567", telegram_user_id=SENDER_ID)
+
+    await client.post(WEBHOOK_URL, json=_contact("+998901234567"), headers=HEADERS)
+
+    row = await db_session.scalar(select(TelegramLoginCode))
+    assert row is not None
+    assert row.client_id == person.id
+    await db_session.refresh(person)
+    assert person.telegram_user_id == SENDER_ID
+    assert _keyboard_labels(_last_markup(bot_calls)) == [CODE_BUTTON_TEXT]
+
+
+async def test_a_blocked_account_keeps_no_keyboard_at_all(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    bot_calls: list[tuple[str, dict[str, Any]]],
+) -> None:
+    await _seed_client(
+        db_session,
+        phone="+998901234567",
+        telegram_user_id=SENDER_ID,
+        status=UserStatus.BLOCKED,
+    )
+
+    await client.post(WEBHOOK_URL, json=_text(CODE_BUTTON_TEXT), headers=HEADERS)
+
+    assert _texts(bot_calls)[-1] == BLOCKED_TEXT
+    assert _last_markup(bot_calls) == {"remove_keyboard": True}
+    assert await db_session.scalar(select(TelegramLoginCode)) is None
