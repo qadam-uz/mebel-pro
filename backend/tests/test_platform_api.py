@@ -11,6 +11,7 @@ from app.modules.platform.contracts import ErrorRecord, JobDefinition
 from app.modules.platform.scheduler import RegisteredJob, registry
 from app.modules.platform.service import ensure_default_jobs_registered, run_due_platform_jobs
 from app.modules.support.contracts import ActionLog, Notification, StatusChangeLog
+from app.modules.workshop.contracts import Workshop
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -861,3 +862,33 @@ async def test_error_record_manual_reopen_clears_resolution(
 
     actions = await client.get("/api/v1/platform/audit/actions", headers=_auth(access))
     assert "platform.error.reopen" in {row["action"] for row in actions.json()}
+
+
+async def test_workshop_detail_carries_the_client_link_ingredients(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # The admin copies a workshop's `/w/{code}` link and each branch's
+    # `/w/{code}/{branch_no}` link off this one payload (client-entry.md), so the
+    # detail must carry the workshop's public code alongside every branch number.
+    access = await _platform_access_token(client, db_session)
+    provisioned = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access),
+        json=_provision_payload(),
+    )
+    assert provisioned.status_code == 201
+    workshop_id = provisioned.json()["workshop"]["id"]
+    stored = await db_session.get(Workshop, uuid.UUID(workshop_id))
+    assert stored is not None
+
+    detail = await client.get(f"/api/v1/platform/workshops/{workshop_id}", headers=_auth(access))
+    listed = await client.get("/api/v1/platform/workshops", headers=_auth(access))
+
+    assert detail.status_code == 200
+    assert detail.json()["workshop"]["public_code"] == stored.public_code
+    assert [branch["branch_no"] for branch in detail.json()["branches"]] == [1]
+    # The list row is the same summary, so an operator has the code before
+    # opening a workshop too.
+    assert listed.status_code == 200
+    assert [row["public_code"] for row in listed.json()] == [stored.public_code]

@@ -17,6 +17,7 @@ import {
 } from '@/shared/app/adminUi'
 import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
+import AdminClientLinksCard from '@/shared/components/AdminClientLinksCard.vue'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
@@ -220,53 +221,64 @@ onMounted(() => admin.loadWorkshop(workshopId))
       variant="admin"
     />
 
-    <section
+    <!-- The links card is the operator's copy of what the owner publishes, so it
+         reads as part of the workshop's identity — it sits under the profile
+         rather than in the read-only Filiallar table, which is a support lookup
+         (branch number, phone, address), not a place to act. -->
+    <div
       v-if="tab === 'profile'"
       id="ws-profile-panel"
       role="tabpanel"
       aria-labelledby="ws-profile-tab"
-      class="admin-card max-w-[720px]"
+      class="grid gap-5"
     >
-      <div class="admin-card-h">
-        <h2>Ustaxona profili</h2>
-      </div>
-      <div class="admin-card-b">
-        <dl class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt class="text-[12.5px] font-semibold text-ink-muted">Nomi</dt>
-            <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
-          </div>
-          <div>
-            <dt class="text-[12.5px] font-semibold text-ink-muted">Rahbar</dt>
-            <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
-              <span class="text-sm">{{ admin.detail.owner.login }}</span>
-              <button
-                type="button"
-                class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
-                :aria-label="`${admin.detail.owner.login} rahbarining parolini tiklash`"
-                @click="resetConfirmOpen = true"
-              >
-                Parolni tiklash
-              </button>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[12.5px] font-semibold text-ink-muted">Yaratildi</dt>
-            <dd class="mt-1 text-sm text-ink">
-              {{ adminDate(admin.detail.workshop.created_at) }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[12.5px] font-semibold text-ink-muted">Holat</dt>
-            <dd class="mt-1">
-              <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
-                {{ workshopStatusLabel(admin.detail.workshop.status) }}
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </section>
+      <section class="admin-card max-w-[720px]">
+        <div class="admin-card-h">
+          <h2>Ustaxona profili</h2>
+        </div>
+        <div class="admin-card-b">
+          <dl class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt class="text-[12.5px] font-semibold text-ink-muted">Nomi</dt>
+              <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
+            </div>
+            <div>
+              <dt class="text-[12.5px] font-semibold text-ink-muted">Rahbar</dt>
+              <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
+                <span class="text-sm">{{ admin.detail.owner.login }}</span>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
+                  :aria-label="`${admin.detail.owner.login} rahbarining parolini tiklash`"
+                  @click="resetConfirmOpen = true"
+                >
+                  Parolni tiklash
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[12.5px] font-semibold text-ink-muted">Yaratildi</dt>
+              <dd class="mt-1 text-sm text-ink">
+                {{ adminDate(admin.detail.workshop.created_at) }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[12.5px] font-semibold text-ink-muted">Holat</dt>
+              <dd class="mt-1">
+                <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
+                  {{ workshopStatusLabel(admin.detail.workshop.status) }}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <AdminClientLinksCard
+        :code="admin.detail.workshop.public_code"
+        :branches="admin.detail.branches"
+      />
+    </div>
 
     <section
       v-else-if="tab === 'branches'"

@@ -321,7 +321,7 @@ to its own customer.
 ### Where the workshop gets its link
 
 Owner surfaces in the workshop app ([`workshop.md`](workshop.md)), no new grant — a
-**"Mijoz havolasi"** card in two places:
+**"Mijoz havolasi"** card in two places, plus a copy action on the list:
 
 - **Branch detail** — the branch URL, a **Nusxalash** copy action, a QR rendered in the app
   itself (SVG, no external service), and **Chop etish**, which opens a minimal print sheet:
@@ -330,9 +330,28 @@ Owner surfaces in the workshop app ([`workshop.md`](workshop.md)), no new grant 
   needs.
 - **Workshop settings** — the same card once, with the workshop-level URL, for anything not
   tied to one counter: business cards, a Telegram bio, a sign.
+- **Branches list** — every row carries an icon-only **Havolani nusxalash** action in a
+  **Havola** column: reading a branch link out to a print shop should not cost one page load
+  per branch. It is the copy alone — the QR and the print sheet stay on the card, because a
+  table row cannot hold them.
+
+The **platform operator** sees the same links, read-only, on the superadmin workshop detail:
+a **"Mijoz havolalari"** card under the workshop profile with the workshop link, its QR, and
+one copyable row per branch — a `temporarily_closed` or `inactive` branch included, carrying
+its status pill, since the QR already printed on that counter still resolves. Support gets
+calls about a link a caller cannot read back; without this the operator could see the branch
+numbers and never the URL they address. It carries no **Chop etish**: the print sheet is a
+workshop route, and printing a workshop's counter sheet is not the platform's job.
+
+Who copies what: the **owner** copies their own workshop's links (the session is the
+workshop's, so scope is automatic — no new grant); the **platform operator** copies any
+workshop's, gated by the same operator check as the rest of the superadmin app
+([`access-management.md`](access-management.md)).
 
 The QR encodes the absolute URL on the deployment's public client origin — the same source
-the Telegram bot uses for its links.
+the Telegram bot uses for its links. Every staff app derives that origin from its own: in
+production by swapping the `workshop.` or `admin.` host prefix for `app.`, in dev by swapping
+the role base path for `/client`.
 
 ## Edge cases
 

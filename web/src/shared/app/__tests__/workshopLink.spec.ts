@@ -15,8 +15,17 @@ describe('client app base', () => {
     )
   })
 
+  it('swaps the platform subdomain too — the admin copies the same links', () => {
+    expect(clientAppBase('https://admin.mebel-pro.uz', '/workshops/abc', false)).toBe(
+      'https://app.mebel-pro.uz',
+    )
+  })
+
   it('mounts the client role base in dev, where one server hosts all three apps', () => {
     expect(clientAppBase('http://localhost:5173', '/workshop/branches/1', true)).toBe(
+      'http://localhost:5173/client',
+    )
+    expect(clientAppBase('http://localhost:5173', '/admin/workshops/abc', true)).toBe(
       'http://localhost:5173/client',
     )
   })
