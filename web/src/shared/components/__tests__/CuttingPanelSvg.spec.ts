@@ -227,6 +227,66 @@ describe('CuttingPanelSvg edge banding', () => {
     expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 1000 700')
   })
 
+  it('reads panel size from a reshape-era Uzbek snapshot', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          material_snapshots: {
+            'mat-1': { tur: 'ldsp', nomi: 'Panel', uzunlik_mm: 1000, eni_mm: 700 },
+          },
+        } as unknown as CuttingResult,
+        panel,
+        activePlacementId: null,
+      },
+    })
+
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 1000 700')
+  })
+
+  // The bug behind fix/pdf-sheet-size-fallback: a snapshot with no size in any
+  // vocabulary used to fall back to a flat 1000×700, drawing a 2800×2070 layout
+  // at 2.8× — placements outside their own viewBox, with nothing to signal it.
+  it('sizes a snapshot with no dimensions from the layout, not a constant', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          material_snapshots: { 'mat-1': { nomi: 'Panel' } },
+        } as unknown as CuttingResult,
+        panel: {
+          ...panel,
+          placements: [{ ...panel.placements[0], length_mm: 1200, width_mm: 900 }],
+          // Offcuts fill everything the parts leave, so the extent is the sheet.
+          offcuts: [
+            { x_mm: 1200, y_mm: 0, length_mm: 1600, width_mm: 2070, usable: true },
+            { x_mm: 0, y_mm: 900, length_mm: 1200, width_mm: 1170, usable: false },
+          ],
+        },
+        activePlacementId: null,
+      },
+    })
+
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 2800 2070')
+  })
+
+  it('widens the viewBox when a snapshot is smaller than its own layout', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          material_snapshots: { 'mat-1': { name: 'Panel', length_mm: 200, width_mm: 100 } },
+        } as unknown as CuttingResult,
+        panel,
+        activePlacementId: null,
+      },
+    })
+
+    // The placement is 300×200 on a snapshot claiming 200×100: draw all of it
+    // rather than letting it run outside the frame.
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 300 200')
+  })
+
   it('rotates labels for tall narrow offcuts', () => {
     const wrapper = mount(CuttingPanelSvg, {
       props: {

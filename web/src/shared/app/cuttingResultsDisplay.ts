@@ -1,7 +1,8 @@
 import {
   snapshotMaterialLabel,
+  snapshotSheetSize,
   snapshotShortLabel,
-  snapshotValue,
+  type SheetSize,
 } from '@/shared/app/materialLabel'
 import { edgeFields } from '@/shared/app/cuttingDisplay'
 import {
@@ -38,19 +39,61 @@ export function numberSnapshot(value: unknown, fallback: number) {
 
 export { snapshotShortLabel }
 
-/** One sheet's area in mm², read off the frozen material snapshot — 0 when the
- *  snapshot carries no usable size, which every caller renders as "no figure"
- *  rather than as zero. Pre-reshape snapshots only have
- *  `panel_length_mm`/`panel_width_mm`; drop the legacy read and every historical
- *  result silently loses its fill. */
+/** Bounding extent of everything laid on a sheet, in sheet mm. */
+export function panelExtent(panel: CuttingPanel): SheetSize {
+  let length = 0
+  let width = 0
+  for (const item of panel.placements) {
+    length = Math.max(length, item.x_mm + item.length_mm)
+    width = Math.max(width, item.y_mm + item.width_mm)
+  }
+  for (const item of panel.offcuts) {
+    length = Math.max(length, item.x_mm + item.length_mm)
+    width = Math.max(width, item.y_mm + item.width_mm)
+  }
+  return { length, width }
+}
+
+/** The one place a drawn sheet's millimetres are decided — twin of the
+ *  backend's `rendering.sheet_size`, so the on-screen map and the PDF agree.
+ *
+ *  Never guesses. When the snapshot carries no size in any vocabulary the size
+ *  is *derived*: the optimizer fills every square millimetre it does not cut
+ *  into a part with an offcut rectangle, so the bounding extent of placements +
+ *  offcuts is the sheet, minus at most the edge trim. The old flat 1000x700
+ *  fallback drew a real 2800x2070 layout at 2.8x, spilling outside its own
+ *  viewBox with nothing to signal it. */
+export function panelSheetSize(result: CuttingResult, panel: CuttingPanel): SheetSize {
+  const snapshot = snapshotSheetSize(result.material_snapshots[panel.material_id])
+  const extent = panelExtent(panel)
+  return {
+    length: snapshot.length || extent.length,
+    width: snapshot.width || extent.width,
+  }
+}
+
+/** `panelSheetSize` with a floor of 1, for the callers that divide by it: an
+ *  empty panel carries neither a snapshot size nor an extent. */
+export function drawnSheetSize(result: CuttingResult, panel: CuttingPanel): SheetSize {
+  const size = panelSheetSize(result, panel)
+  const extent = panelExtent(panel)
+  // Widened past the recorded sheet when the placements disagree with it, so a
+  // stale or hand-built snapshot cannot push anything outside the frame.
+  return {
+    length: Math.max(size.length, extent.length) || 1,
+    width: Math.max(size.width, extent.width) || 1,
+  }
+}
+
+/** One sheet's area in mm², through `panelSheetSize` — so a fill percent is
+ *  read off exactly the rectangle the map and the PDF draw, in every snapshot
+ *  vocabulary and, failing all of them, off the placements + offcuts extent.
+ *  0 only when there is nothing to measure at all (no recorded size *and* an
+ *  empty sheet), which every caller renders as "no figure" rather than as
+ *  zero — never as a fabricated 100%. */
 function panelSheetAreaMm2(result: CuttingResult, panel: CuttingPanel) {
-  const snapshot = result.material_snapshots[panel.material_id]
-  const length = numberSnapshot(
-    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    0,
-  )
-  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
-  if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return 0
+  const { length, width } = panelSheetSize(result, panel)
+  if (length <= 0 || width <= 0) return 0
   return length * width
 }
 
@@ -66,9 +109,13 @@ export function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
  *
  * Area-weighted across the panels rather than averaged over the material rows:
  * two materials on one result cut different sheet sizes, and an unweighted mean
- * lets one small offcut-heavy sheet outvote the boards the money is in. `null`
- * when no panel's snapshot carries a usable size (frozen pre-reshape history) —
- * the caller prints an em dash rather than a fabricated 0%.
+ * lets one small offcut-heavy sheet outvote the boards the money is in.
+ *
+ * `null` — the em dash the caller prints — is now the **empty-result** case
+ * alone, not a history case: since the sheet size falls back to the placements +
+ * offcuts extent, a result with anything laid on a sheet always measures, frozen
+ * pre-reshape snapshots included. Nothing on any sheet is the only way through
+ * here, and for that there is no yield to state.
  */
 export function resultFillPercent(result: CuttingResult): number | null {
   let sheetArea = 0

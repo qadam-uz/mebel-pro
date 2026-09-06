@@ -8,12 +8,11 @@ import {
   deriveSnapshotEdgeRegistry,
   edgeRegistryEntryByMaterial,
   groupPanelPlacements,
-  numberSnapshot,
   panelDisplayIndex,
   resultTotals,
   workshopResultFigures,
 } from '@/shared/app/cuttingResultsDisplay'
-import { snapshotValue } from '@/shared/app/materialLabel'
+import { snapshotSheetSize } from '@/shared/app/materialLabel'
 import CuttingPartsList from '@/shared/components/CuttingPartsList.vue'
 import CuttingResultSheets from '@/shared/components/CuttingResultSheets.vue'
 import {
@@ -102,12 +101,7 @@ const panelMaterials = computed(() =>
 function materialFillPercent(materialId: string) {
   const panels = props.result.panels.filter((panel) => panel.material_id === materialId)
   if (panels.length === 0) return null
-  const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(
-    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    0,
-  )
-  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const { length, width } = snapshotSheetSize(props.result.material_snapshots[materialId])
   if (length <= 0 || width <= 0) return null
   const sheetArea = length * width * panels.length
   const waste = panels.reduce((sum, panel) => sum + panel.waste_area_mm2, 0)

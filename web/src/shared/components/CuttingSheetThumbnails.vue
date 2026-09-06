@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { panelDisplayIndex, panelFillPercent } from '@/shared/app/cuttingResultsDisplay'
-import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
+import {
+  drawnSheetSize,
+  panelDisplayIndex,
+  panelFillPercent,
+} from '@/shared/app/cuttingResultsDisplay'
+import { snapshotMaterialLabel } from '@/shared/app/materialLabel'
 import type { CuttingPanel, CuttingResult } from '@/shared/stores/cutting'
 
 defineProps<{
@@ -12,31 +16,20 @@ const emit = defineEmits<{
   select: [panelId: string]
 }>()
 
-function numberSnapshot(value: unknown, fallback: number) {
-  if (typeof value === 'number') return value
-  if (typeof value === 'string' && value.trim()) return Number(value)
-  return fallback
-}
-
 function snapshot(result: CuttingResult, panel: CuttingPanel) {
   return result.material_snapshots[panel.material_id] ?? {}
 }
 
-// Frozen history: pre-reshape snapshots only carry panel_length_mm/panel_width_mm,
-// so the legacy key stays in the read. Without it every historical thumbnail falls
-// back to 1000×700 and renders at the wrong aspect ratio, with no error.
+// Same resolver the full map and the PDF use: any of the three frozen snapshot
+// vocabularies, else the layout's own extent, then widened to cover anything
+// that sticks out of the recorded sheet. Never a constant — a thumbnail sized
+// by a guess is silently the wrong shape.
 function panelLength(result: CuttingResult, panel: CuttingPanel) {
-  return numberSnapshot(
-    snapshotValue(snapshot(result, panel), 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    1000,
-  )
+  return drawnSheetSize(result, panel).length
 }
 
 function panelWidth(result: CuttingResult, panel: CuttingPanel) {
-  return numberSnapshot(
-    snapshotValue(snapshot(result, panel), 'width_mm', 'eni_mm', 'panel_width_mm'),
-    700,
-  )
+  return drawnSheetSize(result, panel).width
 }
 
 function viewBox(result: CuttingResult, panel: CuttingPanel) {

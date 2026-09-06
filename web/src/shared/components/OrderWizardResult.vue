@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 
 import {
   deriveSnapshotEdgeRegistry,
-  numberSnapshot,
   panelDisplayIndex,
   panelFillPercent,
   resultTotals,
@@ -12,7 +11,7 @@ import {
   workshopResultFigures,
 } from '@/shared/app/cuttingResultsDisplay'
 import { materialSwatchStyle } from '@/shared/app/cuttingDisplay'
-import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
+import { snapshotMaterialLabel, snapshotSheetSize, snapshotValue } from '@/shared/app/materialLabel'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { useCuttingStore, type CuttingResult } from '@/shared/stores/cutting'
 
@@ -38,11 +37,7 @@ function swatchFor(materialId: string) {
 
 function materialSize(materialId: string) {
   const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(
-    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    0,
-  )
-  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const { length, width } = snapshotSheetSize(snapshot)
   const thickness = snapshotValue(snapshot, 'thickness_mm', 'qalinlik_mm')
   if (length <= 0 || width <= 0) return ''
   const base = `${length}×${width}`
@@ -53,12 +48,7 @@ function materialSize(materialId: string) {
 // not against a result-wide figure two materials would have to share.
 function materialFill(materialId: string) {
   const panels = props.result.panels.filter((panel) => panel.material_id === materialId)
-  const snapshot = props.result.material_snapshots[materialId]
-  const length = numberSnapshot(
-    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    0,
-  )
-  const width = numberSnapshot(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const { length, width } = snapshotSheetSize(props.result.material_snapshots[materialId])
   if (panels.length === 0 || length <= 0 || width <= 0) return null
   const waste = panels.reduce((sum, panel) => sum + panel.waste_area_mm2, 0)
   return Math.max(0, Math.min(100, 100 - (waste / (length * width * panels.length)) * 100))

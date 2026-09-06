@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-09-06
 order: 40
 ---
 
@@ -106,7 +106,7 @@ is stamped for audit; replacing a solver later doesn't touch past results.
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |
 | `edge_length_by_material`                                          | json       | `{ "<kromka branch_material_id>": 12500, … }` — per-tape geometric length in integer millimetres; UI/pricing displays metres.                               |
 | `parts_snapshot`                                                   | json       | source parts copied from the draft at optimise time, including each part's `name`, `follow_grain` and `thickened`, so the result remains renderable after the draft is deleted on order placement |
-| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every material the result references, branch materials and customer boards alike — `manufacturer_name`, `type`, `code`, `name`, `thickness_mm`, `length_mm`, `width_mm`, `tape_width_mm`, `has_grain`, `finished_sides`, plus `customer_supplied` + `stock_material_id` on a board — used for labels and PDFs after catalog edits. **Frozen history is never rewritten**, so older rows carry the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`decor_code`, `color`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`); the label formatter reads **all three**, newest key first |
+| `material_snapshots`                                               | json       | material display/spec facts copied at optimise time for every material the result references, branch materials and customer boards alike — `manufacturer_name`, `type`, `code`, `name`, `thickness_mm`, `length_mm`, `width_mm`, `tape_width_mm`, `has_grain`, `finished_sides`, plus `customer_supplied` + `stock_material_id` on a board — used for labels and PDFs after catalog edits. **Frozen history is never rewritten**, so older rows carry the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`decor_code`, `color`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`); the label formatter and the sheet-size resolver behind every drawn map read **all three**, newest key first |
 | `edge_length_shop_by_material` / `edge_length_own_by_material`     | json       | source-split geometric edge length, keyed by kromka branch material id, in integer millimetres                                                                                                |
 | `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json       | source-split edge consumption, keyed by kromka branch material id, in integer millimetres; includes the branch's `edge_overhang_mm` once per banded side ([`workshop.md`](workshop.md))                                                  |
 | `edge_banded_sides_by_material`                                    | json       | `{ "<kromka branch_material_id>": { "shop": 4, "own": 2 } }` — source-split count of banded sides feeding consumption and Phase 5 stock math                                                  |

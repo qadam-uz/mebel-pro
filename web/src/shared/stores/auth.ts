@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore, getActivePinia, type StoreGeneric } from 'pinia'
 
-import { ApiError, api } from '@/shared/api/client'
+import { ApiError, api, isAbortError, type ApiRequestInit } from '@/shared/api/client'
 import type { RoleKey } from '@/shared/app/roleConfig'
 
 export type PrincipalType = 'platform_user' | 'workshop_user' | 'client'
@@ -236,18 +236,22 @@ export const useAuthStore = defineStore('auth', () => {
    * poll secret is the only credential that releases it, and the backend burns
    * the token on the way out, so exactly one poll can ever win it.
    */
-  async function pollClientLogin(pollSecret: string) {
+  async function pollClientLogin(pollSecret: string, init?: ApiRequestInit) {
     try {
       const response = await api.post<TokenResponse | ClientLoginPoll>(
         '/auth/client/telegram/poll',
         { poll_secret: pollSecret },
+        init,
       )
       if ('access_token' in response) {
         applyToken(response)
       }
       return response
     } catch (error) {
-      captureError(error)
+      // A poll the card cancelled — superseded, or dropped because the tab went
+      // to Telegram — did not fail; recording it would leave `lastError` naming
+      // a request nobody is waiting for and colour the next screen that reads it.
+      if (!isAbortError(error)) captureError(error)
       throw error
     }
   }

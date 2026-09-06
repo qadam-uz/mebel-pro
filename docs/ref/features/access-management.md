@@ -121,7 +121,7 @@ sequenceDiagram
     participant T as Telegram (bot chat)
     B->>S: new login token
     S-->>B: deep link (token) + poll secret
-    Note over B: renders QR / button,<br/>polls with the secret every ~2 s
+    Note over B: renders QR / button,<br/>polls with the secret every ~2 s<br/>and on every return to the tab
     T->>S: /start token
     S->>T: confirm? (+ share contact, first time)
     T->>S: confirmed (+ contact)
@@ -136,14 +136,23 @@ sequenceDiagram
    `login_token_rate_limited` with `retry_after_seconds`); like every per-IP budget it needs
    the deploy's trusted-proxy config (`TRUSTED_PROXY_CIDRS`) or all traffic shares one bucket.
 2. **The client opens the bot.** The page renders `https://t.me/<bot>?start=<token>` two
-   ways at once — as a QR and as a button, one per tab (UX below). Scanning or tapping opens
-   the bot chat with the token attached.
+   ways at once — as a QR and as a button, one per tab (UX below; on a phone the button
+   carries the `tg://` form of the same link). Scanning or tapping opens the bot chat with the
+   token attached.
 3. **The bot identifies and confirms** (the conversation below). On success the token is
    `confirmed` and bound to the client.
 4. **The browser polls with the poll secret.** The poll reports the token's state (so the
    page can say "confirm in Telegram" the moment the chat opens); on `confirmed` it answers
    with a normal [session](../entities/identity.md#session) and the token is `used`. Session
    mechanics and self-service session management are identical to every other principal.
+   The page polls **every ~2 s and again the moment the tab comes back to the front**
+   (`visibilitychange`, `focus`, and a bfcache restore all count as one return), because the
+   tab is usually back precisely because the client has just confirmed. **An in-flight poll is
+   abandoned when the tab hides** and each poll carries its own ceiling: a phone freezes the
+   page during the trip to Telegram, and a request frozen mid-flight can simply never settle —
+   waiting on it wedges the loop, which is what used to leave the confirmed client staring at
+   "waiting" until they reloaded. Only the newest poll may act on its answer, so abandoning
+   one is always safe.
 
 **Two secrets, deliberately.** The deep-link token is displayed on screen — anyone who can
 photograph the QR holds it. If polling redeemed the *token*, that photographer could poll it
@@ -305,9 +314,25 @@ Telegram lives on the other device is one click away from the affordance they ne
 
 - **QR kod** — the QR of the deep link, scanned by **the phone's camera** (not by Telegram;
   the copy says so). Under it, collapsed, sits the code fallback below.
-- **Telegram orqali** — one primary **Telegram botga o'tish** button opening the deep link in a
-  **new tab**, so the card is never navigated away from and its poll keeps running; the poll
-  picks the session up when the client returns to the browser.
+- **Telegram orqali** — one primary **Telegram botga o'tish** button. **On a phone it is the
+  `tg://resolve?domain=…&start=…` form of the same handshake, opened in this tab**; on a
+  desktop it is the `https://t.me/…` link in a **new tab**. The split is deliberate: on a
+  phone the https form loads Telegram's own "Open in Telegram" interstitial *page* first, and
+  the client comes back to that page rather than to the login card — where they tap the bot a
+  second time instead of finding themselves signed in. The scheme hands the OS the app with no
+  page in between, and it either opens Telegram or does nothing at all, so this tab and its
+  poll survive the tap either way. A phone with no Telegram installed gets no error from the
+  OS, so the way out is on screen before it is needed: a text link **«Telegram ochilmadimi?
+  t.me orqali ochish»** under the button, opening the https form away. On a desktop there is
+  no guaranteed `tg://` handler, so it keeps the new tab — navigating the card itself away
+  would tear the handshake down.
+- **Once the client has gone to Telegram** — the tap, or the first `started` poll, switches the
+  tab to the state that says what to do next: the status line becomes «Telegramda tasdiqlang va
+  shu sahifaga qayting — avtomatik kirasiz», the deep-link button steps down to secondary and
+  becomes **«Telegramga qaytish»** (the action that matters is now in the bot; this is only the
+  way back), and a text button **«Tasdiqladim, tekshirish»** appears that polls once on demand.
+  The automatic poll answers within two seconds on its own — the button exists for the client
+  who is back, still sees a waiting line, and would otherwise tap through to the bot again.
 - **The in-flight handshake survives the round trip.** The live token, its poll secret and its
   expiry are parked in per-tab storage (`sessionStorage`), so a reload — or a mobile browser
   evicting the tab during the switch to Telegram — resumes the same handshake and polls it

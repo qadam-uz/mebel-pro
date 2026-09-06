@@ -197,6 +197,33 @@ export function snapshotInt(value: unknown, fallback: number): number {
   return fallback
 }
 
+export interface SheetSize {
+  length: number
+  width: number
+}
+
+/**
+ * `{length, width}` of the sheet a snapshot describes, `0` for a slot it does
+ * not carry. Mirrors `material_label.snapshot_sheet_size`.
+ *
+ * The single reader of the sheet-size slots, across every vocabulary in the
+ * table above. Callers that *draw* the sheet must not re-implement it: a reader
+ * that forgets a column does not fail, it silently returns 0 — or, worse, some
+ * constant — and rescales the whole drawing with nothing to signal it.
+ */
+export function snapshotSheetSize(snapshot: MaterialSnapshot): SheetSize {
+  return {
+    length: Math.max(
+      0,
+      snapshotInt(snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'), 0),
+    ),
+    width: Math.max(
+      0,
+      snapshotInt(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0),
+    ),
+  }
+}
+
 /**
  * The name slot of the base: decor code first, then whatever names exist. `name`
  * is the legacy server-generated column, gone from new snapshots; it is consulted
@@ -270,11 +297,7 @@ export function snapshotMaterialLabel(
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
   const name = decorName(snapshot)
   const thickness = snapshotText(snapshot, 'thickness_mm', 'qalinlik_mm')
-  const length = snapshotInt(
-    snapshotValue(snapshot, 'length_mm', 'uzunlik_mm', 'panel_length_mm'),
-    0,
-  )
-  const width = snapshotInt(snapshotValue(snapshot, 'width_mm', 'eni_mm', 'panel_width_mm'), 0)
+  const { length, width } = snapshotSheetSize(snapshot)
   const oneSided = finishedSidesNote(snapshotValue(snapshot, 'finished_sides'))
 
   const base = [type, manufacturer, identity(snapshot, name)].filter(Boolean).join(' ') || fallback
