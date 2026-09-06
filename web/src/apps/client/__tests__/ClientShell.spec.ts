@@ -22,6 +22,13 @@ const routes = [
   { path: '/c/orders', name: 'client-orders', component: blank },
   { path: '/c/profile', name: 'client-profile', component: blank },
   { path: '/c/notifications', name: 'client-notifications', component: blank },
+  {
+    path: '/c/cutting/:id',
+    name: 'client-editor',
+    component: blank,
+    meta: { titleKey: 'routes.draft', chromeless: true },
+  },
+  { path: '/auth/login', name: 'client-login', component: blank, meta: { layout: 'auth' } },
 ]
 
 function workshop(id: string): ClientWorkshop {
@@ -35,9 +42,9 @@ function workshop(id: string): ClientWorkshop {
   }
 }
 
-async function mountShell(workshops: ClientWorkshop[]) {
+async function mountShell(workshops: ClientWorkshop[], path = '/c') {
   const router = createRouter({ history: createMemoryHistory(), routes })
-  await router.push('/c')
+  await router.push(path)
   await router.isReady()
 
   // No token: `primeWorkshops` must not fire a fetch over the rows the test set.
@@ -94,5 +101,41 @@ describe('ClientShell — the Ustaxona entry point', () => {
   it('sends both surfaces to Ustaxonalarim before the list has loaded', async () => {
     const wrapper = await mountShell([])
     expect(ustaxonaHrefs(wrapper)).toEqual({ nav: '/c/branches', tab: '/c/branches' })
+  })
+})
+
+/**
+ * Both halves of `isChromelessRoute` render without header or tab bar, and they
+ * used to render identically — which left the editor, the result stage and the
+ * order confirmation with no page gutter at all: on a phone the back link, the
+ * title and the cards sat on the viewport edge (the ⋯ button's 44px tap target
+ * pushed `scrollWidth` 4px past `clientWidth`), and on a desktop the title
+ * started at x=0 while every other client page was centred.
+ *
+ * A `meta.chromeless` route is still a page of the app, so it gets the column.
+ * A `layout: 'auth'` route is a card that centres itself in the viewport, so it
+ * must not — assert the pair together, since only the contrast is the rule.
+ */
+describe('ClientShell — the chromeless page column', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('gives a signed-in chromeless route the client page column', async () => {
+    const wrapper = await mountShell([workshop('w-1')], '/c/cutting/draft-1')
+    const main = wrapper.find('main')
+    expect(main.exists()).toBe(true)
+    expect(main.classes()).toContain('client-container')
+    expect(main.classes()).toContain('client-focus-page')
+    // Still chromeless: no header, no tab bar.
+    expect(wrapper.find('header').exists()).toBe(false)
+    expect(wrapper.find('nav').exists()).toBe(false)
+  })
+
+  it('leaves a `layout: auth` route to lay itself out', async () => {
+    const wrapper = await mountShell([workshop('w-1')], '/auth/login')
+    expect(wrapper.find('.client-container').exists()).toBe(false)
+    expect(wrapper.find('.client-focus-page').exists()).toBe(false)
+    expect(wrapper.find('header').exists()).toBe(false)
   })
 })
