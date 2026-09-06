@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
+import ClientChipFilter from '@/shared/components/ClientChipFilter.vue'
 
 const options = [
   { value: 'all', label: 'Hammasi' },

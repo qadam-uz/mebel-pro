@@ -69,6 +69,8 @@
     "searchLabel": "Material qidirish",
     "searchPlaceholder": "Dekor nomi yoki kodi — Sonoma, H1145, сонома",
     "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
+    "typeFilter": "Material turi",
+    "typeAll": "Barchasi",
     "pickerEmpty": "Bu filialda material yo‘q.",
     "discontinued": "Ishlab chiqarishdan chiqqan",
     "perSheet": "/ list",

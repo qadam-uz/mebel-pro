@@ -55,6 +55,15 @@ function mountPicker(materials: ClientCatalogMaterialOption[], currentId: string
   })
 }
 
+/** The board-type chips — the only radiogroup in the sheet. */
+function chips(wrapper: ReturnType<typeof mountPicker>) {
+  return wrapper.findAll('[role="radio"]')
+}
+
+function chip(wrapper: ReturnType<typeof mountPicker>, label: string) {
+  return chips(wrapper).find((button) => button.text() === label)!
+}
+
 /** The button carrying a decor's or a format's own text. Looked up by copy
  *  rather than by index: the thumbnail beside a decor is a button only when the
  *  decor has an image, so positions shift with the fixture. */
@@ -160,5 +169,117 @@ describe('CuttingMaterialPicker (spec §7.3)', () => {
 
     await empty.setProps({ search: 'sonoma' })
     expect(empty.text()).toContain("Bu so'rov bo'yicha material topilmadi.")
+  })
+})
+
+/**
+ * The board-type filter (decision 27b). It cuts **formats**, not decors: the
+ * same decor can be on the shelf as both an LDSP and an MDF board, and under
+ * the MDF chip only its MDF formats are its formats.
+ */
+describe('CuttingMaterialPicker — the board-type filter', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    document.body.innerHTML = ''
+  })
+
+  /** Dub Sonoma in two LDSP formats and one MDF; Oq in MDF; Qayin in fanera. */
+  function shelf() {
+    return [
+      option({ id: 'm-18' }),
+      option({ id: 'm-16', thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
+      option({ id: 'm-mdf', type: 'mdf', thickness_mm: '16' }),
+      option({ id: 'm-oq', type: 'mdf', code: 'W980', name: 'Oq' }),
+      option({ id: 'm-qayin', type: 'fanera', code: 'F1', name: 'Qayin' }),
+    ]
+  }
+
+  it('offers one chip per type on the shelf, boards first and the rest alphabetically', () => {
+    const wrapper = mountPicker(shelf())
+
+    expect(chips(wrapper).map((button) => button.text())).toEqual([
+      'Barchasi',
+      'LDSP',
+      'MDF',
+      'Fanera',
+    ])
+    expect(chips(wrapper)[0].attributes('aria-checked')).toBe('true')
+  })
+
+  it('stays out of the way when the branch carries one type', () => {
+    const wrapper = mountPicker([
+      option({ id: 'm-18' }),
+      option({ id: 'm-16', thickness_mm: '16' }),
+    ])
+
+    expect(chips(wrapper)).toHaveLength(0)
+  })
+
+  it('narrows the decor list, and counts only the chosen type on the rows it keeps', async () => {
+    const wrapper = mountPicker(shelf())
+
+    await chip(wrapper, 'LDSP').trigger('click')
+
+    const text = wrapper.text()
+    expect(text).toContain('Dub Sonoma')
+    // Three formats on the shelf, two of them LDSP — the row counts the filter's.
+    expect(text).toContain('2 ta format')
+    expect(text).not.toContain('Oq')
+    expect(text).not.toContain('Qayin')
+  })
+
+  it('picks silently when the chip leaves a decor with a single format', async () => {
+    const wrapper = mountPicker(shelf())
+
+    await chip(wrapper, 'MDF').trigger('click')
+    // Dub Sonoma is one MDF board now, so its row is that board — price and all.
+    expect(wrapper.text()).toContain('16 mm · 2800×2070 mm')
+
+    await buttonWith(wrapper, 'Dub Sonoma').trigger('click')
+
+    expect(wrapper.emitted('pick')).toEqual([['m-mdf']])
+  })
+
+  /**
+   * The search is the server's, so the parent hands down an already-narrowed
+   * list; the chips must survive it (they are the shelf's, not the result's)
+   * and keep cutting what is left.
+   */
+  it('composes with the search instead of replacing it', async () => {
+    const wrapper = mountPicker(shelf())
+    await chip(wrapper, 'MDF').trigger('click')
+
+    await wrapper.setProps({
+      search: 'oq',
+      materials: [option({ id: 'm-oq', type: 'mdf', code: 'W980', name: 'Oq' })],
+    })
+
+    // Every chip the shelf offered is still there, and MDF is still armed.
+    expect(chips(wrapper).map((button) => button.text())).toEqual([
+      'Barchasi',
+      'LDSP',
+      'MDF',
+      'Fanera',
+    ])
+    expect(chip(wrapper, 'MDF').attributes('aria-checked')).toBe('true')
+    expect(wrapper.text()).toContain('Oq')
+
+    // A query whose hits are all LDSP, with the MDF chip still armed: the two
+    // filters compose to nothing, and that is the no-results empty, not the
+    // branch-has-no-catalog one.
+    await wrapper.setProps({ search: 'sonoma 18', materials: [option({ id: 'm-18' })] })
+    expect(wrapper.text()).toContain("Bu so'rov bo'yicha material topilmadi.")
+  })
+
+  it('forgets the chip when the picker closes', async () => {
+    const wrapper = mountPicker(shelf())
+    await chip(wrapper, 'MDF').trigger('click')
+    expect(wrapper.text()).not.toContain('Qayin')
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+
+    expect(chips(wrapper)[0].attributes('aria-checked')).toBe('true')
+    expect(wrapper.text()).toContain('Qayin')
   })
 })
