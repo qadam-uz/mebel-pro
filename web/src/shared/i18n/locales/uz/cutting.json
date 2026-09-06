@@ -150,7 +150,6 @@
     "lengthAria": "Uzunlik millimetr",
     "widthAria": "Kenglik millimetr",
     "closeActions": "Amallar menyusini yopish",
-    "rowActionsAria": "Detal #{n} amallari",
     "duplicate": "Nusxalash",
     "moveToMaterial": "Boshqa materialga ko'chirish",
     "materialMissing": "Bu qatordagi list materiali endi katalogda yo'q — boshqasini tanlang.",
@@ -465,7 +464,7 @@
     "sheetTitle": "Detal #{n}",
     "save": "Saqlash",
     "saveAndNext": "Saqlash va yana",
-    "delete": "O'chirish"
+    "delete": "Detalni o'chirish"
   },
   "branchRow": {
     "closed": "vaqtincha yopiq",

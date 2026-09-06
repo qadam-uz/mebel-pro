@@ -1316,14 +1316,39 @@ const sheetPartIndex = computed(() =>
   parts.value.findIndex((part) => part.part_ref === sheetPartRef.value),
 )
 const sheetGroupTape = computed(() => groupTapeFor(sheetPart.value?.material_id ?? null))
+// Decision 27(c): the sheet's «Detalni o'chirish» belongs to a row the list
+// already shows. A part the sheet itself just minted («Saqlash va yana») has
+// nothing to delete — closing discards it — so it renders no delete button and
+// leaves no empty row behind.
+const sheetPartIsNew = ref(false)
 
 function openPartSheet(part: CuttingPart) {
   sheetPartRef.value = part.part_ref
+  sheetPartIsNew.value = false
   armedThicknessMm.value = armedThicknessFor(groupTapeFor(part.material_id))
 }
 
 function closePartSheet() {
+  const current = sheetPart.value
+  const index = sheetPartIndex.value
   sheetPartRef.value = null
+  // Discard, not delete: an untouched row the user never filled is not a thing
+  // they made, so it goes silently — no undo toast, nothing in the list.
+  if (sheetPartIsNew.value && current && index >= 0 && partIsUntouched(current)) {
+    parts.value = parts.value.filter((_, at) => at !== index)
+  }
+  sheetPartIsNew.value = false
+}
+
+/** A freshly minted row nobody has typed into yet. */
+function partIsUntouched(part: CuttingPart) {
+  return (
+    !part.name &&
+    part.length_mm === 0 &&
+    part.width_mm === 0 &&
+    part.quantity === 0 &&
+    edgeFields.every((side) => !part[side])
+  )
 }
 
 /** «Saqlash va yana»: keep the flow going with a fresh part in the same group. */
@@ -1333,7 +1358,10 @@ function savePartAndNext() {
   const index = sheetPartIndex.value
   addRow(current.material_id, current, index)
   const next = parts.value[index + 1]
-  if (next) sheetPartRef.value = next.part_ref
+  if (next) {
+    sheetPartRef.value = next.part_ref
+    sheetPartIsNew.value = true
+  }
 }
 
 function clearActivePart() {
@@ -3618,6 +3646,7 @@ onBeforeRouteLeave(async () => {
       :decor="sheetGroupTape"
       :selected-thickness-mm="armedThicknessFor(sheetGroupTape)"
       :foreign-tape-label="foreignTapeLabel"
+      :deletable="!sheetPartIsNew"
       @close="closePartSheet"
       @save="closePartSheet"
       @save-and-next="savePartAndNext"

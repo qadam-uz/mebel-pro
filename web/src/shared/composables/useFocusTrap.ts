@@ -48,6 +48,13 @@ export function useFocusTrap(
   function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       event.preventDefault()
+      // The document-level handler below is the fallback for focus that has
+      // left the panel; when the panel itself saw the keypress it owns it.
+      // `preventDefault` alone does not settle that — a synthetic
+      // non-cancelable keydown leaves `defaultPrevented` false and both
+      // handlers fire — and with a dialog stacked over another, only the inner
+      // one should close.
+      event.stopPropagation()
       onEscape()
       return
     }
@@ -107,7 +114,15 @@ export function useFocusTrap(
         }
       }
     },
-    { flush: 'post' },
+    // `immediate`, because a panel can arrive already open: `CuttingPartSheet`
+    // is `v-if`-mounted on the part it edits and passes `open: true` from its
+    // first render, so a change-only watcher never fired and that sheet ran
+    // with no trap at all — no focus moved in, no Escape at document level, no
+    // body scroll lock (which is also what tells a teleported action menu it is
+    // inside an overlay; see `body.modal-open .mp-action-menu` in main.css).
+    // The closed branch is a no-op on mount: the lock is reference-counted and
+    // returns early at zero, and there is no previous focus to restore.
+    { flush: 'post', immediate: true },
   )
 
   onBeforeUnmount(() => {

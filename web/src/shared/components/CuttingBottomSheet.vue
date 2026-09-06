@@ -41,8 +41,16 @@ const props = withDefaults(
     sheetTopClass?: string
     /** The control that opened this — turns on the anchored frame at `md`. */
     anchor?: HTMLElement | null
+    /**
+     * Raised from inside another sheet. Two sheets both at the modal layer tie
+     * on z-index, and the tie is broken by the order their `Teleport` anchors
+     * were created — which put the always-mounted tape picker *behind* the
+     * part sheet that opens it, so §7.1's «kromka tanlang» gate opened onto
+     * nothing. This is the ladder's raised-from-a-modal tier (DESIGN.md).
+     */
+    raised?: boolean
   }>(),
-  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3', anchor: null },
+  { maxWidth: 'sm:max-w-[560px]', sheetTopClass: 'top-3', anchor: null, raised: false },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -218,7 +226,11 @@ onBeforeUnmount(() => {
 
     <!-- z-[80] is the app modal layer, shared with AppModal — a ConfirmDialog
          raised from inside one still lands above at z-[85]. -->
-    <div v-else-if="open" class="fixed inset-0 z-[80] sm:grid sm:place-items-center sm:p-4">
+    <div
+      v-else-if="open"
+      class="fixed inset-0 sm:grid sm:place-items-center sm:p-4"
+      :class="raised ? 'z-[85]' : 'z-[80]'"
+    >
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true" @click="emit('close')"></div>
       <section
         :id="id"

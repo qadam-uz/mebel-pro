@@ -308,9 +308,14 @@ border. Coloured glows are gone: nothing separates with a tinted halo any more.
 **The overlay z-ladder** — pick the tier that matches what the surface sits above, and don't
 invent new ones: inline listboxes **z-30/40** · teleported dropdown/listbox panels **z-50** ·
 the action menu and the onboarding spotlight **z-60** · admin modal scrim **z-70** · the
-modal layer **z-80** · `DateField`'s calendar over a modal **z-84** · `ConfirmDialog` raised
-from inside a modal **z-85** · toasts and `SearchCombobox`'s panel **z-90**. Scroll-locking and overlay
-positioning mechanics are `AGENTS.md`'s sections.
+modal layer **z-80** · `DateField`'s calendar over a modal **z-84** · anything **raised from
+inside** a modal or a sheet — `ConfirmDialog`, the action menu, a second `CuttingBottomSheet` —
+**z-85** · toasts and `SearchCombobox`'s panel **z-90**. That raised tier is not optional
+decoration: two surfaces on the same tier tie, and the tie goes to DOM order, which for a
+teleported panel is the order its `Teleport` was created — so the overlay a sheet opens can land
+*behind* it. The action menu takes the tier from the body scroll lock
+(`body.modal-open .mp-action-menu`), a sheet takes it from its `raised` prop.
+Scroll-locking and overlay positioning mechanics are `AGENTS.md`'s sections.
 
 Desktop paints at `zoom: 90%` on the root (≥769px) — the density the back-office is designed
 for. Everything about measuring, positioning, viewport units, and breakpoints under the zoom

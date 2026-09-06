@@ -84,10 +84,14 @@ function variantLines(decor: TapeDecor): string[] {
 </script>
 
 <template>
+  <!-- `raised`: this picker is opened from the «Detal» sheet as often as from
+       the group line, and at the plain modal tier it lost the tie to that
+       sheet and opened behind it. -->
   <CuttingBottomSheet
     :open="open"
     :title="$t('cutting.edge.pickerTitle')"
     max-width="sm:max-w-[560px]"
+    raised
     @close="emit('close')"
   >
     <template #pinned>

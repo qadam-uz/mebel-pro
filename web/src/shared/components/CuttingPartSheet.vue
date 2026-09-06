@@ -5,7 +5,6 @@ import type { EdgeField } from '@/shared/app/cuttingDisplay'
 import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
 import type { TapeDecor } from '@/shared/app/cuttingGroupTape'
 import { sanitizeWholeNumberInput } from '@/shared/app/inputSanitizers'
-import ActionMenu from '@/shared/components/ActionMenu.vue'
 import CuttingBottomSheet from '@/shared/components/CuttingBottomSheet.vue'
 import CuttingEdgeSides from '@/shared/components/CuttingEdgeSides.vue'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -24,8 +23,12 @@ import type { CuttingPart } from '@/shared/stores/cutting'
  *   In a plain scrolling dialog they end up under the keyboard exactly when
  *   they are needed, and «Saqlash va yana» — the whole point of rapid entry —
  *   becomes unreachable.
- * - **Delete out of the primaries.** «O'chirish» lives in the head's ⋯ menu, a
- *   thumb's width away from «Saqlash va yana» rather than beside it.
+ * - **Delete out of the primaries.** «Detalni o'chirish» is the last thing in
+ *   the form, a full scroll away from the foot's «Saqlash va yana» — not a ⋯
+ *   menu in the head (decision 27c). The menu was the wrong control twice
+ *   over: its teleported panel paints at z-60 under the sheet's own z-80
+ *   layer, so on a phone the ⋯ opened onto nothing, and a one-item menu is a
+ *   tap that only reveals another tap.
  *
  * The sheet edits the live part object (the editor owns `parts`, and autosave
  * is debounced anyway), so «Saqlash» closes rather than commits — there is no
@@ -39,6 +42,12 @@ const props = defineProps<{
   decor: TapeDecor | null
   selectedThicknessMm: number | null
   foreignTapeLabel: (materialId: string) => string
+  /**
+   * False for a part this sheet has just created («Saqlash va yana»): there is
+   * nothing to delete yet, and closing the sheet discards it. An existing row —
+   * one the list already shows — gets the button.
+   */
+  deletable: boolean
 }>()
 
 // Granular emits, never a write through `part`: this component renders the row
@@ -93,15 +102,6 @@ const rotationAllowed = computed(() => props.part?.follow_grain === false)
     max-width="sm:max-w-[480px]"
     @close="emit('close')"
   >
-    <template #head-actions>
-      <ActionMenu
-        :label="$t('cutting.parts.rowActionsAria', { n: displayIndex + 1 })"
-        trigger-class="mp-action-icon-button size-9 min-h-0 text-ink-muted"
-        :items="[{ label: $t('cutting.part.delete'), icon: 'trash', danger: true }]"
-        @select="emit('delete')"
-      />
-    </template>
-
     <div class="grid gap-3.5">
       <div class="grid grid-cols-3 gap-2">
         <label class="block min-w-0">
@@ -229,14 +229,36 @@ const rotationAllowed = computed(() => props.part?.follow_grain === false)
           @need-tape="emit('need-tape')"
         />
       </div>
+
+      <!-- Last in the form, ghost-danger: the destructive action is reachable
+           without hunting for a menu, and still sits a whole scroll away from
+           the foot's two primaries. Undo is the safety net (the editor raises
+           the toast), so there is no confirmation nag. -->
+      <button
+        v-if="deletable"
+        type="button"
+        class="mp-button w-full gap-2 border-transparent bg-transparent text-danger hover:bg-danger-soft max-md:text-[13.5px]"
+        @click="emit('delete')"
+      >
+        <Icon name="trash" class="size-4" />
+        {{ $t('cutting.part.delete') }}
+      </button>
     </div>
 
     <template #foot>
       <div class="grid grid-cols-2 gap-2.5">
-        <button type="button" class="mp-button mp-button-outline" @click="emit('save')">
+        <button
+          type="button"
+          class="mp-button mp-button-outline max-md:text-[13.5px]"
+          @click="emit('save')"
+        >
           {{ $t('cutting.part.save') }}
         </button>
-        <button type="button" class="mp-button mp-button-primary" @click="emit('save-and-next')">
+        <button
+          type="button"
+          class="mp-button mp-button-primary max-md:text-[13.5px]"
+          @click="emit('save-and-next')"
+        >
           {{ $t('cutting.part.saveAndNext') }}
         </button>
       </div>
