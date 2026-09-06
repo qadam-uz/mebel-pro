@@ -5,6 +5,18 @@ the server-rendered-documents rule in `docs/architecture.md`. Every outbound
 send here is best-effort: a Bot API hiccup must not roll back a handshake the
 browser's poll is about to redeem, so send failures are logged and swallowed
 while the state change still commits with the webhook's 2xx.
+
+**The reply keyboard is state, not decoration.** Telegram keeps the last reply
+keyboard in the chat until a later message replaces or removes it, so a keyboard
+sent once outlives the step that needed it — «Raqamni ulashish» used to sit there
+forever after the number had already been shared. Every plain reply therefore
+carries the keyboard for the sender's *current* state (`_state_keyboard`):
+unlinked → the contact request, linked and active → «🔑 Kirish kodi», blocked →
+`remove_keyboard`. A message can carry only one `reply_markup`, so the confirm
+prompt spends its slot on the inline Tasdiqlash/Bekor qilish pair and leaves the
+sticky keyboard alone — every path that links an account ends in a
+keyboard-bearing message (`CODE_TEXT` / `CONFIRMED_TEXT`), so by the time a
+linked account can be deep-linked its chat already shows the code keyboard.
 """
 
 import uuid
@@ -55,14 +67,23 @@ FOREIGN_CONTACT_TEXT = "Iltimos, faqat o'z raqamingizni ulashing."
 UNSUPPORTED_PHONE_TEXT = "Hozircha faqat O'zbekiston raqamlari (+998) qo'llab-quvvatlanadi."
 CODE_TEXT = "Kirish kodi: {code}\n\n5 daqiqa amal qiladi. Kodni saytdagi maydonga kiriting."
 
+CONTACT_BUTTON_TEXT = "📱 Raqamni ulashish"
+CODE_BUTTON_TEXT = "🔑 Kirish kodi"
+_CODE_BUTTON_LABEL = "kirish kodi"
+
 _CONTACT_KEYBOARD: dict[str, Any] = {
-    "keyboard": [[{"text": "📱 Raqamni ulashish", "request_contact": True}]],
+    "keyboard": [[{"text": CONTACT_BUTTON_TEXT, "request_contact": True}]],
     "resize_keyboard": True,
     "one_time_keyboard": True,
 }
+# Persistent, not one-time: for a linked account this button *is* the fallback
+# login, so it stays in reach instead of collapsing into the keyboard icon.
 _CODE_KEYBOARD: dict[str, Any] = {
-    "inline_keyboard": [[{"text": "Kirish kodi", "callback_data": LOGIN_CODE_ACTION}]]
+    "keyboard": [[{"text": CODE_BUTTON_TEXT}]],
+    "resize_keyboard": True,
+    "is_persistent": True,
 }
+_REMOVE_KEYBOARD: dict[str, Any] = {"remove_keyboard": True}
 
 
 def _confirm_keyboard(token_id: uuid.UUID) -> dict[str, Any]:
@@ -119,7 +140,10 @@ async def _handle_message(db: AsyncSession, message: dict[str, Any], *, now: dat
             now=now,
         )
         return
-    await _reply(chat_id, HELP_TEXT, reply_markup=_CODE_KEYBOARD)
+    if isinstance(text, str) and _is_code_button(text):
+        await _start_code_flow(db, sender_id=sender_id, chat_id=chat_id, now=now)
+        return
+    await _reply(chat_id, HELP_TEXT, reply_markup=await _state_keyboard(db, sender_id))
 
 
 async def _handle_start(
@@ -133,11 +157,11 @@ async def _handle_start(
     # Pressing Start un-blocks the bot by definition, so any earlier 403 is stale.
     await _clear_unreachable(db, sender_id=sender_id)
     if not token:
-        await _reply(chat_id, HELP_TEXT, reply_markup=_CODE_KEYBOARD)
+        await _reply(chat_id, HELP_TEXT, reply_markup=await _state_keyboard(db, sender_id))
         return
     row = await find_login_token(db, token=token)
     if row is None or not _is_open(row, now=now):
-        await _reply(chat_id, EXPIRED_TEXT, reply_markup=_CODE_KEYBOARD)
+        await _reply(chat_id, EXPIRED_TEXT, reply_markup=await _state_keyboard(db, sender_id))
         return
     row.telegram_user_id = sender_id
     row.status = TelegramLoginTokenStatus.STARTED
@@ -146,7 +170,7 @@ async def _handle_start(
     if client is not None and client.status is not UserStatus.ACTIVE:
         decline_login_token(row, now=now)
         await db.flush()
-        await _reply(chat_id, BLOCKED_TEXT)
+        await _reply(chat_id, BLOCKED_TEXT, reply_markup=_REMOVE_KEYBOARD)
         return
     # The confirm comes first for known and unknown accounts alike — the
     # exists/new branch is only revealed after a verified contact, so the
@@ -166,6 +190,8 @@ async def _handle_callback(db: AsyncSession, callback: dict[str, Any], *, now: d
     data = callback.get("data")
     if not isinstance(data, str):
         return
+    # The code button is a reply-keyboard button now, but inline ones from
+    # earlier messages stay pressable forever — they must keep working.
     if data == LOGIN_CODE_ACTION:
         await _start_code_flow(db, sender_id=sender_id, chat_id=chat_id, now=now)
         return
@@ -197,12 +223,12 @@ async def _resolve_confirmation(
     # The token must belong to the chat that answered: a leaked callback id from
     # another account must not advance somebody else's handshake.
     if row is None or row.telegram_user_id != sender_id or not _is_open(row, now=now):
-        await _reply(chat_id, EXPIRED_TEXT, reply_markup=_CODE_KEYBOARD)
+        await _reply(chat_id, EXPIRED_TEXT, reply_markup=await _state_keyboard(db, sender_id))
         return
     if not confirmed:
         decline_login_token(row, now=now)
         await db.flush()
-        await _reply(chat_id, DECLINED_TEXT)
+        await _reply(chat_id, DECLINED_TEXT, reply_markup=await _state_keyboard(db, sender_id))
         return
     client = await _client_by_telegram_id(db, sender_id)
     if client is None:
@@ -214,11 +240,11 @@ async def _resolve_confirmation(
     if client.status is not UserStatus.ACTIVE:
         decline_login_token(row, now=now)
         await db.flush()
-        await _reply(chat_id, BLOCKED_TEXT)
+        await _reply(chat_id, BLOCKED_TEXT, reply_markup=_REMOVE_KEYBOARD)
         return
     confirm_login_token(row, client=client, now=now)
     await db.flush()
-    await _reply(chat_id, CONFIRMED_TEXT)
+    await _reply(chat_id, CONFIRMED_TEXT, reply_markup=_CODE_KEYBOARD)
 
 
 async def _start_code_flow(
@@ -235,10 +261,10 @@ async def _start_code_flow(
         await _reply(chat_id, ASK_CONTACT_TEXT, reply_markup=_CONTACT_KEYBOARD)
         return
     if client.status is not UserStatus.ACTIVE:
-        await _reply(chat_id, BLOCKED_TEXT)
+        await _reply(chat_id, BLOCKED_TEXT, reply_markup=_REMOVE_KEYBOARD)
         return
     code = await issue_login_code(db, client=client, now=now)
-    await _reply(chat_id, CODE_TEXT.format(code=code))
+    await _reply(chat_id, CODE_TEXT.format(code=code), reply_markup=_CODE_KEYBOARD)
 
 
 async def _handle_contact(
@@ -257,7 +283,11 @@ async def _handle_contact(
         return
     phone = _normalize_contact_phone(contact.get("phone_number"))
     if phone is None:
-        await _reply(chat_id, UNSUPPORTED_PHONE_TEXT)
+        # The one-time contact keyboard has collapsed by now; the state keyboard
+        # puts the retry (or, for a linked account, the code) back in reach.
+        await _reply(
+            chat_id, UNSUPPORTED_PHONE_TEXT, reply_markup=await _state_keyboard(db, sender_id)
+        )
         return
     token = await find_awaiting_contact_token(db, telegram_user_id=sender_id, now=now)
     try:
@@ -272,18 +302,20 @@ async def _handle_contact(
         if token is not None:
             decline_login_token(token, now=now)
             await db.flush()
-        await _reply(chat_id, BLOCKED_TEXT)
+        await _reply(chat_id, BLOCKED_TEXT, reply_markup=_REMOVE_KEYBOARD)
         return
     if resolution is None:
         raise RuntimeError("contact registration produced no client despite a name")
     await _link_telegram_account(db, client=resolution.client, telegram_user_id=sender_id)
+    # The account is linked from here on, so the contact button has done its job:
+    # both replies swap the sticky keyboard over to «Kirish kodi».
     if token is not None:
         confirm_login_token(token, client=resolution.client, now=now)
         await db.flush()
-        await _reply(chat_id, CONFIRMED_TEXT)
+        await _reply(chat_id, CONFIRMED_TEXT, reply_markup=_CODE_KEYBOARD)
         return
     code = await issue_login_code(db, client=resolution.client, now=now)
-    await _reply(chat_id, CODE_TEXT.format(code=code))
+    await _reply(chat_id, CODE_TEXT.format(code=code), reply_markup=_CODE_KEYBOARD)
 
 
 async def _link_telegram_account(
@@ -320,6 +352,29 @@ async def _clear_unreachable(db: AsyncSession, *, sender_id: int) -> None:
     if client is not None and client.telegram_unreachable_at is not None:
         client.telegram_unreachable_at = None
         await db.flush()
+
+
+async def _state_keyboard(db: AsyncSession, sender_id: int) -> dict[str, Any]:
+    """The reply keyboard this Telegram account should be looking at right now.
+
+    Sent with every plain reply, because Telegram's reply keyboard is sticky:
+    whatever was shown last stays until a message replaces it.
+    """
+    client = await _client_by_telegram_id(db, sender_id)
+    if client is None:
+        return _CONTACT_KEYBOARD
+    if client.status is not UserStatus.ACTIVE:
+        return _REMOVE_KEYBOARD
+    return _CODE_KEYBOARD
+
+
+def _is_code_button(text: str) -> bool:
+    """Did the client press «🔑 Kirish kodi»?
+
+    Matched with or without the emoji: a keyboard from an older message, a
+    client that retyped the label, and a copy-paste all mean the same thing.
+    """
+    return text.strip().strip("🔑").strip().casefold() == _CODE_BUTTON_LABEL
 
 
 async def _client_by_telegram_id(db: AsyncSession, telegram_user_id: int) -> Client | None:
