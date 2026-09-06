@@ -2946,9 +2946,87 @@ onBeforeRouteLeave(async () => {
                           : 'sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2'
                       "
                     >
+                      <!-- Decision 27(a): on phones the head is TWO lines. In one
+                           row the counts and the «to'ldirilmagan» pill are
+                           `shrink-0` and the name is the only flexible thing on
+                           it, so a 46-character decor label truncated to two or
+                           three characters — the head stopped naming its own
+                           material. Line 1 is the material alone (thumb, name,
+                           collapse chevron), line 2 the counts and the pill.
+                           Two sibling controls rather than one wrapping the
+                           other: the name opens the picker, the chevron
+                           collapses, and neither nests inside the other. -->
+                      <div v-if="isClientEditor" class="w-full min-w-0 md:hidden">
+                        <div class="flex min-h-11 items-center gap-2.5">
+                          <AuthFileImage
+                            v-if="groupDecorImageId(group.materialId)"
+                            :file-id="groupDecorImageId(group.materialId)"
+                            alt=""
+                            class="size-6 shrink-0 rounded-md border border-hairline object-cover"
+                          />
+                          <span
+                            v-else
+                            class="size-6 shrink-0 rounded-md border border-hairline"
+                            :style="
+                              group.materialId
+                                ? groupSwatchStyle(group.materialId)
+                                : { background: 'var(--color-ink-muted)' }
+                            "
+                            aria-hidden="true"
+                          ></span>
+                          <button
+                            v-if="!isReadOnly && group.materialId"
+                            type="button"
+                            class="min-w-0 max-w-full self-stretch truncate border-b border-dashed border-ink-muted text-left text-[13.5px] font-extrabold text-ink"
+                            @click="openGroupMaterial(group, $event)"
+                          >
+                            {{ group.label }}
+                          </button>
+                          <span
+                            v-else
+                            class="min-w-0 max-w-full truncate text-[13.5px] font-extrabold text-ink"
+                            >{{ group.label }}</span
+                          >
+                          <button
+                            type="button"
+                            class="ml-auto grid size-11 shrink-0 place-items-center text-ink-muted"
+                            :aria-expanded="!collapsedGroupKeys.has(group.key)"
+                            :aria-label="
+                              $t('cutting.editor.toggleGroupAria', { name: group.label })
+                            "
+                            @click="toggleGroup(group.key)"
+                          >
+                            <Icon
+                              :name="
+                                collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'
+                              "
+                              class="size-4"
+                            />
+                          </button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 pb-0.5">
+                          <span class="min-w-0 truncate text-[12.5px] font-bold text-ink-muted">
+                            {{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                            {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}
+                          </span>
+                          <span
+                            v-if="groupErrorCount(group.key) > 0"
+                            class="shrink-0 rounded-md bg-danger-soft px-2 py-0.5 text-[12.5px] font-bold text-danger"
+                          >
+                            {{
+                              $t(
+                                'cutting.editor.unfilledCount',
+                                { n: groupErrorCount(group.key) },
+                                groupErrorCount(group.key),
+                              )
+                            }}
+                          </span>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
+                        :class="isClientEditor ? 'max-md:hidden' : ''"
                         @click="toggleGroup(group.key)"
                       >
                         <span class="flex min-w-0 flex-1 items-center gap-3">

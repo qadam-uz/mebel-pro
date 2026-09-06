@@ -139,6 +139,7 @@
     "ctaViewResult": "Посмотреть результат",
     "addMaterialClient": "+ Материал",
     "draftActionsAria": "Действия с чертежом",
+    "toggleGroupAria": "Свернуть или развернуть группу «{name}»",
     "catalogCaption": "Каталог {workshopBranch} · {n} декоров",
     "tapeCatalogCaption": "{workshopBranch} · {n} декоров кромки"
   },

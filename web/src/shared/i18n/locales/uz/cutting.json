@@ -139,6 +139,7 @@
     "ctaViewResult": "Natijani ko'rish",
     "addMaterialClient": "+ Material",
     "draftActionsAria": "Chizma amallari",
+    "toggleGroupAria": "«{name}» guruhini yig'ish yoki yoyish",
     "catalogCaption": "{workshopBranch} katalogi · {n} ta dekor",
     "tapeCatalogCaption": "{workshopBranch} · {n} ta kromka dekori"
   },
