@@ -127,10 +127,15 @@ function variantLines(decor: TapeDecor): string[] {
     </p>
 
     <div v-else class="grid gap-2" role="radiogroup" :aria-label="$t('cutting.edge.pickerTitle')">
+      <!-- `min-w-0`, exactly as `CuttingMaterialPicker` carries it: a grid
+           item's `min-width: auto` is its min-content size — the thumbnail plus
+           the decor label, which `truncate` keeps on one line — so without it
+           the track sizes to the longest name and the whole list hangs off the
+           right edge of a phone sheet. -->
       <div
         v-for="decor in rows"
         :key="decor.key"
-        class="flex min-h-[60px] items-center gap-3 rounded-xl border p-2 pl-3 transition"
+        class="flex min-h-[60px] min-w-0 items-center gap-3 rounded-xl border p-2 pl-3 transition"
         :class="
           decor.key === selectedKey
             ? 'border-accent-tint bg-accent-soft'
