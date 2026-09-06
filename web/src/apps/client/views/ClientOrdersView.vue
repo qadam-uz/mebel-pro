@@ -217,11 +217,15 @@ onMounted(() => {
         :key="item"
         class="client-card flex justify-between gap-3 p-3.5 md:p-5"
       >
+        <!-- Sized like the real card's five lines — number, name, workshop,
+             counts, and the date's own line on phones — so nothing jumps when
+             the rows land. -->
         <div class="min-w-0 flex-1">
-          <div class="client-skeleton h-4 w-28"></div>
-          <div class="client-skeleton mt-2 h-[17px] w-2/5"></div>
-          <div class="client-skeleton mt-2 h-3 w-3/5"></div>
-          <div class="client-skeleton mt-1.5 h-3 w-2/5"></div>
+          <div class="client-skeleton h-[19px] w-28"></div>
+          <div class="client-skeleton mt-1.5 h-[18px] w-2/5"></div>
+          <div class="client-skeleton mt-2 h-4 w-3/5"></div>
+          <div class="client-skeleton mt-1.5 h-3.5 w-2/5"></div>
+          <div class="client-skeleton mt-1 h-3.5 w-1/3 md:hidden"></div>
         </div>
         <div class="shrink-0 text-right">
           <div class="client-skeleton ml-auto h-[19px] w-24 rounded-full"></div>
@@ -283,16 +287,21 @@ onMounted(() => {
         @keydown.enter="openOrder(order)"
         @keydown.space.prevent="openOrder(order)"
       >
+        <!-- One descending ladder, top to bottom (decision 28): 15 / 14 / 13.5
+             / 12.5. The number is the identity and so the largest thing in the
+             column; every line under it is a qualifier and reads smaller. -->
         <div class="min-w-0 flex-1">
           <span class="block text-[15px] font-bold leading-[1.3] text-ink md:text-base">
             {{ formatOrderNumber(order.order_number) }}
           </span>
-          <!-- The name is the headline only when there is one. An untitled
-               drawing shows no headline at all: a grey "Nomsiz chizma"
-               placeholder was the worst element on the old card. -->
+          <!-- The name is a subtitle, never bigger than the number it belongs
+               to — and in the Text face: display is for identity and magnitude,
+               not for a truncated line of user input. Rendered only when there
+               is one: an untitled drawing shows no line at all, because a grey
+               "Nomsiz chizma" placeholder was the worst element on the old card. -->
           <h2
             v-if="order.draft_name"
-            class="mt-[3px] truncate font-display text-[17px] font-semibold leading-[1.25] text-ink md:mt-1 md:text-lg"
+            class="mt-[3px] truncate text-sm font-semibold leading-[1.3] text-ink md:mt-1 md:text-[15px]"
           >
             {{ order.draft_name }}
           </h2>
@@ -304,21 +313,26 @@ onMounted(() => {
           >
             {{ $t('client.orders.createdByWorkshop') }}
           </span>
-          <!-- Two short lines, not one wrapping one: the right column leaves
-               the left about 200px on a phone. -->
-          <p class="mt-1 text-[12.5px] leading-[1.4] text-ink-soft md:mt-[5px] md:text-sm">
+          <!-- The workshop is who the client deals with, so it sits above the
+               counts and stays `ink-soft` rather than muted: readable at a
+               glance, still clearly under the name. Two short lines, not one
+               wrapping one — the right column leaves the left about 200px on a
+               phone. -->
+          <p
+            class="mt-[3px] text-[13.5px] font-medium leading-[1.4] text-ink-soft md:mt-1 md:text-sm"
+          >
             {{ cardWhere(order) }}
           </p>
           <!-- Counts and date: joined by «·» from `md` up, the date on its own
                line under them on a phone (decision 22, amended 2026-09-06
                evening) — joined, the date wrapped in the middle at 375px. -->
           <div
-            class="mt-0.5 flex flex-col text-[12.5px] leading-[1.4] text-ink-soft md:flex-row md:items-baseline md:gap-x-[3px] md:text-sm"
+            class="mt-0.5 flex flex-col text-[12.5px] leading-[1.4] text-ink-muted md:flex-row md:items-baseline md:gap-x-[3px] md:text-[13px]"
           >
             <p>
-              <b class="font-semibold text-ink">{{ order.item_count }}</b>
+              <b class="font-semibold">{{ order.item_count }}</b>
               {{ $t('client.unit.part', order.item_count) }} ·
-              <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
+              <b class="font-semibold">{{ order.planned_panels || '—' }}</b>
               {{ $t('client.unit.sheet', order.planned_panels) }}
             </p>
             <span class="hidden shrink-0 md:inline" aria-hidden="true">·</span>

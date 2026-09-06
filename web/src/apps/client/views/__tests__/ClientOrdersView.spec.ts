@@ -184,6 +184,74 @@ describe('ClientOrdersView — the Faol empty state (decision 28)', () => {
   })
 })
 
+/**
+ * Decision 28's second half — the card is one descending ladder, and the
+ * ladder is the whole point: the owner's complaint was a draft name shouting
+ * over the order number while the workshop whispered. jsdom applies no
+ * stylesheet, so what is asserted is the utility that carries each size; a
+ * class swap that puts the name back above the number fails here rather than
+ * on a phone.
+ */
+describe('ClientOrdersView — the card typography ladder (decision 28)', () => {
+  /** Tailwind sizes on this card are either `text-[Npx]` or the `sm` step. */
+  function fontSize(classes: string[]) {
+    const arbitrary = classes.find((name) => /^text-\[[\d.]+px]$/.test(name))
+    if (arbitrary) return Number(arbitrary.slice(6, -3))
+    if (classes.includes('text-sm')) return 14
+    if (classes.includes('text-base')) return 16
+    return null
+  }
+
+  async function card() {
+    vi.mocked(api.get).mockImplementation(
+      async () => [{ ...order(2, 1), draft_name: 'Oshxona shkafi' }] as never,
+    )
+    const view = await mountOrders()
+    return view.find('article')
+  }
+
+  it('keeps the order number the biggest, boldest line on the card', async () => {
+    const article = await card()
+
+    // The total is bold too, so the number is found by its `№` rather than by
+    // a weight both lines carry.
+    const number = article.findAll('span').find((el) => el.text().startsWith('№'))
+    const name = article.find('h2')
+    expect(name.text()).toBe('Oshxona shkafi')
+
+    const numberSize = fontSize(number?.classes() ?? [])
+    const nameSize = fontSize(name.classes())
+    expect(numberSize).toBe(15)
+    expect(nameSize).toBe(14)
+    expect(numberSize as number).toBeGreaterThanOrEqual(nameSize as number)
+    expect(number?.classes()).toContain('font-bold')
+    expect(name.classes()).toContain('font-semibold')
+  })
+
+  it('keeps the name a plain truncated subtitle, not a display headline', async () => {
+    const article = await card()
+
+    const name = article.find('h2')
+    expect(name.classes()).toContain('truncate')
+    // Display is for identity and magnitude (DESIGN.md), not a line of user
+    // input the card then truncates.
+    expect(name.classes()).not.toContain('font-display')
+  })
+
+  it('steps the workshop down from the name and the counts down from it', async () => {
+    const article = await card()
+
+    const workshop = article.findAll('p').find((el) => el.text().includes('Mebel Master'))
+    expect(fontSize(workshop?.classes() ?? [])).toBe(13.5)
+    expect(workshop?.classes()).toContain('text-ink-soft')
+
+    const counts = article.findAll('div').find((el) => el.classes().includes('text-[12.5px]'))
+    expect(counts?.text()).toContain('detal')
+    // Muted, a step under the workshop line — the last thing read, not the first.
+    expect(counts?.classes()).toContain('text-ink-muted')
+  })
+})
+
 // Decision 23 — the card's third line follows the naming rule off the payload's
 // own branch count, so a client of a single-counter workshop never reads a
 // branch name they have no use for.
