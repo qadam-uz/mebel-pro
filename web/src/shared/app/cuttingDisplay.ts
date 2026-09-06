@@ -7,6 +7,7 @@ import {
   snapshotText,
   type MaterialSnapshot,
 } from '@/shared/app/materialLabel'
+import { buildSearchKey, fold } from '@/shared/app/searchFold'
 import { translate } from '@/shared/i18n'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
@@ -115,8 +116,30 @@ export function edgeTinyLabel(material: ClientCatalogMaterialOption | null | und
 // Keyboard-jump filter for the rows already loaded into the open edge-picker
 // modal. The catalog list itself is server-searched; this only narrows what is
 // on screen, which is why it stays client-side (the cutting editor's behaviour
-// is unchanged by the reshape). `name` is gone from the blob; `code`/`name` carry
-// the signal now.
-export function edgeSearchText(material: ClientCatalogMaterialOption): string {
-  return `${material.manufacturer_name} ${material.name} ${material.code ?? ''} ${material.thickness_mm} ${material.tape_width_mm ?? ''}`.toLowerCase()
+// is unchanged by the reshape).
+//
+// The key is built the way `decors.search_key` is (SPEC_CATALOG_SMART_SEARCH §1),
+// not lower-cased: the rows are stored in Latin and half the shop floor types on
+// a Cyrillic keyboard, so `.toLowerCase().includes()` found nothing for «сонома»
+// while the server's own list found it. Search it with `matchesQuery`, never with
+// `includes` — the spaces around the tokens are what makes a word-start test
+// possible. The type word (`kromka`) is in the key on purpose, and so are the
+// thickness and tape width: «0.4» has always narrowed this list.
+export function edgeSearchParts(material: ClientCatalogMaterialOption): string[] {
+  return [
+    material.manufacturer_name,
+    material.name,
+    material.code ?? '',
+    material.type,
+    // `fold`ed rather than passed raw: `0.4` would otherwise tokenise into `0`
+    // and `4`, and a query of `4` would then hit every thin tape at a word
+    // start. Folded it is the single token `04`, which is what `fold('0.4')`
+    // makes of the query too.
+    fold(material.thickness_mm),
+    material.tape_width_mm == null ? '' : String(material.tape_width_mm),
+  ]
+}
+
+export function edgeSearchKey(material: ClientCatalogMaterialOption): string {
+  return buildSearchKey(edgeSearchParts(material))
 }
