@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.core.search_fold import fold
+from app.core.search_query import SearchPlan, capped, run_search_tiers
 from app.models.enums import (
     AuthenticatedPrincipalType,
     DecorType,
@@ -26,7 +26,12 @@ from app.modules.access.contracts import PermissionGrant, WorkshopUser
 # The label and its snapshot vocabulary are catalog's to define — inventory only
 # renders them. Importing through catalog's public api keeps one writer for the
 # key set that `app/core/material_label.py` reads.
-from app.modules.catalog.api import branch_material_label, set_branch_material_min_stock
+from app.modules.catalog.api import (
+    apply_decor_search,
+    branch_material_label,
+    format_dimension_arms,
+    set_branch_material_min_stock,
+)
 from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer, is_tape
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier, SupplierInvoice
 from app.modules.inventory.schemas import (
@@ -215,26 +220,9 @@ async def list_stock(
     limit: int | None = None,
 ) -> list[StockRecord]:
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
-    query = (
-        _material_join(select(StockItem, BranchMaterial, DecorFormat, Decor, Manufacturer))
-        .where(StockItem.branch_id == scope.branch_id)
-        # A negative balance is a state that wants resolving — it sorts to the
-        # top so nobody has to scroll past a minus sign to find it (QAD-150).
-        # There is no stored material name to sort on any more, so the order is
-        # the identity the reader sees: maker, decor, then thickness.
-        .order_by(
-            (StockItem.on_hand < 0).desc(),
-            Manufacturer.name,
-            Decor.name,
-            DecorFormat.thickness_mm,
-        )
-    )
-    folded = fold(_optional_text(search) or "")
-    if folded:
-        # One folded ILIKE over the stored key replaces the old four-column OR:
-        # `search_key` already carries the decor name, code and maker, script-
-        # and apostrophe-insensitively (see app/core/search_fold.py).
-        query = query.where(Decor.search_key.ilike(f"%{folded}%"))
+    query = _material_join(
+        select(StockItem, BranchMaterial, DecorFormat, Decor, Manufacturer)
+    ).where(StockItem.branch_id == scope.branch_id)
     if types:
         # Plural, mirroring the catalog's `types`: one label the operator reads
         # can cover more than one wire value — `ldsp` and `dsp` are both «LDSP»
@@ -256,23 +244,45 @@ async def list_stock(
             .where(StockTransaction.stock_item_id == StockItem.id)
             .exists()
         )
-    if limit is not None:
-        # Callers that only render a few rows (the global search preview) say so.
-        # Unbounded is still the default: the inventory table itself pages in the
-        # client and a silent cap there would hide stock.
-        query = query.limit(limit)
-    return [
-        StockRecord(
-            stock_item=item,
-            branch_material=branch_material,
-            decor_format=decor_format,
-            decor=decor,
-            manufacturer=manufacturer,
+
+    async def run(plan: SearchPlan) -> list[StockRecord]:
+        # The catalog's one matcher, with the warehouse's own ordering under it:
+        # a negative balance is a state that wants resolving, so it sorts to the
+        # top and nobody scrolls past a minus sign to find it (QAD-150). There is
+        # no stored material name to sort on any more, so the rest of the order
+        # is the identity the reader sees: maker, decor, then thickness. The row
+        # here *is* a format, so a number is matched on it directly.
+        searched = apply_decor_search(
+            query,
+            plan,
+            ordering=(
+                (StockItem.on_hand < 0).desc(),
+                Manufacturer.name,
+                Decor.name,
+                DecorFormat.thickness_mm,
+            ),
+            dimension_arms=format_dimension_arms,
         )
-        for item, branch_material, decor_format, decor, manufacturer in (
-            await db.execute(query)
-        ).all()
-    ]
+        page = capped(limit, plan.limit)
+        if page is not None:
+            # Callers that only render a few rows (the global search preview) say
+            # so. Unbounded is still the default: the inventory table itself
+            # pages in the client and a silent cap there would hide stock.
+            searched = searched.limit(page)
+        return [
+            StockRecord(
+                stock_item=item,
+                branch_material=branch_material,
+                decor_format=decor_format,
+                decor=decor,
+                manufacturer=manufacturer,
+            )
+            for item, branch_material, decor_format, decor, manufacturer in (
+                await db.execute(searched)
+            ).all()
+        ]
+
+    return await run_search_tiers(db, search, run)
 
 
 async def list_transactions(

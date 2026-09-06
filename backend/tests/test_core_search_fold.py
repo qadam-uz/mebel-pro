@@ -19,7 +19,12 @@ from app.core.search_fold import fold
         (["сонома", "Сонома", "Sonoma", "SONOMA"], "sonoma"),
         # Apostrophes: all three shapes, plus the spelling that omits it. The
         # `q -> k` fold is what also pulls `yongok` into the same bucket.
-        (["ёнғоқ", "yong'oq", "yongʻoq", "yongʼoq", "yong‘oq", "yongoq", "yongok"], "yongok"),
+        # `yonģoq` is the same word again: a Latin diacritic where the Cyrillic
+        # had `ғ`, which step 3 strips.
+        (
+            ["ёнғоқ", "yong'oq", "yongʻoq", "yongʼoq", "yong‘oq", "yongoq", "yongok", "yonģoq"],
+            "yongok",
+        ),
         (["оқ", "oq", "ok"], "ok"),
         # `x -> h`: Uzbek Latin uses both for the same sound.
         (["хром", "xrom", "hrom"], "hrom"),

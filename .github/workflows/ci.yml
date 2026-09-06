@@ -4,8 +4,9 @@
 #
 #   1. Verify (PR + push to main)
 #        - verify-backend : ruff check · ruff format --check · mypy · pytest,
-#                           then the infra-gated suites (Postgres locking +
-#                           MinIO contract) against Compose data services
+#                           then the infra-gated suites (Postgres locking,
+#                           pg_trgm search, MinIO contract) against Compose
+#                           data services
 #        - verify-web     : pnpm lint:check · format:check · typecheck · i18n:check · test · build
 #        - verify-e2e     : pnpm typecheck · Playwright browser tests
 #      These mirror the per-directory check gates documented in the repo
@@ -79,11 +80,12 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
-      # The main suite is hermetic (in-memory SQLite, stubbed S3). The two
-      # infra-gated suites assert what SQLite/stubs can't: stock-adjustment
-      # row locking on real Postgres and the S3FileStorage round-trip against
-      # real MinIO. Without this step they are skipped everywhere — a test
-      # that never runs is documentation, not a test.
+      # The main suite is hermetic (in-memory SQLite, stubbed S3). The
+      # infra-gated suites assert what SQLite/stubs can't: stock-adjustment row
+      # locking on real Postgres, the catalog search's `pg_trgm` typo tier, and
+      # the S3FileStorage round-trip against real MinIO. Without this step they
+      # are skipped everywhere — a test that never runs is documentation, not a
+      # test.
       - name: Start data services (Postgres + MinIO)
         working-directory: deploy
         run: |
@@ -94,12 +96,12 @@ jobs:
             -c "DROP DATABASE IF EXISTS mebel_ci WITH (FORCE);" \
             -c "CREATE DATABASE mebel_ci;"
 
-      - name: Infra-gated tests (Postgres locking + MinIO contract)
+      - name: Infra-gated tests (Postgres locking + pg_trgm + MinIO contract)
         env:
           POSTGRES_CONCURRENCY: "1"
           MINIO_CONTRACT: "1"
           DATABASE_URL: postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_ci
-        run: uv run pytest tests/test_inventory_postgres_concurrency.py tests/test_telegram_login_postgres_concurrency.py tests/test_sales_postgres_concurrency.py tests/test_files_minio_contract.py -q --no-cov
+        run: uv run pytest tests/test_inventory_postgres_concurrency.py tests/test_telegram_login_postgres_concurrency.py tests/test_sales_postgres_concurrency.py tests/test_catalog_search_postgres_trgm.py tests/test_files_minio_contract.py -q --no-cov
 
       - name: Stop data services
         if: always()

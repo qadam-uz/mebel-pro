@@ -1,6 +1,7 @@
 """Client profile and visible branch use cases."""
 
 import uuid
+from typing import Any
 
 from fastapi import status
 from sqlalchemy import Select, func, or_, select
@@ -9,7 +10,7 @@ from sqlalchemy.orm import aliased
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.core.search_fold import fold
+from app.core.search_query import SearchPlan, run_search_tiers
 from app.models.enums import (
     AuthenticatedPrincipalType,
     BranchStatus,
@@ -20,7 +21,12 @@ from app.modules.access.contracts import Client
 
 # One writer for the label and its snapshot vocabulary: catalog owns both, and
 # a second copy here is how `18` and `18.0000000000` reach two endpoints.
-from app.modules.catalog.api import branch_material_label, normalize_mm
+from app.modules.catalog.api import (
+    apply_decor_search,
+    branch_material_label,
+    format_dimension_arms,
+    normalize_mm,
+)
 from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer
 from app.modules.client_portal.schemas import (
     ClientBranchMaterialPreview,
@@ -316,15 +322,22 @@ async def client_branch_materials(
             Decor.status == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
-        .order_by(Manufacturer.name, Decor.name, DecorFormat.thickness_mm)
     )
-    normalized = search.strip() if search else ""
-    if normalized:
-        # Both sides folded: `Sonoma`, `сонома` and `yong'oq` all reach the same
-        # rows, and the stored search_key already carries the manufacturer name,
-        # so this single predicate replaces the old four-column OR.
-        query = query.where(Decor.search_key.ilike(f"%{fold(normalized)}%"))
-    rows = (await db.execute(query)).all()
+
+    async def run(plan: SearchPlan) -> list[Any]:
+        # The catalog's one matcher again — the client browsing a branch's shelf
+        # searches it by the same rules as the staff who registered it.
+        searched = apply_decor_search(
+            query,
+            plan,
+            ordering=(Manufacturer.name, Decor.name, DecorFormat.thickness_mm),
+            dimension_arms=format_dimension_arms,
+        )
+        if plan.limit is not None:
+            searched = searched.limit(plan.limit)
+        return list((await db.execute(searched)).all())
+
+    rows = await run_search_tiers(db, search, run)
     return [
         ClientBranchMaterialResponse(
             id=branch_material.id,
