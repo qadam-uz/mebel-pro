@@ -20,7 +20,7 @@ import CuttingPartsByMaterial from '@/shared/components/CuttingPartsByMaterial.v
 import CuttingResultOverview from '@/shared/components/CuttingResultOverview.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { formatOrderNumber, formatTiyin } from '@/shared/formatters'
+import { formatClientDateTime, formatOrderNumber, formatTiyin } from '@/shared/formatters'
 import { metres } from '@/shared/stores/cutting'
 import { useOrdersStore } from '@/shared/stores/orders'
 
@@ -30,8 +30,10 @@ import { useOrdersStore } from '@/shared/stores/orders'
  * Header card, the Ustaxona card, the Narx receipt, then the parts — and on
  * desktop the drawing beside them under a two-tab control. Deliberately gone:
  * the four-phase track (the pill says the same thing in one word), the history
- * tab, the To'lov tab — its two figures moved into the receipt, where the
- * client already reads the total — and every date.
+ * tab and the To'lov tab — its two figures moved into the receipt, where the
+ * client already reads the total. The header does carry the order's own date
+ * (decision 22, amended 2026-09-06); what stays gone is phase dates and any
+ * timeline built from them.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -212,21 +214,30 @@ onMounted(() => {
            No dates, no phase text, no track. -->
       <section class="client-card mb-3.5 p-4 md:mb-5 md:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3.5 md:gap-4">
-          <div class="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-2">
-            <h1
-              class="m-0 font-display text-[26px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink md:text-[28px]"
-            >
-              {{ formatOrderNumber(order.order_number) }}
-            </h1>
-            <p
-              v-if="order.draft_name"
-              class="m-0 min-w-0 truncate text-[13.5px] text-ink-soft md:text-[15px]"
-            >
-              {{ order.draft_name }}
+          <div class="flex min-w-0 flex-col gap-1.5">
+            <div class="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-2">
+              <h1
+                class="m-0 font-display text-[26px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink md:text-[28px]"
+              >
+                {{ formatOrderNumber(order.order_number) }}
+              </h1>
+              <p
+                v-if="order.draft_name"
+                class="m-0 min-w-0 truncate text-[13.5px] text-ink-soft md:text-[15px]"
+              >
+                {{ order.draft_name }}
+              </p>
+              <span :class="clientStatusPillClass(order.status)" class="hidden md:inline-flex">
+                {{ clientStatusLabel(order.status) }}
+              </span>
+            </div>
+            <!-- When the order was placed (decision 22, amended 2026-09-06).
+                 Under the identity line and above the phone pill, muted — the
+                 money column stays money only. Still no phase dates and no
+                 timeline: this is the one date the order has. -->
+            <p class="m-0 text-[12.5px] leading-[1.35] text-ink-muted md:text-[13px]">
+              {{ formatClientDateTime(order.created_at) }}
             </p>
-            <span :class="clientStatusPillClass(order.status)" class="hidden md:inline-flex">
-              {{ clientStatusLabel(order.status) }}
-            </span>
           </div>
           <div class="shrink-0 text-right">
             <span

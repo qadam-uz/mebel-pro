@@ -415,3 +415,58 @@ describe('ClientHomeView — the drawing meta line agrees with its numbers', () 
     expect(text).toContain('5 детал · 5 лист')
   })
 })
+
+/**
+ * Decision 22, amended 2026-09-06: a «Faol buyurtmalar» row carries the order's
+ * own creation date on the sub-line under the number, beside the drawing name
+ * when there is one. Zone-less fixtures again, for the reason above.
+ */
+describe('ClientHomeView — the active order date (decision 22)', () => {
+  function withDatedOrder(draftName: string | null) {
+    const rows = [
+      {
+        ...activeOrder('order-dated'),
+        draft_name: draftName,
+        created_at: '2026-04-26T09:32:00',
+      },
+    ]
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith('/client/orders') ? rows : [],
+    )
+  }
+
+  afterEach(async () => {
+    await setLocale(DEFAULT_LOCALE)
+  })
+
+  it('spells the date out in Uzbek beside the drawing name', async () => {
+    withDatedOrder('Oshxona shkafi')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const text = view.text().replace(/\s+/g, ' ')
+    expect(text).toContain('Oshxona shkafi')
+    expect(text).toContain('26-aprel 2026, 09:32')
+    expect(text).not.toContain('26.04')
+    expect(text).not.toMatch(/kecha|kun oldin/)
+  })
+
+  // An untitled drawing shows no headline anywhere in the client, so the
+  // sub-line is the date alone rather than an empty line.
+  it('still shows the date when the order has no drawing name', async () => {
+    withDatedOrder(null)
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26-aprel 2026, 09:32')
+  })
+
+  it('uses the Russian genitive month', async () => {
+    withDatedOrder('Oshxona shkafi')
+    await setLocale('ru')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
+})

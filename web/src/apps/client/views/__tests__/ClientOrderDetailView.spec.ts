@@ -193,3 +193,34 @@ describe('ClientOrderDetailView — the receipt agrees with its sheet counts', (
     }
   })
 })
+
+/**
+ * Decision 22, amended 2026-09-06 — the header card names the day the order was
+ * placed, in the one client date format, under the number and the drawing name.
+ * What «no dates» still means here is no phase dates and no timeline. The
+ * fixture timestamp is zone-less on purpose so it parses as local time and the
+ * assertion is about the shape, not about the runner's timezone.
+ */
+describe('ClientOrderDetailView — the header card date (decision 22)', () => {
+  it('spells the date out in Uzbek, inside the header card', async () => {
+    const view = await mountDetail(1, {
+      created_at: '2026-04-26T09:32:00',
+    } as Partial<OrderDetail>)
+
+    const header = view.find('section.client-card')
+    expect(header.text().replace(/\s+/g, ' ')).toContain('26-aprel 2026, 09:32')
+    // The numeric shape the client never uses must be absent, not merely unused.
+    expect(view.text()).not.toContain('26.04.2026')
+    expect(view.text()).not.toMatch(/kecha|kun oldin/)
+  })
+
+  it('uses the Russian genitive month', async () => {
+    await setLocale('ru')
+
+    const view = await mountDetail(1, {
+      created_at: '2026-04-26T09:32:00',
+    } as Partial<OrderDetail>)
+
+    expect(view.text().replace(/\s+/g, ' ')).toContain('26 апреля 2026, 09:32')
+  })
+})
