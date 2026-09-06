@@ -65,7 +65,7 @@ function mountPicker(materials = CATALOG) {
       panel: tape({ id: 'panel-1', type: 'ldsp', name: 'Sonoma eman', thickness_mm: '18' }),
       panelImageFileId: null,
       currentKey: null,
-      caption: 'Mebel Master · 3 ta kromka dekori',
+      branch: 'Mebel Master · Yunusobod filiali',
     },
     global: { stubs: { Icon: true, AuthFileImage: true, CuttingDecorThumb: true, ...sheetStub } },
   })
@@ -143,6 +143,13 @@ describe('CuttingTapePicker — smart search (SPEC_CATALOG_SMART_SEARCH §2)', (
     expect(labels(wrapper).length).toBe(3)
     await type(wrapper, 'kromka egger')
     expect(labels(wrapper)).toEqual(['Egger H1145 · Sonoma eman', "Egger H3734 · Yong'oq"])
+  })
+
+  it('counts the rows the query left, not the branch shelf', async () => {
+    const wrapper = mountPicker()
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod filiali · 3 ta kromka dekori')
+    await type(wrapper, 'сонома')
+    expect(wrapper.text()).toContain('Mebel Master · Yunusobod filiali · 1 ta kromka dekori')
   })
 
   it('says so when nothing matches, and keeps the board colour pinned', async () => {

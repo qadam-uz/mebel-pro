@@ -39,8 +39,12 @@ const props = defineProps<{
   panelImageFileId: string | null
   /** The group's current tape decor key, or null while it has none. */
   currentKey: string | null
-  /** `Mebel Master · Yunusobod filiali · 5 ta kromka dekori` */
-  caption: string
+  /**
+   * The shelf the list belongs to — `Mebel Master · Yunusobod filiali`. Only the
+   * name: the count beside it is the picker's, because only the picker knows
+   * what the query left on screen.
+   */
+  branch: string
 }>()
 
 const emit = defineEmits<{ close: []; pick: [decorKey: string] }>()
@@ -118,6 +122,19 @@ const rows = computed(() => {
     .slice(0, TYPO_LIMIT)
     .map((entry) => entry.decor)
 })
+
+/**
+ * `Mebel Master · Yunusobod filiali · 6 ta kromka dekori` — the line under the
+ * search field. The count is **what is listed**, not what the branch carries, as
+ * the material picker's caption is: one still claiming fourteen decors over the
+ * single row «сонома» left reads as a broken list rather than a filtered one.
+ */
+const caption = computed(() =>
+  t('cutting.editor.tapeCatalogCaption', {
+    workshopBranch: props.branch,
+    n: rows.value.length,
+  }),
+)
 
 /**
  * `0.4 mm · 1 200 so'm/m` per variant — the decor's whole price card, which is
