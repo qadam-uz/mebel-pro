@@ -131,7 +131,7 @@
     "hintReadOnly": "Bu chizma buyurtmaga biriktirilgan",
     "hintNoBranch": "Avval ustaxona tanlang",
     "hintNoParts": "Avval detal qo'shing",
-    "hintIncomplete": "To'ldirilmagan qatorlarni to'ldiring",
+    "hintIncomplete": "{n} qator to'ldirilmagan",
     "hintOverCap": "{max} donadan oshib ketdi",
     "grainFitError": "Tekstura yo'nalishi qat'iy — detal {length}×{width} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).",
     "sizeFitError": "Detal listga sig'maydi — maksimal {length}×{width} mm (list − 2×{trim} mm chetki qirqim).",

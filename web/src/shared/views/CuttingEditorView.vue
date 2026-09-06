@@ -468,7 +468,12 @@ const optimizeDisabledHint = computed(() => {
   if (isReadOnly.value) return t('cutting.editor.hintReadOnly')
   if (!activeBranchId.value) return t('cutting.editor.hintNoBranch')
   if (parts.value.length === 0) return t('cutting.editor.hintNoParts')
-  if (!hasPersistableParts.value) return t('cutting.editor.hintIncomplete')
+  // Decision 27(d): the count, not the instruction. «To'ldirilmagan qatorlarni
+  // to'ldiring» is 34 characters that say what the reader can already see, and
+  // it was what pushed the sticky bar onto a second row at 375px; the number is
+  // both shorter and the fact the reader does not have.
+  if (!hasPersistableParts.value)
+    return t('cutting.editor.hintIncomplete', { n: errorCount.value }, errorCount.value)
   if (totalQuantity.value > MAX_PARTS) return t('cutting.editor.hintOverCap', { max: MAX_PARTS })
   return ''
 })
@@ -3396,37 +3401,47 @@ onBeforeRouteLeave(async () => {
               <!-- In the wizard the action row is a plain right-aligned row under the
              card, as the design draws it: the list is one card on one screen, so
              a sticky bar would be chrome floating over content it never covers. -->
+              <!-- Decision 27(d): the bar never grows. One row, `flex-nowrap`,
+                   every region but the hint `shrink-0` — so the bar is the same
+                   height at 375px whether the hint is there or not, and a long
+                   hint truncates instead of wrapping the button onto a second
+                   row that covers the parts it is talking about. -->
               <div
                 v-if="!inOrderWizard && parts.length > 0"
-                class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur"
+                class="sticky bottom-0 z-20 mt-4 flex items-center gap-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-2.5 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur md:gap-3 md:py-3"
               >
-                <div class="text-sm">
-                  <span class="font-bold text-ink"
+                <div class="mr-auto shrink-0 text-[13px] md:text-sm">
+                  <!-- The phone keeps only the figure the cap governs. «N xil»
+                       and «/ 300» are context, and at 375px they are what would
+                       otherwise squeeze the hint beside them down to «3 qator
+                       to'…» — the same truncated-to-nothing failure the group
+                       head had (decision 27a). -->
+                  <span class="font-bold text-ink max-md:hidden"
                     >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} ·
-                    {{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
+                  </span>
+                  <span class="font-bold text-ink"
+                    >{{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
                   >
-                  <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
+                  <span class="text-ink-muted max-md:hidden"> / {{ MAX_PARTS }}</span>
                 </div>
-                <div class="flex flex-wrap items-center justify-end gap-3">
-                  <!-- The blocker states itself as a chip rather than a whispered
+                <!-- The blocker states itself as a chip rather than a whispered
                  note: it is the reason the button beside it will not move, and
                  on a touch screen a `title` tooltip never appears at all. -->
-                  <span
-                    v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
-                    class="inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
-                  >
-                    {{ primaryCtaHint }}
-                  </span>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-primary"
-                    :disabled="primaryCtaDisabled"
-                    :title="primaryCtaHint"
-                    @click="runPrimaryCta"
-                  >
-                    {{ primaryCtaLabel }}
-                  </button>
-                </div>
+                <span
+                  v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
+                  class="min-w-0 flex-1 truncate text-center text-[12.5px] font-semibold text-warning md:flex-none md:rounded-[10px] md:bg-warning-soft md:px-[11px] md:py-[9px] md:text-left"
+                >
+                  {{ primaryCtaHint }}
+                </span>
+                <button
+                  type="button"
+                  class="mp-button mp-button-primary shrink-0 max-md:h-11 max-md:min-h-11 max-md:px-3 max-md:text-[13.5px]"
+                  :disabled="primaryCtaDisabled"
+                  :title="primaryCtaHint"
+                  @click="runPrimaryCta"
+                >
+                  {{ primaryCtaLabel }}
+                </button>
               </div>
             </div>
             <!-- Levelled with the row it is editing rather than pinned to the
