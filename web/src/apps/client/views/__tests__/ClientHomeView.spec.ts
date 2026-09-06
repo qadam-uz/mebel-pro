@@ -111,6 +111,18 @@ async function mountHome(me: MeResponse) {
   return wrapper
 }
 
+/**
+ * Decision 22 (amended 2026-09-06 evening) puts the date on a line of its own
+ * on phones, so both list rows here must render it into an element that holds
+ * the date and nothing else. Fails loudly rather than returning `undefined`,
+ * so the assertion that follows reads the element and not an optional.
+ */
+function dateOwnElement(view: VueWrapper, date: string) {
+  const el = view.findAll('span').find((candidate) => candidate.text().trim() === date)
+  if (!el) throw new Error(`no element holds «${date}» alone: ${view.text()}`)
+  return el
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   window.localStorage.clear()
@@ -344,6 +356,26 @@ describe('ClientHomeView — the drawing date (decision 22)', () => {
     expect(text).not.toMatch(/kecha|kun oldin/)
   })
 
+  // Amended 2026-09-06 evening: on a phone the date drops to its own line
+  // under the counts instead of being the third «·»-joined item on them.
+  it('keeps the date out of the counts line', async () => {
+    withDatedDraft()
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const dateEl = dateOwnElement(view, '26-aprel 2026, 09:32')
+    expect(dateEl.classes()).toContain('whitespace-nowrap')
+
+    // `findAll` is document order, so the last match is the innermost span —
+    // the counts themselves rather than a row wrapper that holds both lines.
+    const counts = view
+      .findAll('span')
+      .filter((el) => el.text().includes('detal'))
+      .at(-1)
+    expect(counts?.text()).toContain('list')
+    expect(counts?.text()).not.toContain('2026')
+  })
+
   it('uses the Russian genitive month', async () => {
     withDatedDraft()
     await setLocale('ru')
@@ -418,8 +450,9 @@ describe('ClientHomeView — the drawing meta line agrees with its numbers', () 
 
 /**
  * Decision 22, amended 2026-09-06: a «Faol buyurtmalar» row carries the order's
- * own creation date on the sub-line under the number, beside the drawing name
- * when there is one. Zone-less fixtures again, for the reason above.
+ * own creation date under the number — beside the drawing name from `md` up,
+ * and on its own line under it on a phone (amended again the same evening).
+ * Zone-less fixtures again, for the reason above.
  */
 describe('ClientHomeView — the active order date (decision 22)', () => {
   function withDatedOrder(draftName: string | null) {
@@ -449,6 +482,30 @@ describe('ClientHomeView — the active order date (decision 22)', () => {
     expect(text).toContain('26-aprel 2026, 09:32')
     expect(text).not.toContain('26.04')
     expect(text).not.toMatch(/kecha|kun oldin/)
+  })
+
+  // Amended 2026-09-06 evening: on a phone the date is its own line under the
+  // drawing name, never joined to it with «·» — joined, it wrapped mid-date at
+  // 375px. jsdom resolves no breakpoints, so what is pinned here is the markup
+  // that carries the split: the date is an element of its own holding nothing
+  // but the date, and the «·» that joins the two from `md` up is `md:`-gated.
+  it('gives the date its own element rather than joining it to the name', async () => {
+    withDatedOrder('Oshxona shkafi')
+
+    const view = await mountHome(clientMe({ pinned_workshop_name: 'Mebel Master' }))
+
+    const dateEl = dateOwnElement(view, '26-aprel 2026, 09:32')
+    expect(dateEl.classes()).toContain('whitespace-nowrap')
+    expect(dateEl.text()).not.toContain('·')
+    expect(dateEl.text()).not.toContain('Oshxona')
+
+    const nameEl = view.findAll('span').find((el) => el.text().trim() === 'Oshxona shkafi')
+    expect(nameEl).toBeDefined()
+
+    // The separator exists only from `md` up, so it never renders on a phone.
+    const separator = view.findAll('span').find((el) => el.text().trim() === '·')
+    expect(separator?.classes()).toContain('hidden')
+    expect(separator?.classes()).toContain('md:inline')
   })
 
   // An untitled drawing shows no headline anywhere in the client, so the

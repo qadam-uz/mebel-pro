@@ -82,6 +82,176 @@ afterEach(async () => {
   await setLocale(DEFAULT_LOCALE)
 })
 
+/** The URL the store asked the API for, from the last `api.get` call. */
+function lastRequest() {
+  const calls = vi.mocked(api.get).mock.calls
+  return String(calls[calls.length - 1]?.[0] ?? '')
+}
+
+/**
+ * The chips render twice — the scrolling `ClientChipFilter` under `md`, the
+ * `SegmentedControl` from `md` up — and jsdom resolves no breakpoints, so both
+ * are in the tree. Reading the first radiogroup keeps the assertions about one
+ * row rather than a doubled list.
+ */
+function chips(view: VueWrapper) {
+  const group = view.findAll('[role="radiogroup"]')[0]
+  return group?.findAll('[role="radio"]') ?? []
+}
+
+/**
+ * Decision 28 — Faol is the chip a client lands on, and the URL stays clean
+ * while it is armed. The rule is small and entirely invisible to typecheck: a
+ * default that silently reverts to Hammasi turns the page every client opens
+ * back into an archive that only grows.
+ */
+describe('ClientOrdersView — the status chips (decision 28)', () => {
+  it('opens on Faol, with no status in the URL and none asked of the API', async () => {
+    const view = await mountOrders()
+
+    expect(router.currentRoute.value.query.status).toBeUndefined()
+    expect(lastRequest()).toContain('status=active')
+    expect(chips(view)[0]?.attributes('aria-checked')).toBe('true')
+  })
+
+  it('lands on Faol from a status the chips no longer offer', async () => {
+    // «Bekor» was dropped from the row; a bookmark carrying it must not leave
+    // the page with no chip lit.
+    router = createRouter({ history: createMemoryHistory(), routes })
+    await router.push('/c/orders?status=cancelled')
+    await router.isReady()
+    const view = mount(ClientOrdersView, {
+      global: { plugins: [router], provide: { [roleConfigKey as symbol]: clientConfig } },
+    })
+    wrapper = view
+    await flushPromises()
+
+    expect(chips(view)[0]?.attributes('aria-checked')).toBe('true')
+    expect(lastRequest()).toContain('status=active')
+  })
+
+  it('orders the row Faol → Tayyor → Yakunlangan → Hammasi and offers no Bekor', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    expect(chips(view).map((chip) => chip.text())).toEqual([
+      'Faol',
+      'Tayyor',
+      'Yakunlangan',
+      'Hammasi',
+    ])
+  })
+
+  it('writes ?status=all for Hammasi and clears the query again on Faol', async () => {
+    const view = await mountOrders()
+
+    await chips(view)[3]?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.status).toBe('all')
+
+    await chips(view)[0]?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.status).toBeUndefined()
+  })
+})
+
+/**
+ * The landing chip empties for every client who is between orders, so its empty
+ * state has to hand over the filter that still has rows — «no results» copy on
+ * the default view reads as a broken search.
+ */
+describe('ClientOrdersView — the Faol empty state (decision 28)', () => {
+  it('offers Hammasi as a link, not first-run copy', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    expect(view.text()).toContain("Faol buyurtma yo'q")
+    const link = view.findAll('a').find((el) => el.text().includes("Hammasini ko'rish"))
+    expect(link?.attributes('href')).toBe('/c/orders?status=all')
+  })
+
+  it('keeps the first-run empty state for Hammasi with nothing at all', async () => {
+    await setLocale('uz')
+
+    const view = await mountOrders()
+    await chips(view)[3]?.trigger('click')
+    await flushPromises()
+
+    expect(view.text()).toContain("Buyurtma yo'q")
+    expect(view.text()).not.toContain("Faol buyurtma yo'q")
+  })
+})
+
+/**
+ * Decision 28's second half — the card is one descending ladder, and the
+ * ladder is the whole point: the owner's complaint was a draft name shouting
+ * over the order number while the workshop whispered. jsdom applies no
+ * stylesheet, so what is asserted is the utility that carries each size; a
+ * class swap that puts the name back above the number fails here rather than
+ * on a phone.
+ */
+describe('ClientOrdersView — the card typography ladder (decision 28)', () => {
+  /** Tailwind sizes on this card are either `text-[Npx]` or the `sm` step. */
+  function fontSize(classes: string[]) {
+    const arbitrary = classes.find((name) => /^text-\[[\d.]+px]$/.test(name))
+    if (arbitrary) return Number(arbitrary.slice(6, -3))
+    if (classes.includes('text-sm')) return 14
+    if (classes.includes('text-base')) return 16
+    return null
+  }
+
+  async function card() {
+    vi.mocked(api.get).mockImplementation(
+      async () => [{ ...order(2, 1), draft_name: 'Oshxona shkafi' }] as never,
+    )
+    const view = await mountOrders()
+    return view.find('article')
+  }
+
+  it('keeps the order number the biggest, boldest line on the card', async () => {
+    const article = await card()
+
+    // The total is bold too, so the number is found by its `№` rather than by
+    // a weight both lines carry.
+    const number = article.findAll('span').find((el) => el.text().startsWith('№'))
+    const name = article.find('h2')
+    expect(name.text()).toBe('Oshxona shkafi')
+
+    const numberSize = fontSize(number?.classes() ?? [])
+    const nameSize = fontSize(name.classes())
+    expect(numberSize).toBe(15)
+    expect(nameSize).toBe(14)
+    expect(numberSize as number).toBeGreaterThanOrEqual(nameSize as number)
+    expect(number?.classes()).toContain('font-bold')
+    expect(name.classes()).toContain('font-semibold')
+  })
+
+  it('keeps the name a plain truncated subtitle, not a display headline', async () => {
+    const article = await card()
+
+    const name = article.find('h2')
+    expect(name.classes()).toContain('truncate')
+    // Display is for identity and magnitude (DESIGN.md), not a line of user
+    // input the card then truncates.
+    expect(name.classes()).not.toContain('font-display')
+  })
+
+  it('steps the workshop down from the name and the counts down from it', async () => {
+    const article = await card()
+
+    const workshop = article.findAll('p').find((el) => el.text().includes('Mebel Master'))
+    expect(fontSize(workshop?.classes() ?? [])).toBe(13.5)
+    expect(workshop?.classes()).toContain('text-ink-soft')
+
+    const counts = article.findAll('div').find((el) => el.classes().includes('text-[12.5px]'))
+    expect(counts?.text()).toContain('detal')
+    // Muted, a step under the workshop line — the last thing read, not the first.
+    expect(counts?.classes()).toContain('text-ink-muted')
+  })
+})
+
 // Decision 23 — the card's third line follows the naming rule off the payload's
 // own branch count, so a client of a single-counter workshop never reads a
 // branch name they have no use for.
@@ -132,6 +302,31 @@ describe('ClientOrdersView — the card date (decision 22)', () => {
     expect(text).toContain('26-aprel 2026, 09:32')
     // The numeric shape this replaced must be gone, not merely unused.
     expect(text).not.toContain('26.04.2026')
+  })
+
+  // Amended 2026-09-06 evening: on a phone the date is its own line under the
+  // counts, never the third «·»-joined item on them — joined, it wrapped
+  // mid-date at 375px. jsdom resolves no breakpoints, so what is pinned here
+  // is the markup that carries the split: the counts and the date are separate
+  // paragraphs, and the «·» between them from `md` up is `md:`-gated.
+  it('gives the date its own paragraph, not the counts line', async () => {
+    datedOrder()
+    await setLocale('uz')
+
+    const view = await mountOrders()
+
+    const paragraphs = view.findAll('p')
+    const dateEl = paragraphs.find((el) => el.text().trim() === '26-aprel 2026, 09:32')
+    expect(dateEl).toBeDefined()
+    expect(dateEl?.classes()).toContain('whitespace-nowrap')
+
+    const counts = paragraphs.find((el) => el.text().includes('detal'))
+    expect(counts?.text()).toContain('list')
+    expect(counts?.text()).not.toContain('2026')
+
+    const separator = view.findAll('span').find((el) => el.text().trim() === '·')
+    expect(separator?.classes()).toContain('hidden')
+    expect(separator?.classes()).toContain('md:inline')
   })
 
   it('uses the Russian genitive month', async () => {

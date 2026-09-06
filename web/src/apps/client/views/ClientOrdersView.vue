@@ -27,24 +27,34 @@ const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
 
-const STATUSES = ['all', 'active', 'ready', 'completed', 'cancelled'] as const
+/**
+ * Chip order and default (decision 28). **Faol first and default**: the list a
+ * client opens is the orders they are waiting on, not an archive that grows for
+ * ever. «Hammasi» is last and explicit — it is the way back to history, never
+ * the landing state. There is no «Bekor» chip: a cancelled order is read from
+ * Hammasi, and a filter nobody arms is a chip stealing width from the four that
+ * matter on a 375px row.
+ */
+const DEFAULT_STATUS = 'active'
+const STATUSES = ['active', 'ready', 'completed', 'all'] as const
 type StatusFilter = (typeof STATUSES)[number]
 
 function readStatus(value: unknown): StatusFilter {
-  const raw = String(value ?? 'all')
-  return (STATUSES as readonly string[]).includes(raw) ? (raw as StatusFilter) : 'all'
+  const raw = String(value ?? DEFAULT_STATUS)
+  return (STATUSES as readonly string[]).includes(raw) ? (raw as StatusFilter) : DEFAULT_STATUS
 }
 
 /**
- * The filter lives in the URL, not only in the component: home's «Barchasi →»
- * links straight to `?status=active`, and the browser's back button has to land
- * on the filter the client left rather than resetting to Hammasi.
+ * The filter lives in the URL, not only in the component, so the browser's back
+ * button lands on the filter the client left. Only a non-default chip is
+ * written: no `?status` **is** Faol, which keeps home's «Barchasi →» a plain
+ * `/c/orders` and the address bar clean on the view everybody opens.
  */
 const status = computed({
   get: () => readStatus(route.query.status),
   set: (value: string) => {
     const query = { ...route.query }
-    if (value === 'all') delete query.status
+    if (value === DEFAULT_STATUS) delete query.status
     else query.status = value
     void router.replace({ query })
   },
@@ -61,7 +71,10 @@ const statusOptions = computed(() =>
 )
 
 const visibleOrders = computed(() => orders.clientOrders)
+/** Hammasi with no search: an empty list here means the client has no orders. */
 const noFilter = computed(() => status.value === 'all' && !search.value)
+/** The landing view — its empty state offers Hammasi rather than first-run copy. */
+const isDefaultView = computed(() => status.value === DEFAULT_STATUS && !search.value)
 const isTrueEmpty = computed(
   () => !orders.loading && !orders.error && visibleOrders.value.length === 0 && noFilter.value,
 )
@@ -204,11 +217,15 @@ onMounted(() => {
         :key="item"
         class="client-card flex justify-between gap-3 p-3.5 md:p-5"
       >
+        <!-- Sized like the real card's five lines — number, name, workshop,
+             counts, and the date's own line on phones — so nothing jumps when
+             the rows land. -->
         <div class="min-w-0 flex-1">
-          <div class="client-skeleton h-4 w-28"></div>
-          <div class="client-skeleton mt-2 h-[17px] w-2/5"></div>
-          <div class="client-skeleton mt-2 h-3 w-3/5"></div>
-          <div class="client-skeleton mt-1.5 h-3 w-2/5"></div>
+          <div class="client-skeleton h-[19px] w-28"></div>
+          <div class="client-skeleton mt-1.5 h-[18px] w-2/5"></div>
+          <div class="client-skeleton mt-2 h-4 w-3/5"></div>
+          <div class="client-skeleton mt-1.5 h-3.5 w-2/5"></div>
+          <div class="client-skeleton mt-1 h-3.5 w-1/3 md:hidden"></div>
         </div>
         <div class="shrink-0 text-right">
           <div class="client-skeleton ml-auto h-[19px] w-24 rounded-full"></div>
@@ -231,6 +248,16 @@ onMounted(() => {
         <p>{{ $t('client.orders.emptyBody') }}</p>
         <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
           {{ $t('client.common.newOrder') }}
+        </RouterLink>
+      </template>
+      <!-- The landing chip empties for every client who is between orders, so
+           it says so plainly and hands over the one filter that still has
+           rows — not «no results», which reads like a broken search. -->
+      <template v-else-if="isDefaultView">
+        <h3>{{ $t('client.orders.emptyActiveTitle') }}</h3>
+        <p>{{ $t('client.orders.emptyActiveBody') }}</p>
+        <RouterLink :to="{ query: { status: 'all' } }" class="mp-button mp-button-outline mt-4">
+          {{ $t('client.orders.viewAllStatuses') }}
         </RouterLink>
       </template>
       <template v-else>
@@ -260,16 +287,21 @@ onMounted(() => {
         @keydown.enter="openOrder(order)"
         @keydown.space.prevent="openOrder(order)"
       >
+        <!-- One descending ladder, top to bottom (decision 28): 15 / 14 / 13.5
+             / 12.5. The number is the identity and so the largest thing in the
+             column; every line under it is a qualifier and reads smaller. -->
         <div class="min-w-0 flex-1">
           <span class="block text-[15px] font-bold leading-[1.3] text-ink md:text-base">
             {{ formatOrderNumber(order.order_number) }}
           </span>
-          <!-- The name is the headline only when there is one. An untitled
-               drawing shows no headline at all: a grey "Nomsiz chizma"
-               placeholder was the worst element on the old card. -->
+          <!-- The name is a subtitle, never bigger than the number it belongs
+               to — and in the Text face: display is for identity and magnitude,
+               not for a truncated line of user input. Rendered only when there
+               is one: an untitled drawing shows no line at all, because a grey
+               "Nomsiz chizma" placeholder was the worst element on the old card. -->
           <h2
             v-if="order.draft_name"
-            class="mt-[3px] truncate font-display text-[17px] font-semibold leading-[1.25] text-ink md:mt-1 md:text-lg"
+            class="mt-[3px] truncate text-sm font-semibold leading-[1.3] text-ink md:mt-1 md:text-[15px]"
           >
             {{ order.draft_name }}
           </h2>
@@ -281,18 +313,31 @@ onMounted(() => {
           >
             {{ $t('client.orders.createdByWorkshop') }}
           </span>
-          <!-- Two short lines, not one wrapping one: the right column leaves
-               the left about 200px on a phone. -->
-          <p class="mt-1 text-[12.5px] leading-[1.4] text-ink-soft md:mt-[5px] md:text-sm">
+          <!-- The workshop is who the client deals with, so it sits above the
+               counts and stays `ink-soft` rather than muted: readable at a
+               glance, still clearly under the name. Two short lines, not one
+               wrapping one — the right column leaves the left about 200px on a
+               phone. -->
+          <p
+            class="mt-[3px] text-[13.5px] font-medium leading-[1.4] text-ink-soft md:mt-1 md:text-sm"
+          >
             {{ cardWhere(order) }}
           </p>
-          <p class="mt-0.5 text-[12.5px] leading-[1.4] text-ink-soft md:text-sm">
-            <b class="font-semibold text-ink">{{ order.item_count }}</b>
-            {{ $t('client.unit.part', order.item_count) }} ·
-            <b class="font-semibold text-ink">{{ order.planned_panels || '—' }}</b>
-            {{ $t('client.unit.sheet', order.planned_panels) }} ·
-            {{ formatClientDateTime(order.created_at) }}
-          </p>
+          <!-- Counts and date: joined by «·» from `md` up, the date on its own
+               line under them on a phone (decision 22, amended 2026-09-06
+               evening) — joined, the date wrapped in the middle at 375px. -->
+          <div
+            class="mt-0.5 flex flex-col text-[12.5px] leading-[1.4] text-ink-muted md:flex-row md:items-baseline md:gap-x-[3px] md:text-[13px]"
+          >
+            <p>
+              <b class="font-semibold">{{ order.item_count }}</b>
+              {{ $t('client.unit.part', order.item_count) }} ·
+              <b class="font-semibold">{{ order.planned_panels || '—' }}</b>
+              {{ $t('client.unit.sheet', order.planned_panels) }}
+            </p>
+            <span class="hidden shrink-0 md:inline" aria-hidden="true">·</span>
+            <p class="whitespace-nowrap">{{ formatClientDateTime(order.created_at) }}</p>
+          </div>
         </div>
 
         <div class="flex shrink-0 flex-col items-end gap-[5px] md:gap-[7px]">

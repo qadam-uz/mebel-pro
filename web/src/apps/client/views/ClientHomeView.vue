@@ -173,13 +173,14 @@ function draftPanels(draft: CuttingDraft) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
 }
 
+// Counts only — the date is rendered beside this on desktop and on its own
+// line under it on a phone (decision 22, amended 2026-09-06 evening).
 function draftMeta(draft: CuttingDraft) {
   const parts = draftParts(draft)
   const panels = draftPanels(draft)
   return [
     `${parts} ${t('client.unit.part', parts)}`,
     `${panels || '—'} ${t('client.unit.sheet', panels)}`,
-    formatClientDateTime(draft.updated_at),
   ].join(' · ')
 }
 
@@ -424,8 +425,10 @@ onMounted(() => {
         <section v-if="visibleActiveOrders.length > 0" class="mb-5 md:mb-0">
           <div class="client-section-title">
             <h2>{{ $t('client.home.activeOrders') }}</h2>
+            <!-- No `?status=active`: Faol is the orders page's default chip
+                 (decision 28), so the bare path already lands on this list. -->
             <RouterLink
-              :to="rolePath('/c/orders?status=active')"
+              :to="rolePath('/c/orders')"
               class="text-[13px] font-bold text-ink-soft no-underline hover:text-ink"
             >
               {{ $t('client.common.viewAll') }} →
@@ -452,17 +455,19 @@ onMounted(() => {
                 {{ clientStatusLabel(order.status) }}
               </span>
               <!-- The sub-line: the drawing's name when it has one, and always
-                   the order's date (decision 22, amended 2026-09-06). One
-                   short line on both breakpoints — the date keeps its full
-                   width and the name truncates into whatever is left, because
-                   a wrapped second line would push the total out of the row. -->
+                   the order's date (decision 22, amended 2026-09-06). On a
+                   phone the date is its own line under the name and never
+                   joined to it with «·» — at 375px the joined form wrapped
+                   mid-date. Desktop keeps the one-line form. -->
               <span
-                class="row-start-2 flex min-w-0 items-baseline gap-x-1.5 text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:text-sm"
+                class="row-start-2 flex min-w-0 flex-col items-start text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:flex-row md:items-baseline md:gap-x-1.5 md:text-sm"
               >
-                <span v-if="order.draft_name" class="min-w-0 truncate">
+                <span v-if="order.draft_name" class="w-full min-w-0 truncate md:w-auto">
                   {{ order.draft_name }}
                 </span>
-                <span v-if="order.draft_name" class="shrink-0" aria-hidden="true">·</span>
+                <span v-if="order.draft_name" class="hidden shrink-0 md:inline" aria-hidden="true"
+                  >·</span
+                >
                 <span class="shrink-0 whitespace-nowrap">
                   {{ formatClientDateTime(order.created_at) }}
                 </span>
@@ -507,10 +512,16 @@ onMounted(() => {
                 >
                   {{ draftTitle(draft) }}
                 </span>
+                <!-- Counts, then the date: one line on desktop, two on a
+                     phone (decision 22 — the joined form wrapped mid-date). -->
                 <span
-                  class="block truncate text-[12.5px] leading-[1.3] text-ink-muted md:text-[13px]"
+                  class="flex min-w-0 flex-col items-start text-[12.5px] leading-[1.3] text-ink-muted md:flex-row md:items-baseline md:gap-x-[3px] md:text-[13px]"
                 >
-                  {{ draftMeta(draft) }}
+                  <span class="w-full min-w-0 truncate md:w-auto">{{ draftMeta(draft) }}</span>
+                  <span class="hidden shrink-0 md:inline" aria-hidden="true">·</span>
+                  <span class="shrink-0 whitespace-nowrap">
+                    {{ formatClientDateTime(draft.updated_at) }}
+                  </span>
                 </span>
               </span>
               <span

@@ -8,19 +8,20 @@ import { nextStableId } from '@/shared/app/listboxNav'
  * phone-first filter, in place of a dropdown.
  *
  * `SegmentedControl` divides one row between its options and stops fitting past
- * three or four; these are five status filters and a variable-length substrate
- * list, and every one has to stay one tap away. So the row scrolls instead of
- * shrinking, and each chip keeps the 44px touch floor.
+ * three or four; these are four status filters beside a search button and a
+ * variable-length substrate list, and every one has to stay one tap away. So
+ * the row scrolls instead of shrinking, and each chip keeps the 44px touch
+ * floor.
  *
  * A radiogroup with a roving tabindex, like `SegmentedControl`: one tab stop for
  * the whole row, arrows to move, which is what a set of mutually exclusive
  * choices owes the keyboard.
  *
- * **A scroller has to say it scrolls.** Five status chips do not fit a 375px
- * phone, and a row that simply clips «Yakunlangan» mid-word against the search
- * button reads as broken rather than as "swipe for more". The overflowing side
- * is faded out, and the checked chip is scrolled into view — so arriving on
- * `?status=cancelled` shows the chip that is actually selected.
+ * **A scroller has to say it scrolls.** The longest chip sets do not fit a
+ * 375px phone, and a row that simply clips «Yakunlangan» mid-word against the
+ * search button reads as broken rather than as "swipe for more". The
+ * overflowing side is faded out, and the checked chip is scrolled into view —
+ * so arriving on `?status=completed` shows the chip that is actually selected.
  */
 const props = defineProps<{
   /** The group's accessible name; never rendered — the chips say what they are. */

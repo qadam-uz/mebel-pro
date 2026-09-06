@@ -81,14 +81,16 @@
     "cancelReasonDefault": "Mijoz buyurtmani tasdiqlashdan oldin bekor qildi",
     "filter": {
       "label": "Holat bo'yicha filtr",
-      "all": "Hammasi",
       "active": "Faol",
       "ready": "Tayyor",
       "completed": "Yakunlangan",
-      "cancelled": "Bekor"
+      "all": "Hammasi"
     },
     "searchToggle": "Qidirishni ochish",
     "searchClose": "Qidirishni yopish",
+    "emptyActiveTitle": "Faol buyurtma yo'q",
+    "emptyActiveBody": "Tayyor va yakunlangan buyurtmalar «Hammasi» ro'yxatida.",
+    "viewAllStatuses": "Hammasini ko'rish",
     "emptyFilteredTitle": "Bu filtr bo'yicha buyurtma yo'q",
     "emptyFilteredHint": "Boshqa holatni tanlang yoki filtrlarni tozalang."
   },

@@ -182,16 +182,23 @@ onMounted(() => {
           <div class="truncate text-sm font-bold text-ink">
             {{ draftTitle(draft) }}
           </div>
-          <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
-            <span
-              ><b class="text-ink">{{ draftParts(draft) }}</b>
-              {{ $t('client.unit.part', draftParts(draft)) }}</span
-            >
-            <span
-              ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
-              {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
-            >
-            <span>{{ formatClientDateTime(draft.updated_at) }}</span>
+          <!-- The date is its own line under the counts on a phone and sits
+               beside them from `md` up (decision 22, amended 2026-09-06
+               evening): joined, it wrapped mid-date at 375px. -->
+          <div
+            class="mt-1 flex flex-col gap-y-0.5 text-xs text-ink-muted md:flex-row md:flex-wrap md:items-baseline md:gap-x-3 md:gap-y-1"
+          >
+            <span class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span
+                ><b class="text-ink">{{ draftParts(draft) }}</b>
+                {{ $t('client.unit.part', draftParts(draft)) }}</span
+              >
+              <span
+                ><b class="text-ink">{{ draftPanels(draft) || '—' }}</b>
+                {{ $t('client.unit.sheet', draftPanels(draft)) }}</span
+              >
+            </span>
+            <span class="whitespace-nowrap">{{ formatClientDateTime(draft.updated_at) }}</span>
           </div>
         </div>
         <RouterLink
