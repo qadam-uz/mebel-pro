@@ -27,9 +27,15 @@ const trap = useFocusTrap(panelRef, openRef, () => emit('close'))
 
 <template>
   <Teleport to="body">
-    <!-- z-[80]: the app modal layer. ConfirmDialog raised from inside a modal
-         stays above at z-[85]; toasts sit above both at z-[90]. -->
-    <div v-if="open" class="fixed inset-0 z-[80] grid place-items-center p-4">
+    <!-- The tier comes from the overlay stack, not from a literal: this modal
+         is the decor lightbox as often as it is a form, and a lightbox opened
+         from inside a bottom sheet has to clear the sheet that raised it
+         (shared/app/overlayStack; DESIGN.md, the overlay z-ladder). -->
+    <div
+      v-if="open"
+      class="fixed inset-0 grid place-items-center p-4"
+      :style="{ zIndex: trap.zIndex.value }"
+    >
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true" @click="emit('close')"></div>
       <section
         :id="id"

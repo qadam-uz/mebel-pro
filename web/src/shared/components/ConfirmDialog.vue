@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useOverlayLayer } from '@/shared/app/overlayStack'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import { nextStableId } from '@/shared/app/listboxNav'
 
@@ -45,6 +46,11 @@ const slots = useSlots()
 const id = nextStableId('mp-confirm')
 let previousFocus: HTMLElement | null = null
 
+// This dialog is raised from inside another overlay more often than not, so its
+// tier is its depth in the overlay stack rather than a fixed one step above the
+// modal layer — a confirm over a sheet over a sheet still lands on top.
+const layer = useOverlayLayer(computed(() => props.open))
+
 // The trap must cycle slot fields too (a reason input/textarea sits before the
 // footer buttons) — a buttons-only cycle makes those fields keyboard-unreachable.
 const FOCUSABLE_SELECTOR = [
@@ -61,7 +67,9 @@ function focusableElements() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && !props.busy) {
+  // Escape belongs to whatever is innermost; when something is stacked over
+  // this dialog the event is left untouched so that overlay answers it.
+  if (event.key === 'Escape' && !props.busy && layer.isTopmost.value) {
     event.preventDefault()
     emit('cancel')
     return
@@ -131,10 +139,15 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <!-- z-[85]: above the modal layer (admin modal panel z-80, scrim z-70) so a
-         confirm raised from inside another modal is clickable, yet below toasts
-         (z-90) so the success/failure toast still shows on top. -->
-    <div v-if="open" class="fixed inset-0 z-[85] grid place-items-center p-4" @keydown="onKeydown">
+    <!-- The tier comes from the overlay stack: above whatever raised this
+         confirm so it is clickable, and always below the toast layer so the
+         success/failure toast still shows on top (DESIGN.md, the z-ladder). -->
+    <div
+      v-if="open"
+      class="fixed inset-0 grid place-items-center p-4"
+      :style="{ zIndex: layer.zIndex.value }"
+      @keydown="onKeydown"
+    >
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true"></div>
       <section
         :id="id"

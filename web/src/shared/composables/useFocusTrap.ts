@@ -1,5 +1,6 @@
-import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, watch, type ComputedRef, type Ref } from 'vue'
 
+import { useOverlayLayer } from '@/shared/app/overlayStack'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 
 const FOCUSABLE_SELECTOR = [
@@ -34,8 +35,15 @@ export function useFocusTrap(
   panelRef: Ref<HTMLElement | null>,
   open: Ref<boolean>,
   onEscape: () => void,
-) {
+): {
+  onKeydown: (event: KeyboardEvent) => void
+  zIndex: ComputedRef<number>
+  isTopmost: ComputedRef<boolean>
+} {
   let previousFocus: HTMLElement | null = null
+  // Registering here rather than in each panel: every surface that traps focus
+  // is an overlay, and its tier is its depth in the stack (shared/app/overlayStack).
+  const { zIndex, isTopmost } = useOverlayLayer(open)
 
   function focusables(): HTMLElement[] {
     const panel = panelRef.value
@@ -47,6 +55,11 @@ export function useFocusTrap(
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
+      // Escape belongs to the innermost overlay. When something is stacked over
+      // this panel we leave the event alone entirely — no `preventDefault`, no
+      // `stopPropagation` — so it reaches the document handler of the overlay
+      // that *is* on top and closes that one instead.
+      if (!isTopmost.value) return
       event.preventDefault()
       // The document-level handler below is the fallback for focus that has
       // left the panel; when the panel itself saw the keypress it owns it.
@@ -90,6 +103,9 @@ export function useFocusTrap(
    */
   function onDocumentKeydown(event: KeyboardEvent) {
     if (!open.value || event.key !== 'Escape' || event.defaultPrevented) return
+    // Every open overlay has this listener bound, and they fire in the order
+    // they were added — outermost first. Only the top of the stack answers.
+    if (!isTopmost.value) return
     event.preventDefault()
     onEscape()
   }
@@ -133,5 +149,5 @@ export function useFocusTrap(
     }
   })
 
-  return { onKeydown }
+  return { onKeydown, zIndex, isTopmost }
 }

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } f
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import { useAttachedOverlayZIndex } from '@/shared/app/overlayStack'
 
 export interface ActionMenuItem {
   label: string
@@ -31,12 +32,19 @@ const triggerLabel = computed(() => props.label ?? t('forms.actionMenu.trigger')
 
 const GUTTER = 8
 const MAX_PANEL_PX = 320 // matches the max-height in `.mp-action-menu`
+const ACTION_MENU_BASE_Z = 60 // matches the z-index in `.mp-action-menu`
 
 const open = ref(false)
 const wrapRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const panelStyle = ref<CSSProperties>({})
+
+// The panel's tier: `.mp-action-menu`'s own z-60 on a plain page, lifted just
+// over the innermost open overlay when the ⋯ lives inside one. It used to be a
+// `body.modal-open .mp-action-menu` rule pinned at 85, which only worked while
+// overlays never nested more than one deep (shared/app/overlayStack).
+const panelZIndex = useAttachedOverlayZIndex(ACTION_MENU_BASE_Z)
 
 // The panel is teleported to `<body>` and positioned from the trigger, the same
 // way every other popover here works (`ProjectDropdown`, `DateField`).
@@ -147,7 +155,7 @@ onBeforeUnmount(stopListening)
         v-if="open"
         ref="menuRef"
         class="mp-action-menu"
-        :style="panelStyle"
+        :style="[panelStyle, { zIndex: panelZIndex }]"
         role="menu"
         @keydown.esc.stop.prevent="close(true)"
       >
