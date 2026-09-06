@@ -189,7 +189,7 @@ const rotationAllowed = computed(() => props.part?.follow_grain === false)
           >
             <Icon :name="rotationAllowed ? 'rotate' : 'grain'" class="size-[18px]" />
           </button>
-          <span class="min-w-0 text-[13px] leading-[1.4] text-ink-soft">
+          <span class="min-w-0 text-[12.5px] leading-[1.4] text-ink-soft md:text-[13px]">
             {{
               rotationAllowed
                 ? $t('cutting.parts.rotationAllowed')

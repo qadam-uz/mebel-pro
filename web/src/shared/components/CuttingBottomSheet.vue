@@ -260,7 +260,7 @@ onBeforeUnmount(() => {
           <div class="min-w-0">
             <h2
               :id="`${id}-title`"
-              class="font-display text-lg font-bold tracking-[-0.02em] text-ink"
+              class="font-display text-base font-bold tracking-[-0.02em] text-ink md:text-lg"
             >
               {{ title }}
             </h2>

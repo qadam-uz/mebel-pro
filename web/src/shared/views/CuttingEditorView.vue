@@ -2742,7 +2742,7 @@ onBeforeRouteLeave(async () => {
                       :class="
                         inOrderWizard
                           ? 'text-[14.5px] font-semibold text-ink'
-                          : 'mt-1 text-sm text-ink-muted'
+                          : 'mt-1 text-[13px] text-ink-muted md:text-sm'
                       "
                     >
                       <!-- Counts only. The m² was an estimate of the parts, not
@@ -3271,7 +3271,7 @@ onBeforeRouteLeave(async () => {
                       <button
                         v-if="!isReadOnly"
                         type="button"
-                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13.5px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
+                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
                         @click="addGroupRow(group)"
                       >
                         <Icon name="plus" class="size-4" />
@@ -3333,7 +3333,7 @@ onBeforeRouteLeave(async () => {
                   >
                     <button
                       type="button"
-                      class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                      class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-[13px] font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink md:text-sm"
                       :class="
                         inOrderWizard ? 'h-10 min-h-10 rounded-[11px] px-4 text-[13.5px]' : ''
                       "
