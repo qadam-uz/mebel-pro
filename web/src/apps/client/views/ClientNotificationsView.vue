@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import ClientChipFilter from '@/apps/client/components/ClientChipFilter.vue'
+import ClientChipFilter from '@/shared/components/ClientChipFilter.vue'
 import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
   notificationBody,

@@ -58,7 +58,7 @@ const bandedCount = computed(
   <button
     :id="`part-row-${part.part_ref}`"
     type="button"
-    class="grid min-h-14 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-[10px] border px-3 py-2 text-left transition"
+    class="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-[10px] border px-3 py-2 text-left transition"
     :class="
       hasError
         ? 'border-danger bg-danger-soft/60'
@@ -68,9 +68,9 @@ const bandedCount = computed(
   >
     <span class="min-w-0 truncate">
       <span class="text-[12.5px] font-bold text-ink-muted">#{{ number }} · </span>
-      <span class="text-[15px] font-semibold text-ink">{{ name }}</span>
+      <span class="text-[13.5px] font-semibold text-ink">{{ name }}</span>
     </span>
-    <span class="whitespace-nowrap text-sm text-ink-soft">
+    <span class="whitespace-nowrap text-[13px] text-ink-soft">
       {{ part.length_mm || '—' }} × {{ part.width_mm || '—' }}
     </span>
     <span class="inline-flex items-center gap-2">

@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { decorIdentityKey, decorTitle } from '@/shared/app/cuttingGroupTape'
-import { formatMm } from '@/shared/app/materialLabel'
+import { decorTypeLabel, formatMm } from '@/shared/app/materialLabel'
 import { formatTiyin } from '@/shared/formatters'
+import ClientChipFilter from '@/shared/components/ClientChipFilter.vue'
 import CuttingBottomSheet from '@/shared/components/CuttingBottomSheet.vue'
 import CuttingDecorThumb from '@/shared/components/CuttingDecorThumb.vue'
 import Icon from '@/shared/components/AppIcon.vue'
+import type { DecorType } from '@/shared/stores/admin'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
 /**
@@ -27,6 +29,15 @@ import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
  * wrong frame on a desktop: changing one group's board is a picker on a row,
  * not a decision that earns a scrim over the whole drawing.
  *
+ * Under the search sits the **board-type filter** (decision 27b): «Barchasi»
+ * plus one chip per type the branch's shelf holds, in the catalog's own
+ * vocabulary. It is the one cut a client makes before colour — "I need an
+ * 18 mm LDSP", not "I need something beige" — and on a phone it is the
+ * difference between a list of six decors and a list of forty. The chips filter
+ * **formats**, so a decor is listed only while it has one of that type, its
+ * «{n} ta format» line counts only those, and the caption above the chips
+ * counts the rows the chip left on screen.
+ *
  * The workshop keeps its own picker in `CuttingEditorView` — this component is
  * mounted on the client path only.
  */
@@ -38,8 +49,12 @@ const props = withDefaults(
     /** The format currently on the part/group, so its row reads as chosen. */
     currentId: string | null
     search: string
-    /** `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` */
-    caption: string
+    /**
+     * The shelf the list belongs to — `Mebel Master · Yunusobod filiali`. Only
+     * the name: the count in the caption beside it is the picker's own, because
+     * only the picker knows what the armed chip left on screen.
+     */
+    branch: string
     /**
      * The control that opened the picker. With one, `md` and up renders the
      * anchored panel and focus returns here on close; without one (or on a
@@ -65,10 +80,66 @@ interface DecorRow {
   formats: ClientCatalogMaterialOption[]
 }
 
+// ---- the board-type filter (§27b) -----------------------------------------
+
+const ALL = 'all'
+const activeType = ref<string>(ALL)
+
+/**
+ * The types the chip row offers, remembered across the searches of **one**
+ * opening.
+ *
+ * The search is server-side, so `materials` is the branch's catalog only while
+ * the query is empty (which is how every open starts — the editor clears the
+ * query on open). Deriving the chips from the current list alone would make
+ * them appear and vanish under the typing hand; a set that only ever grows
+ * while the sheet is open keeps the row still, and closing it forgets
+ * everything, so a branch that lost a substrate is not remembered either.
+ */
+const typesSeen = ref<DecorType[]>([])
+
+function absorbTypes() {
+  for (const material of props.materials) {
+    if (material.type && !typesSeen.value.includes(material.type))
+      typesSeen.value.push(material.type)
+  }
+}
+
+watch(() => props.materials, absorbTypes)
+
+/**
+ * LDSP, MDF, DSP first — the three a client meets on nine drawings out of ten,
+ * in the order the shop floor names them — then whatever else the branch
+ * carries, alphabetically. A fixed head means the chip a client reaches for
+ * does not move when a branch adds a substrate.
+ */
+const TYPE_HEAD: readonly DecorType[] = ['ldsp', 'mdf', 'dsp']
+
+const typeChips = computed(() => {
+  const head = TYPE_HEAD.filter((type) => typesSeen.value.includes(type))
+  const tail = typesSeen.value
+    .filter((type) => !TYPE_HEAD.includes(type))
+    .map((type) => ({ type, label: decorTypeLabel(type) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+  return [
+    { value: ALL, label: t('cutting.material.typeAll') },
+    ...head.map((type) => ({ value: type as string, label: decorTypeLabel(type) })),
+    ...tail.map((entry) => ({ value: entry.type as string, label: entry.label })),
+  ]
+})
+
+/** The formats the chips let through — the decor rows are folded from these, so
+ *  the «{n} ta format» count and the expanded list are the filter's too. */
+const shownMaterials = computed(() =>
+  activeType.value === ALL
+    ? props.materials
+    : props.materials.filter((material) => material.type === activeType.value),
+)
+
 const rows = computed<DecorRow[]>(() => {
   const list: DecorRow[] = []
   const indexByKey = new Map<string, number>()
-  for (const material of props.materials) {
+  for (const material of shownMaterials.value) {
     const key = decorIdentityKey(material)
     let row = list[indexByKey.get(key) ?? -1]
     if (!row) {
@@ -81,6 +152,17 @@ const rows = computed<DecorRow[]>(() => {
   }
   return list
 })
+
+/**
+ * `Mebel Master · Yunusobod filiali katalogi · 6 ta dekor` — the line under the
+ * search field. The count is **what is listed**, not what the branch carries:
+ * the search narrows the list from the server and the type chip narrows it here,
+ * and a caption that kept saying "16 ta dekor" over six rows would read as a
+ * broken list rather than a filtered one.
+ */
+const caption = computed(() =>
+  t('cutting.editor.catalogCaption', { workshopBranch: props.branch, n: rows.value.length }),
+)
 
 /** `18 mm · 2800×2070 mm` — the format line, in the order the canvas prints it. */
 function formatLabel(material: ClientCatalogMaterialOption): string {
@@ -114,23 +196,36 @@ function hasPrice(material: ClientCatalogMaterialOption): boolean {
 // 18 mm board are different boards), so the row opens instead of selecting.
 const expandedKey = ref<string | null>(null)
 
-// Reopening starts closed, and a decor that already holds the current format
-// opens so the chosen radio is visible without a tap.
+/** Open the decor that already holds the current format, so its chosen radio is
+ *  visible without a tap — and nothing else. */
+function syncExpanded() {
+  expandedKey.value =
+    rows.value.find(
+      (row) =>
+        row.formats.length > 1 && row.formats.some((format) => format.id === props.currentId),
+    )?.key ?? null
+}
+
+// Reopening starts closed, on «Barchasi», with nothing remembered from the last
+// open: a chip left armed would silently hide most of the catalog next time.
 watch(
   () => props.open,
   (open) => {
     if (!open) {
       expandedKey.value = null
+      activeType.value = ALL
+      typesSeen.value = []
       return
     }
-    expandedKey.value =
-      rows.value.find(
-        (row) =>
-          row.formats.length > 1 && row.formats.some((format) => format.id === props.currentId),
-      )?.key ?? null
+    absorbTypes()
+    syncExpanded()
   },
   { immediate: true },
 )
+
+// A narrowed list is a different list: a decor left open may now hold one
+// format, or none.
+watch(activeType, syncExpanded)
 
 function onRow(row: DecorRow) {
   if (row.formats.length === 1) {
@@ -173,12 +268,23 @@ function rowIsCurrent(row: DecorRow) {
           />
         </span>
         <p class="mt-2 truncate text-[12.5px] text-ink-muted">{{ caption }}</p>
+        <!-- One chip per substrate the branch actually carries; with a single
+             one the row would be a control with nothing to choose. -->
+        <ClientChipFilter
+          v-if="typeChips.length > 2"
+          v-model="activeType"
+          class="mt-2.5"
+          :label="$t('cutting.material.typeFilter')"
+          :options="typeChips"
+        />
       </div>
     </template>
 
     <p v-if="rows.length === 0" class="px-1 py-8 text-center text-sm text-ink-muted">
       {{
-        search.trim() ? $t('cutting.material.searchEmpty') : $t('cutting.material.emptyInBranch')
+        search.trim() || activeType !== 'all'
+          ? $t('cutting.material.searchEmpty')
+          : $t('cutting.material.emptyInBranch')
       }}
     </p>
 
@@ -259,20 +365,33 @@ function rowIsCurrent(row: DecorRow) {
               "
               aria-hidden="true"
             ></span>
-            <span class="min-w-0 flex-1 text-[13.5px] font-semibold text-ink">
-              {{ formatLabel(format) }}
-            </span>
-            <span
-              v-if="hasPrice(format)"
-              class="shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
-            >
-              {{ price(format)
-              }}<span class="font-normal text-ink-muted">
-                {{ $t('cutting.material.perSheet') }}</span
+            <!-- Size and price on one line where the width allows, and two
+                 lines where it does not — «18 mm · 2800×2070 mm» beside
+                 «315 000 so'm / list» is wider than a 375px sheet. `flex-wrap`
+                 makes that the row's own decision: both parts keep their full
+                 width and the price drops to a second line, right-aligned under
+                 the size, instead of the size breaking mid-label. `flex-auto`
+                 (not `flex-1`) is what makes it: a zero flex basis would leave
+                 the wrap unreachable and truncate the size away instead. -->
+            <span class="flex min-w-0 flex-auto flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span class="min-w-0 flex-auto truncate text-[13.5px] font-semibold text-ink">
+                {{ formatLabel(format) }}
+              </span>
+              <span
+                v-if="hasPrice(format)"
+                class="ml-auto shrink-0 whitespace-nowrap text-[13.5px] font-bold text-ink"
               >
-            </span>
-            <span v-else class="shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
-              {{ $t('cutting.material.priceOnRequest') }}
+                <!-- `&nbsp;`, not a template space: the compiler condenses the
+                     whitespace around an interpolation away, and on its own
+                     line the price then read «315 000 so'm/ list». -->
+                {{ price(format)
+                }}<span class="font-normal text-ink-muted"
+                  >&nbsp;{{ $t('cutting.material.perSheet') }}</span
+                >
+              </span>
+              <span v-else class="ml-auto shrink-0 whitespace-nowrap text-[12.5px] text-ink-muted">
+                {{ $t('cutting.material.priceOnRequest') }}
+              </span>
             </span>
           </button>
         </div>

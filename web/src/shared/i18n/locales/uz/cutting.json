@@ -69,6 +69,8 @@
     "searchLabel": "Material qidirish",
     "searchPlaceholder": "Dekor nomi yoki kodi — Sonoma, H1145, сонома",
     "searchEmpty": "Bu so'rov bo'yicha material topilmadi.",
+    "typeFilter": "Material turi",
+    "typeAll": "Barchasi",
     "pickerEmpty": "Bu filialda material yo‘q.",
     "discontinued": "Ishlab chiqarishdan chiqqan",
     "perSheet": "/ list",
@@ -131,7 +133,7 @@
     "hintReadOnly": "Bu chizma buyurtmaga biriktirilgan",
     "hintNoBranch": "Avval ustaxona tanlang",
     "hintNoParts": "Avval detal qo'shing",
-    "hintIncomplete": "To'ldirilmagan qatorlarni to'ldiring",
+    "hintIncomplete": "{n} qator to'ldirilmagan",
     "hintOverCap": "{max} donadan oshib ketdi",
     "grainFitError": "Tekstura yo'nalishi qat'iy — detal {length}×{width} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).",
     "sizeFitError": "Detal listga sig'maydi — maksimal {length}×{width} mm (list − 2×{trim} mm chetki qirqim).",
@@ -139,6 +141,7 @@
     "ctaViewResult": "Natijani ko'rish",
     "addMaterialClient": "+ Material",
     "draftActionsAria": "Chizma amallari",
+    "toggleGroupAria": "«{name}» guruhini yig'ish yoki yoyish",
     "catalogCaption": "{workshopBranch} katalogi · {n} ta dekor",
     "tapeCatalogCaption": "{workshopBranch} · {n} ta kromka dekori"
   },
@@ -149,7 +152,6 @@
     "lengthAria": "Uzunlik millimetr",
     "widthAria": "Kenglik millimetr",
     "closeActions": "Amallar menyusini yopish",
-    "rowActionsAria": "Detal #{n} amallari",
     "duplicate": "Nusxalash",
     "moveToMaterial": "Boshqa materialga ko'chirish",
     "materialMissing": "Bu qatordagi list materiali endi katalogda yo'q — boshqasini tanlang.",
@@ -464,7 +466,7 @@
     "sheetTitle": "Detal #{n}",
     "save": "Saqlash",
     "saveAndNext": "Saqlash va yana",
-    "delete": "O'chirish"
+    "delete": "Detalni o'chirish"
   },
   "branchRow": {
     "closed": "vaqtincha yopiq",

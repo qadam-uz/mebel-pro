@@ -468,7 +468,12 @@ const optimizeDisabledHint = computed(() => {
   if (isReadOnly.value) return t('cutting.editor.hintReadOnly')
   if (!activeBranchId.value) return t('cutting.editor.hintNoBranch')
   if (parts.value.length === 0) return t('cutting.editor.hintNoParts')
-  if (!hasPersistableParts.value) return t('cutting.editor.hintIncomplete')
+  // Decision 27(d): the count, not the instruction. «To'ldirilmagan qatorlarni
+  // to'ldiring» is 34 characters that say what the reader can already see, and
+  // it was what pushed the sticky bar onto a second row at 375px; the number is
+  // both shorter and the fact the reader does not have.
+  if (!hasPersistableParts.value)
+    return t('cutting.editor.hintIncomplete', { n: errorCount.value }, errorCount.value)
   if (totalQuantity.value > MAX_PARTS) return t('cutting.editor.hintOverCap', { max: MAX_PARTS })
   return ''
 })
@@ -1316,14 +1321,39 @@ const sheetPartIndex = computed(() =>
   parts.value.findIndex((part) => part.part_ref === sheetPartRef.value),
 )
 const sheetGroupTape = computed(() => groupTapeFor(sheetPart.value?.material_id ?? null))
+// Decision 27(c): the sheet's «Detalni o'chirish» belongs to a row the list
+// already shows. A part the sheet itself just minted («Saqlash va yana») has
+// nothing to delete — closing discards it — so it renders no delete button and
+// leaves no empty row behind.
+const sheetPartIsNew = ref(false)
 
 function openPartSheet(part: CuttingPart) {
   sheetPartRef.value = part.part_ref
+  sheetPartIsNew.value = false
   armedThicknessMm.value = armedThicknessFor(groupTapeFor(part.material_id))
 }
 
 function closePartSheet() {
+  const current = sheetPart.value
+  const index = sheetPartIndex.value
   sheetPartRef.value = null
+  // Discard, not delete: an untouched row the user never filled is not a thing
+  // they made, so it goes silently — no undo toast, nothing in the list.
+  if (sheetPartIsNew.value && current && index >= 0 && partIsUntouched(current)) {
+    parts.value = parts.value.filter((_, at) => at !== index)
+  }
+  sheetPartIsNew.value = false
+}
+
+/** A freshly minted row nobody has typed into yet. */
+function partIsUntouched(part: CuttingPart) {
+  return (
+    !part.name &&
+    part.length_mm === 0 &&
+    part.width_mm === 0 &&
+    part.quantity === 0 &&
+    edgeFields.every((side) => !part[side])
+  )
 }
 
 /** «Saqlash va yana»: keep the flow going with a fresh part in the same group. */
@@ -1333,7 +1363,10 @@ function savePartAndNext() {
   const index = sheetPartIndex.value
   addRow(current.material_id, current, index)
   const next = parts.value[index + 1]
-  if (next) sheetPartRef.value = next.part_ref
+  if (next) {
+    sheetPartRef.value = next.part_ref
+    sheetPartIsNew.value = true
+  }
 }
 
 function clearActivePart() {
@@ -1641,14 +1674,9 @@ function applyMaterialPicker(materialId: string) {
   closeMaterialPicker()
 }
 
-// `{workshop} katalogi · N ta dekor` — the picker's foot line, so the client
-// can see WHOSE prices these are without leaving the sheet.
-const materialCatalogCaption = computed(() =>
-  t('cutting.editor.catalogCaption', {
-    workshopBranch: clientBranchLabel.value,
-    n: materialPickerGroups.value.length,
-  }),
-)
+// The material picker composes its own `{workshop} katalogi · N ta dekor` from
+// this name, because the count has to follow the type chip it owns; the tape
+// picker has no such filter, so its caption is still written here.
 const tapeCatalogCaption = computed(() =>
   t('cutting.editor.tapeCatalogCaption', {
     workshopBranch: clientBranchLabel.value,
@@ -2709,7 +2737,7 @@ onBeforeRouteLeave(async () => {
                       :class="
                         inOrderWizard
                           ? 'text-[14.5px] font-semibold text-ink'
-                          : 'mt-1 text-sm text-ink-muted'
+                          : 'mt-1 text-[13px] text-ink-muted md:text-sm'
                       "
                     >
                       <!-- Counts only. The m² was an estimate of the parts, not
@@ -2946,9 +2974,87 @@ onBeforeRouteLeave(async () => {
                           : 'sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2'
                       "
                     >
+                      <!-- Decision 27(a): on phones the head is TWO lines. In one
+                           row the counts and the «to'ldirilmagan» pill are
+                           `shrink-0` and the name is the only flexible thing on
+                           it, so a 46-character decor label truncated to two or
+                           three characters — the head stopped naming its own
+                           material. Line 1 is the material alone (thumb, name,
+                           collapse chevron), line 2 the counts and the pill.
+                           Two sibling controls rather than one wrapping the
+                           other: the name opens the picker, the chevron
+                           collapses, and neither nests inside the other. -->
+                      <div v-if="isClientEditor" class="w-full min-w-0 md:hidden">
+                        <div class="flex min-h-11 items-center gap-2.5">
+                          <AuthFileImage
+                            v-if="groupDecorImageId(group.materialId)"
+                            :file-id="groupDecorImageId(group.materialId)"
+                            alt=""
+                            class="size-6 shrink-0 rounded-md border border-hairline object-cover"
+                          />
+                          <span
+                            v-else
+                            class="size-6 shrink-0 rounded-md border border-hairline"
+                            :style="
+                              group.materialId
+                                ? groupSwatchStyle(group.materialId)
+                                : { background: 'var(--color-ink-muted)' }
+                            "
+                            aria-hidden="true"
+                          ></span>
+                          <button
+                            v-if="!isReadOnly && group.materialId"
+                            type="button"
+                            class="min-w-0 max-w-full self-stretch truncate border-b border-dashed border-ink-muted text-left text-[13.5px] font-extrabold text-ink"
+                            @click="openGroupMaterial(group, $event)"
+                          >
+                            {{ group.label }}
+                          </button>
+                          <span
+                            v-else
+                            class="min-w-0 max-w-full truncate text-[13.5px] font-extrabold text-ink"
+                            >{{ group.label }}</span
+                          >
+                          <button
+                            type="button"
+                            class="ml-auto grid size-11 shrink-0 place-items-center text-ink-muted"
+                            :aria-expanded="!collapsedGroupKeys.has(group.key)"
+                            :aria-label="
+                              $t('cutting.editor.toggleGroupAria', { name: group.label })
+                            "
+                            @click="toggleGroup(group.key)"
+                          >
+                            <Icon
+                              :name="
+                                collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'
+                              "
+                              class="size-4"
+                            />
+                          </button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 pb-0.5">
+                          <span class="min-w-0 truncate text-[12.5px] font-bold text-ink-muted">
+                            {{ group.quantity }} {{ $t('cutting.unit.part', group.quantity) }} ·
+                            {{ group.areaM2.toFixed(1) }} {{ $t('cutting.unit.areaM2') }}
+                          </span>
+                          <span
+                            v-if="groupErrorCount(group.key) > 0"
+                            class="shrink-0 rounded-md bg-danger-soft px-2 py-0.5 text-[12.5px] font-bold text-danger"
+                          >
+                            {{
+                              $t(
+                                'cutting.editor.unfilledCount',
+                                { n: groupErrorCount(group.key) },
+                                groupErrorCount(group.key),
+                              )
+                            }}
+                          </span>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
+                        :class="isClientEditor ? 'max-md:hidden' : ''"
                         @click="toggleGroup(group.key)"
                       >
                         <span class="flex min-w-0 flex-1 items-center gap-3">
@@ -3160,7 +3266,7 @@ onBeforeRouteLeave(async () => {
                       <button
                         v-if="!isReadOnly"
                         type="button"
-                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13.5px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
+                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-hairline-strong text-[13px] font-bold text-ink-soft transition hover:border-accent hover:text-ink"
                         @click="addGroupRow(group)"
                       >
                         <Icon name="plus" class="size-4" />
@@ -3222,7 +3328,7 @@ onBeforeRouteLeave(async () => {
                   >
                     <button
                       type="button"
-                      class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink"
+                      class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-[13px] font-bold text-ink-muted transition hover:border-accent hover:bg-neutral-soft hover:text-ink md:text-sm"
                       :class="
                         inOrderWizard ? 'h-10 min-h-10 rounded-[11px] px-4 text-[13.5px]' : ''
                       "
@@ -3290,37 +3396,47 @@ onBeforeRouteLeave(async () => {
               <!-- In the wizard the action row is a plain right-aligned row under the
              card, as the design draws it: the list is one card on one screen, so
              a sticky bar would be chrome floating over content it never covers. -->
+              <!-- Decision 27(d): the bar never grows. One row, `flex-nowrap`,
+                   every region but the hint `shrink-0` — so the bar is the same
+                   height at 375px whether the hint is there or not, and a long
+                   hint truncates instead of wrapping the button onto a second
+                   row that covers the parts it is talking about. -->
               <div
                 v-if="!inOrderWizard && parts.length > 0"
-                class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur"
+                class="sticky bottom-0 z-20 mt-4 flex items-center gap-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-2.5 shadow-[0_-6px_24px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)] backdrop-blur md:gap-3 md:py-3"
               >
-                <div class="text-sm">
-                  <span class="font-bold text-ink"
+                <div class="mr-auto shrink-0 text-[13px] md:text-sm">
+                  <!-- The phone keeps only the figure the cap governs. «N xil»
+                       and «/ 300» are context, and at 375px they are what would
+                       otherwise squeeze the hint beside them down to «3 qator
+                       to'…» — the same truncated-to-nothing failure the group
+                       head had (decision 27a). -->
+                  <span class="font-bold text-ink max-md:hidden"
                     >{{ parts.length }} {{ $t('cutting.unit.kind', parts.length) }} ·
-                    {{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
+                  </span>
+                  <span class="font-bold text-ink"
+                    >{{ totalQuantity }} {{ $t('cutting.unit.piece', totalQuantity) }}</span
                   >
-                  <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
+                  <span class="text-ink-muted max-md:hidden"> / {{ MAX_PARTS }}</span>
                 </div>
-                <div class="flex flex-wrap items-center justify-end gap-3">
-                  <!-- The blocker states itself as a chip rather than a whispered
+                <!-- The blocker states itself as a chip rather than a whispered
                  note: it is the reason the button beside it will not move, and
                  on a touch screen a `title` tooltip never appears at all. -->
-                  <span
-                    v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
-                    class="inline-flex items-center rounded-[10px] bg-warning-soft px-[11px] py-[9px] text-[12.5px] font-semibold text-warning"
-                  >
-                    {{ primaryCtaHint }}
-                  </span>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-primary"
-                    :disabled="primaryCtaDisabled"
-                    :title="primaryCtaHint"
-                    @click="runPrimaryCta"
-                  >
-                    {{ primaryCtaLabel }}
-                  </button>
-                </div>
+                <span
+                  v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
+                  class="min-w-0 flex-1 truncate text-center text-[12.5px] font-semibold text-warning md:flex-none md:rounded-[10px] md:bg-warning-soft md:px-[11px] md:py-[9px] md:text-left"
+                >
+                  {{ primaryCtaHint }}
+                </span>
+                <button
+                  type="button"
+                  class="mp-button mp-button-primary shrink-0 max-md:h-11 max-md:min-h-11 max-md:px-3 max-md:text-[13.5px]"
+                  :disabled="primaryCtaDisabled"
+                  :title="primaryCtaHint"
+                  @click="runPrimaryCta"
+                >
+                  {{ primaryCtaLabel }}
+                </button>
               </div>
             </div>
             <!-- Levelled with the row it is editing rather than pinned to the
@@ -3540,6 +3656,7 @@ onBeforeRouteLeave(async () => {
       :decor="sheetGroupTape"
       :selected-thickness-mm="armedThicknessFor(sheetGroupTape)"
       :foreign-tape-label="foreignTapeLabel"
+      :deletable="!sheetPartIsNew"
       @close="closePartSheet"
       @save="closePartSheet"
       @save-and-next="savePartAndNext"
@@ -3574,7 +3691,7 @@ onBeforeRouteLeave(async () => {
       :loading="cutting.materialsLoading"
       :current-id="materialPickerCurrentId"
       :search="materialPickerSearch"
-      :caption="materialCatalogCaption"
+      :branch="clientBranchLabel"
       :anchor="materialPickerAnchor"
       @close="closeMaterialPicker"
       @update:search="materialPickerSearch = $event"
