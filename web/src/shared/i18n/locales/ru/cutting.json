@@ -133,7 +133,7 @@
     "hintReadOnly": "Раскрой привязан к заказу",
     "hintNoBranch": "Сначала выберите мастерскую",
     "hintNoParts": "Сначала добавьте деталь",
-    "hintIncomplete": "Заполните незаполненные строки",
+    "hintIncomplete": "{n} строка не заполнена | {n} строки не заполнены | {n} строк не заполнено",
     "hintOverCap": "Превышен предел {max} шт.",
     "grainFitError": "Направление текстуры задано жёстко — деталь должна помещаться в {length}×{width} мм (повернуть нельзя).",
     "sizeFitError": "Деталь не помещается на лист — максимум {length}×{width} мм (лист − 2×{trim} мм краевой обрез).",
@@ -141,6 +141,7 @@
     "ctaViewResult": "Посмотреть результат",
     "addMaterialClient": "+ Материал",
     "draftActionsAria": "Действия с чертежом",
+    "toggleGroupAria": "Свернуть или развернуть группу «{name}»",
     "catalogCaption": "Каталог {workshopBranch} · {n} декоров",
     "tapeCatalogCaption": "{workshopBranch} · {n} декоров кромки"
   },
@@ -151,7 +152,6 @@
     "lengthAria": "Длина в миллиметрах",
     "widthAria": "Ширина в миллиметрах",
     "closeActions": "Закрыть меню действий",
-    "rowActionsAria": "Действия детали #{n}",
     "duplicate": "Дублировать",
     "moveToMaterial": "Перенести в другой материал",
     "materialMissing": "Листового материала этой строки больше нет в каталоге — выберите другой.",
@@ -466,7 +466,7 @@
     "sheetTitle": "Деталь #{n}",
     "save": "Сохранить",
     "saveAndNext": "Сохранить и ещё",
-    "delete": "Удалить"
+    "delete": "Удалить деталь"
   },
   "branchRow": {
     "closed": "временно закрыт",

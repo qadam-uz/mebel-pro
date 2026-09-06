@@ -3356,6 +3356,19 @@
     padding: 5px;
   }
 
+  /* Raised from inside a modal or a bottom sheet.
+     `ActionMenu` teleports its panel to <body> at z-60, which is *under* the
+     modal layer (z-80) — so a ⋯ inside `CuttingBottomSheet` opened, took focus
+     and painted behind the sheet: `elementFromPoint` over the panel returned
+     the sheet's own scroller, and the trigger read as dead (decision 27c).
+     While any overlay holds the shared body scroll lock the page behind it is
+     inert, so a menu that is open then can only have been opened from inside
+     that overlay — it rides the same tier a `ConfirmDialog` raised from a modal
+     uses (DESIGN.md, the overlay z-ladder). Toasts at z-90 still win. */
+  body.modal-open .mp-action-menu {
+    z-index: 85;
+  }
+
   .mp-action-menu-item {
     display: flex;
     width: 100%;

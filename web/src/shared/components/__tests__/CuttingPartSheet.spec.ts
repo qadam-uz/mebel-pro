@@ -30,7 +30,7 @@ let wrapper: VueWrapper | null = null
  * captions are not in the wrapper's own subtree; the three numeric fields
  * (Uzunlik · Kenglik · Soni) each carry one, and Soni's is the last.
  */
-function quantityCaption(quantity: number): string {
+function mountSheet(quantity = 1, deletable = true) {
   wrapper = mount(CuttingPartSheet, {
     props: {
       open: true,
@@ -40,12 +40,26 @@ function quantityCaption(quantity: number): string {
       decor: null,
       selectedThicknessMm: null,
       foreignTapeLabel: () => '',
+      deletable,
     },
-    global: { stubs: { Icon: true, ActionMenu: true, CuttingEdgeSides: true } },
+    global: { stubs: { Icon: true, CuttingEdgeSides: true } },
     attachTo: document.body,
   })
+  return wrapper
+}
+
+function quantityCaption(quantity: number): string {
+  mountSheet(quantity)
   const captions = [...document.querySelectorAll('span.mt-1.block.text-center')]
   return captions[captions.length - 1]?.textContent?.trim() ?? ''
+}
+
+function deleteButton(): HTMLElement | null {
+  return (
+    [...document.querySelectorAll<HTMLElement>('[role="dialog"] button')].find((button) =>
+      button.textContent?.includes("Detalni o'chirish"),
+    ) ?? null
+  )
 }
 
 afterEach(async () => {
@@ -82,5 +96,36 @@ describe('CuttingPartSheet — the quantity caption agrees with the quantity', (
     await setLocale('uz-Cyrl')
 
     expect(quantityCaption(quantity)).toBe('дона')
+  })
+})
+
+/**
+ * Decision 27(c). The ⋯ that used to carry «O'chirish» is gone — its teleported
+ * panel painted under the sheet's own layer, so on a phone the trigger opened
+ * onto nothing. The action is a button at the end of the form instead, and only
+ * a row the list already shows can be deleted.
+ */
+describe("CuttingPartSheet — «Detalni o'chirish» replaces the head ⋯", () => {
+  it('carries no action menu in the head', () => {
+    mountSheet()
+
+    expect(document.querySelector('[role="dialog"] .mp-action-menu-wrap')).toBeNull()
+  })
+
+  it('emits delete from the form button for an existing part', async () => {
+    const sheet = mountSheet(1, true)
+    const button = deleteButton()
+
+    expect(button).not.toBeNull()
+    button?.click()
+    await sheet.vm.$nextTick()
+
+    expect(sheet.emitted('delete')).toHaveLength(1)
+  })
+
+  it('offers no delete for a part the sheet has just created', () => {
+    mountSheet(1, false)
+
+    expect(deleteButton()).toBeNull()
   })
 })

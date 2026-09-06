@@ -84,10 +84,14 @@ function variantLines(decor: TapeDecor): string[] {
 </script>
 
 <template>
+  <!-- `raised`: this picker is opened from the «Detal» sheet as often as from
+       the group line, and at the plain modal tier it lost the tie to that
+       sheet and opened behind it. -->
   <CuttingBottomSheet
     :open="open"
     :title="$t('cutting.edge.pickerTitle')"
     max-width="sm:max-w-[560px]"
+    raised
     @close="emit('close')"
   >
     <template #pinned>
@@ -114,7 +118,7 @@ function variantLines(decor: TapeDecor): string[] {
             id="cutting-tape-picker-search"
             v-model="search"
             type="search"
-            class="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-ink outline-none"
+            class="min-w-0 flex-1 border-0 bg-transparent p-0 text-base text-ink outline-none md:text-sm"
             :placeholder="$t('cutting.edge.searchPlaceholder')"
           />
         </span>
@@ -122,7 +126,7 @@ function variantLines(decor: TapeDecor): string[] {
       </div>
     </template>
 
-    <p v-if="rows.length === 0" class="px-1 py-8 text-center text-sm text-ink-muted">
+    <p v-if="rows.length === 0" class="px-1 py-8 text-center text-[13px] text-ink-muted md:text-sm">
       {{ decors.length === 0 ? $t('cutting.edge.emptyInBranch') : $t('cutting.edge.noMatches') }}
     </p>
 
@@ -151,7 +155,9 @@ function variantLines(decor: TapeDecor): string[] {
           @click="selectedKey = decor.key"
         >
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-bold text-ink">{{ decor.label }}</span>
+            <span class="block truncate text-[13.5px] font-bold text-ink md:text-sm">{{
+              decor.label
+            }}</span>
             <span class="mt-0.5 block text-[12.5px] leading-[1.35] text-ink-muted">
               <span
                 v-for="(line, index) in variantLines(decor)"
