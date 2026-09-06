@@ -9,7 +9,7 @@ import {
   panelFillPercent,
   resultTotals,
   sheetEdgeLine,
-  squareMetres,
+  workshopResultFigures,
 } from '@/shared/app/cuttingResultsDisplay'
 import { materialSwatchStyle } from '@/shared/app/cuttingDisplay'
 import { snapshotMaterialLabel, snapshotValue } from '@/shared/app/materialLabel'
@@ -82,60 +82,22 @@ const planRows = computed(() =>
     .sort((left, right) => left.label.localeCompare(right.label, 'uz')),
 )
 
-/** `metres()` carries its own unit, which the KPI cell prints separately — it
- *  would read "26.38 m m". */
-function bareMetres(mm: number) {
-  return (mm / 1000).toFixed(2)
-}
-
-/** The six figures the operator reads out loud, value first. They replaced a
- *  label/value list in an aside: the same numbers, but a list beside the plan
- *  rows made them look like a footnote to the materials rather than the result
- *  of the whole optimisation. */
-const kpiRows = computed(() => {
-  const value = totals.value
-  const fills = planRows.value
-    .map((row) => row.fill)
-    .filter((fill): fill is number => fill !== null)
-  const usedPercent = fills.length
-    ? Math.round(fills.reduce((sum, fill) => sum + fill, 0) / fills.length)
-    : 0
-  return [
-    {
-      key: 'sheets',
-      value: String(value.sheets),
-      unit: t('cutting.unit.sheet', value.sheets),
-      label: t('cutting.result.kpiSheets'),
-    },
-    {
-      key: 'parts',
-      value: String(value.placedParts),
-      unit: t('cutting.unit.part', value.placedParts),
-      label: t('cutting.result.kpiPlaced'),
-    },
-    { key: 'fill', value: String(usedPercent), unit: '%', label: t('cutting.result.kpiFill') },
-    // An em dash rather than 0: a drawing with no banding has no tape figure,
-    // and a zero invites the reader to look for one.
-    {
-      key: 'edge',
-      value: value.edgeConsumedMm > 0 ? bareMetres(value.edgeConsumedMm) : '\u2014',
-      unit: value.edgeConsumedMm > 0 ? t('cutting.unit.metre') : '',
-      label: t('cutting.result.kpiEdge'),
-    },
-    {
-      key: 'offcuts',
-      value: value.usableOffcutCount ? squareMetres(value.usableOffcutAreaMm2) : '\u2014',
-      unit: value.usableOffcutCount ? t('cutting.unit.areaM2') : '',
-      label: t('cutting.result.kpiOffcuts'),
-    },
-    {
-      key: 'cut',
-      value: bareMetres(value.cutLengthMm),
-      unit: t('cutting.unit.metre'),
-      label: t('cutting.result.kpiCut'),
-    },
-  ]
-})
+/**
+ * The five figures the operator reads out loud — **Detallar · Listlar · Kromka ·
+ * Foydali qoldiq · Chiqim** (§13 W3) — from the composer the result stage and the
+ * client app already share, so the numbers quoted at the counter and the ones
+ * read at home are worded identically. «Arra yo'li» is gone from both: a propil
+ * length is a saw-planning number nobody reads off a summary.
+ *
+ * They sit in a strip above the material rows rather than in an aside beside
+ * them, which is where they started — a list next to the plan read as a footnote
+ * to the materials rather than as the result of the whole optimisation. The cell
+ * is what the shared composer changed: a value carrying its own unit and, for
+ * the offcut, its count («2 dona · 2.50 m²») is a phrase, not a headline
+ * numeral, so the label leads and the value sits under it at the client card's
+ * weight instead of being split into a number and a unit.
+ */
+const kpiRows = computed(() => workshopResultFigures(props.result))
 
 const edgeRegistry = computed(() => deriveSnapshotEdgeRegistry(props.result.parts_snapshot ?? []))
 
@@ -187,25 +149,27 @@ function sourceLabel(own: boolean) {
           </span>
         </div>
 
-        <!-- Six figures across the top, hairline-separated. The gap IS the rule:
+        <!-- Five figures across the top, hairline-separated. The gap IS the rule:
              a 1px grid gap over a divider-coloured backdrop draws the lines, so
              the cells reflow at any count without a border that ends up doubled
-             or orphaned at a wrap. -->
+             or orphaned at a wrap. The cell is 150px at its narrowest, not the
+             132px a bare numeral needed: these values carry their unit and the
+             offcut carries its count, and a figure that wraps mid-phrase reads
+             as two figures. -->
         <dl
-          class="mb-5 grid gap-px overflow-hidden rounded-xl bg-divider [grid-template-columns:repeat(auto-fit,minmax(132px,1fr))]"
+          class="mb-5 grid gap-px overflow-hidden rounded-xl bg-divider [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]"
         >
           <div v-for="row in kpiRows" :key="row.key" class="bg-sunk px-3.5 pb-[13px] pt-3">
-            <dd class="flex items-baseline gap-1">
-              <span
-                class="num font-display text-[23px] font-bold leading-none tracking-[-0.03em] text-ink"
-              >
-                {{ row.value }}
-              </span>
-              <span v-if="row.unit" class="text-xs font-semibold text-ink-soft">{{
-                row.unit
-              }}</span>
+            <dt class="text-[11.5px] text-ink-muted">{{ row.label }}</dt>
+            <!-- 17px until `xl`, where the frame's content column finally gives
+                 each of the five cells the ~160px «2 dona · 1.98 m²» needs on
+                 one line. A figure that breaks mid-phrase reads as two figures,
+                 and this is the widest of them. -->
+            <dd
+              class="num mt-[3px] font-display text-[17px] font-bold leading-tight tracking-[-0.03em] text-ink xl:text-[19px]"
+            >
+              {{ row.value }}
             </dd>
-            <dt class="mt-[5px] text-[11.5px] text-ink-muted">{{ row.label }}</dt>
           </div>
         </dl>
 

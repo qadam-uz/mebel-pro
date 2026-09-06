@@ -11,7 +11,7 @@ import {
   numberSnapshot,
   panelDisplayIndex,
   resultTotals,
-  squareMetres,
+  workshopResultFigures,
 } from '@/shared/app/cuttingResultsDisplay'
 import { snapshotValue } from '@/shared/app/materialLabel'
 import CuttingPartsList from '@/shared/components/CuttingPartsList.vue'
@@ -148,87 +148,41 @@ const activePanelGroups = computed(() =>
 
 // D3.2: the order-level figures, which until now only existed on the order
 // detail screen — so reading a fresh result meant leaving it. Nothing here is a
-// new API field; `resultTotals` derives all five from the payload the optimizer
-// already returns.
+// new API field; every figure is derived from the payload the optimizer already
+// returns.
+//
+// §7.7 + §13 W3: **Detallar · Listlar · Kromka · Foydali qoldiq** on the client,
+// the same four plus **Chiqim** on the workshop. «Arra yo'li» is gone from both
+// — a propil length is a saw-planning number nobody reads off a summary — and
+// yield is the one figure the shop keeps and a client quoted a fixed price
+// cannot act on.
+//
+// One composer per role and the same order in both, shared with the result
+// stage's price card: those sit on the same screen at different widths, so two
+// copies meant «Detallar 2 / 2 · Kromka lentasi» beside «Detallar 2 ta ·
+// Kromka». The one thing a composer has no room for is the shortage, which on a
+// placed client order is the only signal that a part did not fit — so it is
+// spelled out here in words as well as coloured (colour alone is never the
+// signal, DESIGN.md).
 const summaryRows = computed(() => {
   const totals = resultTotals(props.result)
   const missing = Math.max(0, totals.requestedParts - totals.placedParts)
-  // §7.7: four figures on the client — Detallar, Listlar, Kromka, Foydali
-  // qoldiq. «Arra yo'li» is a saw metric the shop plans around and «Chiqim» is
-  // the shop's yield; a client who is quoted a fixed price cannot act on
-  // either, so both stay in the workshop app.
-  //
-  // One composer for those four (`clientResultFigures`), shared with the result
-  // stage's price card: they sit on the same screen at different widths, so two
-  // copies meant «Detallar 2 / 2 · Kromka lentasi» beside «Detallar 2 ta ·
-  // Kromka». The one thing the card has no room for is the shortage, which on
-  // the client app is the only signal that a part did not fit — so it is spelled
-  // out here in words as well as coloured (colour alone is never the signal,
-  // DESIGN.md).
-  if (isClientView.value) {
-    return clientResultFigures(props.result).map((figure) =>
-      figure.key === 'parts' && missing
-        ? {
-            ...figure,
-            value: t('cutting.result.summaryPartsShort', {
-              placed: totals.placedParts,
-              requested: totals.requestedParts,
-              n: missing,
-            }),
-            short: true,
-          }
-        : { ...figure, short: false },
-    )
-  }
-  const rows = [
-    {
-      key: 'parts',
-      label: t('cutting.result.summaryParts'),
-      value: missing
-        ? t('cutting.result.summaryPartsShort', {
+  const figures = isClientView.value
+    ? clientResultFigures(props.result)
+    : workshopResultFigures(props.result)
+  return figures.map((figure) =>
+    figure.key === 'parts' && missing
+      ? {
+          ...figure,
+          value: t('cutting.result.summaryPartsShort', {
             placed: totals.placedParts,
             requested: totals.requestedParts,
             n: missing,
-          })
-        : t('cutting.result.summaryPartsValue', {
-            placed: totals.placedParts,
-            requested: totals.requestedParts,
           }),
-      short: missing > 0,
-    },
-    {
-      key: 'sheets',
-      label: t('cutting.result.summarySheets'),
-      value: `${totals.sheets} ${t('cutting.unit.sheet', totals.sheets)}`,
-      short: false,
-    },
-    {
-      key: 'cut',
-      label: t('cutting.result.summaryCutLength'),
-      value: metres(totals.cutLengthMm),
-      short: false,
-    },
-    {
-      key: 'edge',
-      label: t('cutting.result.summaryEdge'),
-      // Em-dash rather than "0.00 m": a drawing with no banding at all has no
-      // tape figure, and printing a zero invites the reader to look for one.
-      value: totals.edgeConsumedMm > 0 ? metres(totals.edgeConsumedMm) : '—',
-      short: false,
-    },
-    {
-      key: 'offcuts',
-      label: t('cutting.result.summaryOffcuts'),
-      value: totals.usableOffcutCount
-        ? t('cutting.result.summaryOffcutsValue', {
-            n: totals.usableOffcutCount,
-            area: squareMetres(totals.usableOffcutAreaMm2),
-          })
-        : '—',
-      short: false,
-    },
-  ]
-  return rows
+          short: true,
+        }
+      : { ...figure, short: false },
+  )
 })
 
 watch(

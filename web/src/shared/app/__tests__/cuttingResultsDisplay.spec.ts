@@ -8,11 +8,13 @@ import {
   panelDisplayIndex,
   panelEdgeConsumedByMaterial,
   panelFillPercent,
+  resultFillPercent,
   resultSheetPartGroups,
   resultTotals,
   sheetEdgeLine,
   snapshotShortLabel,
   squareMetres,
+  workshopResultFigures,
 } from '@/shared/app/cuttingResultsDisplay'
 import { DEFAULT_LOCALE, setLocale } from '@/shared/i18n'
 import type {
@@ -376,9 +378,109 @@ describe('resultTotals', () => {
     expect(totals.usableOffcutAreaMm2).toBe(2_500_000)
     expect(squareMetres(totals.usableOffcutAreaMm2)).toBe('2.50')
   })
+})
 
-  it('carries the propil length through untouched', () => {
-    expect(resultTotals(result({ total_cut_length_mm: 53_800 })).cutLengthMm).toBe(53_800)
+/**
+ * «Chiqim», the workshop's fifth figure. Two properties are load-bearing and
+ * neither shows up in a screenshot: the mean is **area-weighted** (an unweighted
+ * one over the sheets lets a small offcut-heavy board outvote the big ones the
+ * money is in), and a sheet whose frozen snapshot carries no size is left out of
+ * the arithmetic entirely rather than counted as zero area.
+ */
+describe('resultFillPercent', () => {
+  const panel = (id: string, wasteMm2: number): CuttingPanel => ({
+    id,
+    material_id: id,
+    panel_index: 1,
+    waste_area_mm2: wasteMm2,
+    offcuts: [],
+    placements: [],
+  })
+
+  it('weights the yield by sheet area rather than averaging the sheets', () => {
+    const fill = resultFillPercent(
+      result({
+        // 4 m² fully used beside 1 m² half wasted: weighted 90%, a plain mean of
+        // the two sheets would say 75%.
+        panels: [panel('big', 0), panel('small', 500_000)],
+        material_snapshots: {
+          big: { length_mm: 2000, width_mm: 2000 },
+          small: { length_mm: 1000, width_mm: 1000 },
+        },
+      }),
+    )
+
+    expect(fill).toBeCloseTo(90, 5)
+  })
+
+  it('skips a sheet whose snapshot carries no size instead of scoring it zero', () => {
+    const cuttingResult = result({
+      panels: [panel('modern', 500_000), panel('sizeless', 250_000)],
+      material_snapshots: { modern: { length_mm: 2000, width_mm: 1000 } },
+    })
+
+    expect(resultFillPercent(cuttingResult)).toBeCloseTo(75, 5)
+  })
+
+  it('has no yield at all when every snapshot is sizeless', () => {
+    expect(resultFillPercent(result({ panels: [panel('sizeless', 0)] }))).toBeNull()
+  })
+})
+
+/**
+ * The workshop reads the client's four figures plus «Chiqim» (§13 W3) — one
+ * composer behind both apps, so a figure cannot be worded one way at the counter
+ * and another way at home. «Arra yo'li» is gone from both: the propil length
+ * stayed on this screen long after anyone read it off there.
+ */
+describe('workshopResultFigures', () => {
+  const panel = (): CuttingPanel => ({
+    id: 'panel-1',
+    material_id: 'panel-a',
+    panel_index: 1,
+    waste_area_mm2: 400_000,
+    offcuts: [],
+    placements: [],
+  })
+  const workshopResult = () =>
+    result({
+      panels: [panel()],
+      material_snapshots: { 'panel-a': { length_mm: 2000, width_mm: 1000 } },
+      total_cut_length_mm: 53_800,
+    })
+
+  it('adds Chiqim to the client four, in the client order', () => {
+    const figures = workshopResultFigures(workshopResult())
+
+    expect(figures.map((figure) => figure.key)).toEqual([
+      'parts',
+      'sheets',
+      'edge',
+      'offcuts',
+      'yield',
+    ])
+    expect(figures.map((figure) => figure.label)).toEqual([
+      'Detallar',
+      'Listlar',
+      'Kromka',
+      'Foydali qoldiq',
+      'Chiqim',
+    ])
+    expect(figures.at(-1)?.value).toBe('80%')
+  })
+
+  it('says exactly what the client says about the four they share', () => {
+    const cuttingResult = workshopResult()
+
+    expect(workshopResultFigures(cuttingResult).slice(0, 4)).toEqual(
+      clientResultFigures(cuttingResult),
+    )
+  })
+
+  it('prints an em dash rather than 0% when the yield cannot be derived', () => {
+    const figures = workshopResultFigures(result({ panels: [panel()] }))
+
+    expect(figures.find((figure) => figure.key === 'yield')?.value).toBe('—')
   })
 })
 
