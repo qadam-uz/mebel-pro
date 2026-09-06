@@ -7,9 +7,10 @@ The `material_snapshots` fixtures here deliberately use the **legacy** key
 vocabulary (`kind`/`type`/`name`/`color`/`decor_code`/`panel_length_mm`/…).
 `cutting_results.material_snapshots` is frozen history the reshape migration does
 not rewrite, so the PDF must keep rendering pre-reshape results byte-identically.
-`test_a_new_vocabulary_snapshot_prints_the_same_summary_row` covers the other
-side, with `_NEW_PANEL_SNAPSHOT` holding exactly what
-`catalog.branch_material_snapshot` writes today.
+`test_every_vocabulary_snapshot_prints_the_same_summary_row` covers the other
+two, with `_NEW_PANEL_SNAPSHOT` holding exactly what
+`catalog.branch_material_snapshot` writes today and `_UZBEK_PANEL_SNAPSHOT` the
+reshape-era keys most of the historical rows are actually written in.
 """
 
 import re
@@ -20,6 +21,7 @@ from io import BytesIO
 from typing import Any
 
 import pytest
+from app.core.material_label import snapshot_sheet_size
 from app.core.order_number import format_order_number
 from app.models.enums import CuttingResultSource, CuttingResultStatus
 from app.modules.cutting import pdf_document
@@ -928,6 +930,29 @@ _LEGACY_PANEL_SNAPSHOT = {
     "panel_width_mm": 1000,
 }
 
+# The third vocabulary, written during the reshape era and the one actually
+# holding most of the historical rows: Uzbek keys. The PDF read `length_mm` and
+# `panel_length_mm` only, so every one of these sheets was drawn at a flat
+# 1000x700 no matter its real size — the map overflowed the page and the
+# summary reported >100% utilisation.
+_UZBEK_PANEL_SNAPSHOT = {
+    "id": str(PANEL_ID),
+    "tur": "ldsp",
+    "kod": "H1334 ST9",
+    "nomi": "Sanoma",
+    "tolali": False,
+    "qalinlik_mm": "18",
+    "uzunlik_mm": 1000,
+    "eni_mm": 1000,
+    "manufacturer_name": "Egger",
+}
+
+_ALL_PANEL_VOCABULARIES = (
+    _NEW_PANEL_SNAPSHOT,
+    _LEGACY_PANEL_SNAPSHOT,
+    _UZBEK_PANEL_SNAPSHOT,
+)
+
 
 def test_material_short_reads_both_snapshot_vocabularies() -> None:
     """Old and new snapshots must name the sheet the same way.
@@ -944,41 +969,37 @@ def test_material_short_reads_both_snapshot_vocabularies() -> None:
     assert pdf_document._material_short({}, str(PANEL_ID)) == str(PANEL_ID)[:8]
 
 
-def test_sheet_dimensions_read_both_snapshot_vocabularies() -> None:
+def test_sheet_dimensions_read_every_snapshot_vocabulary() -> None:
     """The sheet size drives the drawn map's scale, so a miss is silent and total."""
-    for snapshot in (_NEW_PANEL_SNAPSHOT, _LEGACY_PANEL_SNAPSHOT):
-        assert pdf_document._panel_length_for_snapshot(snapshot) == 1000
-        assert pdf_document._panel_width_for_snapshot(snapshot) == 1000
+    for snapshot in _ALL_PANEL_VOCABULARIES:
+        assert snapshot_sheet_size(snapshot) == (1000, 1000)
 
 
-def test_a_new_vocabulary_snapshot_prints_the_same_summary_row() -> None:
+def test_every_vocabulary_snapshot_prints_the_same_summary_row() -> None:
     """The summary table, not just the label helper, is vocabulary-agnostic.
 
     This is the row that names the sheet and prints its size — the two places a
-    missed legacy key degrades silently (an id fragment, and a 0x0 sheet).
+    missed key degrades silently (an id fragment, and a wrong-sized sheet).
     """
     parts = [_part()]
     panels = [_panel(PANEL_ID, panel_index=1, placements=[_placement("part-1", 0, 0)])]
 
-    legacy = _result(parts=parts, panels=panels)
-    modern = _result(parts=parts, panels=panels)
-    modern.material_snapshots = {
-        **modern.material_snapshots,
-        str(PANEL_ID): dict(_NEW_PANEL_SNAPSHOT),
-    }
-
-    def summary_row(result: CuttingResultResponse) -> tuple[str, str]:
+    def summary_row(snapshot: dict[str, Any]) -> tuple[str, str]:
+        result = _result(parts=parts, panels=panels)
+        result.material_snapshots = {**result.material_snapshots, str(PANEL_ID): dict(snapshot)}
         stats = pdf_document._material_stats(result)
         row = next(entry for entry in stats if entry.material_id == str(PANEL_ID))
-        snapshot = pdf_document._material_snapshot(result, row.material_id)
+        size = pdf_document._material_sheet_size(result, row.material_id)
         return (
-            pdf_document._material_label(snapshot, row.material_id),
-            f"{pdf_document._panel_length_for_snapshot(snapshot)}"
-            f"×{pdf_document._panel_width_for_snapshot(snapshot)}",
+            pdf_document._material_label(
+                pdf_document._material_snapshot(result, row.material_id), row.material_id
+            ),
+            f"{size.length}×{size.width}",
         )
 
-    assert summary_row(modern) == summary_row(legacy)
-    assert summary_row(modern)[1] == "1000×1000"
+    rows = [summary_row(snapshot) for snapshot in _ALL_PANEL_VOCABULARIES]
+    assert rows == [rows[0]] * len(rows)
+    assert rows[0][1] == "1000×1000"
 
 
 def test_summary_section_headers_survive_their_own_column_widths() -> None:

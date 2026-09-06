@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   clientResultFigures,
   deriveSnapshotEdgeRegistry,
+  drawnSheetSize,
   groupPanelPlacements,
   offcutLabelMode,
   panelDisplayIndex,
   panelEdgeConsumedByMaterial,
   panelFillPercent,
+  panelSheetSize,
   resultSheetPartGroups,
   resultTotals,
   sheetEdgeLine,
@@ -39,6 +41,19 @@ function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
     edge_right: null,
     ...overrides,
   }
+}
+
+function placed(
+  id: string,
+  box: Pick<CuttingPlacement, 'x_mm' | 'y_mm' | 'length_mm' | 'width_mm'>,
+) {
+  return {
+    id,
+    part_ref: 'part-a',
+    part_quantity_index: 1,
+    rotated: false,
+    ...box,
+  } satisfies CuttingPlacement
 }
 
 function result(overrides: Partial<CuttingResult> = {}): CuttingResult {
@@ -86,8 +101,8 @@ describe('cutting results display helpers', () => {
 
   // panelFillPercent returns '-' when a size is missing, so a legacy snapshot read
   // through the new keys alone would silently show '-' on every historical result
-  // — no error, no failing test. Both vocabularies are pinned.
-  it('computes the fill percentage from either snapshot vocabulary', () => {
+  // — no error, no failing test. All three vocabularies are pinned.
+  it('computes the fill percentage from any snapshot vocabulary', () => {
     const panel = (id: string): CuttingPanel => ({
       id,
       material_id: id,
@@ -97,16 +112,78 @@ describe('cutting results display helpers', () => {
       placements: [],
     })
     const cuttingResult = result({
-      panels: [panel('legacy'), panel('modern'), panel('unknown')],
+      panels: [panel('legacy'), panel('modern'), panel('uzbek'), panel('unknown')],
       material_snapshots: {
         legacy: { panel_length_mm: 2000, panel_width_mm: 1000 },
         modern: { length_mm: 2000, width_mm: 1000 },
+        uzbek: { uzunlik_mm: 2000, eni_mm: 1000 },
       },
     })
 
     expect(panelFillPercent(cuttingResult, cuttingResult.panels[0])).toBe('50.0%')
     expect(panelFillPercent(cuttingResult, cuttingResult.panels[1])).toBe('50.0%')
-    expect(panelFillPercent(cuttingResult, cuttingResult.panels[2])).toBe('-')
+    expect(panelFillPercent(cuttingResult, cuttingResult.panels[2])).toBe('50.0%')
+    // Nothing to size the sheet by: no snapshot dimensions and an empty layout.
+    expect(panelFillPercent(cuttingResult, cuttingResult.panels[3])).toBe('-')
+  })
+
+  // Twin of backend `rendering.sheet_size` — the screen map and the PDF must
+  // scale a sheet identically. Regression: a snapshot with no size in any
+  // vocabulary used to fall back to a flat 1000×700, drawing a 2800×2070 layout
+  // at 2.8× with everything spilling outside its own frame.
+  it('derives a missing sheet size from the layout, never from a constant', () => {
+    const sheetPanel: CuttingPanel = {
+      id: 'p',
+      material_id: 'mat',
+      panel_index: 1,
+      waste_area_mm2: 0,
+      placements: [
+        placed('p1', { x_mm: 0, y_mm: 0, length_mm: 1200, width_mm: 900 }),
+        placed('p2', { x_mm: 1200, y_mm: 0, length_mm: 800, width_mm: 600 }),
+      ],
+      // Offcuts fill everything the parts leave, so the extent is the sheet.
+      offcuts: [
+        { x_mm: 2000, y_mm: 0, length_mm: 800, width_mm: 2070, usable: true },
+        { x_mm: 0, y_mm: 900, length_mm: 2000, width_mm: 1170, usable: false },
+      ],
+    }
+    const sized = result({ panels: [sheetPanel], material_snapshots: { mat: { nomi: 'Panel' } } })
+
+    expect(panelSheetSize(sized, sheetPanel)).toEqual({ length: 2800, width: 2070 })
+    expect(drawnSheetSize(sized, sheetPanel)).toEqual({ length: 2800, width: 2070 })
+  })
+
+  it('widens the drawn sheet when a snapshot is smaller than its own layout', () => {
+    const sheetPanel: CuttingPanel = {
+      id: 'p',
+      material_id: 'mat',
+      panel_index: 1,
+      waste_area_mm2: 0,
+      placements: [placed('p1', { x_mm: 0, y_mm: 0, length_mm: 1200, width_mm: 900 })],
+      offcuts: [],
+    }
+    const stale = result({
+      panels: [sheetPanel],
+      material_snapshots: { mat: { length_mm: 600, width_mm: 400 } },
+    })
+
+    // The recorded size is what the summary reports…
+    expect(panelSheetSize(stale, sheetPanel)).toEqual({ length: 600, width: 400 })
+    // …but the drawing covers the placements, so nothing leaves the frame.
+    expect(drawnSheetSize(stale, sheetPanel)).toEqual({ length: 1200, width: 900 })
+  })
+
+  it('never hands a divisor of zero to a drawing of an empty panel', () => {
+    const empty: CuttingPanel = {
+      id: 'p',
+      material_id: 'mat',
+      panel_index: 1,
+      waste_area_mm2: 0,
+      placements: [],
+      offcuts: [],
+    }
+
+    expect(drawnSheetSize(result({ panels: [empty] }), empty)).toEqual({ length: 1, width: 1 })
   })
 
   it('chooses offcut label modes without clipping narrow remnants', () => {

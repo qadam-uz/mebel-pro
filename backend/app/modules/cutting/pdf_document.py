@@ -29,13 +29,12 @@ from app.core.order_number import format_order_number
 from app.modules.cutting.rendering import (
     _FONT_BOLD,
     _FONT_REGULAR,
-    _int_snapshot,
+    SheetSize,
     _material_snapshot,
-    _panel_length,
-    _panel_width,
     _parts_by_ref,
     _register_fonts,
     draw_sheet_map,
+    sheet_size,
 )
 from app.modules.cutting.schemas import CuttingPanelResponse, CuttingResultResponse
 
@@ -328,9 +327,10 @@ def _draw_materials_summary(pdf: canvas.Canvas, result: CuttingResultResponse, y
     total = MaterialStats("", 0, 0, 0, 0, 0, 0)
     for row in stats:
         snapshot = _material_snapshot(result, row.material_id)
+        size = _material_sheet_size(result, row.material_id)
         values = [
             _material_label(snapshot, row.material_id),
-            f"{_panel_length_for_snapshot(snapshot)}×{_panel_width_for_snapshot(snapshot)}",
+            f"{size.length}×{size.width}",
             str(row.sheet_count),
             str(row.piece_count),
             _m2(row.parts_area),
@@ -456,7 +456,8 @@ def _draw_sheet_title_block(
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
     material = _material_label(snapshot, panel.material_id)
-    dims = f"{_panel_length(result, panel)}×{_panel_width(result, panel)} mm"
+    size = sheet_size(result, panel)
+    dims = f"{size.length}×{size.width} mm"
     list_label = (
         f"List {group.start}" if group.start == group.end else f"List {group.start}–{group.end}"
     )
@@ -628,9 +629,18 @@ def _material_stats(result: CuttingResultResponse) -> list[MaterialStats]:
     return list(stats.values())
 
 
+def _material_sheet_size(result: CuttingResultResponse, material_id: str) -> SheetSize:
+    """Sheet size for a materials-summary row, which names a material and not a
+    panel. Every row comes from `_material_stats`, i.e. from panels, so the
+    material's first panel always exists and gives `sheet_size` its extent."""
+    for panel in result.panels:
+        if str(panel.material_id) == str(material_id):
+            return sheet_size(result, panel)
+    return SheetSize(0, 0)
+
+
 def _panel_areas(result: CuttingResultResponse, panel: CuttingPanelResponse) -> MaterialStats:
-    length = _panel_length(result, panel)
-    width = _panel_width(result, panel)
+    length, width = sheet_size(result, panel)
     sheet_area = length * width
     parts_area = sum(item.length_mm * item.width_mm for item in panel.placements)
     usable_area = sum(item.length_mm * item.width_mm for item in panel.offcuts if item.usable)
@@ -764,20 +774,6 @@ def _material_short(snapshot: dict[str, Any], material_id: str) -> str:
 def _snapshot_text(snapshot: dict[str, Any], key: str) -> str:
     value = snapshot.get(key)
     return value.strip() if isinstance(value, str) else ""
-
-
-def _panel_length_for_snapshot(snapshot: dict[str, Any]) -> int:
-    return _int_snapshot(_snapshot_size(snapshot, "length_mm", "panel_length_mm"), fallback=0)
-
-
-def _panel_width_for_snapshot(snapshot: dict[str, Any]) -> int:
-    return _int_snapshot(_snapshot_size(snapshot, "width_mm", "panel_width_mm"), fallback=0)
-
-
-def _snapshot_size(snapshot: dict[str, Any], key: str, legacy_key: str) -> Any:
-    """New snapshot key first, pre-reshape key as the fallback."""
-    value = snapshot.get(key)
-    return value if value is not None else snapshot.get(legacy_key)
 
 
 def _part_name(part: dict[str, Any], index: int) -> str:

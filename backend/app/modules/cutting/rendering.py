@@ -19,6 +19,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
+from app.core.material_label import snapshot_sheet_size
 from app.core.pdf import FONT_BOLD, FONT_REGULAR, register_pdf_fonts
 from app.modules.cutting.schemas import (
     CuttingOffcutResponse,
@@ -131,6 +132,13 @@ class _Frame(NamedTuple):
     height: float
 
 
+class SheetSize(NamedTuple):
+    """A sheet's millimetres — always resolved through `sheet_size`."""
+
+    length: int
+    width: int
+
+
 def _sheet_transform(
     panel_length: int,
     panel_width: int,
@@ -160,8 +168,15 @@ def draw_sheet_map(
     """Draw only the sheet map into `(x, y, width, height)` PDF points."""
     _register_fonts()
     parts = parts_by_ref or _parts_by_ref(result)
-    panel_length = _panel_length(result, panel)
-    panel_width = _panel_width(result, panel)
+    # The drawing's own size, which is the resolved sheet widened to hold
+    # anything that sticks out of it. `sheet_size` is the sheet as recorded and
+    # is what the document *reports*; a snapshot that disagrees with its own
+    # placements (a size edited after the fact, a hand-built fixture) must still
+    # produce a map inside its frame rather than one running off the page.
+    extent = panel_extent(panel)
+    resolved = sheet_size(result, panel)
+    panel_length = max(resolved.length, extent.length)
+    panel_width = max(resolved.width, extent.width)
     box = _Frame(*frame)
     origin_x, origin_y, scale = _sheet_transform(
         panel_length,
@@ -605,31 +620,39 @@ def _material_snapshot(result: CuttingResultResponse, material_id: object) -> di
     return result.material_snapshots.get(str(material_id), {})
 
 
-def _panel_length(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.material_id)
-    return _int_snapshot(_snapshot_size(snapshot, "length_mm", "panel_length_mm"), fallback=1000)
+def sheet_size(result: CuttingResultResponse, panel: CuttingPanelResponse) -> SheetSize:
+    """The one place a sheet's millimetres are decided. Never guesses.
 
+    `material_snapshots` is frozen history no migration rewrites, so the sheet
+    size arrives in whichever vocabulary the app spoke that day —
+    `snapshot_sheet_size` reads all three. When even that comes up empty the
+    size is *derived*, not assumed: the optimizer fills every square millimetre
+    it does not cut into a part with an offcut rectangle, so the bounding
+    extent of placements + offcuts is the sheet, minus at most the edge trim.
 
-def _panel_width(result: CuttingResultResponse, panel: CuttingPanelResponse) -> int:
-    snapshot = _material_snapshot(result, panel.material_id)
-    return _int_snapshot(_snapshot_size(snapshot, "width_mm", "panel_width_mm"), fallback=700)
-
-
-def _snapshot_size(snapshot: dict[str, object], key: str, legacy_key: str) -> object:
-    """New snapshot key first, pre-reshape key as the fallback.
-
-    Both vocabularies live in the DB forever — `material_snapshots` is frozen
-    history the migration deliberately does not rewrite. Reading only the new
-    key would silently draw every pre-reshape sheet map at the 1000×700
-    fallback, with every placement scaled wrong and no error raised.
+    The old code instead fell back to a flat 1000×700, which drew a real
+    2800×2070 layout at 2.8× — parts spilling off the frame and off the page —
+    and silently reported >100% sheet utilisation. A wrong constant is
+    indistinguishable from a right one at the call site; an extent is not.
     """
-    value = snapshot.get(key)
-    return value if value is not None else snapshot.get(legacy_key)
+    length, width = snapshot_sheet_size(_material_snapshot(result, panel.material_id))
+    extent = panel_extent(panel)
+    # `max(..., 1)`: an empty panel has no extent either, and the transform
+    # divides by these.
+    return SheetSize(
+        length or extent.length or 1,
+        width or extent.width or 1,
+    )
 
 
-def _int_snapshot(value: object, *, fallback: int) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str) and value.isdecimal():
-        return int(value)
-    return fallback
+def panel_extent(panel: CuttingPanelResponse) -> SheetSize:
+    """Bounding extent of everything laid on the sheet, in sheet mm."""
+    length = 0
+    width = 0
+    for placement in panel.placements:
+        length = max(length, placement.x_mm + placement.length_mm)
+        width = max(width, placement.y_mm + placement.width_mm)
+    for offcut in panel.offcuts:
+        length = max(length, offcut.x_mm + offcut.length_mm)
+        width = max(width, offcut.y_mm + offcut.width_mm)
+    return SheetSize(length, width)

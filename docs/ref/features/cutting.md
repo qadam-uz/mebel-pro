@@ -893,6 +893,18 @@ instead, so fewer labels print and the ones that do are legible.
      summary, title blocks, stats and tables are PDF-own.
      Text is rendered with an embedded Unicode font, so Cyrillic material and part names
      print correctly.
+   - **A sheet's millimetres are resolved, never assumed** — one resolver per side, and both
+     agree. It reads the size from the result's material snapshot across all three frozen
+     vocabularies (see `docs/ref/entities/cutting.md`), and when the snapshot carries none it
+     *derives* one from the layout: the optimizer fills every square millimetre it does not
+     cut into a part with an offcut rectangle, so the bounding extent of placements plus
+     offcuts is the sheet, minus at most the edge trim. There is no constant fallback. A
+     missed vocabulary or a guessed default is a silent, total defect — it rescales the whole
+     drawing with nothing to signal it (until 2026-09 the PDF read two of the three keys and
+     fell back to a flat 1000×700, drawing reshape-era 2800×2070 results at 2.8× off the page
+     and reporting over 100% utilisation beside them). The drawing additionally clamps to the
+     extent, so a snapshot that disagrees with its own placements still prints inside its
+     frame while the summary keeps reporting the recorded size.
    - **Edit parts** returns to the editor. Name, edge-band, and material-source changes retain
      the current layout and refresh edge metrics. A geometry-affecting edit removes all previous
      results, including an imported MAP. The next **Optimise** creates and chooses one fresh
