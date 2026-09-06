@@ -1009,9 +1009,26 @@ test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({
   await expect(option(cyrillic)).toBeVisible()
   await expect(option(latin)).toBeVisible()
 
-  // A query that folds to something else finds neither — the fold widens the
-  // match, it does not stop filtering.
-  await search.fill(`zzz-${id}`)
+  // Tier 2 — `yongoq` typed with the Cyrillic layout still active. The fold of
+  // «нщтпщй» (`nshtpshy`) is in no key, so the search retypes it through the
+  // other keyboard and runs again; both dekors come back from that second pass.
+  await search.fill('нщтпщй')
+  await expect(option(cyrillic)).toBeVisible()
+  await expect(option(latin)).toBeVisible()
+
+  // Tier 3 — one letter wrong. `yongak` is a substring of no key and not a
+  // layout swap of anything, so the typo tier scores it against the closest
+  // whole word of each key: 0.40 against `yongok`, over the 0.3 floor. Both
+  // dekors fold onto that same word, so a typo of one finds the other too.
+  await search.fill('yongak')
+  await expect(option(cyrillic)).toBeVisible()
+  await expect(option(latin)).toBeVisible()
+
+  // A query that shares no trigram with anything seeded finds neither — all
+  // three tiers stay empty. It has to be trigram-alien rather than merely
+  // fold-different: `zzz-${id}` folds against keys that all carry `${id}`, and
+  // the typo tier rightly reads it as a mistyped code.
+  await search.fill('qwxzvk')
   await expect(pickStep.getByText('Dekor topilmadi')).toBeVisible()
 })
 
