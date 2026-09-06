@@ -6,6 +6,9 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
   carryOneFormat,
   createCatalogDecors,
+  createDecor,
+  createDecorFormat,
+  createManufacturer,
   databaseUrl,
   edgeNumbers,
   enterViaWorkshopLink,
@@ -13,6 +16,7 @@ import {
   devConfirmLogin,
   expectOk,
   expectPdfOpensInTab,
+  panelFormat,
   panelNumbers,
   workshopLinkFor,
   type BranchMaterialResponse,
@@ -571,4 +575,81 @@ test('workshop opens a confirmed order cutting plan and opens the PDF', async ({
     page.getByRole('button', { name: 'Chizma (PDF)' }),
     /\/workshop\/orders\/[0-9a-f-]+\/cutting\/pdf$/,
   )
+})
+
+/**
+ * A board no carried tape can be auto-matched to, so the group gate is
+ * **forced**. Matching reads decor identity first and the decor *name* second
+ * (`shared/app/cuttingGroupTape.ts`), and the suite's stock catalogue names its
+ * board and its tape alike — which is why `chooseEdgeBanding` above finds the
+ * gate already answered and skips the picker behind an `isVisible()`.
+ */
+async function carryUnmatchedBoard(
+  request: APIRequestContext,
+  adminToken: string,
+  ownerToken: string,
+  branchId: string,
+  id: string,
+) {
+  const manufacturerId = await createManufacturer(request, adminToken, `Gate Maker ${id}`)
+  const decor = await createDecor(request, adminToken, {
+    manufacturer_id: manufacturerId,
+    code: `P5-G-${id}`,
+    name: `Graphite ${id}`,
+  })
+  const format = await createDecorFormat(request, adminToken, decor.id, panelFormat())
+  const material = await carryOneFormat(request, ownerToken, branchId, format.id, panelNumbers)
+  return { decor, material }
+}
+
+test('the client tape picker answers a row click on desktop instead of closing', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p4-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const branchId = setup.branch.id as string
+  // The branch carries a tape — it just isn't this board's colour, so the group
+  // has to be asked and the picker opens for real rather than optionally.
+  await carriedMaterials(request, adminAccess, ownerAccess, branchId, id)
+  const board = await carryUnmatchedBoard(request, adminAccess, ownerAccess, branchId, id)
+
+  const workshopLink = await workshopLinkFor(request, ownerAccess, branchId)
+  await enterViaWorkshopLink(page, workshopLink, phoneFor(id, 80), 'Tape Picker Client')
+  await page.getByRole('button', { name: 'Yangi chizma' }).click()
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
+
+  await page.getByRole('button', { name: '+ Material', exact: true }).click()
+  await chooseMaterial(page, board.decor.label)
+  await page.getByLabel('Uzunlik millimetr').fill('260')
+  await page.getByLabel('Kenglik millimetr').fill('180')
+  await page.getByLabel('Soni').fill('2')
+
+  await page.getByRole('button', { name: 'Kromka tomonlari', exact: true }).click()
+  const panel = page.getByRole('region', { name: 'Kromka' })
+  const gate = panel.getByRole('button', { name: /rangi mos lentani tanlang/ })
+  await expect(gate).toBeVisible()
+  await gate.click()
+
+  const sheet = page.getByRole('dialog', { name: 'Rangi mos kromkani tanlang' })
+  await expect(sheet).toBeVisible()
+
+  // The regression this test exists for. On a desktop viewport the picker takes
+  // `CuttingBottomSheet`'s modal frame, where the panel used to declare
+  // `sm:static` beside an `absolute` scrim — and a positioned box paints over a
+  // non-positioned sibling whatever the DOM order says. The scrim therefore
+  // covered the panel: a real click on a row landed on the scrim, which reads as
+  // an outside click, and the sheet closed without selecting anything.
+  const row = sheet.getByRole('radio').first()
+  await row.click()
+  await expect(sheet).toBeVisible()
+  await expect(row).toHaveAttribute('aria-checked', 'true')
+
+  await sheet.getByRole('button', { name: 'Tanlash' }).click()
+  await expect(sheet).toBeHidden()
+  await expect(panel.getByText(/^Kromka:/)).toBeVisible()
 })

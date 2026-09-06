@@ -234,6 +234,15 @@ onBeforeUnmount(() => {
       :style="{ zIndex: trap.zIndex.value }"
     >
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true" @click="emit('close')"></div>
+      <!-- `sm:relative`, never `sm:static`: the scrim above is positioned, and a
+           positioned box paints over a non-positioned sibling whatever the DOM
+           order — so a `static` panel sits *under* its own scrim from `sm` up,
+           every click on it reads as an outside click, and the sheet closes
+           instead of selecting. (Both are `z-index: auto`, so the tie goes to
+           DOM order, which puts the panel on top; nothing here disturbs the
+           depth-based tier on the wrapper.) `sm:inset-auto` then drops the
+           phone frame's `top-3 / inset-x-0 / bottom-0`, which `relative` would
+           otherwise re-read as offsets and nudge the modal down the screen. -->
       <section
         :id="id"
         ref="panelRef"
@@ -241,7 +250,7 @@ onBeforeUnmount(() => {
         aria-modal="true"
         :aria-labelledby="`${id}-title`"
         tabindex="-1"
-        class="absolute inset-x-0 bottom-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-[18px] border-t border-hairline-strong bg-elevated shadow-[0_-28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)] sm:static sm:max-h-[min(calc(var(--app-vh)*0.9),44rem)] sm:w-full sm:rounded-2xl sm:border sm:shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
+        class="absolute inset-x-0 bottom-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-[18px] border-t border-hairline-strong bg-elevated shadow-[0_-28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)] sm:relative sm:inset-auto sm:max-h-[min(calc(var(--app-vh)*0.9),44rem)] sm:w-full sm:rounded-2xl sm:border sm:shadow-[0_28px_90px_-30px_color-mix(in_srgb,var(--color-ink)_55%,transparent)]"
         :class="[sheetTopClass, maxWidth]"
         @keydown="trap.onKeydown"
       >

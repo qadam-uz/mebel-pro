@@ -41,6 +41,26 @@ function placement(el: Element, axis: 'row' | 'col'): number | null {
   return hit ? Number(hit.slice(`${axis}-start-`.length)) : null
 }
 
+const POSITIONS = new Set(['static', 'relative', 'absolute', 'fixed', 'sticky'])
+
+/**
+ * The `position` an element resolves to at a breakpoint — the cascade in
+ * miniature, read off the declared utilities rather than off jsdom, which
+ * evaluates no media query and would report `static` for every branch here.
+ */
+function positionAt(el: Element, breakpoint: 'base' | 'sm'): string | null {
+  const prefixes = breakpoint === 'sm' ? ['', 'sm:'] : ['']
+  let value: string | null = null
+  for (const prefix of prefixes) {
+    for (const name of el.classList) {
+      if (name.startsWith(prefix) && POSITIONS.has(name.slice(prefix.length))) {
+        value = name.slice(prefix.length)
+      }
+    }
+  }
+  return value
+}
+
 /** Make the component's own `(min-width: 768px)` probe report a wide viewport. */
 function pretendWide() {
   vi.spyOn(window, 'matchMedia').mockImplementation(
@@ -96,6 +116,37 @@ describe('CuttingBottomSheet frame', () => {
     // only one that flexes.
     const template = [...section.classList].find((name) => name.startsWith('grid-rows-'))
     expect(template).toBe('grid-rows-[auto_auto_minmax(0,1fr)_auto]')
+  })
+
+  it('keeps the desktop modal panel above its own scrim', () => {
+    // The tape picker has no anchor, so from `sm` up it is *this* branch — and
+    // it was unclickable there: the panel declared `sm:static` while the scrim
+    // stayed `absolute`, and a positioned box paints over a non-positioned
+    // sibling whatever the DOM order says. Every click on a row or «Tanlash»
+    // landed on the scrim, which reads as an outside click and closes.
+    const section = mountSheet()
+    const frame = section.parentElement
+    expect(frame).not.toBeNull()
+    const scrim = frame!.querySelector(':scope > [aria-hidden="true"]')
+    expect(scrim).not.toBeNull()
+
+    expect(positionAt(scrim!, 'base')).toBe('absolute')
+    expect(positionAt(scrim!, 'sm')).toBe('absolute')
+
+    // Positioned at *both* widths — never `static`, and never left to the
+    // initial value either.
+    for (const breakpoint of ['base', 'sm'] as const) {
+      expect(positionAt(section, breakpoint)).not.toBe('static')
+      expect(positionAt(section, breakpoint)).not.toBeNull()
+    }
+
+    // Neither carries a `z-index` of its own — the tier lives on the frame — so
+    // the tie is broken by DOM order, which has to put the panel last.
+    expect(scrim!.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // `relative` re-reads the phone frame's `top-3 / inset-x-0 / bottom-0` as
+    // offsets, so the desktop branch has to clear them or the modal hangs low.
+    expect(section.classList).toContain('sm:inset-auto')
   })
 
   it('keeps the anchored popover to a single column too', () => {
