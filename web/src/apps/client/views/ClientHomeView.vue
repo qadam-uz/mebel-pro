@@ -451,10 +451,21 @@ onMounted(() => {
               >
                 {{ clientStatusLabel(order.status) }}
               </span>
+              <!-- The sub-line: the drawing's name when it has one, and always
+                   the order's date (decision 22, amended 2026-09-06). One
+                   short line on both breakpoints — the date keeps its full
+                   width and the name truncates into whatever is left, because
+                   a wrapped second line would push the total out of the row. -->
               <span
-                class="row-start-2 min-w-0 truncate text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:text-sm"
+                class="row-start-2 flex min-w-0 items-baseline gap-x-1.5 text-[12.5px] leading-[1.3] text-ink-muted md:col-start-2 md:row-start-1 md:text-sm"
               >
-                {{ order.draft_name || '' }}
+                <span v-if="order.draft_name" class="min-w-0 truncate">
+                  {{ order.draft_name }}
+                </span>
+                <span v-if="order.draft_name" class="shrink-0" aria-hidden="true">·</span>
+                <span class="shrink-0 whitespace-nowrap">
+                  {{ formatClientDateTime(order.created_at) }}
+                </span>
               </span>
               <span
                 class="row-start-2 justify-self-end whitespace-nowrap text-[13px] font-bold leading-[1.3] text-ink md:col-start-4 md:row-start-1 md:min-w-[112px] md:text-right md:text-[15px]"
