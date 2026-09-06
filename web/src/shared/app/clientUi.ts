@@ -307,6 +307,9 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   'map-pin':
     '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/>',
+  // The copy action on a branch row names what is copied — the client link —
+  // rather than the clipboard, which would read as "duplicate this branch".
+  link: '<path d="M10 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.4 1.4"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.4-1.4"/>',
   // The pin mark on a branch row (§6.1). Same outline for both states; the
   // filled one carries its own `fill`/`stroke`, which as presentation
   // attributes on the path beat the ones AppIcon sets on the <svg>.

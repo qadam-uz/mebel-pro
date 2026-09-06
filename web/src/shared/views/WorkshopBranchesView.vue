@@ -12,8 +12,11 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { additionalPhoneErrors } from '@/shared/app/branchPhones'
+import { copyText } from '@/shared/app/clipboard'
 import { useRolePath } from '@/shared/app/paths'
+import { workshopLinkUrl } from '@/shared/app/workshopLink'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import BranchMap from '@/shared/components/BranchMap.vue'
 import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
@@ -123,6 +126,21 @@ async function createBranch() {
   } finally {
     creatingBranch.value = false
   }
+}
+
+// The counter's own client link, straight off the list: an owner reading out a
+// branch link for a print shop or a Telegram post should not have to open the
+// branch first. The card on the branch screen keeps the QR and the print sheet —
+// this is the copy action alone (client-entry.md).
+async function copyBranchLink(branch: { workshop_public_code: string; branch_no: number }) {
+  const url = workshopLinkUrl(branch.workshop_public_code, branch.branch_no)
+  if (await copyText(url)) {
+    toast.success(t('workshopAdmin.clientLink.copied'))
+    return
+  }
+  // No selectable field in a table row — an insecure context or a denied
+  // permission is sent to the branch screen, where the URL is readable text.
+  toast.danger(t('workshopAdmin.clientLink.copyRowFailed'))
 }
 
 onMounted(() => {
@@ -288,6 +306,9 @@ onMounted(() => {
                 <th>{{ $t('workshopAdmin.branches.colAddress') }}</th>
                 <th>{{ $t('workshopAdmin.branches.colPhone') }}</th>
                 <th>{{ $t('workshopAdmin.branches.colStatus') }}</th>
+                <!-- Reuses the card's own «Havola» label — the column holds the
+                     same artifact, so it gets the same word. -->
+                <th class="nowrap right">{{ $t('workshopAdmin.clientLink.urlLabel') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -309,6 +330,18 @@ onMounted(() => {
                   <span :class="branchPillClass(branch.status)">
                     <span class="pd"></span>{{ branchStatusUz(branch.status) }}
                   </span>
+                </td>
+                <!-- `row-above` lifts the copy button over the row's stretched
+                     click layer, so copying a link never opens the filial. -->
+                <td class="nowrap right row-above">
+                  <button
+                    type="button"
+                    class="mp-row-icon"
+                    :aria-label="$t('workshopAdmin.clientLink.copyRow', { name: branch.name })"
+                    @click="copyBranchLink(branch)"
+                  >
+                    <AppIcon name="link" />
+                  </button>
                 </td>
               </tr>
             </tbody>

@@ -432,8 +432,10 @@
     "workshopHint": "Mijoz shu QR kodni skanerlasa, ilova ustaxonangizga ulanadi va filialni o'zi tanlaydi.",
     "urlLabel": "Havola",
     "copy": "Nusxalash",
+    "copyRow": "{name} havolasini nusxalash",
     "copied": "Havola nusxalandi",
     "copyFailed": "Nusxalab bo'lmadi — havolani belgilab qo'lda nusxalang.",
+    "copyRowFailed": "Nusxalab bo'lmadi — havolani filial sahifasidan oling.",
     "print": "Chop etish",
     "qrLabel": "Mijoz havolasining QR kodi",
     "tagline": "Chizmangizni o'zingiz chizing — narxini darhol bilasiz"
