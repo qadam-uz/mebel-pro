@@ -74,6 +74,12 @@ function poll(status: ClientLoginPoll['status'], expired = false): ClientLoginPo
   return { status, expired }
 }
 
+/** The poll secrets a spy was asked with — every call carries its own abort
+ *  signal and ceiling alongside, which no assertion here is about. */
+function polledSecrets(spy: { mock: { calls: unknown[][] } }) {
+  return spy.mock.calls.map((call) => call[0])
+}
+
 /** Drive the card's own poll interval forward by one tick. */
 async function tick(times = 1) {
   for (let index = 0; index < times; index += 1) {
@@ -101,6 +107,24 @@ function setViewport(mobile: boolean) {
   })
 }
 
+/** Send the tab away and bring it back, the way a trip to Telegram does. */
+async function hideTab() {
+  Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+}
+
+async function showTab() {
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+}
+
+/** A bfcache restore: no mount, no reload, `persisted: true`. */
+function pageShowEvent() {
+  return Object.assign(new Event('pageshow'), { persisted: true })
+}
+
 /** The viewport answering later than mount — a settling layout, a rotation. */
 async function emitViewportChange(mobile: boolean) {
   for (const listener of viewportListeners) listener({ matches: mobile } as MediaQueryListEvent)
@@ -115,6 +139,22 @@ async function selectTab(view: VueWrapper, tab: 'qr' | 'telegram') {
 
 function selectedTab(view: VueWrapper) {
   return view.find('[role="tab"][aria-selected="true"]').text()
+}
+
+/**
+ * Tap the deep-link button. On mobile its href is a `tg://` scheme in this same
+ * tab, which jsdom tries to follow and then logs as unimplemented navigation —
+ * the tap is what these cases are about, not the browser's handling of a scheme.
+ */
+async function tapDeepLink(view: VueWrapper) {
+  const link = view.find('#client-login-telegram')
+  link.element.addEventListener('click', (event) => event.preventDefault(), { once: true })
+  await link.trigger('click')
+}
+
+/** «Tasdiqladim, tekshirish» — the manual poll under the status line. */
+function checkButton(view: VueWrapper) {
+  return view.find('#client-login-check')
 }
 
 let router: Router
@@ -436,17 +476,18 @@ describe('ClientLoginView — surviving the trip to Telegram', () => {
     // Straight away, not two seconds from now: the page is usually back
     // precisely because the client has finished answering in the bot.
     expect(create).not.toHaveBeenCalled()
-    expect(pollSpy).toHaveBeenCalledWith('secret-7')
+    expect(polledSecrets(pollSpy)).toContain('secret-7')
     expect(view.text()).toContain('Telefoningizda tasdiqlang')
 
     // Same handshake behind both affordances — the QR and the button the
-    // resumed card renders are the token the client is already holding.
+    // resumed card renders are the token the client is already holding. The bot
+    // chat is already open, so that button is already the way back.
     await selectTab(view, 'telegram')
-    expect(view.find('a.mp-button-primary').attributes('href')).toBe(
-      'https://t.me/mebel_pro_uz_bot?start=tok-7',
-    )
+    const back = view.find('#client-login-telegram')
+    expect(back.attributes('href')).toBe('https://t.me/mebel_pro_uz_bot?start=tok-7')
+    expect(back.text()).toBe('Telegramga qaytish')
     await tick()
-    expect(pollSpy).toHaveBeenLastCalledWith('secret-7')
+    expect(polledSecrets(pollSpy).at(-1)).toBe('secret-7')
     expect(create).not.toHaveBeenCalled()
   })
 
@@ -466,7 +507,7 @@ describe('ClientLoginView — surviving the trip to Telegram', () => {
     await mountLogin()
 
     expect(create).toHaveBeenCalledTimes(1)
-    expect(pollSpy).toHaveBeenLastCalledWith('secret-1')
+    expect(polledSecrets(pollSpy).at(-1)).toBe('secret-1')
   })
 
   it('mints afresh when the parked handshake has already expired', async () => {
@@ -479,8 +520,8 @@ describe('ClientLoginView — surviving the trip to Telegram', () => {
     await tick()
 
     expect(create).toHaveBeenCalledTimes(1)
-    expect(pollSpy).toHaveBeenCalledWith('secret-2')
-    expect(pollSpy).not.toHaveBeenCalledWith('secret-7')
+    expect(polledSecrets(pollSpy)).toContain('secret-2')
+    expect(polledSecrets(pollSpy)).not.toContain('secret-7')
     await selectTab(view, 'telegram')
     expect(view.find('a.mp-button-primary').attributes('href')).toBe(
       'https://t.me/mebel_pro_uz_bot?start=tok-2',
@@ -600,6 +641,138 @@ describe('ClientLoginView — code fallback', () => {
   })
 })
 
+describe('ClientLoginView — the trip back', () => {
+  /** A poll that never answers — a phone freezing the page mid-request. */
+  function hangingPoll() {
+    const signals: (AbortSignal | undefined)[] = []
+    const impl = (_secret: string, init?: { signal?: AbortSignal }) => {
+      signals.push(init?.signal)
+      return new Promise<never>((_, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        )
+      })
+    }
+    return { signals, impl }
+  }
+
+  it('aborts the poll the tab froze and asks again on return', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const hanging = hangingPoll()
+    const pollSpy = vi
+      .spyOn(auth, 'pollClientLogin')
+      .mockImplementation(hanging.impl as typeof auth.pollClientLogin)
+
+    await mountLogin()
+    await tick()
+    expect(pollSpy).toHaveBeenCalledTimes(1)
+    expect(hanging.signals[0]?.aborted).toBe(false)
+
+    // The client is in Telegram. The request that was out belongs to a page the
+    // browser is freezing and may never settle — it goes now.
+    await hideTab()
+    expect(hanging.signals[0]?.aborted).toBe(true)
+
+    // Back on the page. The wedge this fixes: a boolean latch left set by that
+    // never-settling request swallowed every poll from here on, and only a
+    // reload got the client in.
+    await showTab()
+    expect(pollSpy).toHaveBeenCalledTimes(2)
+
+    // And the loop is armed again, not just poked once.
+    await tick()
+    expect(pollSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it('signs in on the poll that follows the return', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const hanging = hangingPoll()
+    const pollSpy = vi
+      .spyOn(auth, 'pollClientLogin')
+      .mockImplementation(hanging.impl as typeof auth.pollClientLogin)
+
+    await mountLogin()
+    const replace = vi.spyOn(router, 'replace')
+    await tick()
+    await hideTab()
+
+    // The bot confirmed while the page was frozen.
+    pollSpy.mockResolvedValue(session)
+    await showTab()
+
+    expect(replace).toHaveBeenCalledWith('/c')
+  })
+
+  it('answers a burst of return events with one request', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    await mountLogin()
+    await tick()
+    const polls = pollSpy.mock.calls.length
+
+    await hideTab()
+    // A phone fires all three on the way back; they are one return.
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+    document.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('focus'))
+    window.dispatchEvent(pageShowEvent())
+    await flushPromises()
+
+    expect(pollSpy.mock.calls.length).toBe(polls + 1)
+  })
+
+  it('takes focus alone as a return', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    await mountLogin()
+    await tick()
+    const polls = pollSpy.mock.calls.length
+
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+
+    expect(pollSpy.mock.calls.length).toBe(polls + 1)
+  })
+
+  it('takes a bfcache restore alone as a return', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    await mountLogin()
+    await tick()
+    const polls = pollSpy.mock.calls.length
+
+    window.dispatchEvent(pageShowEvent())
+    await flushPromises()
+
+    expect(pollSpy.mock.calls.length).toBe(polls + 1)
+  })
+
+  it('ignores a return once the handshake is dead', async () => {
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending', true))
+
+    const view = await mountLogin()
+    await tick()
+    expect(view.text()).toContain('QR eskirdi.')
+    const polls = pollSpy.mock.calls.length
+
+    window.dispatchEvent(new Event('focus'))
+    window.dispatchEvent(pageShowEvent())
+    await flushPromises()
+
+    expect(pollSpy.mock.calls.length).toBe(polls)
+  })
+})
+
 describe('ClientLoginView — mobile', () => {
   it('opens on the Telegram tab and keeps the QR one click away', async () => {
     setViewport(true)
@@ -611,7 +784,6 @@ describe('ClientLoginView — mobile', () => {
 
     expect(selectedTab(view)).toBe('Telegram orqali')
     const button = view.find('a.mp-button-primary')
-    expect(button.attributes('href')).toBe('https://t.me/mebel_pro_uz_bot?start=tok-1')
     expect(button.text()).toBe("Telegram botga o'tish")
     expect(view.find('svg[role="img"]').exists()).toBe(false)
 
@@ -621,5 +793,78 @@ describe('ClientLoginView — mobile', () => {
 
     expect(view.find('svg[role="img"]').exists()).toBe(true)
     expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  it('hands the phone the app scheme in this tab, with t.me underneath', async () => {
+    setViewport(true)
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+
+    // `https://t.me/…` on a phone loads Telegram's own "Open in Telegram" page
+    // first, and the client comes back to *that* tab. The scheme opens the app
+    // with no page in between, so this tab — and its poll — stays put.
+    const button = view.find('a.mp-button-primary')
+    expect(button.attributes('href')).toBe('tg://resolve?domain=mebel_pro_uz_bot&start=tok-1')
+    expect(button.attributes('target')).toBeUndefined()
+
+    // No installed Telegram means the scheme did nothing and said nothing, so
+    // the way out is on screen before it is needed.
+    const fallback = view
+      .findAll('a')
+      .find((link) => link.text() === 'Telegram ochilmadimi? t.me orqali ochish')
+    expect(fallback?.attributes('href')).toBe('https://t.me/mebel_pro_uz_bot?start=tok-1')
+    expect(fallback?.attributes('target')).toBe('_blank')
+  })
+
+  it('turns the button into the way back and offers a manual check once tapped', async () => {
+    setViewport(true)
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken').mockResolvedValue(handshake())
+    const pollSpy = vi.spyOn(auth, 'pollClientLogin').mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    expect(checkButton(view).exists()).toBe(false)
+
+    await tapDeepLink(view)
+
+    // The action that matters now is in Telegram; this button is only the way
+    // back, so it steps down and says so.
+    const back = view.find('a.mp-button-outline')
+    expect(back.text()).toBe('Telegramga qaytish')
+    expect(view.find('a.mp-button-primary').exists()).toBe(false)
+    expect(view.text()).toContain('shu sahifaga qayting — avtomatik kirasiz')
+    // …and the card stops asking for the thing that has just been done.
+    expect(view.text()).not.toContain("Telegram botga o'ting")
+
+    // The client who is back and impatient gets an answer instead of tapping
+    // through to the bot a second time.
+    const polls = pollSpy.mock.calls.length
+    await checkButton(view).trigger('click')
+    await flushPromises()
+    expect(pollSpy.mock.calls.length).toBe(polls + 1)
+  })
+
+  it('drops the "come back" state when the handshake is replaced', async () => {
+    setViewport(true)
+    const auth = useAuthStore()
+    vi.spyOn(auth, 'createClientLoginToken')
+      .mockResolvedValueOnce(handshake(1))
+      .mockResolvedValueOnce(handshake(2))
+    vi.spyOn(auth, 'pollClientLogin')
+      .mockResolvedValueOnce(poll('declined'))
+      .mockResolvedValue(poll('pending'))
+
+    const view = await mountLogin()
+    await tapDeepLink(view)
+    expect(checkButton(view).exists()).toBe(true)
+
+    // A declined token mints a fresh one — a link nobody has opened yet.
+    await tick()
+
+    expect(checkButton(view).exists()).toBe(false)
+    expect(view.find('a.mp-button-primary').text()).toBe("Telegram botga o'tish")
   })
 })
