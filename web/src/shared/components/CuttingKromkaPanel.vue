@@ -4,9 +4,10 @@ import { computed, ref, watch } from 'vue'
 import Icon from '@/shared/components/AppIcon.vue'
 import CuttingEdgeSides from '@/shared/components/CuttingEdgeSides.vue'
 import CuttingGroupTapeLine from '@/shared/components/CuttingGroupTapeLine.vue'
-import { colorForMaterial, edgeSearchText, sideLabels } from '@/shared/app/cuttingDisplay'
+import { colorForMaterial, edgeSearchKey, sideLabels } from '@/shared/app/cuttingDisplay'
 import { edgeTooNarrow, rankedEdges } from '@/shared/app/cuttingEdgeDisplay'
 import { edgeRegistryKey, type EdgeRegistryEntry } from '@/shared/app/cuttingEditorDerived'
+import { filterByQuery } from '@/shared/app/searchFold'
 import type { TapeDecor } from '@/shared/app/cuttingGroupTape'
 import type {
   ClientCatalogMaterialOption,
@@ -225,10 +226,11 @@ const noneOn = computed(() => bandedFields.value.length === 0)
 
 // ── The tape catalog ────────────────────────────────────────────────────────
 const tapeRows = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return ranked.value
-    .filter((row) => (query ? edgeSearchText(row.material).includes(query) : true))
-    .map((row) => {
+  // Tiers 1–2 of the shared matcher (script, apostrophe and layout insensitive,
+  // tokens ANDed); the rows keep `ranked`'s colour order, which is the answer the
+  // operator is actually scanning for.
+  return filterByQuery(ranked.value, search.value, (row) => edgeSearchKey(row.material)).map(
+    (row) => {
       const entry = props.edgeRegistry.find(
         (registry) => registry.key === edgeRegistryKey(row.material.id, 'shop'),
       )
@@ -241,7 +243,8 @@ const tapeRows = computed(() => {
         ),
         on: row.material.id === activeTapeId.value,
       }
-    })
+    },
+  )
 })
 
 const activeTapeMeta = computed(() => {

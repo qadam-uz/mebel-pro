@@ -56,16 +56,7 @@ describe('fold — the TS mirror of search_fold.py', () => {
 describe('tokenize / buildSearchKey', () => {
   it('splits on whitespace and the separators a decor code is written with', () => {
     expect(tokenize('Sonoma eman')).toEqual(['Sonoma', 'eman'])
-    expect(tokenize('H-1145/W.980_x·y,z(1)')).toEqual([
-      'H',
-      '1145',
-      'W',
-      '980',
-      'x',
-      'y',
-      'z',
-      '1',
-    ])
+    expect(tokenize('H-1145/W.980_x·y,z(1)')).toEqual(['H', '1145', 'W', '980', 'x', 'y', 'z', '1'])
     expect(tokenize('')).toEqual([])
     expect(foldTokens("Yong'oq  H3734 ")).toEqual(['yongok', 'h3734'])
   })

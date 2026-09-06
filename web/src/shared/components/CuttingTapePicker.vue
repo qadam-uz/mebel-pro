@@ -2,9 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { edgeSearchText } from '@/shared/app/cuttingDisplay'
-import { decorTitle, type TapeDecor } from '@/shared/app/cuttingGroupTape'
+import { decorTitle, tapeDecorSearchKey, type TapeDecor } from '@/shared/app/cuttingGroupTape'
 import { formatMm } from '@/shared/app/materialLabel'
+import {
+  SIMILARITY_THRESHOLD,
+  matchesQuery,
+  querySimilarity,
+  rankKey,
+  resolveQuery,
+} from '@/shared/app/searchFold'
 import { formatSom } from '@/shared/formatters'
 import CuttingBottomSheet from '@/shared/components/CuttingBottomSheet.vue'
 import CuttingDecorThumb from '@/shared/components/CuttingDecorThumb.vue'
@@ -57,13 +63,60 @@ watch(
 
 const panelLabel = computed(() => (props.panel ? decorTitle(props.panel) : ''))
 
+/**
+ * The three tiers of SPEC_CATALOG_SMART_SEARCH, run locally: this list is
+ * preloaded (a branch's tape shelf is tens of rows, not thousands), so the same
+ * search the server does over `decors.search_key` is done here over the same
+ * shape of key. `toLowerCase().includes()` was the bug — the catalog is stored in
+ * Latin and half of Uzbekistan types on a Cyrillic keyboard, so «сонома» matched
+ * nothing while the material picker one sheet over found it.
+ *
+ * 1. every folded query token somewhere in the key, ranked (exact code, code
+ *    prefix, word start, substring) then by name;
+ * 2. nothing? read the query as the other keyboard layout and try again;
+ * 3. still nothing? score it as a typo and show the closest rows, best first.
+ *
+ * Tier 3 is capped at 20: past that it is not "did you mean" any more, it is the
+ * list again in a worse order.
+ */
+const TYPO_LIMIT = 20
+
+const keyed = computed(() =>
+  props.decors.map((decor) => ({
+    decor,
+    key: tapeDecorSearchKey(decor),
+    code: decor.variants[0]?.material.code ?? null,
+  })),
+)
+
 const rows = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return props.decors.filter((decor) =>
-    query
-      ? decor.variants.some((variant) => edgeSearchText(variant.material).includes(query))
-      : true,
+  const raw = search.value.trim()
+  if (raw === '') return props.decors
+  // Tiers 1 and 2 share this query: `resolveQuery` hands back the layout swap
+  // only when the raw query finds nothing.
+  const query = resolveQuery(
+    keyed.value.map((row) => row.key),
+    raw,
   )
+  const matched = keyed.value.filter((row) => matchesQuery(row.key, query))
+  if (matched.length > 0) {
+    return matched
+      .map((row) => ({ row, rank: rankKey(row.key, row.code, query) }))
+      .sort(
+        (left, right) =>
+          left.rank - right.rank || left.row.decor.label.localeCompare(right.row.decor.label),
+      )
+      .map((entry) => entry.row.decor)
+  }
+  return keyed.value
+    .map((row) => ({ decor: row.decor, score: querySimilarity(row.key, query) }))
+    .filter((entry) => entry.score >= SIMILARITY_THRESHOLD)
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.decor.label.localeCompare(right.decor.label),
+    )
+    .slice(0, TYPO_LIMIT)
+    .map((entry) => entry.decor)
 })
 
 /**

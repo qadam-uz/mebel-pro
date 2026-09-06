@@ -205,7 +205,7 @@
     "sideAriaCurrent": "Сторона «{side}» — стоит текущая кромка, нажмите чтобы снять",
     "sideAriaOther": "Сторона «{side}» — стоит другая кромка, нажмите чтобы заменить на текущую",
     "sideAriaEmpty": "Сторона «{side}» — нажмите, чтобы добавить текущую кромку",
-    "searchPlaceholder": "Название кромки или код декора",
+    "searchPlaceholder": "Название кромки или код декора — Sonoma, H1145, сонома",
     "searchAria": "Поиск кромки",
     "thicknessFilterAria": "Фильтр по толщине",
     "allThickness": "Все",

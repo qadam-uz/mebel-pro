@@ -300,3 +300,38 @@ export function querySimilarity(key: string, query: string): number {
   }
   return worst
 }
+
+// ── Putting the tiers together ──────────────────────────────────────────────
+
+/**
+ * The query a list should actually be searched with: the raw one, or its layout
+ * swap when the raw one matches nothing (tier 2). Resolving it once, against the
+ * whole list, is what keeps filtering and ranking on the same query — ranking a
+ * row by «Ыщтщьф» after matching it by «sonoma» would put every hit at rank 3.
+ */
+export function resolveQuery(keys: Iterable<string>, query: string): string {
+  const raw = (query ?? '').trim()
+  if (foldTokens(raw).length === 0) return raw
+  for (const key of keys) if (matchesQuery(key, raw)) return raw
+  const swapped = layoutSwap(raw)
+  if (swapped === raw) return raw
+  for (const key of keys) if (matchesQuery(key, swapped)) return swapped
+  return raw
+}
+
+/**
+ * Tiers 1 and 2 over a preloaded list, in the list's own order — for surfaces
+ * that already rank their rows (the workshop's edge picker sorts by how close a
+ * tape is to the board) and want the query only to narrow them. Tier 3 belongs
+ * to the client tape picker, where nothing else is competing for the order.
+ */
+export function filterByQuery<T>(
+  rows: readonly T[],
+  query: string,
+  keyOf: (row: T) => string,
+): T[] {
+  if ((query ?? '').trim() === '') return [...rows]
+  const keys = rows.map(keyOf)
+  const effective = resolveQuery(keys, query)
+  return rows.filter((_, index) => matchesQuery(keys[index], effective))
+}
