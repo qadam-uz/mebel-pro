@@ -369,6 +369,13 @@ operator path to it. Workshop _editing_ (profile, settings) lives in
 not operator-managed. If correcting an owner's phone via the operator ever becomes a real
 need, it must be specified here first — it is deliberately absent in v1.
 
+Reads are wider than writes: the operator also sees a workshop's **client links** — the
+workshop's `/w/{code}` URL and each branch's — on the workshop detail, so a support call about
+a link does not depend on the caller finding it
+([`client-entry.md`](client-entry.md#where-the-workshop-gets-its-link)). Copying a public link
+publishes nothing and changes nothing, so it needs no new capability beyond the operator check
+every superadmin screen already makes.
+
 ### UX
 
 - **Create-workshop dialog** — workshop name + first branch name/address/phone/working-hours,

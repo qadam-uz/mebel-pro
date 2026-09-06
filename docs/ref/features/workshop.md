@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-06
 order: 40
 ---
 
@@ -70,7 +70,10 @@ editing settings.
   **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." The owner
   is identified by login here — the stable operational handle.
 - **Workshop detail** — header (name, status, created); tabs: **Profile** (read-only name,
-  owner login, created date, status), **Branches** (read-only list, branch number first —
+  owner login, created date, status, and the **Mijoz havolalari** card — the workshop's client
+  link with its QR plus one copyable row per branch, so support can read a link back to a
+  caller without asking them to find it, [`client-entry.md`](client-entry.md)), **Branches**
+  (read-only list, branch number first —
   support traces a reported order number back to a branch here), **Block** (block / unblock
   with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze). When the
@@ -135,8 +138,10 @@ Visibility for read operations:
 ### UX
 
 - **Branches list** (`/workshop/branches`) — simple table: branch number (leading, in tabular
-  figures), name, address, primary phone, status badge, action. **+ Branch** (owner). Empty:
-  "No branches yet — add one to start taking orders."
+  figures), name, address, primary phone, status badge, and a **Havola** column whose
+  icon-only action copies that branch's client link without opening it
+  ([`client-entry.md`](client-entry.md)). **+ Branch** (owner). Empty: "No branches yet — add
+  one to start taking orders."
 - **Branch create dialog** — modal form: name, primary phone, address, an add/remove list for
   the additional phones (capped at three, with the cap explained when reached).
 - **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number, so one
