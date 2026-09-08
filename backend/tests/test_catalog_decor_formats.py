@@ -192,22 +192,23 @@ async def test_a_board_carries_a_sheet_size_and_no_tape_width(
         assert response.json()["details"]["field"] == field
 
 
-async def test_finished_sides_is_required_for_boards_and_refused_for_the_rest(
+async def test_finished_sides_is_required_for_faced_boards_and_refused_for_the_rest(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     """How many faces are finished is a product fact only where it varies.
 
-    A one-sided sheet is the norm for facade MDF and for the cheap white LDSP
-    used on hidden parts: a different product at a different price, not a
-    variant. Fanera, yog'och and «boshqa» have no laminate to count, so a value
+    Only the two *faced* types have faces to count (2026-09-08): a one-sided
+    sheet is the norm for the cheap white LDSP used on hidden parts and for faced
+    LMDF backs — a different product at a different price, not a variant. Bare
+    DSP and MDF, fanera, yog'och and «boshqa» have no laminate at all, so a value
     there would be noise nobody could act on — and the DB cannot catch a
-    *missing* one on a board type (`NULL IN (1,2)` is NULL, which a CHECK
+    *missing* one on a faced type (`NULL IN (1,2)` is NULL, which a CHECK
     passes), so this rule is the service's to keep.
     """
     access = await _platform_access(db_session)
     decor_id = await _decor(client, access)
 
-    for board_type in ("ldsp", "dsp", "mdf"):
+    for board_type in ("ldsp", "lmdf"):
         one_sided = await _post_format(
             client,
             access,
@@ -238,7 +239,7 @@ async def test_finished_sides_is_required_for_boards_and_refused_for_the_rest(
             assert response.json()["code"] == "decor_format_shape_mismatch"
             assert response.json()["details"]["field"] == "finished_sides"
 
-    for other_type in ("fanera", "yogoch", "boshqa"):
+    for other_type in ("dsp", "mdf", "fanera", "yogoch", "boshqa"):
         plain = await _post_format(
             client,
             access,
@@ -305,7 +306,7 @@ async def test_a_duplicate_format_names_the_row_that_already_exists(
         client, access, decor_id, {**BOARD, "length_mm": 2750, "width_mm": 1830}
     )
     one_sided = await _post_format(client, access, decor_id, {**BOARD, "finished_sides": 1})
-    other_substrate = await _post_format(client, access, decor_id, {**BOARD, "type": "mdf"})
+    other_substrate = await _post_format(client, access, decor_id, {**BOARD, "type": "lmdf"})
 
     assert duplicate.status_code == 409
     assert duplicate.json()["code"] == "decor_format_exists"

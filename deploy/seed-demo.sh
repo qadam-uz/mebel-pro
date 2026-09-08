@@ -275,7 +275,8 @@ upload_image() { # img-basename -> file_id | ""
 # `shape` is `panel` or `kromka` — the coarse split the templates care about,
 # not the format's `type` (ldsp/mdf/... which varies per decor).
 # `format` is the literal spec string from the table below, `~` stripped:
-# `LxWxTxS` for boards (uzunlik, eni, qalinlik, qoplangan tomonlar), `TxW` for
+# `LxWxTxS` for a FACED board (uzunlik, eni, qalinlik, qoplangan tomonlar),
+# `LxWxT` for a bare one — only ldsp/lmdf carry a face count — and `TxW` for
 # kromka (qalinlik, kromka eni).
 DEKOR_KEY=(); DEKOR_ID=()
 put_dekor() { DEKOR_KEY+=("$1"); DEKOR_ID+=("$2"); }
@@ -308,10 +309,11 @@ bm_id() { # "<branch>|<decor>|<shape>|<format>" -> branch_material id
 #           `type: kromka` and no substrate). The old `type=dsp` rows were LDSP
 #           boards all along — the label already rendered them "LDSP" — so they
 #           seed as `ldsp`.
-#   boards  comma-separated `uzunlik x eni x qalinlik x qoplangan_tomonlar`;
+#   boards  comma-separated `uzunlik x eni x qalinlik [x qoplangan_tomonlar]`;
 #           a leading `~` attaches that format with NO price (price_tiyin 0 —
-#           the "narx yo'q" state). `finished_sides` is required for
-#           ldsp/dsp/mdf and refused for every other type.
+#           the "narx yo'q" state). `finished_sides` is required for the FACED
+#           types (ldsp/lmdf) and refused for every other one, so a bare
+#           `dsp`/`mdf`/`fanera` board's spec stops at the thickness.
 #   kromkalar  comma-separated `qalinlik x kromka_eni`; empty when the dekor is
 #           sold as a board only.
 DEKORLAR='
@@ -319,7 +321,7 @@ h1145|egger|Sonoma eman|true|ldsp|h1145_panel.jpg|2800x2070x18x2,~2800x2070x16x2
 h3734|egger|Yong'\''oq|true|ldsp|h3734_panel.jpg|2800x2070x18x2|2x19
 h1180|egger|Oq eman|true|ldsp|h1180_panel.jpg|2750x1830x16x1|1x19
 h1137|egger|Kulrang eman|true|ldsp|h1137_panel.jpg|2800x2070x18x2|2x19
-h3303|swisskrono|To'\''q yong'\''oq|true|mdf|h3303_panel.jpg|2800x2070x18x2|2x19
+h3303|swisskrono|To'\''q yong'\''oq|true|lmdf|h3303_panel.jpg|2800x2070x18x2|2x19
 h3702|swisskrono|Buk|true|ldsp|h3702_panel.jpg|2750x1830x16x2|1x19
 h1615|swisskrono|Qarag'\''ay|true|ldsp|h1615_panel.jpg|2800x2070x25x2|2x42
 h3170|swisskrono|Charm eman|true|ldsp|h3170_panel.jpg|2800x2070x18x2|2x22
@@ -328,9 +330,9 @@ w1100|kronospan|Alebastr oq|false|ldsp|w1100_panel.jpg|2750x1830x16x2|1x19
 u999|kronospan|Qora|false|ldsp|u999_panel.jpg|2800x2070x18x2|2x19
 u963|kronospan|Antrasit|false|ldsp|u963_panel.jpg|2750x1830x18x2|2x19
 u708|toshkent|Kashmir|false|ldsp|u708_panel.jpg|2800x2070x18x2|1x19
-u732|toshkent|Chang kulrang|false|mdf|u732_panel.jpg|2800x2070x25x2|2x19
+u732|toshkent|Chang kulrang|false|mdf|u732_panel.jpg|2800x2070x25|2x19
 u636|toshkent|Vanil|false|ldsp|u636_panel.jpg|2800x2070x16x2|
-u560|toshkent|Ko'\''k|false|mdf|u560_panel.jpg|2800x2070x18x2|
+u560|toshkent|Ko'\''k|false|mdf|u560_panel.jpg|2800x2070x18|
 '
 
 create_dekor() { # manufacturer kod nomi has_grain file_id -> dekor id
@@ -347,11 +349,15 @@ create_dekor() { # manufacturer kod nomi has_grain file_id -> dekor id
 create_format() { # dekor_id format_json -> decor_format id
   jcall POST "$API/platform/catalog/decors/$1/formats" "$TOKEN" "$2" | jq -r .id
 }
-board_format_json()  { # type LxWxTxS
+# A bare board's spec carries no face count, so `sides` reads back empty and the
+# key is left out of the body entirely — which is what the form sends, and what
+# the shape rule requires for anything but ldsp/lmdf.
+board_format_json()  { # type LxWxT[xS]
   IFS='x' read -r len wid thick sides <<< "$2"
   jq -nc --arg t "$1" --arg th "$thick" --argjson l "$len" --argjson w "$wid" \
-    --argjson s "$sides" \
-    '{type:$t,thickness_mm:$th,length_mm:$l,width_mm:$w,finished_sides:$s}'
+    --arg s "$sides" \
+    '{type:$t,thickness_mm:$th,length_mm:$l,width_mm:$w}
+     + (if $s=="" then {} else {finished_sides:($s|tonumber)} end)'
 }
 kromka_format_json() { # TxW
   IFS='x' read -r thick ew <<< "$1"
