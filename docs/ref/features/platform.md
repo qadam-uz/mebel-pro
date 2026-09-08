@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-08-31
+updated: 2026-09-08
 order: 70
 ---
 
@@ -29,11 +29,16 @@ surfaces for them.
   its manufacturer, so adding a new brand here precedes adding the decors it makes.
 - **Decors** — one decor pattern of one manufacturer: code, name, photo, grain.
 - **Decor formats** — the concrete products of a decor: substrate, thickness, sheet size or
-  tape width, finished sides. **This is new platform territory.** Formats used to be columns
-  on each branch's own row, and this admin app deliberately showed no thickness and no size;
-  they moved here so one physical product has one id across every workshop
-  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-platform-owned) carries the
-  reasoning and the accepted cost).
+  tape width, finished sides. **This is platform territory**, though no longer exclusively:
+  formats were columns on each branch's own row until 2026-08-22, and a workshop may again
+  enter one for itself when the library lacks it
+  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-the-library-and-the-workshops-own)).
+
+**Every catalog screen here shows the library and only the library.** A workshop's own
+manufacturers, decors and formats are invisible to the admin app — not listed, not counted,
+not moderated: they were created because the library lacked something, and nothing promotes
+them into it. What an operator adds here reaches every workshop; what a workshop adds reaches
+only itself.
 
 Operators still do not touch **per-branch prices or stock** — that stays workshop territory.
 
@@ -66,7 +71,7 @@ Operators still do not touch **per-branch prices or stock** — that stays works
   the menu offers no other verb. **+ Format** opens a small form whose fields follow the
   chosen substrate — size for panel-shaped, tape width for `kromka`, finished sides (default
   2) for `ldsp` / `dsp` / `mdf` — with the standard sets as quick-fill chips
-  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-platform-owned)). A shape
+  ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-the-library-and-the-workshops-own)). A shape
   mismatch reports on the dimension fields; a duplicate names the format that already exists.
   Beneath it, what **branches** did with the decor: which branches carry which of its formats,
   derived and read-only. Today only the **branch count** is exposed; the per-branch breakdown
@@ -92,8 +97,8 @@ jobs:
 
 Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
 the 50-draft cap ([`cutting.md`](cutting.md)). There is no auto-cleanup of drafts anywhere.
-Low-stock is surfaced by the inventory module when stock changes; v1 has **no scheduled
-daily low-stock digest job**.
+A negative stock balance is surfaced by the inventory module the moment it happens; v1 has
+**no scheduled daily stock digest job**.
 
 A job doesn't run twice concurrently (a guard). A failed job records its result and notifies
 platform operators; the operator can re-trigger it manually.

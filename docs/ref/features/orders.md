@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-09-08
 order: 30
 ---
 
@@ -399,10 +399,14 @@ assigned jobs, so simple-mode orders never appear in one.
 Driven entirely by this state machine; the mechanics live in
 [`catalog-inventory.md`](catalog-inventory.md). The contract:
 
-- **No reservation.** Verification is **never blocked** by low stock — some workshops buy
-  per order. At approval the operator sees a **warning** if a `shop` material's projected
-  balance won't cover this order (projected = on-hand minus the not-yet-decremented demand
-  of active orders ahead), so they can prompt the warehouseman. It is a warning, not a
+- **No reservation.** Verification is **never blocked** by a thin shelf — some workshops buy
+  per order. At approval the operator sees a **warning** naming each `shop` material this
+  order would take **below zero** (projected = on-hand minus the not-yet-decremented demand
+  of active orders ahead, minus this order's), so they can prompt the warehouseman:
+  «Kesishdan keyin manfiyga tushadi:». It warns at the honest line — a balance going negative
+  — and nowhere else; the per-material threshold that used to raise it earlier was retired
+  with the rest of the low-stock policy
+  ([`catalog-inventory.md`](catalog-inventory.md#price-is-optional)). It is a warning, not a
   gate.
 - **Auto-decrement at job completion.** `shop` panels decrement at the **cutting**
   completion; each `shop` edge material's **consumed length** decrements at the **banding**

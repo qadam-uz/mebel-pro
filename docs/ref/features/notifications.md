@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-09-08
 order: 60
 ---
 
@@ -23,8 +23,8 @@ rules. The notifications module does not broadcast and does not decide recipient
   WebSocket / SSE in v1 — overkill at this scale.
 - **Each row carries a denormalized payload** (order number, branch name, amount, …) so the
   dropdown can render without a follow-up fetch; the linked entity is the source of truth.
-- **No scheduled digest in v1.** Low-stock conditions may produce live inventory notifications,
-  but there is no daily low-stock summary job in v1.
+- **No scheduled digest in v1.** A balance going negative notifies live; there is no daily
+  stock summary job in v1.
 - **Rows persist on block.** A blocked principal's rows stay (history); they reappear on
   unblock.
 - **A client's order notifications are four status events** — `order.confirmed`,
