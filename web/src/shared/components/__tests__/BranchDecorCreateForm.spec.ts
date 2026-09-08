@@ -58,10 +58,21 @@ async function pickEgger(wrapper: Form) {
   await flushPromises()
 }
 
-/** Chip rows: thickness first, then size (or tape width). */
+/** Chip rows inside the composer: Turi, then thickness, then size (or tape width). */
 function chips(wrapper: Form, label: string) {
   const block = wrapper.findAll('.grid.gap-1').find((node) => node.text().startsWith(label))
   return block!.findAll('button.mp-chip')
+}
+
+/** The composer's Turi row — `ClientChipFilter`, so radios rather than chips. */
+async function pickType(wrapper: Form, label: string) {
+  const chip = wrapper.findAll('[role="radio"]').find((node) => node.text() === label)
+  await chip!.trigger('click')
+}
+
+/** The o‘lchamlar list, as the operator reads it back. */
+function draftRows(wrapper: Form) {
+  return wrapper.findAll('li').map((row) => row.text().replace(/\s+/g, ' ').trim())
 }
 
 async function fillName(wrapper: Form, value: string) {
@@ -103,8 +114,7 @@ describe('BranchDecorCreateForm — the workshop enters what the library lacks',
     ])
 
     // Kromka is a different axis entirely: tape widths, not sheet sizes.
-    const kromka = wrapper.findAll('[role="radio"]').find((chip) => chip.text() === 'Kromka')
-    await kromka!.trigger('click')
+    await pickType(wrapper, 'Kromka')
     expect(chips(wrapper, 'Qalinlik').map((chip) => chip.text())).toEqual(['0.4', '0.8', '1', '2'])
     expect(chips(wrapper, 'Kromka eni').map((chip) => chip.text())).toEqual([
       '19 mm',
@@ -131,7 +141,78 @@ describe('BranchDecorCreateForm — the workshop enters what the library lacks',
     await addStandardFormat(wrapper)
     await addStandardFormat(wrapper)
     expect(wrapper.text()).toContain("Bu o'lcham allaqachon ro'yxatda")
-    expect(wrapper.findAll('li')).toHaveLength(1)
+    expect(draftRows(wrapper)).toHaveLength(1)
+  })
+
+  it('keeps two o‘lchamlar of one shape apart when the substrate differs', async () => {
+    const wrapper = mountForm()
+    // LDSP and DSP share a chip set entirely, so the same two taps under each
+    // compose rows that differ by their substrate alone.
+    await chips(wrapper, 'Qalinlik')[0].trigger('click') // 10
+    await chips(wrapper, "O'lcham")[0].trigger('click') // 2750×1830
+    await clickAdd(wrapper)
+    await pickType(wrapper, 'DSP')
+    await chips(wrapper, 'Qalinlik')[0].trigger('click')
+    await chips(wrapper, "O'lcham")[0].trigger('click')
+    await clickAdd(wrapper)
+
+    expect(wrapper.text()).not.toContain("Bu o'lcham allaqachon ro'yxatda")
+    expect(draftRows(wrapper)).toHaveLength(2)
+  })
+
+  it('resets a half-composed o‘lcham when the type switches', async () => {
+    const wrapper = mountForm()
+    await chips(wrapper, 'Qalinlik')[2].trigger('click') // 18
+    await pickType(wrapper, 'MDF')
+    // Nothing survives the swap, so «+ Qo'shish» has a thickness to ask for.
+    await clickAdd(wrapper)
+    expect(wrapper.text()).toContain('Qalinlikni tanlang')
+    expect(draftRows(wrapper)).toHaveLength(0)
+  })
+
+  it('composes an LDSP board and a kromka for ONE decor, each with its own type', async () => {
+    seedManufacturers()
+    vi.mocked(api.post).mockResolvedValue({ decor: { id: 'd-new' }, formats: [] })
+    vi.mocked(api.get).mockResolvedValue([])
+    const wrapper = mountForm()
+    await pickEgger(wrapper)
+    await fillName(wrapper, 'H1145 Oq')
+
+    // The board the decor is sold as…
+    await addStandardFormat(wrapper)
+    // …and the tape that edges it — the same decor, a different substrate.
+    await pickType(wrapper, 'Kromka')
+    await chips(wrapper, 'Qalinlik')[1].trigger('click') // 0.8
+    await chips(wrapper, 'Kromka eni')[1].trigger('click') // 22
+    await clickAdd(wrapper)
+
+    // The list names the substrate: two rows of unlike numbers, otherwise
+    // unreadable side by side.
+    expect(draftRows(wrapper)[0]).toContain('LDSP · 18 mm · 2750×1830')
+    expect(draftRows(wrapper)[1]).toContain('Kromka · 0.8 mm · 22 mm')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const [, body] = vi.mocked(api.post).mock.calls[0]
+    expect((body as { formats: unknown[] }).formats).toEqual([
+      {
+        type: 'ldsp',
+        thickness_mm: '18',
+        length_mm: 2750,
+        width_mm: 1830,
+        tape_width_mm: null,
+        finished_sides: 2,
+      },
+      {
+        type: 'kromka',
+        thickness_mm: '0.8',
+        length_mm: null,
+        width_mm: null,
+        tape_width_mm: 22,
+        finished_sides: null,
+      },
+    ])
   })
 
   it('posts the composed decor, one entry per o‘lcham, sides on the boards', async () => {
@@ -187,8 +268,7 @@ describe('BranchDecorCreateForm — the workshop enters what the library lacks',
     const wrapper = mountForm()
     await pickEgger(wrapper)
     await fillName(wrapper, 'Oq kromka')
-    const kromka = wrapper.findAll('[role="radio"]').find((chip) => chip.text() === 'Kromka')
-    await kromka!.trigger('click')
+    await pickType(wrapper, 'Kromka')
     await chips(wrapper, 'Qalinlik')[1].trigger('click') // 0.8
     await chips(wrapper, 'Kromka eni')[1].trigger('click') // 22
     await clickAdd(wrapper)
