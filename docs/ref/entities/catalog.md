@@ -2,25 +2,31 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-08-22
+updated: 2026-09-08
 order: 25
 ---
 
 # Catalog
 
-The catalog is **three levels, and the platform owns the first two**. A [Decor](#decor) is one
-pattern of one manufacturer: what it's called, what it looks like, whether it has a grain. A
+The catalog is **three levels: the platform's library plus each workshop's own rows on the
+first two, and the branch's decision on the third**. A [Decor](#decor) is one pattern of one
+manufacturer: what it's called, what it looks like, whether it has a grain. A
 [Decor format](#decor-format) is one concrete product of that pattern: substrate, thickness,
 sheet size or tape width, finished faces. A [Branch material](#branch-material) is a branch's
-commercial decision about one format — *we carry this, at this price, with this threshold*. A
+commercial decision about one format — *we carry this, at this price*. A
 branch material *is* the material: stock, cutting panels and order items all point at it,
 because a 16 mm and an 18 mm sheet of the same decor are different things to cut, to stock and
 to price.
 
-Formats used to be the branch's own columns; they were moved up to the platform so one
-physical product has one id across every workshop. The forces behind that reversal, and the
-cost it accepts, are in
-[`catalog-inventory.md`](../features/catalog-inventory.md#decor-formats-platform-owned).
+**Ownership is one nullable column, `workshop_id`, on [manufacturers](#manufacturer),
+[decors](#decor) and [decor formats](#decor-format) alike.** `NULL` is a library row the
+platform maintains for everyone; a set value is a row one workshop entered for itself. A
+workshop sees a row when `workshop_id IS NULL OR workshop_id = <its own>`, at all three levels
+of every query, and a row of another workshop does not exist for it — not listed, not
+attachable, and not fetchable by id. The forces behind that model, the twin rule that keeps a
+workshop from cloning a library format, and why this is a column rather than a return to
+branch-owned formats are in
+[`catalog-inventory.md`](../features/catalog-inventory.md#decor-formats-the-library-and-the-workshops-own).
 
 **The schema vocabulary is English; the screen stays Uzbek.** The tables are `decors`,
 `decor_formats`, `branch_materials` and the enum type is `decor_type`; the word «Dekor» on
@@ -36,27 +42,36 @@ Snapshot semantics (a price change never reaches an existing order) live in
 
 ## Manufacturer
 
-Who makes a decor — Kronospan, Egger, Rehau, and so on. A platform-scoped master record:
-identity includes the manufacturer, so the same decor code from two makers is two decors.
-Created by platform operators on demand from the decor-create form.
+Who makes a decor — Kronospan, Egger, Rehau, and so on. Identity includes the manufacturer, so
+the same decor code from two makers is two decors. Created by platform operators on demand
+from the decor-create form, or by a workshop from its own — inline, while it enters a decor
+the library lacks.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `name` | text | required; unique (case-insensitive) |
+| `workshop_id` | UUID? | `NULL` = a library row; set = this workshop's own, visible to it alone |
+| `name` | text | required; unique (case-insensitive) **within its owner** |
 | `country` | text? | optional — disambiguates similarly-named brands |
 | `note` | text? | optional — short free-text |
 | `status` | enum | `active` / `inactive` (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 
-Invariants: `name` unique; created and edited only by a platform operator; `inactive` invisible
-to new decor creates and to the branch attach picker; existing decors of an `inactive`
-manufacturer keep referencing it (history preserved); never deleted. Renaming a manufacturer
-recomputes the `search_key` of every decor it makes — the name is folded into that key.
+**Uniqueness has two arms, because NULLs are distinct in a unique index.** The library's is
+`lower(name) WHERE workshop_id IS NULL`; a workshop's own is
+`(workshop_id, lower(name)) WHERE workshop_id IS NOT NULL`. One index cannot cover both, and a
+workshop naming a maker the platform later adds must not collide with it.
+
+Invariants: `name` unique within its owner; a library row is created and edited only by a
+platform operator, an own row only by its workshop (owner or `manage_catalog` on a branch of
+it); `inactive` invisible to new decor creates and to the branch attach picker; existing
+decors of an `inactive` manufacturer keep referencing it (history preserved); never deleted.
+Renaming a manufacturer recomputes the `search_key` of every decor it makes — the name is
+folded into that key.
 
 ## Decor
 
-A platform master record of one decor **pattern**: manufacturer, code, name, photo, grain.
+One decor **pattern**: manufacturer, code, name, photo, grain.
 **No substrate, no thickness, no size, no price.** What the decor physically *is* belongs to
 its [formats](#decor-format): Egger H1145 is one decor sold as an LDSP 18 mm board *and* as a
 0.8 × 22 kromka, both sharing this row's photo and name.
@@ -64,7 +79,8 @@ its [formats](#decor-format): Egger H1145 is one decor sold as an LDSP 18 mm boa
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `manufacturer_id` | UUID | required; references a platform [Manufacturer](#manufacturer) |
+| `workshop_id` | UUID? | `NULL` = a library row; set = this workshop's own, visible to it alone |
+| `manufacturer_id` | UUID | required; references a [Manufacturer](#manufacturer) the same owner can see — the library's, or its own |
 | `code` | text? | the decor code, e.g. `H1334 ST9`; optional |
 | `name` | text | required — the decor name, e.g. `Sonoma eman` |
 | `has_grain` | bool | required; `true` when the decor has a grain |
@@ -76,10 +92,13 @@ its [formats](#decor-format): Egger H1145 is one decor sold as an LDSP 18 mm boa
 There is **no texture field**: `has_grain` is the grain flag and nothing else describes the
 surface.
 
-**Uniqueness is by code when there is one, by name when there is not** — two partial,
-case-insensitive unique indexes: `(manufacturer_id, lower(code))` where `code` is non-null,
-and `(manufacturer_id, lower(name))` where `code` is null. A maker's decor code identifies the
-decor when it exists; a code-less decor falls back to its name. **The substrate is deliberately
+**Uniqueness is by code when there is one, by name when there is not** — partial,
+case-insensitive unique indexes on `(manufacturer_id, lower(code))` where `code` is non-null,
+and `(manufacturer_id, lower(name))` where `code` is null, **each in two arms**: the library's
+predicate gains `AND workshop_id IS NULL`, and a workshop's own pair keys on
+`(workshop_id, manufacturer_id, …) WHERE workshop_id IS NOT NULL`. A maker's decor code
+identifies the decor when it exists; a code-less decor falls back to its name; and identity is
+compared only against rows of the same owner. **The substrate is deliberately
 no longer part of identity**: while it was, a pattern sold as both a board and a tape needed
 two rows, and the catalog carried such a twin for nearly every decor it held (14 pairs of the
 demo catalog's 31 rows, merged away by the reshape). Both predicates are spelled for Postgres
@@ -96,21 +115,23 @@ recomputed on every write of the decor and on a rename of its manufacturer. The 
 and why search works this way live in
 [`catalog-inventory.md`](../features/catalog-inventory.md#bilingual-search).
 
-Invariants: created and edited only by a platform operator (platform-ops scope; no
-workshop-side permission grants it); `inactive` invisible to new branch attachments and to
-clients; existing formats and branch materials of an `inactive` decor keep referencing it
-(history preserved); never deleted; editing a decor never affects existing orders (snapshots).
+Invariants: a library row is created and edited only by a platform operator (platform-ops
+scope), an own row only by its workshop, which may never edit a library one; `inactive`
+invisible to new branch attachments and to clients; existing formats and branch materials of
+an `inactive` decor keep referencing it (history preserved); never deleted; editing a decor
+never affects existing orders (snapshots).
 
 ## Decor format
 
 One concrete product of a [decor](#decor) — the thing a supplier actually sells and the thing
-a branch decides to carry. Platform-owned, entered by a platform operator from the
-manufacturer's catalog, and **immutable**.
+a branch decides to carry. Entered by a platform operator from the manufacturer's catalog, or
+by a workshop for itself, and **immutable either way**.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `decor_id` | UUID | required; → [Decor](#decor) |
+| `workshop_id` | UUID? | `NULL` = a library row; set = this workshop's own. An own format may hang off its own decor **or** off a library decor — "the pattern is listed, the size I buy is not" is the common case |
+| `decor_id` | UUID | required; → a [Decor](#decor) the owner can see |
 | `type` | enum `decor_type` | `ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa` — what the product *is*. `kromka` is tape-shaped; every other value is panel-shaped |
 | `thickness_mm` | numeric | required, > 0 — sheets e.g. 16/18; tape e.g. 0.4/2 |
 | `length_mm` / `width_mm` | int? / int? | **panel-shaped only**, both required there; `length ≥ width` (long side = grain direction), normalized on write; null for `kromka` |
@@ -130,9 +151,20 @@ price, so `finished_sides` is part of the format's identity. It is meaningless f
 plywood, timber and the "everything else" bucket, and is null there.
 
 **Natural key** — `(decor_id, type, thickness_mm, COALESCE(length_mm, 0),
-COALESCE(width_mm, 0), COALESCE(tape_width_mm, 0), COALESCE(finished_sides, 0))`, unique. The
-`COALESCE` is load-bearing: NULLs are distinct in a Postgres unique index, so a plain
-constraint over the nullable columns would let the same tape-shaped format in twice.
+COALESCE(width_mm, 0), COALESCE(tape_width_mm, 0), COALESCE(finished_sides, 0))`, unique per
+owner: the library's arm carries `WHERE workshop_id IS NULL`, a workshop's own arm prefixes
+`workshop_id` and carries `WHERE workshop_id IS NOT NULL`. The `COALESCE` is load-bearing:
+NULLs are distinct in a Postgres unique index, so a plain constraint over the nullable columns
+would let the same tape-shaped format in twice. Every predicate is spelled for **both
+dialects** (`postgresql_where` + `sqlite_where`), or the SQLite test database enforces a rule
+production does not have.
+
+**A workshop may not hold a twin of an *active* library format.** The index cannot say so —
+the two rows differ in `workshop_id` — so the service checks the visible set before it
+creates: an active twin is refused by name and the caller is handed that format's id to attach
+instead ([`catalog-inventory.md`](../features/catalog-inventory.md#decor-formats-the-library-and-the-workshops-own)).
+An `inactive` library twin does not block; the workshop's own row is the honest record of a
+product the library retired and the workshop still buys.
 
 **The shape rule is a real DB CHECK now**, which it could not be before — `tur` lived on
 `dekorlar`, and a `branch_materials` constraint cannot reach another table's column, so the
@@ -155,9 +187,12 @@ natural key is refused with `decor_format_exists`, naming the row that already h
 **Immutable — there is no edit path for dimensions.** Branch rows, stock, cutting panels and
 order history all resolve through this id, so re-dimensioning a format in place would rewrite
 what those rows mean. A wrong format is **deactivated and a correct one created**; a branch
-that attached the wrong one attaches the right one instead.
+that attached the wrong one attaches the right one instead. A workshop's own format is no more
+editable than the library's, and it has no status of its own to flip either — the branch
+retires its own row instead.
 
-Invariants: created only by a platform operator; the decor must be `active` at creation;
+Invariants: created by a platform operator (library) or by the owning workshop (own); the
+decor must be visible to that owner and `active` at creation;
 dimensions never change after insert; `status` is the only mutable column and its deactivation
 **never cascades** into branch rows, stock or history
 ([`catalog-inventory.md`](../features/catalog-inventory.md#three-levels-of-off)); never
@@ -166,17 +201,16 @@ deleted.
 ## Branch material
 
 A [decor format](#decor-format) one branch has decided to carry — **this is "the material"**.
-Four facts and nothing else: that the branch carries this format, its price, its low-stock
-alert threshold, and its branch-level visibility. Created when a branch attaches formats; the
+Three facts and nothing else: that the branch carries this format, its price, and its
+branch-level visibility. Created when a branch attaches formats; the
 branch's [`stock_item`](inventory.md#stock-item) is created alongside each row.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
-| `decor_format_id` | UUID | required; references a platform [Decor format](#decor-format) |
+| `decor_format_id` | UUID | required; references a [Decor format](#decor-format) the branch's workshop can see — the library's or its own |
 | `price_tiyin` | bigint | per sell unit (per **sheet** for panel-shaped, per **metre** for `kromka`), integer tiyin, ≥ 0. Default `0` — see *Price 0 means unpriced* |
-| `min_stock` | int | low-stock threshold, in the material's stock unit (sheet count or tape millimetres); ≥ 0; default `0`, which means **monitoring off**. **The only home of the threshold** — [`stock_item`](inventory.md#stock-item) carries no copy. Writable from two surfaces: the catalog edit form (`manage_catalog`) and the Ombor stock detail (`manage_inventory`) |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 
@@ -200,11 +234,13 @@ confirmation, not here ([`orders.md`](../features/orders.md#pricing)).
 something the branch carries, prices or stocks; it belongs to the drawing and then to the
 order, and it has its own entity — [Customer board](cutting.md#customer-board).
 
-`min_stock` is a **watch threshold, not a stock policy** — nothing stops the branch holding
-less and nothing reserves the quantity. `0` switches the watch off entirely: the row is never
-low ([`inventory.md`](inventory.md#stock-item) carries the predicate). The rules behind both
-defaults, and what the attach form prefills, are in
-[`catalog-inventory.md`](../features/catalog-inventory.md#attaching-a-decor-to-a-branch).
+**There is no threshold column any more.** `min_stock` — a per-format low-stock watch level,
+`0` meaning off — was dropped on 2026-09-08 along with the whole low-stock policy: branches
+set it on almost nothing, and the state worth surfacing, a **negative** balance, needs no
+threshold to find ([`inventory.md`](inventory.md#stock-item) carries the predicate;
+[`catalog-inventory.md`](../features/catalog-inventory.md#price-is-optional) carries the
+decision). Attach and patch stopped accepting the field and the column is gone; the
+`inventory.min_stock.update` audit rows already written stay, as every action-log row does.
 
 Order pricing reads `price_tiyin` for **both** shapes: a sheet's per-sheet price for `shop`
 panel parts, and a tape's per-metre price for every `shop` edge metre. The per-metre tape price
@@ -218,11 +254,12 @@ Branch pricing.
 either that or a [`customer_board_id`](cutting.md#customer-board), never both and never
 neither.
 
-Invariants: one row per (branch, decor format); price and threshold are integer and ≥ 0; price
-integer tiyin (never float); editing price or threshold never affects existing orders
+Invariants: one row per (branch, decor format); price is integer and ≥ 0; price
+integer tiyin (never float); editing the price never affects existing orders
 (snapshots); created and edited by the workshop owner or a `manage_catalog` grantee on the
-branch; the referenced Decor format, its Decor and its Manufacturer must all be `active` when
-the row is created (existing rows survive any later platform deactivation); `inactive`
+branch; the referenced Decor format, its Decor and its Manufacturer must all be **visible to
+the branch's workshop** and `active` when
+the row is created (existing rows survive any later deactivation); `inactive`
 invisible to clients shopping at this branch and not selectable in a new cutting; a client
 sees a material at a branch when the Decor and the Branch material are both `active` —
 **price and stock are not conditions**, and the format's own status is not one either

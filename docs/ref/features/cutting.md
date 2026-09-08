@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-09-08
 order: 80
 ---
 
@@ -242,7 +242,7 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   kerf and trim from.
 - **No stock check at cutting time.** The optimiser says only "N panels needed of material
   X" and "L metres needed of edge material Y." Stock is never a gate: the operator sees a
-  non-blocking low-stock warning at order verification and the inventory module
+  non-blocking shortage warning at order verification and the inventory module
   auto-decrements as production completes (see [`orders.md`](orders.md)).
 - **No pricing computed here.** Pricing depends on the branch — branches set their own
   per-panel cutting rate and their own per-metre edge price. The optimiser yields

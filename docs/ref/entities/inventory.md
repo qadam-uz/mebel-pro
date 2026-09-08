@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-08-20
+updated: 2026-09-08
 order: 30
 ---
 
@@ -18,7 +18,7 @@ suppliers stock arrives from. There is **no reservation** in v1: the order state
 A branch's balance for one **branch material** — one platform format the branch carries
 ([`catalog.md`](catalog.md#branch-material)) — as a single on-hand quantity in that
 material's stock unit (sheet count for a panel-shaped format, integer millimetres for
-`kromka`) and a low-stock threshold in the same unit. The UI displays tape balances as
+`kromka`). The UI displays tape balances as
 metres. One per branch material, so 16 mm and 18 mm of the same decor are separate rows.
 
 | Field | Type | Notes |
@@ -29,13 +29,10 @@ metres. One per branch material, so 16 mm and 18 mm of the same decor are separa
 | `on_hand` | int | the branch's book balance for the material, in its stock unit; **may be negative** — see below |
 | `updated_at` | timestamp | |
 
-There is deliberately **no `min_stock` here**. The low-stock threshold is a property of
-what the branch carries, so it lives once on
-[`branch_material.min_stock`](catalog.md#branch-material) and every reader joins to it.
-It used to be mirrored onto this row so the low-stock filter could be a single-table
-predicate, kept in step by an explicit sync call — which is how two copies drift: a write
-path that forgets the call leaves the alert comparing against a stale number, silently.
-`stock_item` is only the balance.
+There is deliberately **no threshold here — and none on the branch material either.** A
+per-format `min_stock` lived on [`branch_material`](catalog.md#branch-material) until
+2026-09-08 and was mirrored onto this row before that; both are gone. `stock_item` is only the
+balance, and the only question asked of it is whether it is below zero.
 
 Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
 
@@ -74,13 +71,10 @@ it may land the balance negative, on the same argument as `consume`.
 Invariants: `branch_material_id` unique; stock changes only via the inventory
 module's operations (never raw SQL from elsewhere); `consume` / `restore` carry the
 `order_id` and no actor (system); `stock_in` / `stock_in_void` / `adjust` carry an actor.
-**Low stock raises no notification** — it is a state on the row, read by the Ombor list and
-its filter, and the alert that used to fire on every movement past the threshold was removed
-as noise (QAD-182). A row is low when `on_hand < 0`, **or** when the branch set a real
-threshold and the balance reached it (`branch_material.min_stock > 0 AND on_hand ≤
-min_stock`). A `min_stock` of `0` means monitoring is **off**: attaching a format mints a
-zero-balance row, so the unconditional `on_hand ≤ min_stock` marked every never-stocked row
-low and the warning stopped meaning anything. Going **negative**
+**The one predicate is `on_hand < 0`** — read by the Ombor list, its «Manfiy» filter and the
+dashboard work list. The level between "enough" and "negative" is gone with the threshold that
+defined it, and so is the alert that used to fire on every movement past that threshold, which
+read as noise rather than news (QAD-182). Going **negative**
 is a discrete event rather than a level, so a `consume` or a `stock_in_void` that leaves
 `on_hand` below zero fires a negative-balance notification to the branch's `manage_inventory`
 grantees and the owner. The verify-time "projected balance" warning

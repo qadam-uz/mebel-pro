@@ -39,8 +39,9 @@ export interface DecorResponse {
 }
 
 /**
- * One concrete product of a decor — platform-owned and immutable. A branch
- * picks from these; it cannot invent one.
+ * One concrete product of a decor — immutable, whoever entered it. Most come
+ * from the platform's library; a workshop enters its own when the library lacks
+ * the size it buys, and only that workshop ever sees those.
  */
 export interface DecorFormatResponse {
   id: string;
@@ -67,7 +68,7 @@ export interface BranchMaterialResponse {
   decor: DecorResponse;
   price_tiyin: number;
   price_unset: boolean;
-  min_stock: number;
+  decor_own: boolean;
   label: string;
 }
 
@@ -283,8 +284,9 @@ export async function createDecor(
 }
 
 /**
- * Add one format to a decor. Platform-only: a branch picks from what exists and
- * cannot create one, which is the whole point of the format reshape.
+ * Add one format to a LIBRARY decor, as a platform operator. A workshop has its
+ * own door to the same thing (`+ Boshqa o'lcham` in the attach sheet), which is
+ * driven through the UI in `catalog-and-inventory.spec.ts`.
  */
 export async function createDecorFormat(
   request: APIRequestContext,
@@ -349,17 +351,18 @@ export async function createCatalogDecors(
 }
 
 /**
- * Have a branch carry platform formats — one transaction, and a format the
- * branch already carries is *skipped* rather than rejected.
+ * Have a branch carry formats — one transaction, and a format the branch
+ * already carries is *skipped* rather than rejected.
  *
- * The endpoint takes a flat batch of format ids: the branch no longer invents
- * formats, so there is nothing per-decor left to nest.
+ * The endpoint takes a flat batch of format ids and a price per item; the
+ * low-stock threshold that used to ride along was retired with the policy
+ * behind it (docs/ref/features/catalog-inventory.md → *Price is optional*).
  */
 export async function carryFormats(
   request: APIRequestContext,
   token: string,
   branchId: string,
-  items: { decor_format_id: string; price_tiyin?: number; min_stock?: number }[],
+  items: { decor_format_id: string; price_tiyin?: number }[],
 ) {
   const response = await request.post(
     `/api/v1/workshop/branches/${branchId}/materials`,
@@ -395,7 +398,7 @@ export async function carryOneFormat(
   token: string,
   branchId: string,
   decorFormatId: string,
-  numbers: { price_tiyin?: number; min_stock?: number } = {},
+  numbers: { price_tiyin?: number } = {},
 ) {
   const [row] = await carryFormats(request, token, branchId, [
     { decor_format_id: decorFormatId, ...numbers },
@@ -430,10 +433,10 @@ export function edgeFormat(
   };
 }
 
-/** The price + threshold a carried panel gets in most of the suite. */
-export const panelNumbers = { price_tiyin: 250_000, min_stock: 1 };
-/** The price + threshold a carried tape gets in most of the suite. */
-export const edgeNumbers = { price_tiyin: 10_000, min_stock: 1_000 };
+/** The price a carried panel gets in most of the suite. */
+export const panelNumbers = { price_tiyin: 250_000 };
+/** The price a carried tape gets in most of the suite. */
+export const edgeNumbers = { price_tiyin: 10_000 };
 
 export async function updateBranchPricing(
   request: APIRequestContext,
