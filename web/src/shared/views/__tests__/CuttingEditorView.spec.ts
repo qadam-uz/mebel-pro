@@ -122,24 +122,15 @@ async function mountEditor(
         Icon: true,
         AppModal: true,
         CuttingBranchPicker: true,
-        CuttingEdgePickerModal: {
-          emits: ['edges-change'],
+        // The docked kromka card is where a side is banded in both editors
+        // now (§13 W2), so it is the seam these specs write an edge through.
+        CuttingKromkaPanel: {
+          props: ['part', 'partNumber', 'groupTapeDecor', 'selectedThicknessMm'],
+          emits: ['set-side', 'close'],
           template: `
-            <button
-              data-test="edge-only-edit"
-              @click="$emit('edges-change', {
-                edges: {
-                  edge_top: { material_id: 'edge-2', source: 'shop' },
-                  edge_bottom: null,
-                  edge_left: null,
-                  edge_right: null,
-                },
-                rememberedMaterialId: 'edge-2',
-              })"
-            />
+            <button data-test="edge-only-edit" @click="$emit('set-side', 'edge_top', 'edge-2')" />
           `,
         },
-        CuttingEdgeTapeRegistry: true,
         CuttingImportWizard: {
           props: ['open'],
           emits: ['committed'],
@@ -831,7 +822,7 @@ describe('CuttingEditorView client branch (spec §2.2, decision 17)', () => {
  * that stubs it away. Mounting the real tree is what catches that class of
  * defect without a browser.
  */
-describe('CuttingEditorView group tape (spec §7.1)', () => {
+describe('CuttingEditorView group tape (spec §7.1, §13 W2)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
@@ -888,14 +879,21 @@ describe('CuttingEditorView group tape (spec §7.1)', () => {
     }),
   ]
 
-  async function mountWithCatalog(parts: CuttingPart[]) {
+  async function mountWithCatalog(
+    parts: CuttingPart[],
+    // §13 W2 gave the workshop editor the same model, so every case below runs
+    // against whichever editor the test names — the client by default.
+    scope: 'client' | 'workshop' = 'client',
+    draftOverrides: Partial<CuttingDraft> = {},
+  ) {
     const mounted = await mountEditor(
       '/c/cutting/draft-1',
-      draft({ preferred_branch_id: 'branch-1', parts_snapshot: parts }),
-      // `false` un-stubs the row the shared harness stubs by default: its
-      // kromka cell is how a desktop client reaches the docked card, and a stub
-      // would test a selection nobody can actually make.
-      { CuttingPartRow: false, Icon: true },
+      draft({ preferred_branch_id: 'branch-1', parts_snapshot: parts, ...draftOverrides }),
+      // `false` un-stubs the row and the card the shared harness stubs by
+      // default: the row's kromka cell is how a desktop user reaches the card,
+      // and a stub would test a selection nobody can actually make.
+      { CuttingPartRow: false, CuttingKromkaPanel: false, Icon: true },
+      scope,
     )
     mounted.cutting.panelOptions = [board]
     mounted.cutting.edgeOptions = tapes
@@ -1025,12 +1023,76 @@ describe('CuttingEditorView group tape (spec §7.1)', () => {
     ])
     await selectRow(wrapper)
 
-    expect(wrapper.findComponent({ name: 'CuttingEdgeTapeRegistry' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'CuttingImportWizard' }).exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Fayldan import')
     // §7.1 dropped the patterns with the per-part tape list: four taps on the
     // diagram, or none, say the same thing.
     expect(wrapper.text()).not.toContain('4 tomon')
     expect(wrapper.text()).not.toContain('Kromsiz')
+  })
+
+  // ── The workshop editor, on the same model (§13 W2) ───────────────────────
+  // A plain workshop draft IS the order wizard's Detallar step (`inOrderWizard`);
+  // a revision draft is the standalone workshop editor. Both are covered, because
+  // they lay the docked card out differently and only the wizard levels it with
+  // the row.
+  const REVISION = { revision_of_order_id: 'order-9' }
+
+  it('attaches the group tape and bands a side in the order wizard', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()], 'workshop')
+
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).toContain('Dub Bardolino')
+
+    await selectRow(wrapper)
+    await panelButton(wrapper, 'Yuqori').trigger('click')
+
+    expect(editorParts(wrapper)[0].edge_top).toEqual({ material_id: TAPE_THICK, source: 'shop' })
+  })
+
+  it('bands a side from the docked card in the standalone workshop editor', async () => {
+    const { wrapper } = await mountWithCatalog([partOn()], 'workshop', REVISION)
+
+    await selectRow(wrapper)
+    await panelButton(wrapper, 'Pastki').trigger('click')
+
+    expect(editorParts(wrapper)[0].edge_bottom).toEqual({ material_id: TAPE_THICK, source: 'shop' })
+  })
+
+  // The workshop is where mixed groups actually turn up — a drawing banded
+  // before W2, or one the import wizard mapped edge by edge.
+  it('marks a mixed group and re-points every banded side on a pick', async () => {
+    const { wrapper } = await mountWithCatalog(
+      [
+        partOn({ part_ref: 'p1', edge_top: { material_id: TAPE_THICK, source: 'shop' } }),
+        partOn({ part_ref: 'p2', edge_top: { material_id: TAPE_OTHER, source: 'shop' } }),
+      ],
+      'workshop',
+    )
+
+    // The head names the first tape its sides use — and says it is not alone.
+    const line = wrapper.get(`#group-tape-${BOARD}`)
+    expect(line.text()).toContain('Dub Bardolino')
+    expect(line.text()).toContain('aralash')
+
+    await line.trigger('click')
+    const picker = wrapper.findComponent({ name: 'CuttingTapePicker' })
+    picker.vm.$emit('pick', 'kronospan|u963')
+    await flushPromises()
+
+    // One pick is the whole way out of a mixed group: both sides move.
+    expect(editorParts(wrapper)[0].edge_top?.material_id).toBe(TAPE_OTHER)
+    expect(editorParts(wrapper)[1].edge_top?.material_id).toBe(TAPE_OTHER)
+    expect(wrapper.get(`#group-tape-${BOARD}`).text()).not.toContain('aralash')
+  })
+
+  it('keeps thickening on the workshop card and off the client one', async () => {
+    const workshop = await mountWithCatalog([partOn()], 'workshop')
+    await selectRow(workshop.wrapper)
+    await kromkaPanel(workshop.wrapper).get('[role="switch"]').trigger('click')
+    expect(editorParts(workshop.wrapper)[0].thickened).toBe(true)
+
+    const client = await mountWithCatalog([partOn()])
+    await selectRow(client.wrapper)
+    expect(kromkaPanel(client.wrapper).find('[role="switch"]').exists()).toBe(false)
   })
 })
