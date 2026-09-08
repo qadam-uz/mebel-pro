@@ -98,7 +98,9 @@ and `(manufacturer_id, lower(name))` where `code` is null, **each in two arms**:
 predicate gains `AND workshop_id IS NULL`, and a workshop's own pair keys on
 `(workshop_id, manufacturer_id, …) WHERE workshop_id IS NOT NULL`. A maker's decor code
 identifies the decor when it exists; a code-less decor falls back to its name; and identity is
-compared only against rows of the same owner. **The substrate is deliberately
+compared only against rows of the same owner. A clash is refused with `decor_exists`, naming
+the decor that already holds the identity so the operator can pick it instead of retyping
+around it. **The substrate is deliberately
 no longer part of identity**: while it was, a pattern sold as both a board and a tape needed
 two rows, and the catalog carried such a twin for nearly every decor it held (14 pairs of the
 demo catalog's 31 rows, merged away by the reshape). Both predicates are spelled for Postgres

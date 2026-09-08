@@ -484,6 +484,52 @@ async def test_a_size_listed_twice_in_one_form_is_refused_rather_than_collapsed(
     assert empty.json()["code"] == "decor_formats_required"
 
 
+async def test_a_clashing_identity_names_the_decor_that_is_in_the_way(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`decor_exists` carries the row it refused for, on both write paths.
+
+    A bare 409 sends the operator back to the picker to work out which of 300
+    rows they collided with. The label the form prints — «Bunday dekor bor:
+    Kastamonu K100 · Oq yog'och» — is the whole difference between a refusal
+    they can act on and one they retype their way around.
+    """
+
+    platform_access = await _platform_access(db_session)
+    a_access, a_branch = await _owner_access(db_session, login="owner-a")
+
+    first = await _own_decor(client, a_access, a_branch, manufacturer_name="Kastamonu")
+    clash = await _create_own_decor(
+        client,
+        a_access,
+        a_branch,
+        manufacturer_id=str(first["decor"]["manufacturer_id"]),
+        # Same maker and code, a different name: the code is the identity, so
+        # this is the same decor typed twice.
+        name="Oq yogoch (2)",
+    )
+    library_maker, library_decor, _ = await _library_decor(
+        client, platform_access, manufacturer="Egger", code="H1145", name="Sonoma eman"
+    )
+    library_clash = await client.post(
+        "/api/v1/platform/catalog/decors",
+        headers=_auth(platform_access),
+        json={"manufacturer_id": library_maker, "code": "h1145", "name": "Sonoma"},
+    )
+
+    assert clash.status_code == 409, clash.text
+    assert clash.json()["code"] == "decor_exists"
+    assert clash.json()["details"] == {
+        "decor_id": str(first["decor"]["id"]),
+        "decor_label": first["decor"]["label"],
+    }
+    # The platform operator writing into the library gets the same detail from
+    # the same helper — one refusal, not two shapes of it.
+    assert library_clash.status_code == 409, library_clash.text
+    assert library_clash.json()["details"]["decor_id"] == library_decor
+    assert library_clash.json()["details"]["decor_label"] == "Egger H1145 · Sonoma eman"
+
+
 async def test_the_create_writes_one_audit_row_per_entity_and_marks_them_workshop_owned(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
