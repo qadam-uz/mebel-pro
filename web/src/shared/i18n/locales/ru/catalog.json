@@ -138,7 +138,8 @@
   },
   "ownBadge": "Ваш",
   "manufacturerChips": {
-    "all": "Все"
+    "all": "Все",
+    "unit": "декор | декора | декоров"
   },
   "section": {
     "count": "Декоров: {n} · размеров: {m}"

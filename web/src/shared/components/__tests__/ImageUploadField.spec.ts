@@ -51,6 +51,24 @@ describe('ImageUploadField', () => {
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
+  it('keeps the file input out of the tab order and the a11y tree, leaving the button as the control', () => {
+    const wrapper = mount(ImageUploadField, {
+      props: { fileId: null, alt: 'Material image' },
+      global: { stubs: { AuthFileImage: true } },
+    })
+    const input = wrapper.get('input[type="file"]')
+
+    // Announced as the browser's unlabelled "Choose File" beside the real
+    // «Rasm tanlash» button before this — the visible button proxies it.
+    expect(input.attributes('aria-hidden')).toBe('true')
+    expect(input.attributes('tabindex')).toBe('-1')
+
+    const choose = wrapper.get('button')
+    expect(choose.text()).toBe('Rasm tanlash')
+    expect(choose.attributes('tabindex')).toBeUndefined()
+    expect(choose.attributes('aria-hidden')).toBeUndefined()
+  })
+
   it('renders an existing authenticated image when a file id exists', () => {
     const wrapper = mount(ImageUploadField, {
       props: { fileId: 'file-1', alt: 'Oak material' },

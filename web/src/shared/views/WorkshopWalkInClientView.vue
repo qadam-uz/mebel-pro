@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { apiErrorCode } from '@/shared/api/client'
 import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
+import { walkInNameAfterLookup } from '@/shared/app/walkInName'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import OrderWizardHead from '@/shared/components/OrderWizardHead.vue'
@@ -31,6 +32,10 @@ const LOOKUP_SETTLE_MS = 350
 
 const phone = ref('')
 const name = ref('')
+// The name the last lookup hit wrote, so a later answer can tell its own value
+// apart from one the operator typed over it. See `walkInName.ts` — the field is
+// editable through the whole 350 ms settle, so both write to it.
+const nameFromLookup = ref<string | null>(null)
 const resolving = ref(false)
 const error = ref<string | null>(null)
 // The client the base returned for the current phone. While it is set the name
@@ -79,13 +84,16 @@ async function lookup(normalized: string) {
     // a number the operator is no longer typing.
     if (!isUzPhone(phone.value) || normalizeUzPhone(phone.value) !== normalized) return
     lookedUpPhone.value = normalized
-    if (found.found && found.id && found.name) {
-      matched.value = { id: found.id, name: found.name }
-      name.value = found.name
-    } else {
-      matched.value = null
-      name.value = ''
-    }
+    const hit = found.found && found.id && found.name ? { id: found.id, name: found.name } : null
+    matched.value = hit
+    // A miss must not eat a name the operator typed while this answer was in
+    // flight — it only clears what a previous hit put there.
+    const next = walkInNameAfterLookup(
+      { value: name.value, fromLookup: nameFromLookup.value },
+      hit?.name ?? null,
+    )
+    name.value = next.value
+    nameFromLookup.value = next.fromLookup
   } catch (caught) {
     // A failed lookup must not block the order: the operator can still type a
     // name, and `resolve` will find the client on the way through anyway.
