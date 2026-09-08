@@ -30,12 +30,13 @@
   },
   "panelType": {
     "ldsp": "ЛДСП",
+    "lmdf": "ЛМДФ",
     "dsp": "ДСП",
     "mdf": "МДФ",
     "fanera": "Фанера",
     "yogoch": "Дерево",
     "kromka": "Кромка",
-    "boshqa": "Лист",
+    "boshqa": "Другое",
     "plywood": "Фанера",
     "natural_wood": "Дерево",
     "other": "Лист"

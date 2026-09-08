@@ -59,12 +59,15 @@ describe('decorTypeLabel / isTape', () => {
     // chipboard indistinguishable on every screen and document even though they
     // are different products at different prices.
     expect(decorTypeLabel('ldsp')).toBe('LDSP')
+    expect(decorTypeLabel('lmdf')).toBe('LMDF')
     expect(decorTypeLabel('dsp')).toBe('DSP')
     expect(decorTypeLabel('mdf')).toBe('MDF')
     expect(decorTypeLabel('fanera')).toBe('Fanera')
     expect(decorTypeLabel('yogoch')).toBe("Yog'och")
     expect(decorTypeLabel('kromka')).toBe('Kromka')
-    expect(decorTypeLabel('boshqa')).toBe('List')
+    // «Boshqa», not «List»: the word is answering "what KIND of material is
+    // this", and «List» — a sheet — answered a different question (2026-09-08).
+    expect(decorTypeLabel('boshqa')).toBe('Boshqa')
   })
 
   it('colours the Tur dot by substrate family, never by status', () => {
@@ -75,6 +78,7 @@ describe('decorTypeLabel / isTape', () => {
     expect(decorTypePillClass('ldsp')).toBe('pill p-tur tur-board')
     expect(decorTypePillClass('dsp')).toBe('pill p-tur tur-board')
     expect(decorTypePillClass('mdf')).toBe('pill p-tur tur-mdf')
+    expect(decorTypePillClass('lmdf')).toBe('pill p-tur tur-mdf')
     expect(decorTypePillClass('fanera')).toBe('pill p-tur tur-wood')
     expect(decorTypePillClass('yogoch')).toBe('pill p-tur tur-wood')
     expect(decorTypePillClass('kromka')).toBe('pill p-tur tur-tape')
@@ -144,12 +148,13 @@ describe('decorTypeFilterGroups', () => {
     // silently start printing a duplicate choice.
     expect(decorTypeFilterGroups()).toEqual([
       { label: 'LDSP', types: ['ldsp'] },
+      { label: 'LMDF', types: ['lmdf'] },
       { label: 'DSP', types: ['dsp'] },
       { label: 'MDF', types: ['mdf'] },
       { label: 'Fanera', types: ['fanera'] },
       { label: "Yog'och", types: ['yogoch'] },
       { label: 'Kromka', types: ['kromka'] },
-      { label: 'List', types: ['boshqa'] },
+      { label: 'Boshqa', types: ['boshqa'] },
     ])
   })
 })

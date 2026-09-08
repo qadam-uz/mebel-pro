@@ -310,7 +310,11 @@ function openAttachSheet() {
 
 // The attach call is not all-or-nothing: a format the branch already carries
 // comes back under `skipped`. That is a notice, never an error.
-async function onMaterialsAttached(result: { created: number; skipped: number }) {
+async function onMaterialsAttached(result: {
+  created: number
+  skipped: number
+  decorLabel: string
+}) {
   attachSheetOpen.value = false
   await refreshCatalog()
   if (result.skipped > 0) {
@@ -318,7 +322,10 @@ async function onMaterialsAttached(result: { created: number; skipped: number })
   }
   if (result.created === 0) return
   if (!(await notifyProgress())) {
-    toast.success(t('catalog.toast.attached', { n: result.created }, result.created))
+    // The sheet handles ONE decor now, so the toast can name it — «Egger H1145
+    // · 2 ta o'lcham qo'shildi» is what the operator just did, where a bare
+    // count left them to remember which decor it was about.
+    toast.success(t('inventory.attach.addedToast', { decor: result.decorLabel, n: result.created }))
   }
 }
 
