@@ -66,11 +66,11 @@ Operators still do not touch **per-branch prices or stock** — that stays works
 - **Dekor detail** (`/admin/catalog/decors/:decor_id`) — the identity header (photo, nomi,
   label, manufacturer, kod, tolali, holat, created) and a deactivate action; then a
   **Formatlar** card — the decor's formats as rows (substrate · thickness · size or tape
-  width · finished sides on the board substrates · status · ⋯ menu with Activate /
+  width · finished sides on the laminated boards · status · ⋯ menu with Activate /
   Deactivate). **There is no Edit**: a format entered wrong is deactivated and re-created, so
   the menu offers no other verb. **+ Format** opens a small form whose fields follow the
   chosen substrate — size for panel-shaped, tape width for `kromka`, finished sides (default
-  2) for `ldsp` / `dsp` / `mdf` — with the standard sets as quick-fill chips
+  2) for `ldsp` / `lmdf` and for nothing else — with the standard sets as quick-fill chips
   ([`catalog-inventory.md`](catalog-inventory.md#decor-formats-the-library-and-the-workshops-own)). A shape
   mismatch reports on the dimension fields; a duplicate names the format that already exists.
   Beneath it, what **branches** did with the decor: which branches carry which of its formats,

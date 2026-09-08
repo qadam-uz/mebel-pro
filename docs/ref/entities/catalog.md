@@ -134,11 +134,11 @@ by a workshop for itself, and **immutable either way**.
 | `id` | UUID | PK |
 | `workshop_id` | UUID? | `NULL` = a library row; set = this workshop's own. An own format may hang off its own decor **or** off a library decor — "the pattern is listed, the size I buy is not" is the common case |
 | `decor_id` | UUID | required; → a [Decor](#decor) the owner can see |
-| `type` | enum `decor_type` | `ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa` — what the product *is*. `kromka` is tape-shaped; every other value is panel-shaped |
+| `type` | enum `decor_type` | `ldsp` / `lmdf` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa` — what the product *is*, listed and displayed in that order. `kromka` is tape-shaped; every other value is panel-shaped. `lmdf` (laminated MDF) was added 2026-09-08 — forward-only `ALTER TYPE … ADD VALUE`, so the enum is append-only and a value is never renumbered |
 | `thickness_mm` | numeric | required, > 0 — sheets e.g. 16/18; tape e.g. 0.4/2 |
 | `length_mm` / `width_mm` | int? / int? | **panel-shaped only**, both required there; `length ≥ width` (long side = grain direction), normalized on write; null for `kromka` |
 | `tape_width_mm` | int? | **`kromka` only**, required there, > 0; null for panel-shaped |
-| `finished_sides` | smallint? | `1` or `2` — how many faces carry laminate, film or paint. **Required for `ldsp` / `dsp` / `mdf`**, null for every other type |
+| `finished_sides` | smallint? | `1` or `2` — how many faces carry the decor. **Required for `ldsp` / `lmdf`**, null for every other type |
 | `status` | enum | `active` / `inactive`; the only mutable column |
 | `created_at` / `updated_at` | timestamp | |
 
@@ -148,9 +148,14 @@ carries both facts. It hangs off the format, not off the decor: a pattern is not
 anything, a product is.
 
 **One-sided is a different product, not a variant of the two-sided sheet.** One-sided is the
-norm for facade MDF and for the cheap white LDSP used on hidden parts, and it sells at its own
-price, so `finished_sides` is part of the format's identity. It is meaningless for tape,
-plywood, timber and the "everything else" bucket, and is null there.
+norm for facade LMDF and for the cheap white LDSP used on hidden parts, and it sells at its own
+price, so `finished_sides` is part of the format's identity. **Only the laminated boards have
+faces to count** — `ldsp` and `lmdf`. Bare `dsp` and bare `mdf` have no laminated face, and
+tape, plywood, timber and the "everything else" bucket never did, so the field is null for all
+of them. It was required on `dsp` and `mdf` until 2026-09-08, when `lmdf` split the laminate off
+`mdf`; the migration that added the value **nulled `finished_sides` on the existing `dsp` and
+`mdf` rows**. Frozen history is not rewritten — an order or cutting snapshot keeps whatever it
+printed, «1 tomonlama» included.
 
 **Natural key** — `(decor_id, type, thickness_mm, COALESCE(length_mm, 0),
 COALESCE(width_mm, 0), COALESCE(tape_width_mm, 0), COALESCE(finished_sides, 0))`, unique per
@@ -178,8 +183,8 @@ whole rule had to sit in the service:
 OR (type <> 'kromka' AND tape_width_mm IS NULL
    AND length_mm IS NOT NULL AND width_mm IS NOT NULL
    AND length_mm >= width_mm
-   AND ((type IN ('ldsp', 'dsp', 'mdf') AND finished_sides IN (1, 2))
-        OR (type NOT IN ('ldsp', 'dsp', 'mdf') AND finished_sides IS NULL)))
+   AND ((type IN ('ldsp', 'lmdf') AND finished_sides IN (1, 2))
+        OR (type NOT IN ('ldsp', 'lmdf') AND finished_sides IS NULL)))
 ```
 
 The service still checks the same rule first, so a wrong shape comes back as a named error
