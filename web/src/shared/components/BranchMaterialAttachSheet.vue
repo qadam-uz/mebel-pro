@@ -208,13 +208,16 @@ const showEmptyState = computed(
 )
 
 /**
- * The substrate «+ Boshqa o'lcham» opens on for a decor: whatever its existing
- * o'lchamlar are. A decor with a board and a kromka takes the board — the
- * common case is another sheet size, and the chip row is one press from the
- * other type anyway.
+ * The substrate «+ Boshqa o'lcham» **opens on** — never the substrate it is
+ * limited to.
+ *
+ * The type is a property of the format, not of the decor, so a board decor must
+ * still be able to take a kromka (Egger H1145 is one decor with both). The
+ * composer carries its own chip row; this only spares the common case — another
+ * size of what the decor already has — one press.
  */
-function groupType(group: { rows: FormatRow[] }): DecorType {
-  return group.rows.find((row) => !isTape(row.type))?.type ?? group.rows[0]?.type ?? 'ldsp'
+function groupInitialType(group: { rows: FormatRow[] }): DecorType {
+  return group.rows[0]?.type ?? 'ldsp'
 }
 
 /** Loaded rows that still have something to add — what select-all may collect. */
@@ -1192,7 +1195,7 @@ watch(
             </button>
             <BranchDecorFormatPicker
               v-if="addFormatDecorId === group.decor.id"
-              :type="groupType(group)"
+              :initial-type="groupInitialType(group)"
               :busy="addFormatBusy"
               :error="addFormatError"
               @add="addDecorFormat(group.decor, $event)"

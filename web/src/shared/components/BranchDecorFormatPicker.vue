@@ -1,12 +1,19 @@
 <script setup lang="ts">
 /**
- * The o'lcham block: two chip rows and an «+ Qo'shish» that composes ONE format.
+ * The o'lcham block: a type chip row, two dimension chip rows and an
+ * «+ Qo'shish» that composes ONE format.
  *
  * Shared by the two places a workshop enters a size it cannot find in the
  * library — «Yangi dekor»'s O'lchamlar field (many at once, collected into a
  * list) and step 2's «+ Boshqa o'lcham» (one at a time, posted straight away).
  * Both compose exactly the same object, so they compose it here rather than
  * twice.
+ *
+ * **The type belongs to the format, not to the decor** (owner review of PR
+ * #148): Egger H1145 is one decor carrying an LDSP board *and* a kromka. So the
+ * chip row lives here, inside the composer, rather than once at the top of the
+ * form — every format the operator composes states its own substrate, and one
+ * creation can mix them. The host only says what the row should OPEN on.
  *
  * The chips come from `standardFormats.ts` and are a typing shortcut, not data:
  * anything a manufacturer makes off that list is typed under «Boshqa…», and the
@@ -16,7 +23,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { isTape } from '@/shared/app/materialLabel'
+import { DECOR_TYPES, decorTypeChoiceLabel, isTape } from '@/shared/app/materialLabel'
 import {
   hasFinishedSides,
   normalizePanelSize,
@@ -24,11 +31,17 @@ import {
   standardFormatSet,
   type FormatDraft,
 } from '@/shared/app/standardFormats'
+import ClientChipFilter from '@/shared/components/ClientChipFilter.vue'
 import type { DecorType } from '@/shared/stores/admin'
 
 const props = withDefaults(
   defineProps<{
-    type: DecorType
+    /**
+     * What the type row opens on — the create form takes the default, the
+     * attach sheet passes the decor group's first format type. It seeds the
+     * row; it does not pin it, and the operator may switch to any substrate.
+     */
+    initialType?: DecorType
     /** A post is in flight — «+ Qo'shish» disables so it cannot double-fire. */
     busy?: boolean
     /** Rejection from the host (a duplicate, a refused create). */
@@ -37,16 +50,29 @@ const props = withDefaults(
     invalid?: boolean
     describedBy?: string
   }>(),
-  { busy: false, error: null, invalid: false, describedBy: undefined },
+  { initialType: 'ldsp', busy: false, error: null, invalid: false, describedBy: undefined },
 )
 
 const emit = defineEmits<{ add: [draft: FormatDraft] }>()
 
 const { t } = useI18n()
 
-const set = computed(() => standardFormatSet(props.type))
-const tape = computed(() => isTape(props.type))
-const boards = computed(() => hasFinishedSides(props.type))
+const type = ref<DecorType>(props.initialType)
+
+/**
+ * Seven substrates, so a chip row rather than a `SegmentedControl` — DESIGN.md
+ * caps that primitive at three or four segments.
+ */
+const typeChips = computed(() =>
+  DECOR_TYPES.map((value) => ({
+    value,
+    label: decorTypeChoiceLabel(value, t('inventory.attach.typeOther')),
+  })),
+)
+
+const set = computed(() => standardFormatSet(type.value))
+const tape = computed(() => isTape(type.value))
+const boards = computed(() => hasFinishedSides(type.value))
 
 const thickness = ref('')
 const thicknessCustom = ref(false)
@@ -80,10 +106,19 @@ const sizeLabel = computed(() =>
 )
 
 /** A type switch swaps both chip sets, so nothing picked under the old one survives. */
+watch(type, () => reset())
+
+/** The host re-seeded the row (a different decor group's composer). */
 watch(
-  () => props.type,
-  () => reset(),
+  () => props.initialType,
+  (value) => {
+    type.value = value
+  },
 )
+
+function setType(value: string) {
+  type.value = value as DecorType
+}
 
 function reset() {
   thickness.value = ''
@@ -160,7 +195,7 @@ function compose(): FormatDraft | null {
       return null
     }
     return {
-      type: props.type,
+      type: type.value,
       thickness_mm: normalizeThickness(rawThickness),
       length_mm: null,
       width_mm: null,
@@ -186,7 +221,7 @@ function compose(): FormatDraft | null {
   // `2750×1830` chip rather than a second row nobody can tell apart.
   const size = normalizePanelSize(length, width)
   return {
-    type: props.type,
+    type: type.value,
     thickness_mm: normalizeThickness(rawThickness),
     length_mm: size.length_mm,
     width_mm: size.width_mm,
@@ -211,6 +246,18 @@ const message = computed(() => localError.value ?? props.error)
     :class="invalid || message ? 'border-danger bg-danger-soft/40' : 'border-hairline bg-sunk'"
     :aria-describedby="describedBy"
   >
+    <!-- Turi leads: it drives the two chip rows under it, so choosing it later
+         would swap a set the operator had already picked from. -->
+    <div class="grid gap-1">
+      <span class="text-xs font-bold text-ink-soft">{{ $t('inventory.attach.typeLabel') }}</span>
+      <ClientChipFilter
+        :label="$t('inventory.attach.typeLabel')"
+        :model-value="type"
+        :options="typeChips"
+        @update:model-value="setType"
+      />
+    </div>
+
     <div class="grid gap-1">
       <span class="text-xs font-bold text-ink-soft">{{
         $t('inventory.attach.thicknessLabel')

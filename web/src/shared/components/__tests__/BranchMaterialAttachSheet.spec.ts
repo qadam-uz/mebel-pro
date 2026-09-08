@@ -518,6 +518,50 @@ describe('BranchMaterialAttachSheet — «+ Boshqa o‘lcham»', () => {
     await flushPromises()
   }
 
+  it('adds a kromka to a board decor — the type belongs to the format', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
+      'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],
+    })
+    vi.mocked(api.post).mockResolvedValue(
+      format('f-new', 'd-1', {
+        type: 'kromka',
+        thickness_mm: '0.8',
+        length_mm: null,
+        width_mm: null,
+        tape_width_mm: 22,
+        finished_sides: null,
+      }),
+    )
+    const wrapper = mountSheet()
+    await flushPromises()
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
+    await byText(wrapper, "+ Boshqa o'lcham")!.trigger('click')
+
+    // The composer opens on the group's substrate but is not held to it: one
+    // decor carries the board AND the tape that edges it.
+    const kromka = wrapper.findAll('[role="radio"]').find((chip) => chip.text() === 'Kromka')
+    await kromka!.trigger('click')
+    const chips = wrapper
+      .findAll('button.mp-chip')
+      .filter((chip) => chip.attributes('aria-pressed'))
+    await chips.find((chip) => chip.text() === '0.8')!.trigger('click')
+    await chips.find((chip) => chip.text() === '22 mm')!.trigger('click')
+    await byText(wrapper, "+ Qo'shish")!.trigger('click')
+    await flushPromises()
+
+    const [, body] = vi.mocked(api.post).mock.calls[0]
+    expect(body).toEqual({
+      type: 'kromka',
+      thickness_mm: '0.8',
+      length_mm: null,
+      width_mm: null,
+      tape_width_mm: 22,
+      finished_sides: null,
+    })
+    expect(formatBoxes(wrapper)).toHaveLength(2)
+  })
+
   it('adds the o‘lcham and arrives with it ticked', async () => {
     respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
       'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],

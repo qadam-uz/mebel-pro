@@ -16,6 +16,11 @@
  * **The formats block is create-only.** A `decor_format` is immutable — branch
  * rows, stock, cutting panels and order history all resolve through its id —
  * so the edit mode is identity only.
+ *
+ * **The decor has no `type`.** The substrate is a property of each o'lcham, so
+ * the chip row lives inside the composer and one decor may carry an LDSP board
+ * and a kromka at once (Egger H1145). The form only collects the drafts and
+ * sends each one's own type.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,16 +32,15 @@ import {
   type FieldErrors,
 } from '@/shared/app/adminValidation'
 import { traceSuffix } from '@/shared/app/errorTrace'
-import { DECOR_TYPES, decorTypeLabel } from '@/shared/app/materialLabel'
+import { decorTypeChoiceLabel } from '@/shared/app/materialLabel'
 import { foldIncludes } from '@/shared/app/searchFold'
 import { formatDraftKey, formatDraftLabel, type FormatDraft } from '@/shared/app/standardFormats'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import BranchDecorFormatPicker from '@/shared/components/BranchDecorFormatPicker.vue'
-import ClientChipFilter from '@/shared/components/ClientChipFilter.vue'
 import ImageUploadField from '@/shared/components/ImageUploadField.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
-import type { Decor, DecorFormat, DecorType } from '@/shared/stores/admin'
+import type { Decor, DecorFormat } from '@/shared/stores/admin'
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
@@ -69,7 +73,6 @@ const files = useFilesStore()
 const editing = computed(() => props.decor !== null)
 
 const form = reactive({
-  type: 'ldsp' as DecorType,
   manufacturerId: null as string | null,
   newManufacturerName: '',
   name: '',
@@ -121,7 +124,6 @@ watch(
     pickerError.value = null
     drafts.value = []
     manufacturerQuery.value = ''
-    form.type = 'ldsp'
     form.manufacturerId = decor?.manufacturer_id ?? null
     form.newManufacturerName = ''
     form.name = decor?.name ?? props.initialName
@@ -131,27 +133,6 @@ watch(
   },
   { immediate: true },
 )
-
-// ---- Turi -----------------------------------------------------------------
-
-/**
- * Seven substrates, so a chip row rather than a `SegmentedControl` — DESIGN.md
- * caps that primitive at three or four segments.
- *
- * `boshqa` is the one label that does not come from the shared type set: there
- * it reads «List», the word for a sheet, which is right on a cutting part and
- * wrong on a field asking what KIND of material this is.
- */
-const typeChips = computed(() =>
-  DECOR_TYPES.map((value) => ({
-    value,
-    label: value === 'boshqa' ? t('inventory.attach.typeOther') : decorTypeLabel(value),
-  })),
-)
-
-function setType(value: string) {
-  form.type = value as DecorType
-}
 
 // ---- Ishlab chiqaruvchi ---------------------------------------------------
 
@@ -215,10 +196,18 @@ function removeImage() {
 
 // ---- O'lchamlar -----------------------------------------------------------
 
+/**
+ * The composed list, each row named by the substrate it is: a decor may hold
+ * an LDSP board and a kromka, and «18 mm · 2800×2070» beside «0.8 mm · 22 mm»
+ * would leave the reader to infer which is which from the shape of the number.
+ */
 const draftRows = computed(() =>
   drafts.value.map((draft) => ({
     key: formatDraftKey(draft),
-    label: formatDraftLabel(draft, t('catalog.finishedSides.1')),
+    label: [
+      decorTypeChoiceLabel(draft.type, t('inventory.attach.typeOther')),
+      formatDraftLabel(draft, t('catalog.finishedSides.1')),
+    ].join(' · '),
   })),
 )
 
@@ -330,18 +319,6 @@ async function submit() {
 
 <template>
   <form class="grid gap-3" novalidate @submit.prevent="submit">
-    <!-- Turi leads: it drives the o'lcham chips below it, so choosing it later
-         would swap a set the operator had already picked from. -->
-    <div v-if="!editing" class="field">
-      <span>{{ $t('inventory.attach.typeLabel') }}</span>
-      <ClientChipFilter
-        :label="$t('inventory.attach.typeLabel')"
-        :model-value="form.type"
-        :options="typeChips"
-        @update:model-value="setType"
-      />
-    </div>
-
     <SearchCombobox
       ref="manufacturerRef"
       :label="$t('inventory.attach.manufacturerField')"
@@ -397,7 +374,6 @@ async function submit() {
     <div v-if="!editing" class="field !mb-0">
       <span :id="fieldIds.formats">{{ $t('inventory.attach.formatsLabel') }}</span>
       <BranchDecorFormatPicker
-        :type="form.type"
         :error="pickerError"
         :invalid="Boolean(fieldErrors.formats)"
         :described-by="fieldErrors.formats ? 'branch-decor-formats-error' : undefined"
