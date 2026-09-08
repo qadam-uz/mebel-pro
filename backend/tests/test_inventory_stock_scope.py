@@ -154,10 +154,10 @@ async def test_the_stock_alarm_is_the_negative_balance_and_nothing_else(
     rows = await _stock_index(client, access, branch_id)
     negative_only = await _stock_index(client, access, branch_id, "?negative=true")
 
-    assert rows[str(never_stocked.id)]["is_low_stock"] is False
-    assert rows[str(thin.id)]["is_low_stock"] is False
-    assert rows[str(negative.id)]["is_low_stock"] is True
-    assert rows[str(stocked.id)]["is_low_stock"] is False
+    assert rows[str(never_stocked.id)]["is_negative_stock"] is False
+    assert rows[str(thin.id)]["is_negative_stock"] is False
+    assert rows[str(negative.id)]["is_negative_stock"] is True
+    assert rows[str(stocked.id)]["is_negative_stock"] is False
     # No row carries the retired threshold any more.
     assert "min_stock" not in rows[str(negative.id)]
     # The filter and the flag are the same predicate — a row may never be low in

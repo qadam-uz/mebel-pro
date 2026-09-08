@@ -72,10 +72,10 @@ class StockItemResponse(APIModel):
     stock_unit: str
     display_unit: str
     on_hand: int
-    # The wire name is unchanged and its meaning narrowed: `on_hand < 0`, full
-    # stop. The per-material threshold that used to be its other arm was retired
-    # 2026-09-08, and with it the `min_stock` field that stood here.
-    is_low_stock: bool
+    # `on_hand < 0`, full stop. The per-material threshold that used to be the
+    # flag's other arm was retired 2026-09-08, and with it the `min_stock` field
+    # that stood here — so the wire name says what the flag now means.
+    is_negative_stock: bool
     updated_at: datetime
 
 

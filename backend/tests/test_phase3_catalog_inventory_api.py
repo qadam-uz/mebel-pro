@@ -635,7 +635,7 @@ async def test_inventory_stock_in_adjustment_notifications_and_pricing(
     assert stock.json()[0]["on_hand"] == 2
     # Two sheets on the shelf is not an alarm: the only one left is a negative
     # balance (the threshold that used to fire here was retired 2026-09-08).
-    assert stock.json()[0]["is_low_stock"] is False
+    assert stock.json()[0]["is_negative_stock"] is False
     assert transactions.status_code == 200
     assert [row["type"] for row in transactions.json()] == ["adjust", "stock_in"]
     assert transactions.json()[0]["actor_name"] == "Workshop Owner"

@@ -2168,9 +2168,15 @@ async def _ensure_decor_identity_available(
     library's are two rows by design, and neither may refuse the other.
     """
 
-    query = select(Decor.id).where(
-        Decor.manufacturer_id == manufacturer_id,
-        Decor.workshop_id.is_(None) if workshop_id is None else Decor.workshop_id == workshop_id,
+    query = (
+        select(Decor, Manufacturer)
+        .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
+        .where(
+            Decor.manufacturer_id == manufacturer_id,
+            Decor.workshop_id.is_(None)
+            if workshop_id is None
+            else Decor.workshop_id == workshop_id,
+        )
     )
     if code is not None:
         query = query.where(func.lower(Decor.code) == code.lower())
@@ -2178,11 +2184,20 @@ async def _ensure_decor_identity_available(
         query = query.where(Decor.code.is_(None), func.lower(Decor.name) == name.lower())
     if exclude_id is not None:
         query = query.where(Decor.id != exclude_id)
-    if await db.scalar(query) is not None:
+    existing = (await db.execute(query)).first()
+    if existing is not None:
+        # The label rides along so the form can say WHICH decor is in the way —
+        # «Bunday dekor bor: Egger H1145 · Sonoma» — instead of a bare refusal
+        # the operator has to go hunting through the picker to explain.
+        clash, clash_manufacturer = existing
         raise APIError(
             "decor_exists",
             "This manufacturer already has a decor with that code",
             status_code=status.HTTP_409_CONFLICT,
+            details={
+                "decor_id": str(clash.id),
+                "decor_label": decor_label(clash, clash_manufacturer),
+            },
         )
 
 

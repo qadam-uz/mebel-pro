@@ -283,7 +283,7 @@ def _stock_response(row: StockRecord) -> StockItemResponse:
         stock_unit=stock_unit(row.decor_format.type),
         display_unit=display_unit(row.decor_format.type),
         on_hand=item.on_hand,
-        is_low_stock=is_negative_stock(item.on_hand),
+        is_negative_stock=is_negative_stock(item.on_hand),
         updated_at=item.updated_at,
     )
 
