@@ -703,13 +703,7 @@ watch(
     <!-- The filters never scroll away: they are how the list on the other side
          of them is changed (owner item 3, §3.1). -->
     <template v-if="step === 'pick'" #head>
-      <!-- One row of three from `sm` up, rather than `sm:grid-cols-2
-           lg:grid-cols-3`: `--breakpoint-lg` is redefined in `main.css`, which
-           re-registers the variant AFTER `sm` in Tailwind v4's cascade order,
-           so the two-column rule wins at every width and the pair silently
-           never reaches three. The fixed head is the one place that costs a
-           whole row of modal height, so it states the layout once. -->
-      <div class="grid gap-3 sm:grid-cols-3">
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label class="field !mb-0">
           <span>{{ $t('inventory.attach.searchLabel') }}</span>
           <input
