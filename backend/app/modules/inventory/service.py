@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import status
-from sqlalchemy import ColumnElement, Select, and_, or_, select
+from sqlalchemy import ColumnElement, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -30,7 +30,6 @@ from app.modules.catalog.api import (
     apply_decor_search,
     branch_material_label,
     format_dimension_arms,
-    set_branch_material_min_stock,
 )
 from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer, is_tape
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier, SupplierInvoice
@@ -77,30 +76,26 @@ class MaterialRecord:
         return self.decor_format.type
 
 
-def is_low_stock(on_hand: int, min_stock: int) -> bool:
-    """The one low-stock predicate, in Python.
+def is_negative_stock(on_hand: int) -> bool:
+    """The one stock alarm, in Python: the books say less than nothing.
 
-    A row is low when the books went negative, or when the owner set a real
-    threshold and the balance has reached it. `min_stock = 0` means monitoring
-    is **off**: attaching a format mints a zero-balance stock row, and a branch
-    that registers its supplier's whole price list would otherwise see every one
-    of those rows wearing the warning — a warning that is everywhere is nowhere.
+    A negative balance is an unrecorded arrival (QAD-150) — a fact about the
+    warehouse that resolves itself the moment someone enters the delivery.
 
-    The `on_hand < 0` arm is load-bearing and independent of the threshold: a
-    negative balance is an unrecorded arrival (QAD-150) and has to stay visible
-    under the "Kam qolgan" filter and in the dashboard card that counts it.
+    It used to share this predicate with a per-material `min_stock` threshold.
+    That was retired 2026-09-08: a branch registering its supplier's whole price
+    list saw every zero-balance row wearing the warning, and a warning that is
+    everywhere is nowhere. Nothing replaced it — this arm never needed a stored
+    number to be true.
     """
 
-    return on_hand < 0 or (min_stock > 0 and on_hand <= min_stock)
+    return on_hand < 0
 
 
-def low_stock_condition() -> ColumnElement[bool]:
-    """The same predicate in SQL, over `StockItem` joined to `BranchMaterial`."""
+def negative_stock_condition() -> ColumnElement[bool]:
+    """The same predicate in SQL, over `StockItem`."""
 
-    return or_(
-        StockItem.on_hand < 0,
-        and_(BranchMaterial.min_stock > 0, StockItem.on_hand <= BranchMaterial.min_stock),
-    )
+    return StockItem.on_hand < 0
 
 
 @dataclass(frozen=True)
@@ -118,8 +113,8 @@ class StockRecord:
         )
 
     @property
-    def is_low(self) -> bool:
-        return is_low_stock(self.stock_item.on_hand, self.branch_material.min_stock)
+    def is_negative(self) -> bool:
+        return is_negative_stock(self.stock_item.on_hand)
 
 
 @dataclass(frozen=True)
@@ -187,9 +182,8 @@ async def ensure_stock_item_for_branch_material(
     on `StockItem`). The row itself is keyed by `branch_material_id` alone, which
     is what the unique index enforces.
 
-    Idempotent, and it no longer carries a threshold: the low-stock threshold is
-    read from `branch_materials.min_stock` wherever it is needed, so there is
-    nothing here left to keep in sync.
+    Idempotent, and it carries no threshold: the low-stock threshold was retired
+    from the whole system (2026-09-08), leaving `on_hand < 0` as the only alarm.
     """
 
     row = await db.scalar(
@@ -214,7 +208,7 @@ async def list_stock(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID,
     search: str | None = None,
-    low_stock_only: bool = False,
+    negative_only: bool = False,
     moved_only: bool = False,
     types: list[DecorType] | None = None,
     limit: int | None = None,
@@ -229,10 +223,8 @@ async def list_stock(
         # on every screen — and a filter must never make the reader guess which
         # of two identical-looking options is theirs.
         query = query.where(DecorFormat.type.in_(types))
-    if low_stock_only:
-        # The threshold lives on the branch material, which `_material_join` has
-        # already joined — so the single source of truth costs nothing here.
-        query = query.where(low_stock_condition())
+    if negative_only:
+        query = query.where(negative_stock_condition())
     if moved_only:
         # "Has moved" is deliberately *any* movement, a lone adjust or a
         # consume-driven negative included: one movement is exactly what makes a
@@ -668,56 +660,6 @@ async def stock_row_for_material(
     )
 
 
-async def set_min_stock(
-    db: AsyncSession,
-    *,
-    principal: AuthenticatedPrincipal,
-    branch_id: uuid.UUID,
-    branch_material_id: uuid.UUID,
-    min_stock: int,
-) -> StockRecord:
-    """Set a material's low-stock threshold from the stock surface.
-
-    Two doors, one fact: the catalog form (`manage_catalog`) and this route
-    (`manage_inventory`) write the same `branch_materials.min_stock` column —
-    the threshold is warehouse policy, and "5 emas, 10 bo'lsin" is decided
-    standing in front of the shelf. The row itself belongs to the catalog
-    module, so the write goes through its public api.
-    """
-
-    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
-    item, material = await _stock_item_for_movement(
-        db,
-        scope=scope,
-        branch_material_id=branch_material_id,
-    )
-    previous = material.branch_material.min_stock
-    await set_branch_material_min_stock(
-        db,
-        branch_material_id=branch_material_id,
-        branch_id=scope.branch_id,
-        min_stock=min_stock,
-    )
-    await record_action(
-        db,
-        actor=actor_from_principal(principal),
-        action="inventory.min_stock.update",
-        entity_type="branch_material",
-        entity_id=branch_material_id,
-        workshop_id=scope.workshop_id,
-        branch_id=scope.branch_id,
-        summary=f"Set min stock for {material.label} from {previous} to {min_stock}",
-        details={"min_stock": min_stock, "previous_min_stock": previous},
-    )
-    return StockRecord(
-        stock_item=item,
-        branch_material=material.branch_material,
-        decor_format=material.decor_format,
-        decor=material.decor,
-        manufacturer=material.manufacturer,
-    )
-
-
 async def consume_order_stock(
     db: AsyncSession,
     *,
@@ -1111,7 +1053,6 @@ async def _notify_inventory_holders(
                     "branch_material_id": str(material.branch_material.id),
                     "material_name": material_name,
                     "on_hand": stock_item.on_hand,
-                    "min_stock": material.branch_material.min_stock,
                 },
                 created_at=now,
             )

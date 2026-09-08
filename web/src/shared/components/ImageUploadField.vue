@@ -130,11 +130,19 @@ onBeforeUnmount(clearLocalPreview)
         <strong>{{ fieldTitle }}</strong>
         <span>{{ meta || statusText }}</span>
         <small v-if="meta">{{ statusText }}</small>
+        <!-- The file input is machinery, not a control: «Rasm tanlash» below is
+             what the operator sees, tabs to and presses, and it clicks this.
+             Left in the tree the input announces itself a second time as the
+             browser's own unlabelled "Choose File" — so it is hidden from
+             assistive tech and taken out of the tab order, and the visible
+             button carries the accessible name. -->
         <input
           :id="id"
           ref="inputRef"
           class="sr-only"
           type="file"
+          tabindex="-1"
+          aria-hidden="true"
           :accept="accept"
           :disabled="disabled || uploading"
           @change="onChange"

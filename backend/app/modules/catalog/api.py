@@ -5,6 +5,7 @@ from app.modules.catalog.schemas import (
     BranchMaterialResponse,
     DecorFormatResponse,
     DecorResponse,
+    ManufacturerResponse,
 )
 from app.modules.catalog.service import (
     BranchCatalogFacets,
@@ -16,6 +17,7 @@ from app.modules.catalog.service import (
     DecorFormatRecord,
     DecorFormatShape,
     DecorRecord,
+    WorkshopDecorCreateResult,
     apply_decor_search,
     attach_branch_materials,
     branch_material_join,
@@ -24,6 +26,8 @@ from app.modules.catalog.service import (
     create_decor,
     create_decor_format,
     create_manufacturer,
+    create_workshop_decor,
+    create_workshop_decor_format,
     decor_dimension_arms,
     decor_format_label,
     decor_format_snapshot,
@@ -39,8 +43,8 @@ from app.modules.catalog.service import (
     list_decor_formats,
     list_decors,
     list_manufacturers,
+    list_workshop_manufacturers,
     normalize_mm,
-    set_branch_material_min_stock,
     set_branch_material_status,
     set_decor_format_status,
     set_decor_status,
@@ -48,8 +52,24 @@ from app.modules.catalog.service import (
     update_branch_material,
     update_decor,
     update_manufacturer,
+    update_workshop_decor,
     validate_decor_format_shape,
 )
+
+
+def manufacturer_response_from_model(manufacturer: Manufacturer) -> ManufacturerResponse:
+    """Build the public manufacturer response — `own` derived, never stored."""
+
+    return ManufacturerResponse(
+        id=manufacturer.id,
+        name=manufacturer.name,
+        country=manufacturer.country,
+        note=manufacturer.note,
+        status=manufacturer.status,
+        own=manufacturer.workshop_id is not None,
+        created_at=manufacturer.created_at,
+        updated_at=manufacturer.updated_at,
+    )
 
 
 def decor_response_from_models(
@@ -72,6 +92,9 @@ def decor_response_from_models(
         label=decor_label(decor, manufacturer),
         branch_usage_count=branch_usage_count,
         format_count=format_count,
+        # Derived, never stored: a reader only ever sees the library plus its own
+        # rows, so "has an owner" and "is mine" are the same fact here.
+        own=decor.workshop_id is not None,
         created_at=decor.created_at,
         updated_at=decor.updated_at,
     )
@@ -95,6 +118,7 @@ def decor_format_response_from_models(
         finished_sides=decor_format.finished_sides,
         status=decor_format.status,
         label=decor_format_label(decor_format, decor, manufacturer),
+        own=decor_format.workshop_id is not None,
         created_at=decor_format.created_at,
         updated_at=decor_format.updated_at,
     )
@@ -120,7 +144,7 @@ def branch_material_response_from_models(
         decor=decor_response_from_models(decor, manufacturer),
         price_tiyin=branch_material.price_tiyin,
         price_unset=branch_material.price_tiyin == 0,
-        min_stock=branch_material.min_stock,
+        decor_own=decor.workshop_id is not None,
         status=branch_material.status,
         label=branch_material_label(decor_format, decor, manufacturer, branch_material.id),
         created_at=branch_material.created_at,
@@ -138,6 +162,7 @@ __all__ = [
     "DecorFormatRecord",
     "DecorFormatShape",
     "DecorRecord",
+    "WorkshopDecorCreateResult",
     "apply_decor_search",
     "attach_branch_materials",
     "branch_material_join",
@@ -147,6 +172,8 @@ __all__ = [
     "create_decor",
     "create_decor_format",
     "create_manufacturer",
+    "create_workshop_decor",
+    "create_workshop_decor_format",
     "decor_dimension_arms",
     "decor_format_label",
     "decor_format_response_from_models",
@@ -164,8 +191,9 @@ __all__ = [
     "list_decor_formats",
     "list_decors",
     "list_manufacturers",
+    "list_workshop_manufacturers",
+    "manufacturer_response_from_model",
     "normalize_mm",
-    "set_branch_material_min_stock",
     "set_branch_material_status",
     "set_decor_format_status",
     "set_decor_status",
@@ -173,5 +201,6 @@ __all__ = [
     "update_branch_material",
     "update_decor",
     "update_manufacturer",
+    "update_workshop_decor",
     "validate_decor_format_shape",
 ]

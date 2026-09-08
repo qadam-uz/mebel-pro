@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-09-08
 order: 40
 ---
 
@@ -30,7 +30,7 @@ reading order:
 
 | Section | What it shows | Where the numbers come from |
 | --- | --- | --- |
-| **KPI row** — four cards | today's income · orders in production, with their value · client debt · low-stock materials, naming how many are negative | [`finance.md`](finance.md#finance-summary) · this module's order counts · [`catalog-inventory.md`](catalog-inventory.md) |
+| **KPI row** — four cards | today's income · orders in production, with their value · client debt · **Ombor qiymati**, the branch's stock valued at each material's last purchase price | [`finance.md`](finance.md#finance-summary) · this module's order counts · [`catalog-inventory.md`](catalog-inventory.md) |
 | **Sizdan kutilmoqda** — a work list | one row per condition that needs a person: new orders unconfirmed, ready orders not collected, a material gone negative, a branch with no cutter assigned. Each row is a title, a detail line, and the action that clears it | the module the condition belongs to |
 | **Stansiyalar** | Kesish and Krom, each with who is on it and how many orders are queued, plus a text link to the queues. **Hidden while the selected branch runs `simple`** — it has no assignments to report ([`orders.md`](orders.md#production-mode)) | [`orders.md`](orders.md) → production stations |
 | **Savdo** | income per day over the chosen period as a bar chart, the period total in the panel head | [`finance.md`](finance.md#finance-summary) |

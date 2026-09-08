@@ -1,17 +1,15 @@
-"""The Zaxira tab's contract: what counts as low, what counts as stock, who sets the threshold.
+"""The Zaxira tab's contract: what the alarm means, and what counts as stock.
 
-Three rules the stock surface stands on, and each of them used to be wrong or
-absent:
+Two rules the stock surface stands on:
 
-- **low** means `on_hand < 0` **or** (`min_stock > 0` **and** `on_hand <=
-  min_stock`). The old `on_hand <= min_stock` fired for `0 <= 0`, so every
-  never-stocked row a branch had ever attached wore the warning pill and was
-  counted by the dashboard card.
+- the alarm is **`on_hand < 0`** and nothing else. It used to have a second arm,
+  a per-material `min_stock` threshold, which fired for `0 <= 0` and put the
+  warning pill on every never-stocked row a branch had ever attached. The
+  threshold was retired 2026-09-08 and the arm with it, so the chip reads
+  «Manfiy» and the query param is `negative`.
 - `moved_only=true` narrows the list to rows that have actually moved, so the
   warehouse stops being a mirror of the catalog. It is **off by default**: the
   pickers and the global search preview must keep seeing everything.
-- the threshold is editable from the stock surface by `manage_inventory` — the
-  same column the catalog form writes, no mirror.
 """
 
 import uuid
@@ -27,13 +25,10 @@ from app.models.enums import (
 )
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial
 from app.modules.inventory.api import consume_order_stock
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order
-from app.modules.support.contracts import ActionLog
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories import (
@@ -109,7 +104,6 @@ async def _carried(
     branch_id: uuid.UUID,
     name: str,
     on_hand: int,
-    min_stock: int,
 ) -> MaterialFixture:
     """A carried panel and the balance row attaching it would have created."""
     material = await seed_panel_material(
@@ -117,7 +111,6 @@ async def _carried(
         branch_id=branch_id,
         manufacturer=await seed_manufacturer(db, name=f"Maker {uuid.uuid4().hex[:8]}"),
         name=name,
-        min_stock=min_stock,
     )
     db.add(
         StockItem(
@@ -142,35 +135,34 @@ async def _stock_index(
     return {str(row["branch_material_id"]): row for row in response.json()}
 
 
-async def test_low_stock_is_off_at_a_zero_threshold_and_always_on_below_zero(
+async def test_the_stock_alarm_is_the_negative_balance_and_nothing_else(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """The whole low matrix, in the response flag and in the server-side filter.
+    """The whole matrix, in the response flag and in the server-side filter.
 
-    `min = 0` is monitoring off, not "alert when it hits zero" — which is what
-    made the pill meaningless on a freshly registered price list. A negative
-    balance is low regardless: it is an unrecorded arrival, and the dashboard
-    card that counts negatives reads this same filter.
+    A zero balance is not an alarm — that was the threshold arm, and a warning on
+    every freshly registered price list row is a warning nobody reads. Only the
+    books going below zero is: an unrecorded arrival somebody has to enter.
     """
 
     access, _, branch_id = await _owner_access(db_session)
-    unmonitored = await _carried(db_session, branch_id=branch_id, name="A", on_hand=0, min_stock=0)
-    below = await _carried(db_session, branch_id=branch_id, name="B", on_hand=3, min_stock=5)
-    at_threshold = await _carried(db_session, branch_id=branch_id, name="C", on_hand=5, min_stock=5)
-    negative = await _carried(db_session, branch_id=branch_id, name="D", on_hand=-2, min_stock=0)
-    stocked = await _carried(db_session, branch_id=branch_id, name="E", on_hand=7, min_stock=0)
+    never_stocked = await _carried(db_session, branch_id=branch_id, name="A", on_hand=0)
+    thin = await _carried(db_session, branch_id=branch_id, name="B", on_hand=3)
+    negative = await _carried(db_session, branch_id=branch_id, name="D", on_hand=-2)
+    stocked = await _carried(db_session, branch_id=branch_id, name="E", on_hand=7)
 
     rows = await _stock_index(client, access, branch_id)
-    low_only = await _stock_index(client, access, branch_id, "?low_stock=true")
+    negative_only = await _stock_index(client, access, branch_id, "?negative=true")
 
-    assert rows[str(unmonitored.id)]["is_low_stock"] is False
-    assert rows[str(below.id)]["is_low_stock"] is True
-    assert rows[str(at_threshold.id)]["is_low_stock"] is True
-    assert rows[str(negative.id)]["is_low_stock"] is True
-    assert rows[str(stocked.id)]["is_low_stock"] is False
+    assert rows[str(never_stocked.id)]["is_negative_stock"] is False
+    assert rows[str(thin.id)]["is_negative_stock"] is False
+    assert rows[str(negative.id)]["is_negative_stock"] is True
+    assert rows[str(stocked.id)]["is_negative_stock"] is False
+    # No row carries the retired threshold any more.
+    assert "min_stock" not in rows[str(negative.id)]
     # The filter and the flag are the same predicate — a row may never be low in
     # one and not the other.
-    assert set(low_only) == {str(below.id), str(at_threshold.id), str(negative.id)}
+    assert set(negative_only) == {str(negative.id)}
 
 
 async def test_moved_only_admits_a_row_the_moment_it_first_moves(
@@ -179,13 +171,9 @@ async def test_moved_only_admits_a_row_the_moment_it_first_moves(
     """Any movement makes a row warehouse — an adjust, or a consume into the red."""
 
     access, _, branch_id = await _owner_access(db_session)
-    never_moved = await _carried(
-        db_session, branch_id=branch_id, name="Idle", on_hand=0, min_stock=0
-    )
-    adjusted = await _carried(
-        db_session, branch_id=branch_id, name="Counted", on_hand=0, min_stock=0
-    )
-    consumed = await _carried(db_session, branch_id=branch_id, name="Cut", on_hand=0, min_stock=0)
+    never_moved = await _carried(db_session, branch_id=branch_id, name="Idle", on_hand=0)
+    adjusted = await _carried(db_session, branch_id=branch_id, name="Counted", on_hand=0)
+    consumed = await _carried(db_session, branch_id=branch_id, name="Cut", on_hand=0)
 
     # A stock-take correction and a production consume that took the books
     # negative: neither is an arrival, and both are movement.
@@ -277,84 +265,6 @@ async def test_tur_filter_reads_one_shelf_at_a_time_and_composes_with_the_scope(
     assert set(kromka_moved) == {str(tape.id)}
 
 
-async def test_inventory_staff_edits_the_threshold_and_the_row_re_reads_low(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
-    """The happy path, end to end: the response row, the audit line, the next read."""
-
-    _, workshop_id, branch_id = await _owner_access(db_session)
-    access = await _staff_access(
-        db_session,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=Permission.MANAGE_INVENTORY,
-    )
-    material = await _carried(db_session, branch_id=branch_id, name="Oak", on_hand=4, min_stock=0)
-
-    updated = await client.put(
-        f"/api/v1/workshop/inventory/branches/{branch_id}/stock/{material.id}/min-stock",
-        headers=_auth(access),
-        json={"min_stock": 6},
-    )
-
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["min_stock"] == 6
-    # The client patches this row in place instead of reloading the list, so the
-    # derived state has to arrive with it.
-    assert updated.json()["is_low_stock"] is True
-
-    stored = await db_session.get(BranchMaterial, material.id)
-    assert stored is not None and stored.min_stock == 6
-    rows = await _stock_index(client, access, branch_id, "?low_stock=true")
-    assert str(material.id) in rows
-
-    logged = await db_session.scalar(
-        select(ActionLog).where(
-            ActionLog.action == "inventory.min_stock.update",
-            ActionLog.entity_id == material.id,
-        )
-    )
-    assert logged is not None
-    assert logged.details == {"min_stock": 6, "previous_min_stock": 0}
-
-
-async def test_threshold_edit_refuses_a_negative_value_an_unknown_row_and_the_wrong_reader(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
-    owner_access, workshop_id, branch_id = await _owner_access(db_session)
-    material = await _carried(db_session, branch_id=branch_id, name="Ash", on_hand=1, min_stock=2)
-    url = f"/api/v1/workshop/inventory/branches/{branch_id}/stock/{material.id}/min-stock"
-
-    negative = await client.put(url, headers=_auth(owner_access), json={"min_stock": -1})
-    unknown = await client.put(
-        f"/api/v1/workshop/inventory/branches/{branch_id}/stock/{uuid.uuid4()}/min-stock",
-        headers=_auth(owner_access),
-        json={"min_stock": 3},
-    )
-    ungranted = await client.put(
-        url,
-        headers=_auth(
-            await _staff_access(
-                db_session, workshop_id=workshop_id, branch_id=branch_id, permission=None
-            )
-        ),
-        json={"min_stock": 3},
-    )
-    # Another workshop's owner: a valid principal, the wrong branch entirely.
-    foreign_access, _, _ = await _owner_access(db_session, login="foreign-owner")
-    foreign = await client.put(url, headers=_auth(foreign_access), json={"min_stock": 3})
-
-    assert negative.status_code == 400
-    assert negative.json()["code"] == "min_stock_invalid"
-    assert unknown.status_code == 404
-    assert unknown.json()["code"] == "branch_material_not_found"
-    assert ungranted.status_code == 403
-    assert foreign.status_code == 403
-    # Nothing was written by any of the four.
-    stored = await db_session.get(BranchMaterial, material.id)
-    assert stored is not None and stored.min_stock == 2
-
-
 async def test_an_arrival_still_books_for_a_material_that_never_moved(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
@@ -366,7 +276,7 @@ async def test_an_arrival_still_books_for_a_material_that_never_moved(
     """
 
     access, _, branch_id = await _owner_access(db_session)
-    fresh = await _carried(db_session, branch_id=branch_id, name="Never", on_hand=0, min_stock=0)
+    fresh = await _carried(db_session, branch_id=branch_id, name="Never", on_hand=0)
 
     invoice = await client.post(
         "/api/v1/workshop/inventory/invoices",
@@ -401,9 +311,7 @@ async def test_material_page_reads_its_own_row_and_names_the_documents(
     """
 
     access, workshop_id, branch_id = await _owner_access(db_session)
-    material = await _carried(
-        db_session, branch_id=branch_id, name="Sonoma", on_hand=6, min_stock=0
-    )
+    material = await _carried(db_session, branch_id=branch_id, name="Sonoma", on_hand=6)
 
     buyer = Client(phone="+998901112255", name="Dilshod")
     db_session.add(buyer)
@@ -461,7 +369,7 @@ async def test_material_page_refuses_a_reader_outside_the_material_s_branch(
     """Deriving the branch must not widen who may read it."""
 
     _, workshop_id, branch_id = await _owner_access(db_session)
-    material = await _carried(db_session, branch_id=branch_id, name="Oq", on_hand=1, min_stock=0)
+    material = await _carried(db_session, branch_id=branch_id, name="Oq", on_hand=1)
     other_access, _, other_branch_id = await _owner_access(db_session, login="rival")
 
     denied = await client.get(

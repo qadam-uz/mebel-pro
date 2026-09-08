@@ -285,6 +285,16 @@ handoff hex.
   rows tall and airy, numeric columns right-aligned with tabular figures; event timestamps as
   `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted "Kiritildi:"
   entry-timestamp line beneath; images in fixed-size framed thumbnails with a non-empty fallback.
+- **Section rows** group a long table without breaking it into several: one row spanning the
+  width on the `sunk` fill, a hairline above it, the group's name in Display and a muted count
+  line beside it, **sticky under the table head** while its own rows scroll (Material
+  katalogi's manufacturers over its dekor groups). Two rules keep them honest: a section row
+  is emitted whenever the grouping value **changes between consecutive rows**, so a
+  *load-more* page boundary inside one group never reprints its heading; and a level that
+  already exists as a filter gets a **chip row** too, because a reader who can see the groups
+  will want to keep one. It is a level above a group heading, never a substitute for it — a
+  heading a row can hover over needs the `track` fill, not `sunk`, which is the row-hover
+  colour.
 
 ## Elevation & Depth
 
@@ -562,6 +572,7 @@ Russian and appear in the Russian column on purpose.
 | A panel sheet                          | `list`              | `лист`               | `plita`, `panel`                  |
 | A layout's material yield              | `chiqim`            | `выход`              | `vixod`, `foyda`                  |
 | One buyable size of a dekor            | `o'lcham`           | `размер`             | `format`                          |
+| A catalog row this workshop added itself | `Sizniki`         | `свой`               | `O'zimizniki`, `shaxsiy`, `maxsus` |
 | A sheet's length × width               | `list o'lchami`     | `размер листа`       | bare `o'lcham`                    |
 | A tape's width                         | `lenta eni`         | `ширина ленты`       | bare `o'lcham`, `eni`             |
 | Edge tape (the material)               | `kromka`            | `кромка`             | `krom`                            |
@@ -594,6 +605,11 @@ of the interface) are different words for different things.
 `yon menyu` names the 264px column itself, and it is the one word copy uses to send someone
 there — below 921px the same content becomes the drawer, so "yon menyuda" stays true on a phone
 and no string has to name two places.
+
+`Sizniki` marks a manufacturer, dekor or o'lcham the workshop entered itself because the
+platform's library lacked it — a muted chip after the name, never a colour on the row: it says
+where the row came from, not that anything is wrong with it. The library's rows wear nothing;
+absence is the norm.
 
 `o'lcham` is the whole a branch carries and prices — a dekor at one thickness in one size
 (`2750×1830×18`, or `2 mm × 19` for kromka); the API calls it a `format` and always will, but no

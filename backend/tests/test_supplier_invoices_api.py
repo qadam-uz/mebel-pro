@@ -105,7 +105,6 @@ async def _carried_material(
                 {
                     "decor_format_id": decor_format.json()["id"],
                     "price_tiyin": 60_000_000,
-                    "min_stock": 0,
                 }
             ],
         },

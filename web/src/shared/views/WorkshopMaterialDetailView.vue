@@ -1,33 +1,26 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { traceLine } from '@/shared/app/errorTrace'
-import { sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
-import { lowStockThresholdColumn } from '@/shared/app/lowStockThreshold'
 import { formatMm, isTape } from '@/shared/app/materialLabel'
 import { groupMaterialMovements, movementTotal } from '@/shared/app/materialMovements'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
-import AppIcon from '@/shared/components/AppIcon.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import StockAdjustmentDialog from '@/shared/components/StockAdjustmentDialog.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
-import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
   formatDate,
   formatDateTime,
   formatOrderNumber,
-  formatQuantityInput,
   formatStockQuantity,
-  formatStockUnit,
   formatTiyin,
-  parseDisplayQuantity,
 } from '@/shared/formatters'
 import {
   useWorkshopStore,
@@ -49,15 +42,11 @@ import {
 const MOVEMENT_WINDOW = 100
 
 const { t } = useI18n()
-// One module owns this number's copy — the figure tile, Ombor's column and the
-// catalog form all read it from there rather than each naming it themselves.
-const thresholdColumn = computed(() => lowStockThresholdColumn())
 const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const permissions = useWorkshopPermissions()
-const toast = useToast()
 
 const branchMaterialId = computed(() =>
   typeof route.params.branch_material_id === 'string' ? route.params.branch_material_id : '',
@@ -81,10 +70,6 @@ type MovementTab = 'arrivals' | 'consumption' | 'adjustments'
 const movementTab = ref<MovementTab>('arrivals')
 
 const adjustOpen = ref(false)
-const minEditing = ref(false)
-const minInput = ref('')
-const minSaving = ref(false)
-const minError = ref<string | null>(null)
 
 const canUseInventory = computed(() => permissions.can(p.manageInventory))
 const backLink = computed(() => rolePath('/workshop/inventory'))
@@ -107,18 +92,12 @@ const movementTabs = computed<ChoiceOption[]>(() => [
 // section's total read as an all-time figure.
 const movementsCapped = computed(() => movements.value.length >= MOVEMENT_WINDOW)
 
-watch(minInput, (value) => {
-  const clean = sanitizeQuantityInput(value)
-  if (clean !== value) minInput.value = clean
-})
-
 const isNegative = computed(() => (item.value?.on_hand ?? 0) < 0)
 
 const statusPill = computed(() => {
   const row = item.value
   if (!row) return null
   if (row.on_hand < 0) return { cls: 'pill p-bad', text: t('inventory.stock.pillNegative') }
-  if (row.is_low_stock) return { cls: 'pill p-warn', text: t('inventory.stock.pillLow') }
   return { cls: 'pill p-ok', text: t('inventory.stock.pillEnough') }
 })
 
@@ -272,46 +251,6 @@ async function refreshAfterMutation() {
   await Promise.all([loadMovements(), loadLastPrice()])
 }
 
-function startMinEdit() {
-  const row = item.value
-  if (!row) return
-  minInput.value = formatQuantityInput(row.min_stock, row.display_unit)
-  minError.value = null
-  minEditing.value = true
-  void nextTick(() => document.querySelector<HTMLInputElement>('[data-min-input]')?.focus())
-}
-
-function cancelMinEdit() {
-  minEditing.value = false
-  minError.value = null
-}
-
-async function saveMinStock() {
-  const row = item.value
-  if (!row) return
-  const parsed = parseDisplayQuantity(minInput.value.trim(), row.display_unit)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    minError.value = t('inventory.material.minInvalid')
-    return
-  }
-  minSaving.value = true
-  minError.value = null
-  try {
-    // The response is the refreshed row; the store patches it into the table's
-    // collections too, so this page and the list re-derive together.
-    item.value = await workshop.updateStockMinStock(row.branch_id, row.branch_material_id, parsed)
-    minEditing.value = false
-    toast.success(t('inventory.material.minSaved'))
-  } catch (errorValue) {
-    minError.value =
-      apiErrorCode(errorValue) === 'min_stock_invalid'
-        ? t('inventory.material.minInvalid')
-        : t('inventory.material.minFailed')
-  } finally {
-    minSaving.value = false
-  }
-}
-
 function goToArrival() {
   const row = item.value
   if (!row) return
@@ -394,7 +333,10 @@ watch(branchMaterialId, load, { immediate: true })
         </div>
       </div>
 
-      <div class="figs figs-4 mb-4">
+      <!-- Three figures, not four: the low-stock threshold tile is retired
+           (2026-09-08) — a negative balance is the only shelf fact the app
+           watches, and nobody sets a number for it. -->
+      <div class="figs mb-4">
         <div class="fig">
           <span class="fig-l">{{ $t('inventory.stock.columnOnHand') }}</span>
           <span class="fig-v" :class="isNegative ? 'danger-text' : undefined">
@@ -403,78 +345,6 @@ watch(branchMaterialId, load, { immediate: true })
           <small v-if="isNegative" class="fig-note">
             {{ $t('inventory.stock.noteNegative') }}
           </small>
-        </div>
-        <div class="fig">
-          <span class="fig-l">{{ thresholdColumn }}</span>
-          <!-- The threshold is warehouse policy, and the decision "5 emas, 10
-               bo'lsin" is made standing in front of the shelf — so it is edited
-               here as well as on the catalog form. -->
-          <template v-if="minEditing">
-            <!-- Stacked, not inline: a figure column is ~170px wide and an input
-                 beside two buttons spills over the next figure. -->
-            <form class="grid gap-2" @submit.prevent="saveMinStock">
-              <span class="mp-unit-field">
-                <input
-                  v-model="minInput"
-                  data-min-input
-                  class="mp-input min-h-9 text-right"
-                  inputmode="decimal"
-                  :aria-label="
-                    $t('inventory.material.minAria', {
-                      unit: formatStockUnit(item.display_unit),
-                    })
-                  "
-                  :aria-invalid="minError ? 'true' : undefined"
-                  aria-describedby="material-min-error"
-                />
-                <span class="mp-unit-suffix" aria-hidden="true">
-                  {{ formatStockUnit(item.display_unit) }}
-                </span>
-              </span>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="submit"
-                  class="mp-button mp-button-primary min-h-9 px-2 text-xs"
-                  :disabled="minSaving"
-                >
-                  {{ minSaving ? $t('inventory.action.saving') : $t('inventory.action.save') }}
-                </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline min-h-9 px-2 text-xs"
-                  :disabled="minSaving"
-                  @click="cancelMinEdit"
-                >
-                  {{ $t('inventory.action.cancel') }}
-                </button>
-              </div>
-            </form>
-            <small v-if="minError" id="material-min-error" class="mp-field-error">
-              {{ minError }}
-            </small>
-            <!-- The rule belongs where it is actionable: at the input, not
-                 standing under a threshold that is already set. -->
-            <small v-else class="fig-note">{{ $t('inventory.material.minHint') }}</small>
-          </template>
-          <template v-else>
-            <span class="flex items-center gap-2">
-              <span class="fig-v">
-                {{
-                  item.min_stock > 0
-                    ? formatStockQuantity(item.min_stock, item.display_unit)
-                    : $t('inventory.material.minOff')
-                }}
-              </span>
-              <button
-                type="button"
-                class="mp-row-icon"
-                :aria-label="$t('inventory.material.minEditAria')"
-                @click="startMinEdit"
-              >
-                <AppIcon name="pencil" />
-              </button>
-            </span>
-          </template>
         </div>
         <div class="fig">
           <span class="fig-l">{{ $t('inventory.material.lastPrice') }}</span>

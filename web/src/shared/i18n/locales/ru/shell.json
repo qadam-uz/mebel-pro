@@ -57,12 +57,12 @@
     "userBlocked": "Заблокирован",
     "materialActive": "Активен",
     "materialHidden": "Скрыт",
-    "stockLow": "Мало остатка",
     "stockOk": "На складе",
     "openInOrders": "Открыть в списке заказов",
     "openInCatalog": "Открыть в каталоге",
     "openInInventory": "Открыть на складе",
-    "openInUsers": "Открыть в сотрудниках"
+    "openInUsers": "Открыть в сотрудниках",
+    "stockNegative": "В минусе"
   },
   "notifications": {
     "title": "Уведомления",

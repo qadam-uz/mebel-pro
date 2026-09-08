@@ -102,9 +102,6 @@
     "kpiActiveMeta": "buyurtma · {amount}",
     "kpiClientDebt": "Mijozlar qarzi",
     "kpiClientDebtMeta": "{n} ta mijoz bo'yicha",
-    "kpiLowStock": "Kam qolgan material",
-    "kpiLowStockMeta": "me'yordan kam",
-    "kpiLowStockNegative": "{n} ta manfiy",
     "waitTitle": "Sizdan kutilmoqda",
     "waitMeta": "{n} ta ish",
     "cappedNote": "So'nggi {n} ta buyurtma bo'yicha",
@@ -137,7 +134,11 @@
     "chartSummaryEmpty": "So'nggi {n} kun uchun tushum yo'q.",
     "chartSummaryTotal": "So'nggi {n} kun tushumi: {amount}.",
     "chartSummaryToday": "Bugun: {amount}.",
-    "chartSummaryPeak": "Eng yuqori kun: {date} · {amount}."
+    "chartSummaryPeak": "Eng yuqori kun: {date} · {amount}.",
+    "kpiStockValue": "Ombor qiymati",
+    "kpiStockValueMeta": "oxirgi kirim narxlarida",
+    "kpiStockValueNegative": "{n} ta manfiy",
+    "kpiStockValueFailed": "qiymat hisoblanmadi"
   },
   "branches": {
     "title": "Filiallar",

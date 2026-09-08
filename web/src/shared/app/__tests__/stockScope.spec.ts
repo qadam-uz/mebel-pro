@@ -8,14 +8,14 @@ import {
 } from '@/shared/app/stockScope'
 
 function scope(overrides: Partial<StockScope> = {}): StockScope {
-  return { search: '', lowOnly: false, wholeCatalog: false, types: [], ...overrides }
+  return { search: '', negativeOnly: false, wholeCatalog: false, types: [], ...overrides }
 }
 
 describe('stock scope → query', () => {
   it('defaults the table to rows that have actually moved', () => {
     expect(stockListFilters(scope())).toEqual({
       search: '',
-      low_stock: null,
+      negative: null,
       moved_only: true,
       types: null,
     })
@@ -31,7 +31,7 @@ describe('stock scope → query', () => {
     // arrival for, and it has never moved by definition.
     expect(stockListFilters(scope({ search: 'sonoma' }))).toEqual({
       search: 'sonoma',
-      low_stock: null,
+      negative: null,
       moved_only: false,
       types: null,
     })
@@ -40,25 +40,25 @@ describe('stock scope → query', () => {
   it('treats whitespace as no search at all', () => {
     expect(stockListFilters(scope({ search: '   ' }))).toEqual({
       search: '',
-      low_stock: null,
+      negative: null,
       moved_only: true,
       types: null,
     })
   })
 
-  it('widens for the low filter, which is already narrow by definition', () => {
-    expect(stockListFilters(scope({ lowOnly: true }))).toEqual({
+  it('widens for «Manfiy», which is already narrow by definition', () => {
+    expect(stockListFilters(scope({ negativeOnly: true }))).toEqual({
       search: '',
-      low_stock: true,
+      negative: true,
       moved_only: false,
       types: null,
     })
   })
 
-  it('keeps both filters when search and the low chip are combined', () => {
-    expect(stockListFilters(scope({ search: 'egger', lowOnly: true }))).toEqual({
+  it('keeps both filters when search and «Manfiy» are combined', () => {
+    expect(stockListFilters(scope({ search: 'egger', negativeOnly: true }))).toEqual({
       search: 'egger',
-      low_stock: true,
+      negative: true,
       moved_only: false,
       types: null,
     })
@@ -69,7 +69,7 @@ describe('stock scope → query', () => {
     // about the warehouse, so it must not drag the catalog's dead rows in.
     expect(stockListFilters(scope({ types: ['kromka'] }))).toEqual({
       search: '',
-      low_stock: null,
+      negative: null,
       moved_only: true,
       types: ['kromka'],
     })
@@ -79,7 +79,7 @@ describe('stock scope → query', () => {
   it('sends type alongside a search that widened the scope', () => {
     expect(stockListFilters(scope({ search: 'egger', types: ['ldsp', 'dsp'] }))).toEqual({
       search: 'egger',
-      low_stock: null,
+      negative: null,
       moved_only: false,
       types: ['ldsp', 'dsp'],
     })
@@ -89,7 +89,7 @@ describe('stock scope → query', () => {
 describe('stock empty state', () => {
   it('names the filter when one is active', () => {
     expect(stockEmptyKind(scope({ search: 'nothing' }), true)).toBe('filtered')
-    expect(stockEmptyKind(scope({ lowOnly: true }), true)).toBe('filtered')
+    expect(stockEmptyKind(scope({ negativeOnly: true }), true)).toBe('filtered')
     // Even with nothing in the branch at all: "change the filter" is still the
     // actionable sentence, and first-run copy under an active filter lies.
     expect(stockEmptyKind(scope({ search: 'nothing' }), false)).toBe('filtered')

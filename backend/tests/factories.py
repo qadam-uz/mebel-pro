@@ -147,9 +147,15 @@ async def seed_manufacturer(
     *,
     name: str | None = None,
     country: str = "AT",
+    workshop_id: uuid.UUID | None = None,
 ) -> Manufacturer:
-    """A manufacturer with a collision-proof name (the name is uniquely indexed)."""
-    row = Manufacturer(name=name or f"Egger {uuid.uuid4().hex[:8]}", country=country)
+    """A manufacturer with a collision-proof name (the name is uniquely indexed).
+
+    `workshop_id` makes it one workshop's own row instead of a library row.
+    """
+    row = Manufacturer(
+        name=name or f"Egger {uuid.uuid4().hex[:8]}", country=country, workshop_id=workshop_id
+    )
     db.add(row)
     await db.flush()
     return row
@@ -164,8 +170,12 @@ async def seed_decor(
     has_grain: bool = False,
     status: MaterialStatus = MaterialStatus.ACTIVE,
     image_file_id: uuid.UUID | None = None,
+    workshop_id: uuid.UUID | None = None,
 ) -> Decor:
-    """A decor pattern. No substrate — that belongs to its formats."""
+    """A decor pattern. No substrate — that belongs to its formats.
+
+    `workshop_id` makes it one workshop's own row instead of a library row.
+    """
     row = Decor(
         manufacturer_id=manufacturer.id,
         code=code,
@@ -173,6 +183,7 @@ async def seed_decor(
         has_grain=has_grain,
         status=status,
         image_file_id=image_file_id,
+        workshop_id=workshop_id,
         search_key=_search_key(name=name, code=code, manufacturer_name=manufacturer.name),
     )
     db.add(row)
@@ -191,6 +202,7 @@ async def seed_decor_format(
     tape_width_mm: int | None = None,
     finished_sides: int | None = None,
     status: MaterialStatus = MaterialStatus.ACTIVE,
+    workshop_id: uuid.UUID | None = None,
 ) -> DecorFormat:
     """One concrete product of a decor.
 
@@ -202,6 +214,7 @@ async def seed_decor_format(
         finished_sides = 2
     row = DecorFormat(
         decor_id=decor.id,
+        workshop_id=workshop_id,
         type=type,
         thickness_mm=thickness_mm,
         length_mm=length_mm,
@@ -227,15 +240,13 @@ async def seed_branch_material(
     branch_id: uuid.UUID,
     decor_format: DecorFormat,
     price_tiyin: int = 0,
-    min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
 ) -> BranchMaterial:
-    """The branch's decision to carry one platform format, at its own price."""
+    """The branch's decision to carry one format, at its own price."""
     row = BranchMaterial(
         branch_id=branch_id,
         decor_format_id=decor_format.id,
         price_tiyin=price_tiyin,
-        min_stock=min_stock,
         status=status,
     )
     db.add(row)
@@ -258,7 +269,6 @@ async def seed_panel_material(
     width_mm: int = 1830,
     finished_sides: int | None = None,
     price_tiyin: int = 250000,
-    min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
     decor_status: MaterialStatus = MaterialStatus.ACTIVE,
     format_status: MaterialStatus = MaterialStatus.ACTIVE,
@@ -290,7 +300,6 @@ async def seed_panel_material(
         branch_id=branch_id,
         decor_format=decor_format,
         price_tiyin=price_tiyin,
-        min_stock=min_stock,
         status=status,
     )
     return MaterialFixture(
@@ -312,7 +321,6 @@ async def seed_kromka_material(
     thickness_mm: Decimal = Decimal("0.4"),
     tape_width_mm: int = 19,
     price_tiyin: int = 1000,
-    min_stock: int = 0,
     status: MaterialStatus = MaterialStatus.ACTIVE,
     decor_status: MaterialStatus = MaterialStatus.ACTIVE,
     format_status: MaterialStatus = MaterialStatus.ACTIVE,
@@ -339,7 +347,6 @@ async def seed_kromka_material(
         branch_id=branch_id,
         decor_format=decor_format,
         price_tiyin=price_tiyin,
-        min_stock=min_stock,
         status=status,
     )
     return MaterialFixture(

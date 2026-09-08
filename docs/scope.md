@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-09-05
+updated: 2026-09-08
 order: 20
 ---
 
@@ -22,10 +22,12 @@ an integration (payments, refunds), that's a considered substitution.
   registered at the counter by workshop staff). Tenant-isolated, revocable,
   brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks the formats it carries
-  from the platform-curated product catalog and sets its own prices, workers, and settings.
+  from the platform-curated catalog library — adding, for its own workshop only, whatever the
+  library lacks — and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
   arrivals grouped under a supplier invoice carrying the document's discount, automatic
-  consumption driven by orders, and low-stock surfacing. There is no reservation balance in v1.
+  consumption driven by orders, and negative-balance surfacing. There is no reservation
+  balance in v1.
 - **Optimized cutting** — multiple cutting-optimization algorithms run against the same input
   in one request; the platform returns the best result and **names the winning algorithm**.
   Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a

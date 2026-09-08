@@ -121,7 +121,6 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
                 branch_id=branch.id,
                 decor_format_id=decor_format.id,
                 price_tiyin=100000,
-                min_stock=0,
                 status=MaterialStatus.ACTIVE,
             )
             setup.add(material)
@@ -256,7 +255,6 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
                 branch_id=branch.id,
                 decor_format_id=decor_format.id,
                 price_tiyin=100000,
-                min_stock=0,
                 status=MaterialStatus.ACTIVE,
             )
             setup.add(material)

@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import CuttingKromkaPanel from '@/shared/components/CuttingKromkaPanel.vue'
+import { groupTapeDecors } from '@/shared/app/cuttingGroupTape'
 import type { ClientCatalogMaterialOption, CuttingPart } from '@/shared/stores/cutting'
 
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
@@ -33,7 +34,7 @@ function material(
     manufacturer_id: 'maker-1',
     manufacturer_name: 'Maker',
     code: 'K1',
-    name: 'Kromka Oq',
+    name: 'Oq daraxt',
     has_grain: false,
     image_file_id: null,
     thickness_mm: '2',
@@ -47,110 +48,83 @@ function material(
   }
 }
 
-const PANEL = material({ id: 'panel-1', type: 'ldsp', name: 'Oq daraxt', thickness_mm: '18' })
-const TAPE_A = material({ id: 'tape-a', name: 'Kromka A' })
-const TAPE_B = material({ id: 'tape-b', name: 'Kromka B' })
+// One tape decor in two thicknesses — the group tape the card is handed.
+const DECOR = groupTapeDecors([
+  material({ id: 'tape-04', thickness_mm: '0.4' }),
+  material({ id: 'tape-2', thickness_mm: '2' }),
+])[0]
 
 function mountPanel(props: Partial<InstanceType<typeof CuttingKromkaPanel>['$props']> = {}) {
   return mount(CuttingKromkaPanel, {
     props: {
       part: part(),
       partNumber: 1,
-      panelMaterial: PANEL,
-      edgeOptions: [TAPE_A, TAPE_B],
-      edgeRegistry: [],
-      flashSide: null,
+      groupTapeDecor: DECOR,
+      selectedThicknessMm: 2,
       ...props,
     },
   })
 }
 
-/** The side buttons carry their label as text; the two pattern controls are
- *  glyphs, so they are found by their accessible name. */
-function sideButton(wrapper: ReturnType<typeof mountPanel>, label: string) {
-  return wrapper.findAll('button').find((button) => button.text() === label)!
-}
-function patternButton(wrapper: ReturnType<typeof mountPanel>, name: string) {
-  return wrapper.findAll('button').find((button) => button.attributes('aria-label') === name)!
-}
-
-type Payload = {
-  edges: Record<string, unknown>
-  rememberedMaterialId: string | null
+function buttonStartingWith(wrapper: ReturnType<typeof mountPanel>, prefix: string) {
+  return wrapper.findAll('button').find((button) => button.text().startsWith(prefix))!
 }
 
 describe('CuttingKromkaPanel', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  // Number, name and size: the panel has no diagram, so without the size nothing
-  // on this surface says which detal's edges are being set.
+  // Number, name and size: the card has no drawing of the part, so without the
+  // size nothing on this surface says which detal's edges are being set.
   it('names the detal by number, name and size', () => {
     expect(mountPanel().text()).toContain('D1 · Yon panel · 800×600')
     expect(mountPanel({ part: part({ name: null }) }).text()).toContain('D1 · 800×600')
   })
 
-  // The write is a full four-side replace, not a delta: `applyEdgesToRefs` on the
-  // editor side assumes the complete record.
-  it('emits the whole four-side record when one side is toggled', async () => {
+  // §7.1 / §13 W2: the card opens by naming the group's tape and pointing at
+  // where it changes — there is no per-part tape list left to search.
+  it('names the group tape and opens the picker from that line', async () => {
     const wrapper = mountPanel()
-    await sideButton(wrapper, 'Yuqori').trigger('click')
-    const payload = wrapper.emitted('edges-change')?.[0]?.[0] as Payload
-    expect(Object.keys(payload.edges).sort()).toEqual([
-      'edge_bottom',
-      'edge_left',
-      'edge_right',
-      'edge_top',
-    ])
-    expect(payload.edges.edge_top).toEqual({ material_id: 'tape-a', source: 'shop' })
-    expect(payload.edges.edge_bottom).toBeNull()
-    expect(payload.rememberedMaterialId).toBe('tape-a')
+    const line = buttonStartingWith(wrapper, 'Kromka:')
+    expect(line.text()).toContain('Oq daraxt')
+    expect(line.text()).toContain('0.4 / 2 mm')
+    await line.trigger('click')
+    expect(wrapper.emitted('open-group-tape')).toHaveLength(1)
   })
 
-  it('bands all four sides, then clears them, from the two pattern glyphs', async () => {
+  it('bands one side with the armed thickness, and clears it on a second tap', async () => {
     const wrapper = mountPanel()
-    await patternButton(wrapper, '4 tomon').trigger('click')
-    const all = wrapper.emitted('edges-change')?.[0]?.[0] as Payload
-    expect(Object.values(all.edges).every((band) => band !== null)).toBe(true)
-
-    await patternButton(wrapper, 'Kromkasiz').trigger('click')
-    const none = wrapper.emitted('edges-change')?.[1]?.[0] as Payload
-    expect(Object.values(none.edges).every((band) => band === null)).toBe(true)
-  })
-
-  it('marks the pattern glyph that matches the current side set', () => {
-    const bare = mountPanel()
-    expect(patternButton(bare, 'Kromkasiz').attributes('aria-pressed')).toBe('true')
-    expect(patternButton(bare, '4 tomon').attributes('aria-pressed')).toBe('false')
+    await buttonStartingWith(wrapper, 'Yuqori').trigger('click')
+    expect(wrapper.emitted('set-side')?.[0]).toEqual(['edge_top', 'tape-2'])
 
     const banded = mountPanel({
-      part: part({
-        edge_top: { material_id: 'tape-a', source: 'shop' },
-        edge_bottom: { material_id: 'tape-a', source: 'shop' },
-        edge_left: { material_id: 'tape-a', source: 'shop' },
-        edge_right: { material_id: 'tape-a', source: 'shop' },
-      }),
+      part: part({ edge_top: { material_id: 'tape-2', source: 'shop' } }),
     })
-    expect(patternButton(banded, '4 tomon').attributes('aria-pressed')).toBe('true')
+    await buttonStartingWith(banded, 'Yuqori').trigger('click')
+    expect(banded.emitted('set-side')?.[0]).toEqual(['edge_top', null])
   })
 
-  // The bug this panel exists to avoid: the modal's watcher only fires on
-  // open/close, so walking D1 → D2 would carry D1's armed tape onto D2.
-  it('re-arms from the new detal when the subject changes', async () => {
-    const wrapper = mountPanel({
-      part: part({ part_ref: 'a', edge_top: { material_id: 'tape-b', source: 'shop' } }),
-    })
-    await wrapper.setProps({ part: part({ part_ref: 'b' }) })
-    await sideButton(wrapper, 'Yuqori').trigger('click')
-    const payload = wrapper.emitted('edges-change')?.at(-1)?.[0] as Payload
-    expect(payload.rememberedMaterialId).toBe('tape-a')
+  it('asks for a tape instead of banding when the group has none', async () => {
+    const wrapper = mountPanel({ groupTapeDecor: null, selectedThicknessMm: null })
+    await buttonStartingWith(wrapper, 'Yuqori').trigger('click')
+    expect(wrapper.emitted('need-tape')).toHaveLength(1)
+    expect(wrapper.emitted('set-side')).toBeUndefined()
   })
 
-  it('keeps an existing band untouched when a different side is toggled', async () => {
-    const wrapper = mountPanel({
-      part: part({ edge_left: { material_id: 'tape-b', source: 'shop' } }),
-    })
-    await sideButton(wrapper, 'Yuqori').trigger('click')
-    const payload = wrapper.emitted('edges-change')?.[0]?.[0] as Payload
-    expect(payload.edges.edge_left).toEqual({ material_id: 'tape-b', source: 'shop' })
+  it('arms a thickness from the chips', async () => {
+    const wrapper = mountPanel()
+    await buttonStartingWith(wrapper, '0.4 mm').trigger('click')
+    expect(wrapper.emitted('update:selectedThicknessMm')?.[0]).toEqual([0.4])
+  })
+
+  // The one workshop-only control on the card: the client never orders
+  // thickening, and the client editor does not render it.
+  it('carries thickening for the workshop only', async () => {
+    expect(mountPanel().text()).not.toContain('Uta')
+
+    const wrapper = mountPanel({ showThickening: true })
+    const toggle = wrapper.get('[role="switch"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('update:thickened')?.[0]).toEqual([true])
   })
 })
