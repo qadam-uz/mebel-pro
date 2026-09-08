@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/shared/api/client'
+import BranchDecorCreateForm from '@/shared/components/BranchDecorCreateForm.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
 import type { Decor, DecorFormat, DecorType } from '@/shared/stores/admin'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -38,7 +39,7 @@ vi.mock('@/shared/api/client', () => {
   }
 })
 
-function decor(id: string): Decor {
+function decor(id: string, overrides: Partial<Decor> = {}): Decor {
   return {
     id,
     manufacturer_id: 'maker-1',
@@ -51,8 +52,10 @@ function decor(id: string): Decor {
     label: `Dekor ${id}`,
     branch_usage_count: 0,
     format_count: 2,
+    own: false,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
   }
 }
 
@@ -70,6 +73,7 @@ function format(id: string, decorId: string, overrides: Partial<DecorFormat> = {
     finished_sides: 2,
     status: 'active',
     label: `LDSP Egger H${decorId} · 2800×2070×18 mm`,
+    own: false,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -146,7 +150,7 @@ describe('BranchMaterialAttachSheet — step two picks platform formats', () => 
     expect(wrapper.text()).toContain('LDSP 16 mm')
   })
 
-  it('offers no way to invent a format, and says who can add one', async () => {
+  it('no longer tells the branch to wait for the platform', async () => {
     respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
       'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],
     })
@@ -155,12 +159,11 @@ describe('BranchMaterialAttachSheet — step two picks platform formats', () => 
     await tickDecor(wrapper)
     await continueToFormats(wrapper)
 
-    // The old "Nostandart · faqat sizda" group and its "+ qo'shish" are gone:
-    // a format is the manufacturer's fact, entered once by the platform.
-    expect(wrapper.text()).not.toContain('Nostandart')
-    expect(wrapper.text()).not.toContain("+ qo'shish")
-    // ...and the wait that replaces them is made visible.
-    expect(wrapper.text()).toContain('Platformaga xabar bering')
+    // The workshop enters the size itself now (2026-09-07), so the note that
+    // used to send it to the platform is gone and the control that replaces it
+    // is on screen instead.
+    expect(wrapper.text()).not.toContain('Platformaga xabar bering')
+    expect(wrapper.text()).toContain("+ Boshqa o'lcham")
   })
 
   it('posts one item per ticked format, keyed by decor_format_id', async () => {
@@ -186,8 +189,8 @@ describe('BranchMaterialAttachSheet — step two picks platform formats', () => 
     expect(body).toEqual({
       items: [
         // Price left blank means "not priced yet" — 0 tiyin, not a rejection.
-        { decor_format_id: 'f-1', price_tiyin: 0, min_stock: 0 },
-        { decor_format_id: 'f-2', price_tiyin: 0, min_stock: 0 },
+        { decor_format_id: 'f-1', price_tiyin: 0 },
+        { decor_format_id: 'f-2', price_tiyin: 0 },
       ],
     })
   })
@@ -425,5 +428,148 @@ describe('BranchMaterialAttachSheet — step two picks platform formats', () => 
     await continueToFormats(wrapper)
     expect(vi.mocked(api.get).mock.calls).toHaveLength(before)
     expect(formatBoxes(wrapper)).toHaveLength(2)
+  })
+})
+
+/** A button anywhere in the sheet, found by the word on it. */
+function byText(wrapper: Sheet, text: string) {
+  return wrapper.findAll('button').find((node) => node.text() === text)
+}
+
+describe('BranchMaterialAttachSheet — the door to «Yangi dekor»', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('opens the create form from the footer, carrying the typed query', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }])
+    const wrapper = mountSheet()
+    await flushPromises()
+
+    await byText(wrapper, '+ Yangi dekor')!.trigger('click')
+    await flushPromises()
+
+    const form = wrapper.findComponent(BranchDecorCreateForm)
+    expect(form.exists()).toBe(true)
+    expect(wrapper.text()).toContain('Yangi dekor')
+  })
+
+  it('shows ONE create control: the empty state’s, not the footer’s as well', async () => {
+    respondWith([])
+    const wrapper = mountSheet()
+    await flushPromises()
+
+    // The typed query is what the operator looked for and did not find, so it
+    // becomes the new decor's name rather than being thrown away with the step.
+    await wrapper.find('input.mp-input').setValue('kastamonu oq')
+    await flushPromises()
+    expect(
+      wrapper.findAll('button').filter((node) => node.text() === '+ Yangi dekor'),
+    ).toHaveLength(1)
+
+    await byText(wrapper, '+ Yangi dekor')!.trigger('click')
+    await flushPromises()
+    const name = wrapper.find('#branch-decor-name').element as HTMLInputElement
+    expect(name.value).toBe('kastamonu oq')
+  })
+
+  it('lands a created decor on step 2 as the only selection, every o‘lcham ticked', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }])
+    const wrapper = mountSheet()
+    await flushPromises()
+    await byText(wrapper, '+ Yangi dekor')!.trigger('click')
+    await flushPromises()
+
+    const created = decor('d-new', { own: true, label: 'Kastamonu Oq' })
+    wrapper.findComponent(BranchDecorCreateForm).vm.$emit('created', {
+      decor: created,
+      formats: [format('f-a', 'd-new'), format('f-b', 'd-new', { thickness_mm: '16' })],
+    })
+    await flushPromises()
+
+    // Nothing left to choose — the operator just typed the o'lchamlar — so the
+    // step opens with a price to put against each of them.
+    const boxes = formatBoxes(wrapper)
+    expect(boxes).toHaveLength(2)
+    expect(boxes.every((box) => (box.element as HTMLInputElement).checked)).toBe(true)
+    expect(wrapper.text()).toContain('Sizniki')
+    expect(byText(wrapper, "2 ta o'lchamni qo'shish")).toBeDefined()
+  })
+})
+
+describe('BranchMaterialAttachSheet — «+ Boshqa o‘lcham»', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  async function openAddFormat(wrapper: Sheet) {
+    await tickDecor(wrapper)
+    await continueToFormats(wrapper)
+    await byText(wrapper, "+ Boshqa o'lcham")!.trigger('click')
+    // 16 mm · 2750×1830, the first chip of each row.
+    const chips = wrapper
+      .findAll('button.mp-chip')
+      .filter((chip) => chip.attributes('aria-pressed'))
+    await chips.find((chip) => chip.text() === '16')!.trigger('click')
+    await chips.find((chip) => chip.text() === '2750×1830')!.trigger('click')
+    await byText(wrapper, "+ Qo'shish")!.trigger('click')
+    await flushPromises()
+  }
+
+  it('adds the o‘lcham and arrives with it ticked', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 1 }], {
+      'd-1': [{ decor_format: format('f-1', 'd-1'), carried: false }],
+    })
+    vi.mocked(api.post).mockResolvedValue(
+      format('f-new', 'd-1', { thickness_mm: '16', length_mm: 2750, width_mm: 1830 }),
+    )
+    const wrapper = mountSheet()
+    await flushPromises()
+    await openAddFormat(wrapper)
+
+    const [path, body] = vi.mocked(api.post).mock.calls[0]
+    expect(path).toBe('/workshop/branches/branch-1/catalog/decors/d-1/formats')
+    expect(body).toEqual({
+      type: 'ldsp',
+      thickness_mm: '16',
+      length_mm: 2750,
+      width_mm: 1830,
+      tape_width_mm: null,
+      finished_sides: 2,
+    })
+    const boxes = formatBoxes(wrapper)
+    expect(boxes).toHaveLength(2)
+    expect((boxes[1].element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('ticks the twin a 409 names instead of creating a duplicate', async () => {
+    respondWith([{ decor: decor('d-1'), carried_format_count: 0, available_format_count: 2 }], {
+      'd-1': [
+        { decor_format: format('f-1', 'd-1'), carried: false },
+        {
+          decor_format: format('f-2', 'd-1', {
+            thickness_mm: '16',
+            length_mm: 2750,
+            width_mm: 1830,
+          }),
+          carried: false,
+        },
+      ],
+    })
+    const { ApiError } = await import('@/shared/api/client')
+    vi.mocked(api.post).mockRejectedValue(
+      new ApiError(409, { code: 'decor_format_exists', details: { decor_format_id: 'f-2' } }),
+    )
+    const wrapper = mountSheet()
+    await flushPromises()
+    await openAddFormat(wrapper)
+
+    // The shape already exists, so the only wrong outcome would be a second
+    // row: the sheet ticks the one it already has.
+    const boxes = formatBoxes(wrapper)
+    expect(boxes).toHaveLength(2)
+    expect((boxes[1].element as HTMLInputElement).checked).toBe(true)
   })
 })

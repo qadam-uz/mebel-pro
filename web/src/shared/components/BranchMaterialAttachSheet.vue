@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "+ Material" — have this branch carry platform formats.
+ * "+ Material" — have this branch carry catalog formats.
  *
  * Two steps, because the platform owns the product and the branch owns only the
  * decision to sell it: step 1 picks the *decors* (a pattern — manufacturer,
@@ -31,30 +31,24 @@
  * deactivated, never deleted, so a batch is something the operator confirms
  * row by row (or chip by chip), not something the sheet guesses.
  *
- * **The branch cannot invent a format.** The old "Nostandart · faqat sizda"
- * group and its "+ qo'shish" are gone with the reshape: a format is the
- * manufacturer's fact, entered once by the platform so the same physical product
- * carries one id in every workshop. A branch that needs a size nobody has
- * entered is told so on screen (`inventory.attach.missingFormat`) and asks —
- * that wait is the accepted cost of the curated list, so it is made visible
- * rather than hidden behind a control that would silently fork the catalog.
+ * **The branch can enter what the library lacks** (2026-09-07). The platform
+ * catalog is a pre-filled list, not an authority: «+ Yangi dekor» opens the
+ * create form for a decor nobody has entered, and «+ Boshqa o'lcham» adds one
+ * size to a decor that already exists. Both are visible to this workshop only.
+ * The sheet itself stays a router — `pick → create → price` — and the form is
+ * `BranchDecorCreateForm`, so this file does not grow a fourth job.
  *
- * Price and threshold are optional and default to 0: a branch routinely
- * registers its whole list before it knows prices.
+ * Price is optional and defaults to 0: a branch routinely registers its whole
+ * list before it knows prices. The low-stock threshold that used to sit beside
+ * it is retired (2026-09-08) — a negative balance is the only shelf fact the
+ * app watches, and it needs no number behind it.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { apiTraceId, ApiError } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
-import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
-import {
-  defaultLowStockThreshold,
-  thresholdUnit,
-  lowStockThresholdColumn,
-  lowStockThresholdHint,
-  lowStockThresholdLabel,
-} from '@/shared/app/lowStockThreshold'
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import {
   DECOR_TYPES,
   decorTypeLabel,
@@ -63,13 +57,17 @@ import {
   isTape,
 } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
+import { formatDraftKey, type FormatDraft } from '@/shared/app/standardFormats'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import BranchDecorCreateForm from '@/shared/components/BranchDecorCreateForm.vue'
+import BranchDecorFormatPicker from '@/shared/components/BranchDecorFormatPicker.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import { parseDisplayQuantity, parseSomToTiyin } from '@/shared/formatters'
-import type { Decor, DecorType } from '@/shared/stores/admin'
+import { useToast } from '@/shared/composables/useToast'
+import { parseSomToTiyin } from '@/shared/formatters'
+import type { Decor, DecorFormat, DecorType } from '@/shared/stores/admin'
 import {
   useWorkshopStore,
   type BranchCatalogFormatOption,
@@ -91,8 +89,11 @@ const PAGE_LIMIT = 100
 
 const { t } = useI18n()
 const workshop = useWorkshopStore()
+const toast = useToast()
 
-const step = ref<1 | 2>(1)
+/** `pick → create → price`. The sheet only routes; the form is its own file. */
+type Step = 'pick' | 'create' | 'price'
+const step = ref<Step>('pick')
 const search = ref('')
 const manufacturerFilter = ref<string | null>('all')
 const turFilter = ref<string | null>('all')
@@ -137,13 +138,23 @@ const expanded = ref<Set<string>>(new Set())
 const previewLoading = ref<Set<string>>(new Set())
 const previewFailed = ref<Set<string>>(new Set())
 
-// Price / threshold text per FORMAT id. Read with a default rather than
-// pre-seeded: a synced map would either mutate during render or lose what the
-// operator already typed.
+// Price text per FORMAT id. Read with a default rather than pre-seeded: a
+// synced map would either mutate during render or lose what the operator
+// already typed.
 const priceByKey = ref<Record<string, string>>({})
-const thresholdByKey = ref<Record<string, string>>({})
 const priceErrorKeys = ref<Set<string>>(new Set())
-const thresholdErrorKeys = ref<Set<string>>(new Set())
+
+// The decor whose «+ Boshqa o'lcham» block is open, and that block's state.
+const addFormatDecorId = ref<string | null>(null)
+const addFormatBusy = ref(false)
+const addFormatError = ref<string | null>(null)
+
+// The create step: what step 1 had typed, and a failed manufacturer read.
+const createSeedName = ref('')
+const createError = ref<string | null>(null)
+// Bound as a `ref` array so the first price input can take the caret after a
+// create, without the sheet guessing at a generated id.
+const priceInputs = ref<(HTMLInputElement | null)[]>([])
 
 // `FormSelect`, not `ProjectDropdown`: the latter teleports its panel at z-50 and
 // would render behind the modal layer (z-80) — see web/DESIGN.md → Shapes.
@@ -182,6 +193,28 @@ const filterFullySelected = computed(
  */
 function canAttach(option: BranchCatalogOption) {
   return option.carried_format_count < option.available_format_count
+}
+
+const stepTitle = computed(() => {
+  if (step.value === 'create') return t('inventory.attach.createTitle')
+  return step.value === 'pick'
+    ? t('inventory.attach.stepPickTitle')
+    : t('inventory.attach.stepPriceTitle')
+})
+
+/** The list found nothing — the one state that carries its own create action. */
+const showEmptyState = computed(
+  () => !loading.value && !loadError.value && options.value.length === 0,
+)
+
+/**
+ * The substrate «+ Boshqa o'lcham» opens on for a decor: whatever its existing
+ * o'lchamlar are. A decor with a board and a kromka takes the board — the
+ * common case is another sheet size, and the chip row is one press from the
+ * other type anyway.
+ */
+function groupType(group: { rows: FormatRow[] }): DecorType {
+  return group.rows.find((row) => !isTape(row.type))?.type ?? group.rows[0]?.type ?? 'ldsp'
 }
 
 /** Loaded rows that still have something to add — what select-all may collect. */
@@ -428,25 +461,12 @@ function priceOf(key: string) {
   return priceByKey.value[key] ?? ''
 }
 
-function thresholdOf(key: string) {
-  return thresholdByKey.value[key] ?? String(defaultLowStockThreshold())
-}
-
 function setPrice(key: string, value: string) {
   priceByKey.value = { ...priceByKey.value, [key]: sanitizeMoneyInput(value) }
   if (priceErrorKeys.value.has(key)) {
     const next = new Set(priceErrorKeys.value)
     next.delete(key)
     priceErrorKeys.value = next
-  }
-}
-
-function setThreshold(key: string, value: string) {
-  thresholdByKey.value = { ...thresholdByKey.value, [key]: sanitizeQuantityInput(value) }
-  if (thresholdErrorKeys.value.has(key)) {
-    const next = new Set(thresholdErrorKeys.value)
-    next.delete(key)
-    thresholdErrorKeys.value = next
   }
 }
 
@@ -554,9 +574,10 @@ function resetStepTwo() {
   formatsError.value = false
   checked.value = new Set()
   priceByKey.value = {}
-  thresholdByKey.value = {}
   priceErrorKeys.value = new Set()
-  thresholdErrorKeys.value = new Set()
+  addFormatDecorId.value = null
+  addFormatBusy.value = false
+  addFormatError.value = null
   saveError.value = null
   saveTraceId.value = null
 }
@@ -564,8 +585,124 @@ function resetStepTwo() {
 /** Step 1 → step 2. The formats are fetched here, for the selection only. */
 async function goToFormats() {
   resetStepTwo()
-  step.value = 2
+  step.value = 'price'
   await loadFormats()
+}
+
+// ---- «+ Yangi dekor» ------------------------------------------------------
+
+/**
+ * Step 1 → the create form, carrying whatever was typed in the search box.
+ *
+ * The typed query is almost always the decor's name — that is what the operator
+ * looked for and did not find — so it seeds Nomi rather than being thrown away
+ * with the step.
+ */
+function openCreateForm() {
+  createSeedName.value = search.value.trim()
+  createError.value = null
+  step.value = 'create'
+  void workshop.loadBranchManufacturers(props.branchId).catch(() => {
+    createError.value = t('inventory.attach.manufacturersFailed')
+  })
+}
+
+/**
+ * A created decor goes straight to pricing as the ONLY selection, every one of
+ * its brand-new o'lchamlar ticked: the operator just typed them, so there is
+ * nothing left to choose — only a price to put against each.
+ */
+async function onDecorCreated(result: { decor: Decor; formats: DecorFormat[] }) {
+  resetStepTwo()
+  selected.value = new Map([[result.decor.id, result.decor]])
+  formatsByDecor.value = {
+    ...formatsByDecor.value,
+    [result.decor.id]: result.formats.map((decor_format) => ({ decor_format, carried: false })),
+  }
+  checked.value = new Set(result.formats.map((row) => row.id))
+  step.value = 'price'
+  await nextTick()
+  focusFirstPrice()
+}
+
+/** The first price input, so the one thing left to do already has the caret. */
+function focusFirstPrice() {
+  const input = priceInputs.value.find(Boolean)
+  input?.focus()
+}
+
+// ---- «+ Boshqa o'lcham» ---------------------------------------------------
+
+function toggleAddFormat(decorId: string) {
+  addFormatError.value = null
+  addFormatDecorId.value = addFormatDecorId.value === decorId ? null : decorId
+}
+
+/** The format id a 409 `decor_format_exists` names — the twin already on file. */
+function existingFormatId(error: unknown): string | null {
+  if (!(error instanceof ApiError) || typeof error.body !== 'object' || error.body === null) {
+    return null
+  }
+  const details = (error.body as { details?: unknown }).details
+  if (typeof details !== 'object' || details === null) return null
+  const id = (details as { decor_format_id?: unknown }).decor_format_id
+  return typeof id === 'string' ? id : null
+}
+
+/**
+ * Add one o'lcham to a decor already on screen — library or own.
+ *
+ * A 409 is not a failure here: the shape exists, so the sheet ticks the row it
+ * already has and says so. Creating a duplicate is the only outcome that would
+ * be wrong.
+ */
+async function addDecorFormat(decor: Decor, draft: FormatDraft) {
+  addFormatBusy.value = true
+  addFormatError.value = null
+  try {
+    const created = await workshop.createBranchDecorFormat(props.branchId, decor.id, draft)
+    formatsByDecor.value = {
+      ...formatsByDecor.value,
+      [decor.id]: [
+        ...(formatsByDecor.value[decor.id] ?? []),
+        { decor_format: created, carried: false },
+      ],
+    }
+    checked.value = new Set([...checked.value, created.id])
+    addFormatDecorId.value = null
+  } catch (caught) {
+    const twinId = existingFormatId(caught)
+    const rows = formatsByDecor.value[decor.id] ?? []
+    // The id is authoritative; the shape is the fallback for a server that
+    // reports the clash without naming the row.
+    const twin =
+      rows.find((row) => row.decor_format.id === twinId) ??
+      rows.find((row) => formatDraftKey(toDraft(row.decor_format)) === formatDraftKey(draft))
+    if (twin && !twin.carried) {
+      checked.value = new Set([...checked.value, twin.decor_format.id])
+      addFormatDecorId.value = null
+      toast.success(t('inventory.attach.formatExistsTicked'))
+    } else if (twin) {
+      addFormatDecorId.value = null
+      toast.warn(t('inventory.attach.formatExistsCarried'))
+    } else {
+      addFormatError.value = t('inventory.attach.formatCreateFailed')
+    }
+  } finally {
+    addFormatBusy.value = false
+  }
+}
+
+/** A stored format read as the draft shape, so the two compare by one key. */
+function toDraft(format: DecorFormat): FormatDraft {
+  return {
+    type: format.type,
+    thickness_mm: format.thickness_mm,
+    length_mm: format.length_mm,
+    width_mm: format.width_mm,
+    tape_width_mm: format.tape_width_mm,
+    finished_sides: format.finished_sides,
+  }
 }
 
 function apiMessage(error: unknown): string | null {
@@ -587,13 +724,6 @@ function parsePrice(text: string): number | null {
   return /^0+([.,]0+)?$/.test(trimmed) ? 0 : null
 }
 
-function parseThreshold(text: string, type: DecorType): number | null {
-  const trimmed = text.trim()
-  if (!trimmed) return 0
-  const parsed = parseDisplayQuantity(trimmed, isTape(type) ? 'm' : 'pcs')
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-}
-
 async function submit() {
   saveError.value = null
   saveTraceId.value = null
@@ -602,23 +732,18 @@ async function submit() {
     return
   }
   const badPrices = new Set<string>()
-  const badThresholds = new Set<string>()
   const items: BranchMaterialAttachItem[] = []
   for (const row of pendingRows.value) {
     const price = parsePrice(priceOf(row.key))
-    const threshold = parseThreshold(thresholdOf(row.key), row.type)
-    if (price === null) badPrices.add(row.key)
-    if (threshold === null) badThresholds.add(row.key)
-    if (price === null || threshold === null) continue
-    items.push({ decor_format_id: row.key, price_tiyin: price, min_stock: threshold })
+    if (price === null) {
+      badPrices.add(row.key)
+      continue
+    }
+    items.push({ decor_format_id: row.key, price_tiyin: price })
   }
   priceErrorKeys.value = badPrices
-  thresholdErrorKeys.value = badThresholds
-  if (badPrices.size > 0 || badThresholds.size > 0) {
-    // Name the field that actually failed — over a dozen rows, "something is
-    // wrong" leaves the operator hunting.
-    saveError.value =
-      badPrices.size > 0 ? t('catalog.form.priceInvalid') : t('inventory.attach.thresholdInvalid')
+  if (badPrices.size > 0) {
+    saveError.value = t('catalog.form.priceInvalid')
     return
   }
   saving.value = true
@@ -634,7 +759,9 @@ async function submit() {
 }
 
 function reset() {
-  step.value = 1
+  step.value = 'pick'
+  createSeedName.value = ''
+  createError.value = null
   search.value = ''
   manufacturerFilter.value = 'all'
   turFilter.value = 'all'
@@ -673,18 +800,11 @@ watch(
 </script>
 
 <template>
-  <AppModal
-    :open="open"
-    :title="
-      step === 1 ? $t('inventory.attach.stepPickTitle') : $t('inventory.attach.stepPriceTitle')
-    "
-    max-width="max-w-4xl"
-    @close="emit('close')"
-  >
+  <AppModal :open="open" :title="stepTitle" max-width="max-w-4xl" @close="emit('close')">
     <!-- Step 1 — pick the decors. Photo-first: an operator recognises a decor by
          its surface long before its code. Multi-select, because the job is many
          decors in one o'lcham. -->
-    <div v-if="step === 1" class="grid gap-3">
+    <div v-if="step === 'pick'" class="grid gap-3">
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label class="field">
           <span>{{ $t('inventory.attach.searchLabel') }}</span>
@@ -751,9 +871,16 @@ watch(
         <h3>{{ $t('inventory.attach.loadErrorTitle') }}</h3>
         <p>{{ $t('inventory.attach.loadErrorBody') }}</p>
       </div>
+      <!-- The empty state carries the create action itself, and the footer's
+           copy of it is hidden while it shows: one control, not two, on the one
+           screen where the whole point is that nothing was found (QAD-182). -->
       <div v-else-if="options.length === 0" class="st-empty !py-8">
+        <div class="client-empty-icon"><AppIcon name="layers" /></div>
         <h3>{{ $t('inventory.attach.emptyTitle') }}</h3>
         <p>{{ $t('inventory.attach.emptyBody') }}</p>
+        <button type="button" class="mp-button mp-button-primary mt-3" @click="openCreateForm">
+          {{ $t('inventory.attach.newDecor') }}
+        </button>
       </div>
       <template v-else>
         <ul class="grid max-h-[44dvh] gap-2 overflow-y-auto overflow-x-hidden sm:grid-cols-2">
@@ -796,8 +923,15 @@ watch(
                     :class="materialSwatchClass(swatchSource(option.decor))"
                   />
                   <span class="grid min-w-0 flex-1 gap-0.5">
-                    <span class="break-words text-sm font-bold text-ink">
-                      {{ option.decor.label }}
+                    <span class="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span class="break-words text-sm font-bold text-ink">
+                        {{ option.decor.label }}
+                      </span>
+                      <!-- A row only this workshop can see. Quiet on purpose:
+                           it is provenance, not a status. -->
+                      <span v-if="option.decor.own" class="mp-chip shrink-0">
+                        {{ $t('inventory.attach.ownBadge') }}
+                      </span>
                     </span>
                     <small class="break-words text-ink-muted">
                       {{ option.decor.manufacturer_name }}
@@ -902,13 +1036,41 @@ watch(
         >
           {{ $t('inventory.attach.continue') }}
         </button>
+        <!-- Quiet, and beside «Davom etish» rather than behind a search: the
+             door has to be findable without first proving the library lacks the
+             decor. It steps aside when the empty state offers the same action. -->
+        <button
+          v-if="!showEmptyState"
+          type="button"
+          class="mp-button mp-button-outline"
+          @click="openCreateForm"
+        >
+          {{ $t('inventory.attach.newDecor') }}
+        </button>
         <button type="button" class="mp-button mp-button-outline" @click="emit('close')">
           {{ $t('inventory.action.cancel') }}
         </button>
       </div>
     </div>
 
-    <!-- Step 2 — pick the o'lchamlar, then price them (both optional). One chip
+    <!-- Step «create» — the workshop enters what the library lacks. Its own
+         component: the sheet routes, it does not grow a form. -->
+    <div v-else-if="step === 'create'" class="grid gap-3">
+      <p
+        v-if="createError"
+        class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      >
+        {{ createError }}
+      </p>
+      <BranchDecorCreateForm
+        :branch-id="branchId"
+        :initial-name="createSeedName"
+        @created="onDecorCreated"
+        @back="step = 'pick'"
+      />
+    </div>
+
+    <!-- Step 2 — pick the o'lchamlar, then price them (price optional). One chip
          block per type in the selection; a board and its kromka have different axes. -->
     <div v-else class="grid gap-3">
       <p class="text-sm font-bold text-ink-muted">
@@ -988,6 +1150,9 @@ watch(
             <span class="min-w-0 break-words text-sm font-extrabold text-ink">
               {{ group.decor.label }}
             </span>
+            <span v-if="group.decor.own" class="mp-chip shrink-0">
+              {{ $t('inventory.attach.ownBadge') }}
+            </span>
           </div>
 
           <p v-if="group.rows.length === 0" class="text-xs text-ink-muted">
@@ -1012,11 +1177,29 @@ watch(
               {{ $t('inventory.attach.carried') }}
             </span>
           </label>
+
+          <!-- The size the library does not have, added here rather than waited
+               for. Works on a library decor and on an own one alike: the size is
+               the workshop's fact either way. -->
+          <div class="grid gap-2">
+            <button
+              type="button"
+              class="justify-self-start text-xs font-bold text-accent-deep hover:underline"
+              :aria-expanded="addFormatDecorId === group.decor.id"
+              @click="toggleAddFormat(group.decor.id)"
+            >
+              {{ $t('inventory.attach.addOtherFormat') }}
+            </button>
+            <BranchDecorFormatPicker
+              v-if="addFormatDecorId === group.decor.id"
+              :type="groupType(group)"
+              :busy="addFormatBusy"
+              :error="addFormatError"
+              @add="addDecorFormat(group.decor, $event)"
+            />
+          </div>
         </div>
 
-        <!-- The promised visibility of the wait: a branch cannot add a format
-             itself any more, so the screen has to say who can. -->
-        <p class="text-xs text-ink-muted">{{ $t('inventory.attach.missingFormat') }}</p>
         <p v-if="noFormatsAtAll" class="text-xs text-ink-muted">
           {{ $t('inventory.attach.noFormats') }}
         </p>
@@ -1033,7 +1216,6 @@ watch(
                 <th class="min-w-[190px]">{{ $t('inventory.attach.columnDekor') }}</th>
                 <th class="w-full">{{ $t('inventory.attach.columnFormat') }}</th>
                 <th class="nowrap right">{{ $t('inventory.attach.columnPrice') }}</th>
-                <th class="nowrap right">{{ lowStockThresholdColumn() }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1070,6 +1252,7 @@ watch(
                   </td>
                   <td class="nowrap right">
                     <input
+                      ref="priceInputs"
                       class="mp-input w-28 text-right"
                       inputmode="numeric"
                       :value="priceOf(row.key)"
@@ -1084,22 +1267,6 @@ watch(
                     />
                     <small class="block text-ink-muted">{{ priceUnit(row.type) }}</small>
                   </td>
-                  <td class="nowrap right">
-                    <input
-                      class="mp-input w-20 text-right"
-                      inputmode="decimal"
-                      :value="thresholdOf(row.key)"
-                      :aria-label="
-                        $t('inventory.attach.thresholdAria', {
-                          name: `${group.decor.label} · ${row.label}`,
-                        })
-                      "
-                      :aria-invalid="thresholdErrorKeys.has(row.key) || undefined"
-                      :class="thresholdErrorKeys.has(row.key) ? '!border-danger' : ''"
-                      @input="setThreshold(row.key, ($event.target as HTMLInputElement).value)"
-                    />
-                    <small class="block text-ink-muted">{{ thresholdUnit(row.type) }}</small>
-                  </td>
                 </tr>
               </template>
             </tbody>
@@ -1107,9 +1274,6 @@ watch(
         </div>
 
         <p class="text-xs text-ink-muted">{{ $t('inventory.attach.priceOptional') }}</p>
-        <p class="text-xs text-ink-muted">
-          {{ lowStockThresholdLabel() }} — {{ lowStockThresholdHint() }}
-        </p>
       </template>
 
       <p v-if="saveError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
@@ -1129,7 +1293,7 @@ watch(
               : $t('inventory.attach.submit', { n: pendingRows.length }, pendingRows.length)
           }}
         </button>
-        <button type="button" class="mp-button mp-button-outline" @click="step = 1">
+        <button type="button" class="mp-button mp-button-outline" @click="step = 'pick'">
           {{ $t('inventory.attach.back') }}
         </button>
       </div>

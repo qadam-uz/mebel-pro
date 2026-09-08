@@ -225,7 +225,6 @@
     "revisionResume": "Продолжить",
     "revisionDiscard": "Отменить правку",
     "shortfall": "После распила запаса не хватит:",
-    "lowStock": "После распила останется мало:",
     "production": "Производство",
     "cutter": "Распильщик",
     "edger": "Мастер кромки",
@@ -273,7 +272,8 @@
     "surchargeHint": "точная наценка в сумах",
     "surchargeAdd": "Добавить наценку",
     "surchargeUpdate": "Обновить наценку",
-    "surchargeRemove": "Снять наценку"
+    "surchargeRemove": "Снять наценку",
+    "negativeAfterCut": "После распила уйдёт в минус:"
   },
   "timeline": {
     "price": "Цена: {from} → {to}",

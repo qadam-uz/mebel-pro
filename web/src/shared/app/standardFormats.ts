@@ -100,3 +100,70 @@ export function normalizeThickness(value: unknown): string {
 export function normalizePanelSize(a: number, b: number): StandardPanelSize {
   return a >= b ? { length_mm: a, width_mm: b } : { length_mm: b, width_mm: a }
 }
+
+/**
+ * One composed o'lcham on its way to `POST …/catalog/decors[/{id}/formats]`.
+ *
+ * The same shape the wire takes (`DecorFormatCreateRequest`), spelled out here
+ * so the chip block, the pending list and the payload are one object rather
+ * than three that can drift.
+ */
+export interface FormatDraft {
+  type: DecorType
+  /** Decimal string, already normalized. */
+  thickness_mm: string
+  length_mm: number | null
+  width_mm: number | null
+  tape_width_mm: number | null
+  finished_sides: number | null
+}
+
+/**
+ * Identity of a draft — every field that makes it a different product.
+ *
+ * Both halves of the duplicate rule read it: the pending list refuses a second
+ * copy of a shape, and the sheet's «+ Boshqa o'lcham» matches a 409 twin back
+ * to the row already on screen.
+ */
+export function formatDraftKey(draft: FormatDraft): string {
+  return [
+    draft.type,
+    normalizeThickness(draft.thickness_mm),
+    draft.length_mm,
+    draft.width_mm,
+    draft.tape_width_mm,
+    draft.finished_sides,
+  ]
+    .map((part) => String(part ?? ''))
+    .join('|')
+}
+
+/**
+ * `18 mm · 2800×2070`, `0.8 mm · 22 mm`, plus «1 tomonlama» when it applies.
+ *
+ * Thickness first, unlike the canonical `formatDimensionsLabel` — here the row
+ * is being *composed* from a thickness chip and a size chip, so it reads back
+ * in the order it was picked. `oneSided` is the caller's translated note; the
+ * module stays i18n-free so it can be unit-tested without a locale.
+ */
+export function formatDraftLabel(draft: FormatDraft, oneSided = ''): string {
+  const thickness = `${normalizeThickness(draft.thickness_mm)} mm`
+  const size =
+    draft.type === 'kromka'
+      ? draft.tape_width_mm !== null
+        ? `${draft.tape_width_mm} mm`
+        : ''
+      : draft.length_mm !== null && draft.width_mm !== null
+        ? `${draft.length_mm}×${draft.width_mm}`
+        : ''
+  const note = draft.finished_sides === 1 ? oneSided : ''
+  return [thickness, size, note].filter(Boolean).join(' · ')
+}
+
+/**
+ * Types whose sheets have a finished-face count — the boards. Everything else
+ * (fanera, yog'och, kromka, boshqa) carries `null`, matching `decor_formats`.
+ */
+export function hasFinishedSides(type: DecorType): boolean {
+  return type === 'ldsp' || type === 'dsp' || type === 'mdf'
+}

@@ -39,7 +39,8 @@
     "editRow": "{name} — tahrirlash",
     "statusToggle": "{name} holati",
     "expandDekor": "{name} o'lchamlari",
-    "groupSummary": "{name} — {n} ta o'lchamda narx yo'q"
+    "groupSummary": "{name} — {n} ta o'lchamda narx yo'q",
+    "decorMenu": "{name} — amallar"
   },
   "empty": {
     "title": "Bu filialga material qo'shilmagan",
@@ -54,20 +55,21 @@
     "cancel": "Bekor",
     "loadMore": "Ko'proq yuklash",
     "loadingMore": "Yuklanmoqda",
-    "materialDetail": "Ombordagi harakatlar"
+    "materialDetail": "Ombordagi harakatlar",
+    "editDecor": "Dekorni tahrirlash"
   },
   "form": {
     "title": "O'lchamni tahrirlash",
     "material": "Material",
     "price": "Narx (so'm)",
     "priceInvalid": "Narxni to'g'ri kiriting — masalan: 350 000",
-    "thresholdInvalid": "Kam qoldiq chegarasini to'g'ri kiriting",
     "saveFailed": "Filial materiali saqlanmadi."
   },
   "toast": {
     "settingsSaved": "Material sozlamasi saqlandi.",
     "statusChanged": "Material holati o'zgartirildi.",
-    "attached": "Material filialga qo'shildi. | {n} ta material filialga qo'shildi."
+    "attached": "Material filialga qo'shildi. | {n} ta material filialga qo'shildi.",
+    "decorSaved": "Dekor yangilandi."
   },
   "error": {
     "statusChangeFailed": "Material holatini o'zgartirib bo'lmadi."
@@ -134,11 +136,14 @@
     "statusChanged": "Format holati yangilandi.",
     "saveFailed": "Format saqlanmadi."
   },
-  "stock": {
-    "thresholdInline": "kam qoldiq: {value}",
-    "thresholdOff": "kam qoldiq: kuzatilmaydi"
+  "ownBadge": "Sizniki",
+  "manufacturerChips": {
+    "all": "Barchasi"
   },
-  "threshold": {
-    "off": "kuzatilmaydi"
+  "section": {
+    "count": "{n} dekor · {m} o'lcham"
+  },
+  "group": {
+    "formatCount": "{n} o'lcham"
   }
 }

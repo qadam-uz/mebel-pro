@@ -137,9 +137,11 @@ export interface BranchMaterial {
   // price_tiyin === 0 means unpriced, not free. Client-facing listings drop these
   // rows; workshop-facing ones flag them so the gap is visible where it is fixable.
   price_unset: boolean
-  min_stock: number
   status: MaterialStatus
   label: string
+  // The decor behind this row is the workshop's own, not a library one — the
+  // Materiallar table badges it «Sizniki» and offers the edit menu on it.
+  decor_own: boolean
   created_at: string
   updated_at: string
 }
@@ -178,6 +180,63 @@ export interface BranchCatalogFilters {
 }
 
 /**
+ * One manufacturer the «Yangi dekor» form may hang a decor off: the platform's
+ * library plus whatever this workshop has entered itself, library first.
+ *
+ * A list of its own rather than `BranchCatalogFilters.manufacturers`, which
+ * enumerates the *facet* — the brands behind attachable decors — and so would
+ * omit a manufacturer the workshop created but has not yet given a decor.
+ */
+export interface WorkshopManufacturerOption {
+  id: string
+  name: string
+  own: boolean
+}
+
+/** The body of `POST …/catalog/decors/{id}/formats`, and one entry of a create. */
+export interface DecorFormatCreateRequest {
+  type: DecorType
+  thickness_mm: string
+  length_mm?: number | null
+  width_mm?: number | null
+  tape_width_mm?: number | null
+  finished_sides?: number | null
+}
+
+/**
+ * «Yangi dekor» — the workshop enters what the library lacks.
+ *
+ * Exactly one of `manufacturer_id` / `manufacturer_name` travels: an id picks a
+ * visible manufacturer (library or own), a name reuses one matching by folded
+ * name and otherwise mints an own row. The owning workshop is derived from the
+ * branch, never sent.
+ */
+export interface WorkshopDecorCreateRequest {
+  manufacturer_id?: string | null
+  manufacturer_name?: string | null
+  name: string
+  code?: string | null
+  has_grain: boolean
+  image_file_id?: string | null
+  formats: DecorFormatCreateRequest[]
+}
+
+export interface WorkshopDecorCreateResponse {
+  decor: Decor
+  formats: DecorFormat[]
+}
+
+/** Identity only — formats stay immutable, own or not. */
+export interface WorkshopDecorPatchRequest {
+  manufacturer_id?: string | null
+  manufacturer_name?: string | null
+  name?: string
+  code?: string | null
+  has_grain?: boolean
+  image_file_id?: string | null
+}
+
+/**
  * Which set a facet enumerates, and the two are not interchangeable.
  *
  * `attachable` is the platform's offer — the attach sheet's question. `carried`
@@ -191,10 +250,9 @@ export type BranchCatalogFacetScope = 'attachable' | 'carried'
 /** One platform format the branch wants to carry, with its own numbers. */
 export interface BranchMaterialAttachItem {
   decor_format_id: string
-  // Both optional server-side, defaulting to 0: a branch routinely registers its
+  // Optional server-side, defaulting to 0: a branch routinely registers its
   // whole list before it knows prices.
   price_tiyin?: number
-  min_stock?: number
 }
 
 /**
@@ -237,8 +295,11 @@ export interface StockItem {
   stock_unit: string
   display_unit: string
   on_hand: number
-  min_stock: number
-  is_low_stock: boolean
+  // `on_hand < 0` — production consumed material whose arrival was never
+  // recorded. The per-format low-stock threshold is retired (2026-09-08): a
+  // negative balance is the only shelf fact the app watches, and it needs no
+  // number behind it.
+  is_negative_stock: boolean
   updated_at: string
 }
 
@@ -360,7 +421,8 @@ export interface StockLastPrice {
 
 export interface StockListFilters {
   search?: string
-  low_stock?: boolean | null
+  /** Only rows in the red — `on_hand < 0`. */
+  negative?: boolean | null
   // Restrict to rows with at least one movement — the Zaxira table's default
   // scope, and nothing else's: the pickers and the global search preview must
   // keep seeing the branch's whole catalog.
@@ -415,6 +477,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
   // the catalog page, and one shared ref would let the sheet's attachable set
   // silently replace the page filter's carried one underneath it.
   const carriedCatalogFilters = ref<BranchCatalogFilters>({ manufacturers: [] })
+  // Library + own manufacturers, for the «Yangi dekor» form's combobox.
+  const branchManufacturers = ref<WorkshopManufacturerOption[]>([])
   const branchMaterials = ref<BranchMaterial[]>([])
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
@@ -425,7 +489,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   // common first arrival there is — would be impossible to enter.
   const stockPickerItems = ref<StockItem[]>([])
   const stockPickerBranchId = ref<string | null>(null)
-  const lowStockItems = ref<StockItem[]>([])
+  const negativeStockItems = ref<StockItem[]>([])
   const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
@@ -654,6 +718,74 @@ export const useWorkshopStore = defineStore('workshop', () => {
     )
   }
 
+  /**
+   * The manufacturers the «Yangi dekor» form may pick from: the platform
+   * library plus this workshop's own, library first, each flagged `own`.
+   */
+  async function loadBranchManufacturers(id: string) {
+    branchManufacturers.value = await api.get<WorkshopManufacturerOption[]>(
+      `/workshop/branches/${id}/catalog/manufacturers`,
+      authInit(),
+    )
+    return branchManufacturers.value
+  }
+
+  /**
+   * Create a decor the library lacks, with at least one o'lcham, in ONE
+   * transaction — a bad third format leaves no decor and no manufacturer.
+   *
+   * The row is visible to this workshop only; nothing is moderated and nothing
+   * is promoted. The freshly created formats come back with the decor so the
+   * attach sheet can tick them without a second read.
+   */
+  async function createBranchDecor(id: string, payload: WorkshopDecorCreateRequest) {
+    const created = await api.post<WorkshopDecorCreateResponse>(
+      `/workshop/branches/${id}/catalog/decors`,
+      payload,
+      authInit(),
+    )
+    // The picker's decor page and its facets both grew a row.
+    await loadCatalogOptions(id).catch(() => undefined)
+    return created
+  }
+
+  /**
+   * One more o'lcham on a decor the branch can already see — library or own.
+   *
+   * A 409 `decor_format_exists` is not a failure: an active twin already
+   * exists, and its id rides on `details.decor_format_id` so the caller ticks
+   * that row instead of creating a duplicate.
+   */
+  async function createBranchDecorFormat(
+    id: string,
+    decorId: string,
+    payload: DecorFormatCreateRequest,
+  ) {
+    return api.post<DecorFormat>(
+      `/workshop/branches/${id}/catalog/decors/${decorId}/formats`,
+      payload,
+      authInit(),
+    )
+  }
+
+  /** Identity edit on an OWN decor. A library decor is refused server-side. */
+  async function updateBranchDecor(
+    id: string,
+    decorId: string,
+    payload: WorkshopDecorPatchRequest,
+  ) {
+    const updated = await api.patch<Decor>(
+      `/workshop/branches/${id}/catalog/decors/${decorId}`,
+      payload,
+      authInit(),
+    )
+    // Every carried row of this decor renders its identity, so they all move.
+    branchMaterials.value = branchMaterials.value.map((row) =>
+      row.decor.id === decorId ? { ...row, decor: updated } : row,
+    )
+    return updated
+  }
+
   async function loadCatalogFilters(id: string, scope: BranchCatalogFacetScope = 'attachable') {
     const page = await api.get<BranchCatalogFilters>(
       withQuery(`/workshop/branches/${id}/catalog/filters`, { scope }),
@@ -760,7 +892,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
         api.get<StockItem[]>(
           withQuery(`/workshop/branches/${id}/stock`, {
             search: filters.search,
-            low_stock: filters.low_stock ? true : undefined,
+            negative: filters.negative ? true : undefined,
             moved_only: filters.moved_only ? true : undefined,
             types: filters.types ?? undefined,
           }),
@@ -801,20 +933,6 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
-  function patchStockItem(updated: StockItem) {
-    const swap = (rows: StockItem[]) =>
-      rows.map((row) => (row.branch_material_id === updated.branch_material_id ? updated : row))
-    stockItems.value = swap(stockItems.value)
-    stockPickerItems.value = swap(stockPickerItems.value)
-  }
-
-  /**
-   * The low-stock threshold, written from the stock surface by `manage_inventory`.
-   *
-   * The same `branch_materials.min_stock` the catalog form edits — two doors,
-   * one fact. The response is the refreshed row, patched in place so the open
-   * detail modal re-derives its pill without a list reload.
-   */
   /**
    * One material's balance row, addressed by the material alone.
    *
@@ -827,19 +945,10 @@ export const useWorkshopStore = defineStore('workshop', () => {
     return api.get<StockItem>(`/workshop/inventory/materials/${branchMaterialId}/stock`, authInit())
   }
 
-  async function updateStockMinStock(id: string, branchMaterialId: string, minStock: number) {
-    const updated = await api.put<StockItem>(
-      `/workshop/inventory/branches/${id}/stock/${branchMaterialId}/min-stock`,
-      { min_stock: minStock },
-      authInit(),
-    )
-    patchStockItem(updated)
-    return updated
-  }
-
-  async function loadLowStock(branchIds: string[]) {
+  /** Rows in the red across the branches in view — the dashboard's worklist. */
+  async function loadNegativeStock(branchIds: string[]) {
     if (branchIds.length === 0) {
-      lowStockItems.value = []
+      negativeStockItems.value = []
       return
     }
     const pages = await readOrDrop(
@@ -848,17 +957,17 @@ export const useWorkshopStore = defineStore('workshop', () => {
           [...new Set(branchIds)].map((id) =>
             api.get<StockItem[]>(
               withQuery(`/workshop/branches/${id}/stock`, {
-                low_stock: true,
+                negative: true,
               }),
               authInit(),
             ),
           ),
         ),
       () => {
-        lowStockItems.value = []
+        negativeStockItems.value = []
       },
     )
-    lowStockItems.value = pages.flat()
+    negativeStockItems.value = pages.flat()
   }
 
   // Warehouse value at the latest purchase prices — derived server-side per
@@ -1021,7 +1130,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     stockItems.value = []
     stockPickerItems.value = []
     stockPickerBranchId.value = null
-    lowStockItems.value = []
+    negativeStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
     supplierInvoices.value = []
@@ -1347,12 +1456,13 @@ export const useWorkshopStore = defineStore('workshop', () => {
     catalogOptionsTotal.value = 0
     catalogFilters.value = { manufacturers: [] }
     carriedCatalogFilters.value = { manufacturers: [] }
+    branchManufacturers.value = []
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
     stockPickerItems.value = []
     stockPickerBranchId.value = null
-    lowStockItems.value = []
+    negativeStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
     users.value = []
@@ -1391,12 +1501,13 @@ export const useWorkshopStore = defineStore('workshop', () => {
     catalogOptionsTotal,
     catalogFilters,
     carriedCatalogFilters,
+    branchManufacturers,
     branchMaterials,
     branchMaterialsHasMore,
     suppliers,
     stockItems,
     stockPickerItems,
-    lowStockItems,
+    negativeStockItems,
     stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
@@ -1434,15 +1545,18 @@ export const useWorkshopStore = defineStore('workshop', () => {
     fetchCatalogOptions,
     fetchCatalogFormats,
     loadCatalogFilters,
+    loadBranchManufacturers,
+    createBranchDecor,
+    createBranchDecorFormat,
+    updateBranchDecor,
     loadBranchMaterials,
     attachBranchMaterials,
     updateBranchMaterial,
     setBranchMaterialStatus,
     loadStock,
     loadStockPicker,
-    updateStockMinStock,
     fetchMaterialStock,
-    loadLowStock,
+    loadNegativeStock,
     loadStockValue,
     loadStockTransactions,
     fetchStockTransactions,

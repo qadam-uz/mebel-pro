@@ -76,7 +76,7 @@ const inventoryTabs = computed<ChoiceOption[]>(() => [
   { value: 'suppliers', label: t('inventory.tab.suppliers') },
 ])
 const search = ref('')
-const lowOnly = ref(false)
+const negativeOnly = ref(false)
 // The Zaxira tab shows the warehouse, not the catalog: by default only rows
 // that have actually moved. «Butun katalog» opens it up to every attached
 // material — the state the tab used to be in permanently.
@@ -100,7 +100,7 @@ const stockTurlar = computed<DecorType[]>(
 
 const stockScope = computed<StockScope>(() => ({
   search: search.value,
-  lowOnly: lowOnly.value,
+  negativeOnly: negativeOnly.value,
   wholeCatalog: wholeCatalog.value,
   types: stockTurlar.value,
 }))
@@ -108,7 +108,7 @@ const stockScope = computed<StockScope>(() => ({
 // state did not know a search was active (QAD-182). First-run and
 // filtered-empty are different facts and get different copy.
 const stockFiltered = computed(() => isStockFiltered(stockScope.value))
-// "The scope is forced": search and the low chip always widen to the whole
+// "The scope is forced": search and the «Manfiy» chip always widen to the whole
 // catalog, so while either is on the «Butun katalog» chip has nothing left to
 // decide and says so instead of pretending to toggle. The `type` filter is not
 // in here — it narrows within the scope and leaves the chip its job.
@@ -117,12 +117,14 @@ const stockScopeForced = computed(() => isScopeWidened(stockScope.value))
 // link; a combination is what leaves the operator hunting for what is still on.
 const stockFilterCount = computed(
   () =>
-    (search.value.trim() ? 1 : 0) + (lowOnly.value ? 1 : 0) + (stockTur.value !== 'all' ? 1 : 0),
+    (search.value.trim() ? 1 : 0) +
+    (negativeOnly.value ? 1 : 0) +
+    (stockTur.value !== 'all' ? 1 : 0),
 )
 
 function resetStockFilters() {
   search.value = ''
-  lowOnly.value = false
+  negativeOnly.value = false
   stockTur.value = 'all'
 }
 const stockEmptyState = computed(() =>
@@ -305,7 +307,7 @@ function stockFilterKey() {
   return [
     selectedBranchId.value,
     filters.search,
-    filters.low_stock ? 'low' : 'all',
+    filters.negative ? 'negative' : 'all',
     filters.moved_only ? 'moved' : 'catalog',
     filters.types?.join('+') ?? 'any',
   ].join(':')
@@ -528,7 +530,7 @@ watch([txDateFrom, txDateTo, txMaterialId], () => {
   if (activeTab.value === 'tx') void refreshActiveInventoryTab({ force: true })
 })
 
-watch([search, lowOnly, wholeCatalog, stockTur], () => {
+watch([search, negativeOnly, wholeCatalog, stockTur], () => {
   window.clearTimeout(stockSearchTimer)
   stockSearchTimer = window.setTimeout(() => {
     if (activeTab.value === 'stock') void refreshActiveInventoryTab({ force: true })
@@ -637,14 +639,14 @@ onBeforeUnmount(() => {
           v-if="activeTab === 'stock'"
           type="button"
           class="mp-filter-chip"
-          :aria-pressed="lowOnly"
-          @click="lowOnly = !lowOnly"
+          :aria-pressed="negativeOnly"
+          @click="negativeOnly = !negativeOnly"
         >
           <span class="mp-filter-chip-dot" aria-hidden="true"></span>
-          {{ $t('inventory.stock.lowOnly') }}
+          {{ $t('inventory.filter.negative') }}
         </button>
         <!-- The scope, not a filter: the table shows the warehouse, this opens
-             it to the whole catalog. While a search or the low chip is on, the
+             it to the whole catalog. While a search or «Manfiy» is on, the
              list is already the whole catalog — the chip says so rather than
              offering a press that changes nothing. -->
         <button
@@ -806,41 +808,22 @@ onBeforeUnmount(() => {
                     </span>
                   </div>
                 </td>
-                <td
-                  class="amt"
-                  :class="
-                    isNegative(item) ? 'danger-text' : item.is_low_stock ? 'warn-text' : undefined
-                  "
-                >
+                <td class="amt" :class="isNegative(item) ? 'danger-text' : undefined">
                   {{ formatStockQuantity(item.on_hand, item.display_unit) }}
-                  <small
-                    v-if="isNegative(item) || item.is_low_stock"
-                    class="block text-[11px] font-extrabold"
-                  >
-                    {{
-                      isNegative(item)
-                        ? $t('inventory.stock.noteNegative')
-                        : $t('inventory.stock.noteLow')
-                    }}
+                  <small v-if="isNegative(item)" class="block text-[11px] font-extrabold">
+                    {{ $t('inventory.stock.noteNegative') }}
                   </small>
                 </td>
                 <td>
-                  <span
-                    :class="
-                      isNegative(item)
-                        ? 'pill p-bad'
-                        : item.is_low_stock
-                          ? 'pill p-warn'
-                          : 'pill p-ok'
-                    "
-                  >
+                  <!-- Two values, not three: the per-format threshold is retired
+                       (2026-09-08), so a shelf is either in the red or it is
+                       fine. -->
+                  <span :class="isNegative(item) ? 'pill p-bad' : 'pill p-ok'">
                     <span class="pd"></span
                     >{{
                       isNegative(item)
                         ? $t('inventory.stock.pillNegative')
-                        : item.is_low_stock
-                          ? $t('inventory.stock.pillLow')
-                          : $t('inventory.stock.pillEnough')
+                        : $t('inventory.stock.pillEnough')
                     }}
                   </span>
                 </td>

@@ -102,9 +102,6 @@
     "kpiActiveMeta": "заказ · {amount} | заказа · {amount} | заказов · {amount}",
     "kpiClientDebt": "Долг клиентов",
     "kpiClientDebtMeta": "по {n} клиенту | по {n} клиентам | по {n} клиентам",
-    "kpiLowStock": "Материалы на исходе",
-    "kpiLowStockMeta": "ниже нормы",
-    "kpiLowStockNegative": "{n} в минусе",
     "waitTitle": "Ожидает вас",
     "waitMeta": "{n} задача | {n} задачи | {n} задач",
     "cappedNote": "По последним {n} заказам",
@@ -137,7 +134,11 @@
     "chartSummaryEmpty": "За последний {n} день поступлений нет. | За последние {n} дня поступлений нет. | За последние {n} дней поступлений нет.",
     "chartSummaryTotal": "Поступления за последний {n} день: {amount}. | Поступления за последние {n} дня: {amount}. | Поступления за последние {n} дней: {amount}.",
     "chartSummaryToday": "Сегодня: {amount}.",
-    "chartSummaryPeak": "Самый высокий день: {date} · {amount}."
+    "chartSummaryPeak": "Самый высокий день: {date} · {amount}.",
+    "kpiStockValue": "Стоимость склада",
+    "kpiStockValueMeta": "по последним ценам прихода",
+    "kpiStockValueNegative": "{n} в минусе | {n} в минусе | {n} в минусе",
+    "kpiStockValueFailed": "стоимость не посчитана"
   },
   "branches": {
     "title": "Филиалы",

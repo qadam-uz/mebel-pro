@@ -140,14 +140,16 @@ const clientDebtTiyin = computed(() => finance.clientDebts?.they_owe_total_tiyin
 const clientDebtorCount = computed(
   () => finance.clientDebts?.rows.filter((row) => row.balance_tiyin > 0).length ?? 0,
 )
-const lowStockCount = computed(() => workshop.lowStockItems.length)
-// A negative balance is an unrecorded arrival, not a low shelf — it escalates
-// from warn to danger (QAD-150).
+// A negative balance is an unrecorded arrival: the shelf's only red flag now
+// that the per-format threshold is retired (2026-09-08, QAD-150 before it).
 const negativeStock = computed(() =>
-  workshop.lowStockItems
-    .filter((item) => item.on_hand < 0)
-    .sort((left, right) => left.on_hand - right.on_hand),
+  [...workshop.negativeStockItems].sort((left, right) => left.on_hand - right.on_hand),
 )
+// The warehouse at its latest purchase prices — summed server-side per branch.
+// `null` means the read has not landed or failed; the card says which.
+const stockValueTiyin = computed(() => workshop.stockValueTiyin)
+const stockValueParts = computed(() => formatTiyinParts(stockValueTiyin.value ?? 0))
+const stockValueFailed = ref(false)
 // Every money figure on the row shares one scale, so the row can be read across
 // instead of figure by figure (QAD-182).
 const moneyKpis = computed(() =>
@@ -595,7 +597,16 @@ async function loadInventorySection() {
   if (!canInventory.value || inventoryBranchIds.length === 0) return
   workshop.inventoryLoading = true
   try {
-    await workshop.loadLowStock(inventoryBranchIds)
+    stockValueFailed.value = false
+    // Both reads feed the same section: the KPI card's figure and the worklist's
+    // negative rows. One failing must not blank the other, so the value read
+    // records its own failure and the negative read owns the section error.
+    await Promise.all([
+      workshop.loadNegativeStock(inventoryBranchIds),
+      workshop.loadStockValue(inventoryBranchIds).catch(() => {
+        stockValueFailed.value = true
+      }),
+    ])
     workshop.inventoryError = null
     workshop.inventoryTraceId = null
   } catch (errorValue) {
@@ -813,22 +824,32 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- The fourth card is the warehouse's money, not a count of shelves
+             under a threshold nobody sets any more (2026-09-08). A negative
+             balance subtracts from it, so the figure can legitimately go red —
+             and the caption says so in words beside the colour. -->
         <div v-if="canInventory" class="kpi">
-          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiLowStock') }}</div>
-          <div class="v" :class="lowStockCount > 0 ? 'warn-text' : ''">
-            <span v-if="dashboardReady">{{ lowStockCount }}</span>
-            <span v-else class="sk block h-7 w-12"></span>
+          <div class="lbl">{{ $t('workshopAdmin.dashboard.kpiStockValue') }}</div>
+          <div class="v" :class="(stockValueTiyin ?? 0) < 0 ? 'danger-text' : ''">
+            <span v-if="dashboardReady && stockValueTiyin !== null" :title="stockValueParts.full"
+              >{{ stockValueParts.amount }} <small>{{ stockValueParts.unit }}</small></span
+            >
+            <span v-else-if="dashboardReady">—</span>
+            <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d">
             <template v-if="dashboardReady">
-              <span v-if="negativeStock.length > 0" class="kpi-pill bad">{{
+              <span v-if="stockValueFailed">{{
+                $t('workshopAdmin.dashboard.kpiStockValueFailed')
+              }}</span>
+              <span v-else-if="negativeStock.length > 0" class="kpi-pill bad">{{
                 $t(
-                  'workshopAdmin.dashboard.kpiLowStockNegative',
+                  'workshopAdmin.dashboard.kpiStockValueNegative',
                   { n: negativeStock.length },
                   negativeStock.length,
                 )
               }}</span>
-              <span v-else>{{ $t('workshopAdmin.dashboard.kpiLowStockMeta') }}</span>
+              <span v-else>{{ $t('workshopAdmin.dashboard.kpiStockValueMeta') }}</span>
             </template>
             <span v-else class="sk block h-4 w-32"></span>
           </div>

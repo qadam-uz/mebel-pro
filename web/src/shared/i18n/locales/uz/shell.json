@@ -57,12 +57,12 @@
     "userBlocked": "Bloklangan",
     "materialActive": "Faol",
     "materialHidden": "Yashirilgan",
-    "stockLow": "Kam qoldi",
     "stockOk": "Omborda",
     "openInOrders": "Buyurtmalar ro'yxatida ochish",
     "openInCatalog": "Katalogda ochish",
     "openInInventory": "Omborda ochish",
-    "openInUsers": "Xodimlarda ochish"
+    "openInUsers": "Xodimlarda ochish",
+    "stockNegative": "Manfiy"
   },
   "notifications": {
     "title": "Bildirishnomalar",

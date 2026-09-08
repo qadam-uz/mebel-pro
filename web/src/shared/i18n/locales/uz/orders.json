@@ -225,7 +225,6 @@
     "revisionResume": "Davom ettirish",
     "revisionDiscard": "Tahrirni bekor qilish",
     "shortfall": "Kesishdan keyin zaxira yetishmaydi:",
-    "lowStock": "Kesishdan keyin kam qoladi:",
     "production": "Ishlab chiqarish",
     "cutter": "Kesuvchi",
     "edger": "Kromka yopishtiruvchi",
@@ -273,7 +272,8 @@
     "surchargeHint": "aniq ustama so'mda",
     "surchargeAdd": "Ustama qo'shish",
     "surchargeUpdate": "Ustamani yangilash",
-    "surchargeRemove": "Ustamani olib tashlash"
+    "surchargeRemove": "Ustamani olib tashlash",
+    "negativeAfterCut": "Kesishdan keyin manfiyga tushadi:"
   },
   "timeline": {
     "price": "Narx: {from} → {to}",
