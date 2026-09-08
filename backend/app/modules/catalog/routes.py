@@ -17,6 +17,8 @@ from app.modules.catalog.api import (
     create_decor,
     create_decor_format,
     create_manufacturer,
+    create_workshop_decor,
+    create_workshop_decor_format,
     decor_format_response_from_models,
     decor_response_from_models,
     get_decor,
@@ -28,6 +30,8 @@ from app.modules.catalog.api import (
     list_decor_formats,
     list_decors,
     list_manufacturers,
+    list_workshop_manufacturers,
+    manufacturer_response_from_model,
     set_branch_material_status,
     set_decor_format_status,
     set_decor_status,
@@ -35,6 +39,7 @@ from app.modules.catalog.api import (
     update_branch_material,
     update_decor,
     update_manufacturer,
+    update_workshop_decor,
 )
 from app.modules.catalog.schemas import (
     BranchCatalogDecorOption,
@@ -54,6 +59,10 @@ from app.modules.catalog.schemas import (
     ManufacturerCreateRequest,
     ManufacturerPatchRequest,
     ManufacturerResponse,
+    WorkshopDecorCreateRequest,
+    WorkshopDecorCreateResponse,
+    WorkshopDecorPatchRequest,
+    WorkshopManufacturerOption,
 )
 
 router = APIRouter(tags=["catalog"])
@@ -86,7 +95,7 @@ async def platform_manufacturers_index(
         search=search,
         status_filter=status_filter,
     )
-    return [ManufacturerResponse.model_validate(row) for row in rows]
+    return [manufacturer_response_from_model(row) for row in rows]
 
 
 @router.post(
@@ -100,7 +109,7 @@ async def platform_manufacturers_create(
     db: Session,
 ) -> ManufacturerResponse:
     row = await create_manufacturer(db, principal=principal, payload=payload)
-    return ManufacturerResponse.model_validate(row)
+    return manufacturer_response_from_model(row)
 
 
 @router.get(
@@ -113,7 +122,7 @@ async def platform_manufacturers_show(
     db: Session,
 ) -> ManufacturerResponse:
     row = await get_manufacturer(db, principal=principal, manufacturer_id=manufacturer_id)
-    return ManufacturerResponse.model_validate(row)
+    return manufacturer_response_from_model(row)
 
 
 @router.patch(
@@ -132,7 +141,7 @@ async def platform_manufacturers_update(
         manufacturer_id=manufacturer_id,
         payload=payload,
     )
-    return ManufacturerResponse.model_validate(row)
+    return manufacturer_response_from_model(row)
 
 
 @router.post(
@@ -150,7 +159,7 @@ async def platform_manufacturers_activate(
         manufacturer_id=manufacturer_id,
         to_status=MaterialStatus.ACTIVE,
     )
-    return ManufacturerResponse.model_validate(row)
+    return manufacturer_response_from_model(row)
 
 
 @router.post(
@@ -168,7 +177,7 @@ async def platform_manufacturers_deactivate(
         manufacturer_id=manufacturer_id,
         to_status=MaterialStatus.INACTIVE,
     )
-    return ManufacturerResponse.model_validate(row)
+    return manufacturer_response_from_model(row)
 
 
 @router.get("/platform/catalog/decors", response_model=list[DecorResponse])
@@ -398,6 +407,102 @@ async def workshop_catalog_formats_index(
         )
         for row in rows
     ]
+
+
+# ── The workshop's own catalog rows ─────────────────────────────────────────
+# What the library lacks, the branch writes for itself. `MANAGE_CATALOG` on the
+# branch, and the owning workshop is the branch's — never a body field.
+
+
+@router.get(
+    "/workshop/branches/{branch_id}/catalog/manufacturers",
+    response_model=list[WorkshopManufacturerOption],
+)
+async def workshop_catalog_manufacturers_index(
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> list[WorkshopManufacturerOption]:
+    """The create form's combobox: the library's makers, then this workshop's."""
+
+    rows = await list_workshop_manufacturers(db, principal=principal, branch_id=branch_id)
+    return [
+        WorkshopManufacturerOption(id=row.id, name=row.name, own=row.workshop_id is not None)
+        for row in rows
+    ]
+
+
+@router.post(
+    "/workshop/branches/{branch_id}/catalog/decors",
+    response_model=WorkshopDecorCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def workshop_catalog_decors_create(
+    branch_id: uuid.UUID,
+    payload: WorkshopDecorCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> WorkshopDecorCreateResponse:
+    """One decor and its first sizes, in one transaction."""
+
+    result = await create_workshop_decor(
+        db, principal=principal, branch_id=branch_id, payload=payload
+    )
+    return WorkshopDecorCreateResponse(
+        decor=_decor_response(result.decor),
+        formats=[_decor_format_response(row) for row in result.formats],
+    )
+
+
+@router.patch(
+    "/workshop/branches/{branch_id}/catalog/decors/{decor_id}",
+    response_model=DecorResponse,
+)
+async def workshop_catalog_decors_update(
+    branch_id: uuid.UUID,
+    decor_id: uuid.UUID,
+    payload: WorkshopDecorPatchRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> DecorResponse:
+    """Fix an own decor. A library decor is 403, a foreign one 404."""
+
+    row = await update_workshop_decor(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        decor_id=decor_id,
+        payload=payload,
+    )
+    return _decor_response(row)
+
+
+@router.post(
+    "/workshop/branches/{branch_id}/catalog/decors/{decor_id}/formats",
+    response_model=DecorFormatResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def workshop_catalog_decor_formats_create(
+    branch_id: uuid.UUID,
+    decor_id: uuid.UUID,
+    payload: DecorFormatCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> DecorFormatResponse:
+    """«+ Boshqa o'lcham» — one size on a library or own decor.
+
+    409 `decor_format_exists` with `details.decor_format_id` when an active
+    visible twin already exists; the sheet ticks that row instead.
+    """
+
+    row = await create_workshop_decor_format(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        decor_id=decor_id,
+        payload=payload,
+    )
+    return _decor_format_response(row)
 
 
 @router.get(

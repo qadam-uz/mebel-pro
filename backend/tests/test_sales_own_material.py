@@ -9,8 +9,10 @@ is a claim, not a cap.
 """
 
 import uuid
+from decimal import Decimal
 from types import SimpleNamespace
 
+from app.models.enums import DecorType
 from app.modules.cutting.service import clamp_own_claim
 from app.modules.sales.service import (
     _edge_banded_millimetres,
@@ -217,3 +219,45 @@ def test_a_zero_demand_raises_no_stock_warning() -> None:
     )
 
     assert warnings == []
+
+
+def _material_triple(branch_material_id: uuid.UUID) -> tuple[object, object, object, object]:
+    """The four rows `_stock_warnings_from_demands` reads for one material."""
+
+    return (
+        SimpleNamespace(id=branch_material_id),
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            type=DecorType.LDSP,
+            thickness_mm=Decimal("18"),
+            length_mm=2800,
+            width_mm=2070,
+            tape_width_mm=None,
+            finished_sides=2,
+        ),
+        SimpleNamespace(id=uuid.uuid4(), code="H1145", name="Sonoma eman", has_grain=False),
+        SimpleNamespace(id=uuid.uuid4(), name="Egger"),
+    )
+
+
+def test_the_approval_warning_fires_only_when_the_cut_goes_below_zero() -> None:
+    """One arm since 2026-09-08: the books go negative, or there is nothing to say.
+
+    It used to fire on a per-material threshold too, which put a line on every
+    thinly-stocked material and taught the approver to scroll past the block.
+    Four sheets minus three is a shelf that still holds one — not a warning.
+    """
+
+    stock = {
+        PANEL_A: SimpleNamespace(on_hand=4),
+        PANEL_B: SimpleNamespace(on_hand=1),
+    }
+    materials = {PANEL_A: _material_triple(PANEL_A), PANEL_B: _material_triple(PANEL_B)}
+
+    warnings = _stock_warnings_from_demands(
+        demands={PANEL_A: 3, PANEL_B: 3},
+        stock_by_branch_material=stock,  # type: ignore[arg-type]
+        materials=materials,  # type: ignore[arg-type]
+    )
+
+    assert [(w.material_id, w.projected_after) for w in warnings] == [(PANEL_B, -2)]

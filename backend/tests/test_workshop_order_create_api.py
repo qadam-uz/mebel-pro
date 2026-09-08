@@ -123,7 +123,6 @@ async def _materials(
         length_mm=900,
         width_mm=600,
         price_tiyin=250_000,
-        min_stock=1,
     )
     edge = await seed_kromka_material(
         db,
@@ -134,7 +133,6 @@ async def _materials(
         thickness_mm=Decimal("2"),
         tape_width_mm=19,
         price_tiyin=10_000,
-        min_stock=1,
     )
     db.add_all(
         [

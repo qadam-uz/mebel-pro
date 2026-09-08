@@ -61,17 +61,6 @@ class StockAdjustmentRequest(BaseModel):
     note: str
 
 
-class StockMinStockRequest(BaseModel):
-    """The low-stock threshold, in the material's stock unit. `0` = monitoring off.
-
-    Deliberately no `ge=0` constraint: a negative value earns the named
-    `min_stock_invalid` code from the module rather than a shapeless 422, so the
-    client can say what is wrong in the operator's language.
-    """
-
-    min_stock: int
-
-
 class StockItemResponse(APIModel):
     id: uuid.UUID
     branch_id: uuid.UUID
@@ -83,7 +72,9 @@ class StockItemResponse(APIModel):
     stock_unit: str
     display_unit: str
     on_hand: int
-    min_stock: int
+    # The wire name is unchanged and its meaning narrowed: `on_hand < 0`, full
+    # stop. The per-material threshold that used to be its other arm was retired
+    # 2026-09-08, and with it the `min_stock` field that stood here.
     is_low_stock: bool
     updated_at: datetime
 

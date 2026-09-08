@@ -129,7 +129,6 @@ async def _materials(
         length_mm=600,
         width_mm=400,
         price_tiyin=250000,
-        min_stock=1,
     )
     other_panel = await seed_panel_material(
         db,
@@ -143,7 +142,6 @@ async def _materials(
         length_mm=600,
         width_mm=400,
         price_tiyin=180000,
-        min_stock=1,
     )
     # The board's OWN decor, not a second one with the same code: a pattern and
     # the kromka that matches it are two formats of one decor now, which is the
@@ -155,7 +153,6 @@ async def _materials(
         thickness_mm=Decimal("0.4"),
         tape_width_mm=19,
         price_tiyin=1000,
-        min_stock=1,
     )
     return panel, edge, other_panel
 
@@ -193,7 +190,6 @@ async def _map_materials(
         length_mm=2750,
         width_mm=1830,
         price_tiyin=350000,
-        min_stock=1,
     )
     edge = await seed_kromka_material(
         db,
@@ -202,7 +198,6 @@ async def _map_materials(
         thickness_mm=Decimal("0.4"),
         tape_width_mm=19,
         price_tiyin=1000,
-        min_stock=1,
     )
     return panel, edge
 
@@ -393,7 +388,6 @@ async def _big_panel(db: AsyncSession, *, branch_id: uuid.UUID) -> MaterialFixtu
         length_mm=1000,
         width_mm=800,
         price_tiyin=300000,
-        min_stock=1,
     )
 
 
@@ -432,7 +426,6 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
         branch_id=uuid.UUID(branch2_id),
         decor_format=panel.decor_format,
         price_tiyin=300000,
-        min_stock=1,
     )
 
     def parts_for(branch_material_id: uuid.UUID) -> list[dict[str, object]]:

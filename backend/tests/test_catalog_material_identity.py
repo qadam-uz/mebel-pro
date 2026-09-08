@@ -516,6 +516,8 @@ async def test_branch_material_patch_touches_price_and_threshold_only(
     repriced = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{row_id}",
         headers=_auth(owner_access),
+        # `min_stock` was retired 2026-09-08. A stale client still sending it is
+        # ignored rather than rejected, so an old tab does not 422 mid-edit.
         json={"price_tiyin": 260_000, "min_stock": 4},
     )
     # Format fields are not part of the patch schema: they are ignored, and the
@@ -533,7 +535,7 @@ async def test_branch_material_patch_touches_price_and_threshold_only(
 
     assert repriced.status_code == 200, repriced.text
     assert repriced.json()["price_tiyin"] == 260_000
-    assert repriced.json()["min_stock"] == 4
+    assert "min_stock" not in repriced.json()
     assert repriced.json()["price_unset"] is False
     assert ignored.status_code == 200, ignored.text
     assert ignored.json()["decor_format_id"] == thick["id"]
@@ -613,7 +615,8 @@ async def test_catalog_column_checks_hold_at_the_db(
             await db_session.flush()
         await db_session.rollback()
 
-    # And the branch row's own two numbers, which are all it has left to guard.
+    # And the branch row's own number — the price is all it has left to guard
+    # since the threshold was retired.
     manufacturer = Manufacturer(name=f"Constraint Maker {uuid.uuid4().hex[:6]}")
     db_session.add(manufacturer)
     await db_session.flush()
@@ -630,14 +633,14 @@ async def test_catalog_column_checks_hold_at_the_db(
     await db_session.flush()
     _, branch, _ = await seed_workshop_with_owner(db_session, login=f"c-{uuid.uuid4().hex[:6]}")
 
-    for invalid in (
-        {"branch_id": branch.id, "decor_format_id": decor_format.id, "price_tiyin": -1},
-        {"branch_id": branch.id, "decor_format_id": decor_format.id, "min_stock": -1},
-    ):
-        with pytest.raises(IntegrityError):
-            await db_session.execute(insert(BranchMaterial).values(**invalid))
-            await db_session.flush()
-        await db_session.rollback()
+    with pytest.raises(IntegrityError):
+        await db_session.execute(
+            insert(BranchMaterial).values(
+                branch_id=branch.id, decor_format_id=decor_format.id, price_tiyin=-1
+            )
+        )
+        await db_session.flush()
+    await db_session.rollback()
 
 
 async def test_decor_deactivation_hides_it_from_the_branch_picker(
