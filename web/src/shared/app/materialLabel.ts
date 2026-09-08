@@ -94,6 +94,23 @@ export function decorTypeLabel(type: string | null | undefined): string {
 }
 
 /**
+ * The `type` as a **choice** — the label a chip row offers and a composed row
+ * reads back with.
+ *
+ * One value differs from `decorTypeLabel`: `boshqa` reads «List» there, the word
+ * for a sheet, which is right on a cutting part and wrong on a control asking
+ * what KIND of material this is. Picking «Boshqa» and seeing «List» in the list
+ * below would read as two different things, so both ends resolve here.
+ *
+ * `other` is the caller's translated word, like `formatDraftLabel`'s `oneSided`:
+ * it lives in the workshop's `inventory` namespace, which the client and admin
+ * catalogs do not ship, and this module is loaded by all three.
+ */
+export function decorTypeChoiceLabel(type: DecorType, other: string): string {
+  return type === 'boshqa' ? other : decorTypeLabel(type)
+}
+
+/**
  * The Tur pill's classes — the neutral chip plus the dot colour for this
  * substrate's **family**.
  *
