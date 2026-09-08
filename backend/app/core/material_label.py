@@ -75,12 +75,12 @@ _PANEL_TYPE_LABELS = {
     "mdf": "MDF",
     "fanera": "Fanera",
     "yogoch": "Yog'och",
-    "boshqa": "List",
+    "boshqa": "Boshqa",
     "kromka": "Kromka",
     # legacy panel_material_type values not reused above
     "plywood": "Fanera",
     "natural_wood": "Yog'och",
-    "other": "List",
+    "other": "Boshqa",
 }
 
 # Printed only for a one-sided board. Two-sided is the norm and saying so on

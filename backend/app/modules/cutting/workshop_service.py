@@ -472,8 +472,9 @@ async def create_customer_board(
         name=payload.name.strip() or None if payload.name else None,
         # The editor does not ask what the board is made of and should not: the
         # customer rarely knows, and the layout only needs the size. `boshqa`
-        # prints as «List», which is what the seeded `Mijoz` decor carried and
-        # therefore what every existing board's label already reads.
+        # prints as «Boshqa», the same word the screen shows, so every board —
+        # these and the ones already carrying the seeded `Mijoz` decor — reads
+        # «Boshqa Mijoz materiali».
         type=DecorType.BOSHQA,
         thickness_mm=payload.thickness_mm,
         length_mm=length,
