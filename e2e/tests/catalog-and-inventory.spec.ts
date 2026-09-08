@@ -852,7 +852,13 @@ test('one dekor attached in two formats in a single pass creates two branch mate
   await price18.fill('2600')
   await attachSubmit(formatStep, 2).click()
   await expect(formatStep).toBeHidden()
-  await expect(page.getByText(`${dekor.label} · 2 ta o'lcham qo'shildi`)).toBeVisible()
+  // The «{dekor} · n ta o'lcham qo'shildi» toast is NOT what this owner sees:
+  // these are the workshop's first priced materials, so the guided setup speaks
+  // instead and the attach toast stands down rather than stacking two
+  // (`useOnboardingContinuation`). The attach toast itself is asserted where the
+  // onboarding thread is silent — the platform-format test above, which leaves
+  // the price empty.
+  await expect(page.getByText("Material qo'shildi.", { exact: false })).toBeVisible()
 
   // One dekor group, two o'lcham rows under it — not two dekor cards.
   const groupHeader = page.getByRole('button', { name: `${dekor.label} o'lchamlari` })
@@ -893,7 +899,9 @@ test('owner attaches two dekorlar of different turlar, one sheet each', async ({
   await formatPrice(panelStep, panel.format).fill('2500')
   await attachSubmit(panelStep, 1).click()
   await expect(panelStep).toBeHidden()
-  await expect(page.getByText(`${panel.label} · 1 ta o'lcham qo'shildi`)).toBeVisible()
+  // First priced material of a fresh workshop: the guided setup owns the toast
+  // and the attach one stands down — see the two-format test above.
+  await expect(page.getByText("Material qo'shildi.", { exact: false })).toBeVisible()
 
   // Second trip: the tape, through the same button, on a sheet that opens on
   // the dekor list again rather than remembering the last one.
@@ -903,6 +911,9 @@ test('owner attaches two dekorlar of different turlar, one sheet each', async ({
   await formatPrice(edgeStep, edge.format).fill('700')
   await attachSubmit(edgeStep, 1).click()
   await expect(edgeStep).toBeHidden()
+  // Second trip, guided setup already past its material step: here the attach
+  // toast is the one that speaks, and it names the dekor it just added.
+  await expect(page.getByText(`${edge.label} · 1 ta o'lcham qo'shildi`)).toBeVisible()
 
   // Both branch materials land, each under its own dekor group.
   await expect(page.getByRole('button', { name: `${panel.label} o'lchamlari` })).toBeVisible()
@@ -1006,12 +1017,20 @@ test('owner adds a one-sided LMDF o\'lcham to a library dekor', async ({
   const dekor = await createCatalogDekor(request, adminAccess, id)
   // The library has the pattern in LDSP; the workshop buys the LMDF facade of
   // it, one-sided, and enters that itself.
-  await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
+  const f18 = await createDecorFormat(request, adminAccess, dekor.id, catalogFormat())
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   await openAttachSheet(page)
   const formatStep = await attachThroughSheet(page, dekor, [])
+
+  // With exactly one o'lcham left to add there is nothing to choose, so the
+  // sheet ticks it on arrival. This workshop wants the LMDF facade and not the
+  // library's LDSP board, so it unticks the row it was handed.
+  const libraryRow = formatCheckbox(formatStep, f18)
+  await expect(libraryRow).toBeChecked()
+  await libraryRow.uncheck()
+
   await formatStep.getByRole('button', { name: "+ Boshqa o'lcham" }).click()
 
   // «1 tomonlama» belongs to the laminated boards alone: raw DSP has no
