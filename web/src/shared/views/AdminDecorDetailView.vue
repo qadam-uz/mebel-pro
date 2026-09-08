@@ -5,7 +5,11 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { DECOR_TYPES, decorTypeLabel, isTape } from '@/shared/app/materialLabel'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
-import { normalizeThickness, standardFormatSet } from '@/shared/app/standardFormats'
+import {
+  hasFinishedSides,
+  normalizeThickness,
+  standardFormatSet,
+} from '@/shared/app/standardFormats'
 import {
   adminDate,
   adminErrorMessage,
@@ -77,9 +81,10 @@ const draftType = computed({
   },
 })
 const draftIsTape = computed(() => isTape(draft.type))
-// `finished_sides` is a product fact only for the board types; the server
-// rejects it on anything else, so the field follows the same rule.
-const needsFinishedSides = computed(() => ['ldsp', 'dsp', 'mdf'].includes(draft.type))
+// `finished_sides` is a product fact only for the LAMINATED boards — LDSP and
+// LMDF; the server rejects it on anything else (2026-09-08), so the field
+// follows the same rule from the one helper that states it.
+const needsFinishedSides = computed(() => hasFinishedSides(draft.type))
 // Quick-fill only — the operator can still type anything the manufacturer makes.
 const chips = computed(() => standardFormatSet(draft.type))
 

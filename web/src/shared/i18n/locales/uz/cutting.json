@@ -30,12 +30,13 @@
   },
   "panelType": {
     "ldsp": "LDSP",
+    "lmdf": "LMDF",
     "dsp": "DSP",
     "mdf": "MDF",
     "fanera": "Fanera",
     "yogoch": "Yog'och",
     "kromka": "Kromka",
-    "boshqa": "List",
+    "boshqa": "Boshqa",
     "plywood": "Fanera",
     "natural_wood": "Yog'och",
     "other": "List"

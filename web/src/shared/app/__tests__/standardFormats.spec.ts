@@ -98,8 +98,18 @@ describe('format drafts', () => {
     expect(formatDraftLabel(board, '1 tomonlama')).toBe('18 mm · 2750×1830')
   })
 
-  it('gives a finished-face count to the boards and nothing else', () => {
-    expect((['ldsp', 'dsp', 'mdf'] as const).every(hasFinishedSides)).toBe(true)
-    expect((['fanera', 'yogoch', 'kromka', 'boshqa'] as const).some(hasFinishedSides)).toBe(false)
+  it('gives a finished-face count to the LAMINATED boards and nothing else', () => {
+    // A finished face IS the laminate, so only LDSP and LMDF have one to count
+    // (2026-09-08); bare DSP and MDF are raw on both faces, and the server
+    // rejects the field on them.
+    expect((['ldsp', 'lmdf'] as const).every(hasFinishedSides)).toBe(true)
+    expect(
+      (['dsp', 'mdf', 'fanera', 'yogoch', 'kromka', 'boshqa'] as const).some(hasFinishedSides),
+    ).toBe(false)
+  })
+
+  it('offers LMDF the MDF chips — the press does not change what the mill cut', () => {
+    expect(standardFormatSet('lmdf')).toEqual(standardFormatSet('mdf'))
+    expect(standardFormatSet('lmdf').qalinliklar).toEqual(['3', '8', '16', '18'])
   })
 })

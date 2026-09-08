@@ -23,7 +23,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { DECOR_TYPES, decorTypeChoiceLabel, isTape } from '@/shared/app/materialLabel'
+import { DECOR_TYPES, decorTypeLabel, isTape } from '@/shared/app/materialLabel'
 import {
   hasFinishedSides,
   normalizePanelSize,
@@ -60,14 +60,11 @@ const { t } = useI18n()
 const type = ref<DecorType>(props.initialType)
 
 /**
- * Seven substrates, so a chip row rather than a `SegmentedControl` — DESIGN.md
+ * Eight substrates, so a chip row rather than a `SegmentedControl` — DESIGN.md
  * caps that primitive at three or four segments.
  */
 const typeChips = computed(() =>
-  DECOR_TYPES.map((value) => ({
-    value,
-    label: decorTypeChoiceLabel(value, t('inventory.attach.typeOther')),
-  })),
+  DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
 )
 
 const set = computed(() => standardFormatSet(type.value))

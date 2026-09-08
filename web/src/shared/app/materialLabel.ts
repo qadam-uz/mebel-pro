@@ -48,9 +48,18 @@ import { translate } from '@/shared/i18n'
 import type { DecorType } from '@/shared/stores/admin'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
-/** Every `type` a decor can have, in the backend enum's order. */
+/**
+ * Every `type` a decor can have, in the order every screen prints them —
+ * LDSP · LMDF · DSP · MDF · Fanera · Yog'och · Kromka · Boshqa.
+ *
+ * The two laminated boards lead because they are what a workshop sells all day,
+ * and each sits beside the bare panel it laminates. That is deliberately NOT
+ * the Postgres enum's storage order: `lmdf` was appended to the type in
+ * 2026-09-08's migration, and the order a chip row reads in is a display fact.
+ */
 export const DECOR_TYPES = [
   'ldsp',
+  'lmdf',
   'dsp',
   'mdf',
   'fanera',
@@ -74,31 +83,14 @@ export function isTape(type: DecorType | null | undefined): boolean {
 }
 
 /**
- * Localized `type` label — `LDSP`, `MDF`, `Fanera`, `Yog'och`, `Kromka`, `List`.
- * A value the catalog does not know is echoed verbatim rather than swallowed, so
- * a future enum member is visible instead of blank.
+ * Localized `type` label — `LDSP`, `LMDF`, `MDF`, `Fanera`, `Yog'och`,
+ * `Kromka`, `Boshqa`. A value the catalog does not know is echoed verbatim
+ * rather than swallowed, so a future enum member is visible instead of blank.
  */
 export function decorTypeLabel(type: string | null | undefined): string {
   const value = (type ?? '').trim()
   if (!value) return ''
   return LABELLED_TYPES.includes(value) ? translate(`cutting.panelType.${value}`) : value
-}
-
-/**
- * The `type` as a **choice** — the label a chip row offers and a composed row
- * reads back with.
- *
- * One value differs from `decorTypeLabel`: `boshqa` reads «List» there, the word
- * for a sheet, which is right on a cutting part and wrong on a control asking
- * what KIND of material this is. Picking «Boshqa» and seeing «List» in the list
- * below would read as two different things, so both ends resolve here.
- *
- * `other` is the caller's translated word, like `formatDraftLabel`'s `oneSided`:
- * it lives in the workshop's `inventory` namespace, which the client and admin
- * catalogs do not ship, and this module is loaded by all three.
- */
-export function decorTypeChoiceLabel(type: DecorType, other: string): string {
-  return type === 'boshqa' ? other : decorTypeLabel(type)
 }
 
 /**
@@ -118,7 +110,8 @@ export function decorTypeChoiceLabel(type: DecorType, other: string): string {
 export function decorTypePillClass(type: DecorType | null | undefined): string {
   if (type === 'kromka') return 'pill p-tur tur-tape'
   if (type === 'ldsp' || type === 'dsp') return 'pill p-tur tur-board'
-  if (type === 'mdf') return 'pill p-tur tur-mdf'
+  // LMDF is MDF with the laminate on it — same family, same dot, distinct word.
+  if (type === 'mdf' || type === 'lmdf') return 'pill p-tur tur-mdf'
   if (type === 'fanera' || type === 'yogoch') return 'pill p-tur tur-wood'
   return 'pill p-tur'
 }

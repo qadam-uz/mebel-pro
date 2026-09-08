@@ -149,7 +149,7 @@ const typeChips = computed(() => [
 function typeDotClass(type: DecorType): string {
   if (type === 'kromka') return 'bg-tur-tape'
   if (type === 'ldsp' || type === 'dsp') return 'bg-tur-board'
-  if (type === 'mdf') return 'bg-tur-mdf'
+  if (type === 'mdf' || type === 'lmdf') return 'bg-tur-mdf'
   if (type === 'fanera' || type === 'yogoch') return 'bg-tur-wood'
   return 'bg-tur-other'
 }

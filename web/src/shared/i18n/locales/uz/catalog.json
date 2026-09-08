@@ -68,7 +68,6 @@
   "toast": {
     "settingsSaved": "Material sozlamasi saqlandi.",
     "statusChanged": "Material holati o'zgartirildi.",
-    "attached": "Material filialga qo'shildi. | {n} ta material filialga qo'shildi.",
     "decorSaved": "Dekor yangilandi."
   },
   "error": {

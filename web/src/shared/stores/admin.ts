@@ -11,8 +11,11 @@ import { useAuthStore } from '@/shared/stores/auth'
 export type MaterialStatus = 'active' | 'inactive'
 
 // What a decor *is* — the single axis that replaced the old `kind` (panel/edge)
-// plus `type` (dsp/mdf/…) pair. Order matches backend/app/models/enums.py DecorType.
-export type DecorType = 'ldsp' | 'dsp' | 'mdf' | 'fanera' | 'yogoch' | 'kromka' | 'boshqa'
+// plus `type` (dsp/mdf/…) pair. Every member of backend/app/models/enums.py
+// DecorType; `lmdf` (laminated MDF) joined it on 2026-09-08 and is appended to
+// the Postgres enum, so this union is written in the order screens READ the
+// types (`DECOR_TYPES` in materialLabel.ts), not in the enum's storage order.
+export type DecorType = 'ldsp' | 'lmdf' | 'dsp' | 'mdf' | 'fanera' | 'yogoch' | 'kromka' | 'boshqa'
 
 export interface WorkshopSummary {
   id: string
