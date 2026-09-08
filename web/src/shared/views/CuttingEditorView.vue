@@ -24,20 +24,18 @@ import {
 } from '@/shared/app/cuttingEditorAdapter'
 import { edgeFields, materialSwatchStyle, type EdgeField } from '@/shared/app/cuttingDisplay'
 import { materialIdentityLabel } from '@/shared/app/materialLabel'
-import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import { formatOrderNumber } from '@/shared/formatters'
 import {
   deriveEdgeRegistry,
   edgeAssignmentSignature,
-  edgeRegistryKey,
   groupCuttingParts,
   isGeometryNeutralEdit,
   partDisplayName,
   syncEdgeAssignments,
-  type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import {
   autoTapeDecorForPanel,
+  foreignTapeIds,
   groupHasBandedSide,
   groupTapeDecors,
   preferredVariant,
@@ -60,17 +58,14 @@ import CuttingMaterialPicker from '@/shared/components/CuttingMaterialPicker.vue
 import CuttingPartCard from '@/shared/components/CuttingPartCard.vue'
 import CuttingPartSheet from '@/shared/components/CuttingPartSheet.vue'
 import CuttingTapePicker from '@/shared/components/CuttingTapePicker.vue'
-import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
   materialLabel,
   partFitError,
   useCuttingStore,
   type ClientCatalogMaterialOption,
-  type CuttingEdgeBand,
   type CuttingPart,
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
@@ -79,26 +74,21 @@ import { useAuthStore } from '@/shared/stores/auth'
 import type { OrderDetail } from '@/shared/stores/orders'
 
 /**
- * The two workshop-only modals, split out of this view's chunk.
+ * The workshop-only import wizard, split out of this view's chunk.
  *
- * Between them they are ~1900 lines — a fifth of what the editor used to make
- * every role download — and the client opens neither: §7.6 took file import off
- * the client editor, and §7.5 docks kromka in a side panel instead of raising
- * the picker modal. Both are mounted behind `v-if="!isClientEditor"`, so in the
- * client SPA the loader is never called and the bytes are never fetched.
+ * The client opens it never (§7.6 took file import off the client editor), so
+ * it is mounted behind `v-if="!isClientEditor"` and in the client SPA the
+ * loader is never called and the bytes are never fetched.
  *
  * No `loadingComponent`, deliberately. In the workshop the gate is true from
  * the first render, so the chunk is already in flight while the editor paints
  * and a click lands on a component that is long since resolved — a spinner
  * there could only flash. If the network is slow enough that it hasn't arrived,
- * the open state is held in `importWizardOpen` / `edgePickerPart` and the modal
- * appears the moment it does.
+ * the open state is held in `importWizardOpen` and the modal appears the moment
+ * it does.
  */
 const CuttingImportWizard = defineAsyncComponent(
   () => import('@/shared/components/CuttingImportWizard.vue'),
-)
-const CuttingEdgePickerModal = defineAsyncComponent(
-  () => import('@/shared/components/CuttingEdgePickerModal.vue'),
 )
 
 const route = useRoute()
@@ -121,11 +111,11 @@ provide(cuttingEditorAdapterKey, adapter)
 // not a picker; the walk-in identity strip shows in workshop scope.
 const fixedBranch = computed(() => adapter.branch.fixed ?? null)
 const isWorkshopScope = computed(() => cutting.scope === 'workshop')
-// The client editor (SPEC_CLIENT_UX_MVP §7). Every §7 change is gated on this,
-// never on `inOrderWizard`: that flag is false for a workshop revision and for
-// a read-only bound draft too, and those are workshop screens that must keep
-// the registry, the tape picker, the import and the own-material flow exactly
-// as they are today.
+// The client editor (SPEC_CLIENT_UX_MVP §7). What is still gated on this is the
+// client-only chrome — the phone shell and its sheets, the hidden import and
+// own-material flows — never `inOrderWizard`, which is false for a workshop
+// revision and for a read-only bound draft too. Kromka is NOT gated on it any
+// more: §13 W2 moved the workshop editor onto the same group-tape model.
 const isClientEditor = computed(() => cutting.scope === 'client')
 const draftId = computed(() => String(route.params.id))
 // New editor: it has no server id until it contains a complete detail, which
@@ -247,14 +237,7 @@ const importedLayoutWarningOpen = ref(false)
 const importedLayoutWarningAccepted = ref(false)
 const collapsedGroupKeys = ref<Set<string>>(new Set())
 const errorFilterEnabled = ref(false)
-const registryPickerOpen = ref(false)
-const registryReplaceEntry = ref<EdgeRegistryEntry | null>(null)
-const registryPickedEdgeId = ref<string | null>(null)
-const preferredEdgeByPart = ref<Record<string, string>>({})
 const edgeAssignments = ref(new Map<string, number>())
-const edgePickerPart = ref<CuttingPart | null>(null)
-const edgePickerInitialSide = ref<EdgeField | null>(null)
-let edgeReturnFocus: HTMLElement | null = null
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
 // the same draft and must not clobber unsaved local edits (CB-15).
@@ -281,14 +264,6 @@ const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null
 const inOrderWizard = computed(
   () => isWorkshopScope.value && !isReadOnly.value && revisionOrderId.value === null,
 )
-/**
- * Whether kromka is edited in a card docked beside the board rather than in a
- * modal — the staff order wizard, and now the client editor too (§7.5). Both
- * select a row on click or focus and render the panel for that row; the client
- * variant just carries a smaller block. Below `lg` the client's panel is not
- * rendered at all and the phone sheet owns the job instead.
- */
-const docksKromka = computed(() => inOrderWizard.value || isClientEditor.value)
 // The locked-branch strip names the branch the editor actually operates on. For a
 // resumed walk-in draft that's the draft's frozen branch (which may differ from
 // the topbar the adapter froze at mount); fall back to the topbar name.
@@ -579,7 +554,7 @@ function edgeById(id: string | null | undefined) {
   return (id ? edgesById.value.get(id) : null) ?? null
 }
 
-// ── The client's group tape (§7.1) ──────────────────────────────────────────
+// ── The group tape (§7.1, and §13 W2: both editors) ─────────────────────────
 // Nothing below is persisted: a side still stores the concrete kromka material
 // id it always did, and the group's decor is resolved from the parts snapshot
 // plus the branch's tape catalog on every read (see app/cuttingGroupTape.ts).
@@ -591,9 +566,7 @@ const armedThicknessMm = ref<number | null>(null)
 const tapePickerGroupKey = ref<string | null>(null)
 const gateGroupKey = ref<string | null>(null)
 
-const tapeDecors = computed(() =>
-  isClientEditor.value ? groupTapeDecors(cutting.edgeOptions) : [],
-)
+const tapeDecors = computed(() => groupTapeDecors(cutting.edgeOptions))
 
 function partsOfMaterial(materialId: string | null) {
   return parts.value.filter((part) => (part.material_id || null) === materialId)
@@ -607,6 +580,28 @@ function groupTapeFor(materialId: string | null): TapeDecor | null {
     decors: tapeDecors.value,
     pickedKey: pickedTapeByMaterial.value[materialId] ?? null,
   }).decor
+}
+
+/**
+ * A **mixed group**: its parts carry tapes from more than one decor.
+ *
+ * The workshop meets this far more often than the client does — a legacy
+ * drawing banded before W2, or one the import wizard mapped edge-by-edge (that
+ * wizard keeps its own mapping and is untouched). `resolveGroupTape` already
+ * names one decor for the group: the first one its sides use, in first-use
+ * order — the same "what the sides already carry" rung a resumed draft relies
+ * on. The others are kept exactly as saved and named read-only per part
+ * («Boshqa rang: …»), so nothing is silently rewritten on open.
+ *
+ * What that rule cannot say is that the group *is* mixed, which is why the
+ * line takes an «aralash» mark: the operator has to know the head names one of
+ * several tapes before they change it — picking a colour re-points **every**
+ * banded side in the group (`reResolveGroupTape`), which is the deliberate way
+ * out of a mixed group and the only one this editor offers.
+ */
+function groupTapeIsMixed(materialId: string | null): boolean {
+  if (!materialId) return false
+  return foreignTapeIds(partsOfMaterial(materialId), groupTapeFor(materialId)).length > 0
 }
 
 function tapeThicknessOf(materialId: string): number | null {
@@ -632,7 +627,7 @@ function foreignTapeLabel(materialId: string) {
 watch(
   [() => parts.value.map((part) => part.material_id).join('|'), tapeDecors],
   () => {
-    if (!isClientEditor.value || tapeDecors.value.length === 0) return
+    if (tapeDecors.value.length === 0) return
     const next = { ...pickedTapeByMaterial.value }
     let changed = false
     for (const materialId of new Set(parts.value.map((part) => part.material_id).filter(Boolean))) {
@@ -649,14 +644,12 @@ watch(
 
 /** Groups that band a side but have no tape decor — the «Hisoblash» gate. */
 const groupsMissingGroupTape = computed(() =>
-  isClientEditor.value
-    ? groupedParts.value.filter(
-        (group) =>
-          group.materialId &&
-          groupHasBandedSide(group.parts.map((entry) => entry.part)) &&
-          groupTapeFor(group.materialId) === null,
-      )
-    : [],
+  groupedParts.value.filter(
+    (group) =>
+      group.materialId &&
+      groupHasBandedSide(group.parts.map((entry) => entry.part)) &&
+      groupTapeFor(group.materialId) === null,
+  ),
 )
 
 function openTapePicker(materialId: string | null) {
@@ -711,12 +704,20 @@ function setPartSide(part: CuttingPart, side: EdgeField, materialId: string | nu
   if (materialId) {
     const thickness = tapeThicknessOf(materialId)
     if (thickness != null) armedThicknessMm.value = thickness
-    rememberEdgeMaterial(part, materialId)
   }
 }
 
+/** «Uta (obmanka)» — workshop-only, set from the docked card (see the panel). */
+function setPartThickened(part: CuttingPart, value: boolean) {
+  part.thickened = value
+}
+
+// The drawing-wide tape numbering. The ①② registry panel left the editor with
+// W2, but the numbering did not: it is what paints the row's edge glyph here,
+// and what the result views, the parts table and the PDF derive their circled
+// numbers from (`deriveSnapshotEdgeRegistry`). One tape, one number, one
+// colour, all the way from this row to the printed sheet.
 const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
-const edgeAssignmentEntries = computed(() => [...edgeAssignments.value.entries()])
 const groupedParts = computed(() =>
   groupCuttingParts(parts.value, (materialId) =>
     inOrderWizard.value
@@ -778,80 +779,6 @@ const displayPartIndex = computed(() => {
   }
   return positions
 })
-
-function edgeRegistryLabel(materialId: string) {
-  const edge = edgeById(materialId)
-  return edge ? materialLabel(edge) : materialId
-}
-
-function groupEdgeRegistryEntries(group: { parts: Array<{ part: CuttingPart }> }) {
-  const keys = new Set<string>()
-  for (const { part } of group.parts) {
-    for (const side of edgeFields) {
-      const band = part[side]
-      if (band?.material_id) keys.add(edgeRegistryKey(band.material_id, band.source))
-    }
-  }
-  return edgeRegistry.value.filter((entry) => keys.has(entry.key))
-}
-
-function edgeIdsForParts(rows: CuttingPart[]) {
-  const ids: string[] = []
-  const seen = new Set<string>()
-  for (const row of rows) {
-    for (const side of edgeFields) {
-      const materialId = row[side]?.material_id
-      if (!materialId || seen.has(materialId)) continue
-      seen.add(materialId)
-      ids.push(materialId)
-    }
-  }
-  return ids
-}
-
-function groupEdgeIds(part: CuttingPart | null) {
-  if (!part?.material_id) return []
-  return edgeIdsForParts(parts.value.filter((row) => row.material_id === part.material_id))
-}
-
-function otherGroupEdgeIds(part: CuttingPart | null) {
-  if (!part?.material_id) return []
-  return edgeIdsForParts(parts.value.filter((row) => row.material_id !== part.material_id))
-}
-
-function edgeRegistryEntryForPartNumber(part: CuttingPart, number: number) {
-  const groupRows = parts.value
-    .filter((row) => row.material_id === part.material_id)
-    .map((row) => ({ part: row }))
-  return groupEdgeRegistryEntries({ parts: groupRows }).find((entry) => entry.number === number)
-}
-
-function applyEdgeNumberToPartSide(part: CuttingPart, side: EdgeField, number: number) {
-  const entry = edgeRegistryEntryForPartNumber(part, number)
-  if (!entry) return
-  part[side] = { material_id: entry.materialId, source: entry.source }
-  rememberEdgeMaterial(part, entry.materialId)
-}
-
-function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
-  const edge = edgeById(entry.materialId)
-  if (!edge) return null
-  for (const part of parts.value) {
-    const usesEdge = edgeFields.some(
-      (side) => part[side]?.material_id === entry.materialId && part[side]?.source === entry.source,
-    )
-    if (!usesEdge) continue
-    const panel = materialById(part.material_id)
-    const panelThickness = Number(panel?.thickness_mm)
-    if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
-      return t('cutting.edge.narrowWarning', {
-        width: edge.tape_width_mm,
-        thickness: panelThickness,
-      })
-    }
-  }
-  return null
-}
 
 function groupErrorCount(groupKey: string) {
   const group = groupedParts.value.find((item) => item.key === groupKey)
@@ -1015,17 +942,12 @@ function deleteRow(index: number) {
   const removed = parts.value[index]
   parts.value = parts.value.filter((_, current) => current !== index)
   if (removed) {
-    const next = { ...preferredEdgeByPart.value }
-    delete next[removed.part_ref]
-    preferredEdgeByPart.value = next
     if (selectedRefs.value.has(removed.part_ref)) {
       const nextSel = new Set(selectedRefs.value)
       nextSel.delete(removed.part_ref)
       selectedRefs.value = nextSel
     }
-    // The panel's subject just stopped existing. Clearing here rather than
-    // letting `activePart` resolve to null keeps `activeSide` from surviving
-    // into whatever row is selected next.
+    // The card's subject just stopped existing.
     if (activePartRef.value === removed.part_ref) clearActivePart()
     // Same for the phone sheet — deleting from its ⋯ menu closes it, and the
     // undo toast below is then the only thing on screen about that part.
@@ -1047,16 +969,13 @@ function setPartName(part: CuttingPart, value: string | null) {
   part.name = value
 }
 
-type CellName = 'name' | 'length' | 'width' | 'quantity' | 'edge'
+type CellName = 'name' | 'length' | 'width' | 'quantity'
 const cellOrder: CellName[] = ['name', 'length', 'width', 'quantity']
-const edgeCellOrder: EdgeField[] = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right']
 
-function focusCell(index: number, cell: CellName, side?: EdgeField) {
-  const selector =
-    cell === 'edge' && side
-      ? `[data-part-index="${index}"][data-cell="edge"][data-edge-side="${side}"]`
-      : `[data-part-index="${index}"][data-cell="${cell}"]`
-  const target = document.querySelector<HTMLElement>(selector)
+function focusCell(index: number, cell: CellName) {
+  const target = document.querySelector<HTMLElement>(
+    `[data-part-index="${index}"][data-cell="${cell}"]`,
+  )
   target?.focus()
   if (target instanceof HTMLInputElement && cell !== 'name') {
     const end = target.value.length
@@ -1064,14 +983,7 @@ function focusCell(index: number, cell: CellName, side?: EdgeField) {
   }
 }
 
-function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
-  if (cell === 'edge' && side) {
-    const currentSide = edgeCellOrder.indexOf(side)
-    if (currentSide >= 0 && currentSide < edgeCellOrder.length - 1) {
-      focusCell(index, 'edge', edgeCellOrder[currentSide + 1])
-      return
-    }
-  }
+function onCellEnter(index: number, cell: CellName) {
   const currentCell = cellOrder.indexOf(cell)
   if (currentCell < cellOrder.length - 1) {
     focusCell(index, cellOrder[currentCell + 1])
@@ -1265,7 +1177,6 @@ function closeImportWizard() {
 
 function commitImportedParts(mode: ImportLoadMode, importedParts: CuttingPart[]) {
   parts.value = applyImportedParts(parts.value, importedParts, mode).map(normalizeSources)
-  if (mode === 'replace') preferredEdgeByPart.value = {}
   optimizeError.value = null
   optimizeRowError.value = null
   clearSelection()
@@ -1308,23 +1219,19 @@ const selectedRefs = ref<Set<string>>(new Set())
 const selectedParts = computed(() =>
   parts.value.filter((part) => selectedRefs.value.has(part.part_ref)),
 )
-const bulkEdgeMode = ref(false)
 
-// The wizard's docked kromka panel edits ONE row, and this is that row. Kept
-// apart from `selectedRefs` on purpose: that set is the bulk-apply selection,
-// a different question ("which rows does this action fan out to") with a
-// different affordance. Folding them together would make tabbing through the
-// board silently arm a bulk edit.
+// The docked kromka card edits ONE row, and this is that row. Kept apart from
+// `selectedRefs` on purpose: that set is the bulk-apply selection, a different
+// question ("which rows does this action fan out to") with a different
+// affordance. Folding them together would make tabbing through the board
+// silently arm a bulk edit.
 const activePartRef = ref<string | null>(null)
 const activePart = computed(
   () => parts.value.find((part) => part.part_ref === activePartRef.value) ?? null,
 )
-/** The side the operator pointed at, so the panel can flash that toggle. */
-const activeSide = ref<EdgeField | null>(null)
 
-function selectPart(part: CuttingPart, side?: EdgeField) {
+function selectPart(part: CuttingPart) {
   activePartRef.value = part.part_ref
-  activeSide.value = side ?? null
 }
 
 // ── The phone «Detal» sheet (§7.0) ──────────────────────────────────────────
@@ -1389,7 +1296,6 @@ function savePartAndNext() {
 
 function clearActivePart() {
   activePartRef.value = null
-  activeSide.value = null
 }
 
 // Keeping the panel level with the row it edits. The measurement has to cross
@@ -1411,12 +1317,22 @@ function syncPanelOffset() {
   const shell = stepShell.value
   const part = activePart.value
   const panel = kromkaPanel.value?.$el as HTMLElement | undefined
+  // Only the wizard's `flex-wrap` row levels the card; everywhere else it is a
+  // grid track that must sit where the grid puts it.
+  if (!inOrderWizard.value) {
+    panelOffset.value = 0
+    return
+  }
   if (!shell || !part || !panel) {
     panelOffset.value = 0
     return
   }
   const board = shell.firstElementChild?.firstElementChild
-  const row = shell.querySelector(`#part-row-${CSS.escape(part.part_ref)}`)
+  // `getElementById`, not a `#id` selector: a `part_ref` is a UUID that needs
+  // `CSS.escape` to be safe in a selector, and `CSS` does not exist in jsdom —
+  // so the selector form threw in unit tests and was one bad id away from
+  // throwing in a browser.
+  const row = document.getElementById(`part-row-${part.part_ref}`)
   if (!board || !row) return
   const shellBox = overlayRect(shell)
   if (shellBox.width < overlayRect(board).width + PANEL_SIDE_BY_SIDE_MIN) {
@@ -1451,24 +1367,6 @@ onBeforeUnmount(() => {
   panelResize?.disconnect()
 })
 
-// Writes to the PANEL's subject, not the modal's. `onEdgePickerChange` targets
-// `edgePickerPart`, which the wizard never sets because it never opens the
-// modal — routing through it made every toggle a silent no-op. Thickening is a
-// property of the detal rather than of its banding, so it is carried through
-// untouched rather than asked of the panel.
-function onPanelEdgesChange(payload: {
-  edges: Record<EdgeField, CuttingEdgeBand | null>
-  rememberedMaterialId: string | null
-}) {
-  const part = activePart.value
-  if (!part) return
-  part.edge_top = payload.edges.edge_top
-  part.edge_bottom = payload.edges.edge_bottom
-  part.edge_left = payload.edges.edge_left
-  part.edge_right = payload.edges.edge_right
-  rememberEdgeMaterial(part, payload.rememberedMaterialId)
-}
-
 // No per-part target: a row's material is the group's, and changing one row
 // alone is what the group head (or a bulk selection) is for.
 type MaterialPickerTarget = { type: 'group'; key: string } | { type: 'bulk' } | { type: 'new' }
@@ -1486,19 +1384,7 @@ function clearSelection() {
 function bulkDelete() {
   const removed = selectedRefs.value
   parts.value = parts.value.filter((part) => !removed.has(part.part_ref))
-  const nextEdges = { ...preferredEdgeByPart.value }
-  for (const ref of removed) delete nextEdges[ref]
-  preferredEdgeByPart.value = nextEdges
   clearSelection()
-}
-function openBulkEdge() {
-  if (selectedParts.value.length === 0) return
-  // Reuse the single-part edge picker: seed it from the first selected part and
-  // write the applied result to every selected part on apply (bulkEdgeMode).
-  bulkEdgeMode.value = true
-  edgePickerPart.value = { ...selectedParts.value[0], part_ref: '__bulk__' }
-  edgePickerInitialSide.value = null
-  edgeReturnFocus = null
 }
 /**
  * §7.3: on a desktop the client picker is a panel anchored to the control that
@@ -1636,104 +1522,8 @@ function groupSwatchStyle(materialId: string) {
   })
 }
 
-function openRegistryReplace(entry: EdgeRegistryEntry) {
-  registryReplaceEntry.value = entry
-  registryPickedEdgeId.value = entry.materialId
-  registryPickerOpen.value = true
-}
-
-function closeRegistryPicker() {
-  registryPickerOpen.value = false
-  registryReplaceEntry.value = null
-  registryPickedEdgeId.value = null
-}
-
-function applyRegistryPicker() {
-  const materialId = registryPickedEdgeId.value
-  const entry = registryReplaceEntry.value
-  if (!materialId || !entry) return
-  for (const part of parts.value) {
-    for (const side of edgeFields) {
-      const band = part[side]
-      if (band?.material_id === entry.materialId && band.source === entry.source) {
-        part[side] = { ...band, material_id: materialId }
-      }
-    }
-  }
-  closeRegistryPicker()
-}
-
 function setFollowGrain(part: CuttingPart, value: boolean) {
   part.follow_grain = value
-}
-
-function preferredEdgeId(part: CuttingPart) {
-  return preferredEdgeByPart.value[part.part_ref] ?? null
-}
-
-function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
-  const next = { ...preferredEdgeByPart.value }
-  if (materialId) next[part.part_ref] = materialId
-  else delete next[part.part_ref]
-  preferredEdgeByPart.value = next
-}
-
-function openEdgePicker(part: CuttingPart, event?: Event, side?: EdgeField) {
-  // The modal seeds its own working selection from `part`; the editor only records
-  // which part is open and the element to restore focus to on close.
-  bulkEdgeMode.value = false
-  edgePickerPart.value = part
-  edgePickerInitialSide.value = side ?? null
-  edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
-}
-
-function closeEdgePicker() {
-  edgePickerPart.value = null
-  edgePickerInitialSide.value = null
-  bulkEdgeMode.value = false
-  edgeReturnFocus?.focus()
-  edgeReturnFocus = null
-}
-
-type EdgePickerPayload = {
-  edges: Record<EdgeField, CuttingEdgeBand | null>
-  rememberedMaterialId: string | null
-  thickened: boolean
-}
-
-function applyEdgesToRefs(refs: Set<string>, payload: EdgePickerPayload) {
-  const preferred = { ...preferredEdgeByPart.value }
-  parts.value = parts.value.map((part) => {
-    if (!refs.has(part.part_ref)) return part
-    if (payload.rememberedMaterialId) preferred[part.part_ref] = payload.rememberedMaterialId
-    else delete preferred[part.part_ref]
-    return {
-      ...part,
-      thickened: payload.thickened,
-      edge_top: payload.edges.edge_top ? { ...payload.edges.edge_top } : null,
-      edge_bottom: payload.edges.edge_bottom ? { ...payload.edges.edge_bottom } : null,
-      edge_left: payload.edges.edge_left ? { ...payload.edges.edge_left } : null,
-      edge_right: payload.edges.edge_right ? { ...payload.edges.edge_right } : null,
-    }
-  })
-  preferredEdgeByPart.value = preferred
-}
-
-function onEdgePickerChange(payload: EdgePickerPayload) {
-  const targets = bulkEdgeMode.value
-    ? new Set(selectedParts.value.map((part) => part.part_ref))
-    : null
-  if (targets) {
-    applyEdgesToRefs(targets, payload)
-  } else if (edgePickerPart.value) {
-    const part = edgePickerPart.value
-    part.thickened = payload.thickened
-    part.edge_top = payload.edges.edge_top
-    part.edge_bottom = payload.edges.edge_bottom
-    part.edge_left = payload.edges.edge_left
-    part.edge_right = payload.edges.edge_right
-    rememberEdgeMaterial(part, payload.rememberedMaterialId)
-  }
 }
 
 // The client flow no longer offers "I'll bring it" — every material is
@@ -2615,29 +2405,25 @@ onBeforeRouteLeave(async () => {
              inside a number cell. `.stop` so it does not travel on to the
              wizard's own cancel — the operator is dismissing the panel, not
              the order. -->
-        <div ref="stepShell" @keydown.esc.stop="docksKromka && clearActivePart()">
-          <!-- §7.5: on the client this is a real two-column grid at `lg`
-               (`minmax(0,1fr) 340px`), not the wizard's measured wrap — the
-               client board is fluid, so there is no knowable width to wrap
+        <div ref="stepShell" @keydown.esc.stop="clearActivePart()">
+          <!-- §7.5: outside the order wizard this is a real two-column grid at
+               `lg` (`minmax(0,1fr) 340px`), not the wizard's measured wrap — the
+               board is fluid there, so there is no knowable width to wrap
                against, and the docked card wants a fixed column. -->
           <div
             :class="
               inOrderWizard
                 ? 'flex flex-wrap items-start gap-[18px]'
-                : isClientEditor && activePart
+                : activePart
                   ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]'
                   : ''
             "
           >
             <!-- `contents` normally dissolves this wrapper so the card and the
-                 sticky bar are siblings of the page. Under the client's docked
-                 grid it must stay a real box, or both would become grid items
-                 and the bar would land in the kromka column. -->
-            <div
-              :class="
-                inOrderWizard ? 'shrink' : isClientEditor && activePart ? 'min-w-0' : 'contents'
-              "
-            >
+                 sticky bar are siblings of the page. Under the docked grid it
+                 must stay a real box, or both would become grid items and the
+                 bar would land in the kromka column. -->
+            <div :class="inOrderWizard ? 'shrink' : activePart ? 'min-w-0' : 'contents'">
               <!-- A panel, not a bordered block: `.client-card` also sets
              `overflow: hidden`, which would trap the row grid's own horizontal
              scroller on a narrow viewport. `w-max` is what makes the wrap work:
@@ -2749,13 +2535,10 @@ onBeforeRouteLeave(async () => {
                   "
                   class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
                 >
-                  <button
-                    type="button"
-                    class="text-accent-strong hover:underline"
-                    @click="openBulkEdge"
-                  >
-                    {{ $t('cutting.editor.bulkApplyEdge') }}
-                  </button>
+                  <!-- No bulk kromka action: W2 made the tape a property of the
+                       material group, so «apply this tape to N rows» is now
+                       the group tape line one row up. What is left per row is
+                       which SIDES carry it, which is a per-detal answer. -->
                   <button
                     type="button"
                     class="text-accent-strong hover:underline"
@@ -3109,6 +2892,22 @@ onBeforeRouteLeave(async () => {
                         {{ $t('cutting.editor.addPart') }}
                       </button>
                     </div>
+                    <!-- §7.1, and §13 W2 for the workshop: the ①② registry line
+                         is REPLACED by the group's tape line — it names one tape
+                         decor and the thicknesses the branch stocks it in, and it
+                         is itself the control that changes them. A numbering has
+                         nothing left to number once a material group carries one
+                         tape. -->
+                    <CuttingGroupTapeLine
+                      v-if="group.materialId"
+                      :id="`group-tape-${group.materialId}`"
+                      :decor="groupTapeFor(group.materialId)"
+                      :armed="gateGroupKey === group.materialId"
+                      :mixed="groupTapeIsMixed(group.materialId)"
+                      :dense="inOrderWizard"
+                      :padded="!inOrderWizard"
+                      @open="openTapePicker(group.materialId)"
+                    />
                     <div v-if="inOrderWizard" class="hidden pb-1.5 @min-[660px]:block">
                       <div
                         class="grid grid-cols-[26px_208px_80px_80px_56px_62px_54px_44px] items-center gap-[7px] w-max text-[11px] font-extrabold text-ink-muted"
@@ -3134,39 +2933,6 @@ onBeforeRouteLeave(async () => {
                         }}</span>
                         <span aria-hidden="true"></span>
                       </div>
-                    </div>
-                    <!-- §7.1: on the client the registry line is REPLACED by the
-                         group's tape line — it names one tape decor and the
-                         thicknesses the branch stocks it in, and it is itself
-                         the control that changes them. A numbering has nothing
-                         left to number once a material group carries one tape. -->
-                    <CuttingGroupTapeLine
-                      v-if="isClientEditor && group.materialId"
-                      :id="`group-tape-${group.materialId}`"
-                      :decor="groupTapeFor(group.materialId)"
-                      :armed="gateGroupKey === group.materialId"
-                      :dense="false"
-                      @open="openTapePicker(group.materialId)"
-                    />
-
-                    <!-- The registry names every tape in the drawing; on the parts
-                         screen it is a second list of things the operator is not
-                         editing here. The kromka panel names the tape it is
-                         setting, and step 3 totals them. -->
-                    <div
-                      v-if="
-                        !inOrderWizard &&
-                        !isClientEditor &&
-                        groupEdgeRegistryEntries(group).length > 0
-                      "
-                      class="border-t border-hairline px-3 pb-2 pt-1.5"
-                    >
-                      <CuttingEdgeTapeRegistry
-                        :entries="groupEdgeRegistryEntries(group)"
-                        :label-for-material="edgeRegistryLabel"
-                        :narrow-warning-for-entry="edgeRegistryNarrowWarning"
-                        @replace="openRegistryReplace"
-                      />
                     </div>
                     <!-- §7.0: the phone list is read-only cards that open the
                          «Detal» sheet; the table below is the same parts at
@@ -3215,8 +2981,8 @@ onBeforeRouteLeave(async () => {
                         :optimize-error="rowOptimizeError(part, index)"
                         :edge-registry="edgeRegistry"
                         :bare-index="inOrderWizard"
-                        :selected="docksKromka && activePartRef === part.part_ref"
-                        @select="docksKromka && selectPart(part)"
+                        :selected="activePartRef === part.part_ref"
+                        @select="selectPart(part)"
                         @toggle-select="toggleSelect(part.part_ref)"
                         @update:name="setPartName(part, $event)"
                         @update:length="part.length_mm = $event"
@@ -3224,15 +2990,9 @@ onBeforeRouteLeave(async () => {
                         @update:quantity="part.quantity = $event"
                         @update:follow-grain="setFollowGrain(part, $event)"
                         @duplicate="duplicateRow(index)"
-                        @cell-enter="(cell, side) => onCellEnter(index, cell, side)"
+                        @cell-enter="(cell) => onCellEnter(index, cell)"
                         @delete="deleteRow(index)"
-                        @open-edge-picker="
-                          (event, side) =>
-                            docksKromka ? selectPart(part, side) : openEdgePicker(part, event, side)
-                        "
-                        @apply-edge-number="
-                          (side, number) => applyEdgeNumberToPartSide(part, side, number)
-                        "
+                        @open-edge-picker="selectPart(part)"
                       />
                     </div>
                   </section>
@@ -3367,39 +3127,30 @@ onBeforeRouteLeave(async () => {
                  places at once. The offset animates so the move is legible as
                  "the panel followed you". When the panel wraps under the board
                  there is no row to level with, so the offset is dropped. -->
+            <!-- One card, both editors (§13 W2). In the wizard it is levelled
+                 with the row it edits and takes a fixed width, because that
+                 layout is a measured `flex-wrap`; outside it, it is the grid's
+                 340px track, and the client hides it below `lg` where the phone
+                 «Detal» sheet owns kromka instead. The workshop keeps it at
+                 every width — it has no sheet to fall back to, so the card
+                 simply stacks under the board on a narrow window. -->
             <CuttingKromkaPanel
-              v-if="inOrderWizard && activePart"
+              v-if="activePart"
               ref="kromkaPanel"
-              class="transition-[margin] duration-150 ease-out"
-              :style="{ marginTop: `${panelOffset}px` }"
+              :class="[
+                inOrderWizard ? 'transition-[margin] duration-150 ease-out' : '',
+                !inOrderWizard && isClientEditor ? 'max-lg:hidden' : '',
+              ]"
+              :style="inOrderWizard ? { marginTop: `${panelOffset}px` } : undefined"
+              :fixed-width="inOrderWizard"
+              :show-thickening="!isClientEditor"
               :part="activePart"
               :part-number="(displayPartIndex.get(activePart.part_ref) ?? 0) + 1"
-              :panel-material="materialById(activePart.material_id)"
-              :edge-options="cutting.edgeOptions"
-              :edge-registry="edgeRegistry"
-              :flash-side="activeSide"
-              @edges-change="onPanelEdgesChange"
-              @close="clearActivePart"
-            />
-
-            <!-- §7.5, client: the same docked card carrying §7.1's reduced
-                 block. Hidden below `lg`, where the phone sheet owns kromka —
-                 a 340px column has nowhere to go on a narrow viewport, and the
-                 sheet is the better control there anyway. -->
-            <CuttingKromkaPanel
-              v-if="isClientEditor && activePart"
-              variant="client"
-              class="max-lg:hidden"
-              :part="activePart"
-              :part-number="(displayPartIndex.get(activePart.part_ref) ?? 0) + 1"
-              :panel-material="materialById(activePart.material_id)"
-              :edge-options="cutting.edgeOptions"
-              :edge-registry="edgeRegistry"
-              :flash-side="activeSide"
               :group-tape-decor="groupTapeFor(activePart.material_id)"
               :selected-thickness-mm="armedThicknessFor(groupTapeFor(activePart.material_id))"
               :foreign-tape-label="foreignTapeLabel"
               @update:selected-thickness-mm="armedThicknessMm = $event"
+              @update:thickened="setPartThickened(activePart!, $event)"
               @set-side="(side, materialId) => setPartSide(activePart!, side, materialId)"
               @need-tape="openTapePicker(activePart.material_id)"
               @open-group-tape="openTapePicker(activePart.material_id)"
@@ -3487,88 +3238,7 @@ onBeforeRouteLeave(async () => {
       @confirm="resolveImportedLayoutWarning(true)"
     />
 
-    <!-- Workshop-only mount (§7.5): the client edits kromka in the docked panel
-         and never raises this modal, so the client SPA never loads its chunk. -->
-    <CuttingEdgePickerModal
-      v-if="!isClientEditor"
-      :part="edgePickerPart"
-      :initial-side="edgePickerInitialSide"
-      :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
-      :title-suffix="
-        bulkEdgeMode
-          ? $t('cutting.edge.bulkSuffix', { n: selectedParts.length }, selectedParts.length)
-          : undefined
-      "
-      :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
-      :edge-registry="edgeRegistry"
-      :edge-assignment-entries="edgeAssignmentEntries"
-      :group-edge-ids="groupEdgeIds(edgePickerPart)"
-      :other-group-edge-ids="otherGroupEdgeIds(edgePickerPart)"
-      @edges-change="onEdgePickerChange"
-      @close="closeEdgePicker"
-    />
-
-    <div
-      v-if="registryPickerOpen"
-      class="fixed inset-0 z-[70] flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="$t('cutting.edge.pickTitle')"
-      @keydown.esc="closeRegistryPicker"
-    >
-      <div
-        class="absolute inset-0 bg-ink/45 backdrop-blur-[2px]"
-        @click="closeRegistryPicker"
-      ></div>
-      <div
-        class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
-      >
-        <div class="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h3 class="font-display text-lg font-semibold text-ink">
-              {{ $t('cutting.edge.replaceTitle') }}
-            </h3>
-            <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
-              {{
-                $t('cutting.edge.replaceBody', {
-                  name: edgeRegistryLabel(registryReplaceEntry.materialId),
-                })
-              }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="client-edge-close"
-            :aria-label="$t('cutting.action.close')"
-            @click="closeRegistryPicker"
-          >
-            ×
-          </button>
-        </div>
-        <SearchCombobox
-          :model-value="registryPickedEdgeId"
-          :label="$t('cutting.edge.label')"
-          :options="edgeChoices"
-          :placeholder="$t('cutting.edge.placeholder')"
-          @update:model-value="registryPickedEdgeId = $event"
-        />
-        <div class="mt-4 flex flex-wrap justify-end gap-2">
-          <button type="button" class="mp-button mp-button-outline" @click="closeRegistryPicker">
-            {{ $t('cutting.action.cancel') }}
-          </button>
-          <button
-            type="button"
-            class="mp-button mp-button-primary"
-            :disabled="!registryPickedEdgeId"
-            @click="applyRegistryPicker"
-          >
-            {{ $t('cutting.action.apply') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── The client's three overlays (§7.0, §7.2, §7.3) ─────────────────── -->
+    <!-- ── The editor's overlays (§7.0, §7.2, §7.3) ───────────────────────── -->
     <CuttingPartSheet
       v-if="isClientEditor && sheetPart"
       :open="Boolean(sheetPart)"
@@ -3594,14 +3264,18 @@ onBeforeRouteLeave(async () => {
       @open-group-tape="openTapePicker(sheetPart.material_id)"
     />
 
+    <!-- One tape picker, both editors (§13 W2). The workshop passes the board's
+         thickness so a tape too narrow to cover the edge is marked where the
+         choice is actually made; the client picks on colour and price, and the
+         branch owns whether the shelf is coherent. -->
     <CuttingTapePicker
-      v-if="isClientEditor"
       :open="Boolean(tapePickerGroupKey)"
       :decors="tapeDecors"
       :panel="tapePickerPanel"
       :panel-image-file-id="tapePickerPanel?.image_file_id ?? null"
       :current-key="tapePickerCurrentKey"
-      :branch="clientBranchLabel"
+      :branch="pickerBranchLabel"
+      :panel-thickness-mm="isClientEditor ? null : Number(tapePickerPanel?.thickness_mm) || null"
       @close="closeTapePicker"
       @pick="applyGroupTape"
     />

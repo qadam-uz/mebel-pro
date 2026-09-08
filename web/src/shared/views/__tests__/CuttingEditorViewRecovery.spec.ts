@@ -102,8 +102,6 @@ async function mountEditor() {
           Icon: true,
           AppModal: true,
           CuttingBranchPicker: true,
-          CuttingEdgePickerModal: true,
-          CuttingEdgeTapeRegistry: true,
           CuttingImportWizard: true,
           CuttingResultsSection: true,
           SearchCombobox: true,

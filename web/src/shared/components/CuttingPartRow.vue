@@ -43,9 +43,8 @@ const emit = defineEmits<{
   'update:follow-grain': [boolean]
   delete: []
   duplicate: []
-  'cell-enter': [cell: 'name' | 'length' | 'width' | 'quantity' | 'edge', side?: EdgeField]
-  'open-edge-picker': [Event | undefined, side?: EdgeField]
-  'apply-edge-number': [side: EdgeField, number: number]
+  'cell-enter': [cell: 'name' | 'length' | 'width' | 'quantity']
+  'open-edge-picker': [Event | undefined]
   'open-material-picker': []
   'toggle-select': []
   /** "This row is the subject now." Fired by a pointer anywhere in the row and
