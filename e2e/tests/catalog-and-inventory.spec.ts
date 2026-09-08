@@ -373,7 +373,14 @@ test("owner creates a dekor the library lacks and only this workshop sees it", a
   const maker = createStep.getByRole('combobox', { name: 'Ishlab chiqaruvchi' })
   await maker.click()
   await maker.fill(makerName)
-  await createStep.getByRole('option', { name: new RegExp(escapeRegExp(makerName)) }).click()
+  // `SearchCombobox` teleports its panel to <body>, so the listbox is a sibling
+  // of the dialog rather than a descendant — scoping the option to `createStep`
+  // would wait forever. The panel names itself after the field, which keeps this
+  // unambiguous even with another combobox on screen.
+  await page
+    .getByRole('listbox', { name: 'Ishlab chiqaruvchi' })
+    .getByRole('option', { name: new RegExp(escapeRegExp(makerName)) })
+    .click()
   await createStep.getByLabel(/^Kod/).fill(decorCode)
   // LDSP is the default tur, so the chips below are already the board sets; one
   // qalinlik plus one o'lcham compose the format, and «+ Qo'shish» lists it.
@@ -406,11 +413,21 @@ test("owner creates a dekor the library lacks and only this workshop sees it", a
   // And it is a material everywhere a material is picked: the workshop's own
   // editor reaches it through the same picker the client's uses.
   await page.goto('/workshop/orders/new')
+  // The base owns the name field on this step: a settled phone is looked up, and
+  // a miss blanks whatever is in it. So the name is typed only once the answer
+  // is in — typing it first is a race the operator never runs either, since the
+  // field is still saying «Tekshirilmoqda…».
+  const clientLookedUp = page.waitForResponse(
+    (response) => response.url().includes('/workshop/clients/lookup') && response.ok(),
+  )
   await page.getByLabel('Telefon raqami').fill(phoneFor(id, 80))
+  await clientLookedUp
   await page.getByLabel(/^Ism/).fill('Own Dekor Client')
   await page.getByRole('button', { name: 'Davom etish' }).click()
   await expect(page).toHaveURL(/\/workshop\/orders\/new\/cutting/)
-  await page.getByRole('button', { name: '+ Material', exact: true }).click()
+  // The editor opens on an empty chizma, whose own CTA is the way in — «+ Boshqa
+  // material» only exists once there is a first one to be «boshqa» than.
+  await page.getByRole('button', { name: '+ Material tanlash', exact: true }).click()
   const picker = page.getByRole('dialog', { name: 'Material tanlang' })
   await expect(
     picker.getByRole('button', { name: new RegExp(escapeRegExp(decorName)) }),
@@ -1060,16 +1077,35 @@ test('the catalog filters by carried manufacturer and searches the o\'lcham numb
   await expect(row18).toHaveCount(1)
   await expect(row16).toHaveCount(1)
 
-  // The dropdown offers what the branch CARRIES, not the platform's whole offer:
-  // «Offered Maker» matches no row here, so listing it would be a dead option.
-  const manufacturer = page.getByRole('button', { name: /Barcha ishlab chiqaruvchilar/ })
-  await manufacturer.click()
-  await expect(page.getByRole('option', { name: `Carried Maker ${id}` })).toBeVisible()
-  await expect(page.getByRole('option', { name: `Offered Maker ${id}` })).toHaveCount(0)
-  await expect(page.getByRole('option', { name: `Second Maker ${id}` })).toBeVisible()
-  await page.getByRole('option', { name: `Carried Maker ${id}` }).click()
+  const row25 = page.getByRole('row').filter({ hasText: '2620×2070×25 mm' })
+
+  // The brand row offers what the branch CARRIES, not the platform's whole
+  // offer: «Offered Maker» matches no row here, so a chip for it would be a
+  // dead end. It is a single-select chip row rather than a dropdown, and it
+  // appears at all only because the branch carries two makers.
+  const makers = page.getByRole('radiogroup', { name: 'Ishlab chiqaruvchi' })
+  const makerChip = (name: string) => makers.getByRole('radio', { name })
+  // Each chip carries its own count, and the count is DECORS, not o'lchamlar:
+  // «Barchasi» reads 2 while the table holds three rows, because one of the two
+  // decors is carried in two thicknesses.
+  await expect(makerChip('Barchasi 2')).toBeVisible()
+  await expect(makerChip(`Carried Maker ${id} 1`)).toBeVisible()
+  await expect(makerChip(`Second Maker ${id} 1`)).toBeVisible()
+  await expect(
+    makers.getByRole('radio', { name: new RegExp(escapeRegExp(`Offered Maker ${id}`)) }),
+  ).toHaveCount(0)
+
+  // Pressing a maker narrows the table to that brand…
+  await makerChip(`Carried Maker ${id} 1`).click()
+  await expect(makerChip(`Carried Maker ${id} 1`)).toHaveAttribute('aria-checked', 'true')
   await expect(row18).toHaveCount(1)
-  await expect(page.getByRole('row').filter({ hasText: '2620×2070×25 mm' })).toHaveCount(0)
+  await expect(row25).toHaveCount(0)
+
+  // …and «Barchasi» puts the other brand back. The row itself never collapses to
+  // the one chip that is on: it is a property of the branch, not of the filter.
+  await makerChip('Barchasi 2').click()
+  await expect(row25).toHaveCount(1)
+  await expect(row18).toHaveCount(1)
 
   // The search box reaches the numbers the row prints — thickness and panel
   // dimensions live on the format, which `search_key` (a dekor fact) cannot see.
