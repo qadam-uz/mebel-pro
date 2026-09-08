@@ -177,17 +177,28 @@ ranking, so a Cyrillic query and a typo find there what they find everywhere els
 ## Decor formats — the library and the workshop's own
 
 A **decor format** is one concrete product of a decor — the thing a supplier actually sells:
-substrate (`ldsp` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`), thickness,
-sheet `length × width` **or** tape width, and, for the board substrates, how many faces are
-finished. `LDSP · 18 mm · 2800×2070 · 2 tomonlama` is a format; so is
+substrate (`ldsp` / `lmdf` / `dsp` / `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`),
+thickness, sheet `length × width` **or** tape width, and, for the laminated boards, how many
+faces are finished. `LDSP · 18 mm · 2800×2070 · 2 tomonlama` is a format; so is
 `Kromka · 0.8 mm · 22 mm`. Field-level detail is in
-[`catalog.md`](../entities/catalog.md#decor-format).
+[`catalog.md`](../entities/catalog.md#decor-format). Substrates print in one order wherever
+they are listed — chips, filters, admin select, format rows: **LDSP · LMDF · DSP · MDF ·
+Fanera · Yog'och · Kromka · Boshqa**, the two laminated boards first because they are almost
+everything a workshop buys.
+
+**Only LDSP and LMDF carry finished faces.** They are the two laminated boards — chipboard and
+MDF with the decor pressed onto them — and one finished face is a different product at a
+different price, so the count belongs to the format's identity. Raw DSP, raw MDF, plywood,
+timber, tape and the "everything else" bucket have no finished face to count: `finished_sides`
+is empty there, and sending it is refused by name (`decor_format_shape_mismatch`). It was
+required on `dsp` and `mdf` until 2026-09-08, when `lmdf` was added and the laminate got a
+substrate of its own; the migration emptied the field on the DSP and MDF rows that carried it.
 
 **A finished-faces note is printed only when a board is one-sided.** Two finished faces is
 what a board is unless someone says otherwise, so printing it costs width on every line to say
 nothing and buries the exception it exists to mark; `1 tomonlama` is the note, and two is
 silence. The rule holds wherever a format is *displayed* — the composed label, the branch
-table, both steps of the attach sheet — and the two forms that *enter* it are the exception:
+table, the attach sheet's o'lcham rows — and the two forms that *enter* it are the exception:
 the platform's decor-format screen and the workshop's own o'lcham block, where the field is
 being typed rather than read.
 
@@ -211,8 +222,10 @@ workshop buys is not.
 
 **A workshop never gets a second copy of a format the library already has.** Asked for a shape
 that an active visible format already covers, the server refuses by name and returns that
-format's id, and the sheet ticks the existing row instead of creating a twin — the operator
-gets the material either way, and the id everything downstream points at stays the library's.
+format's id, and the sheet ticks the existing row instead of creating a twin — silently, since
+the operator asked to carry the size, not to own a copy of it
+([*Attaching a decor*](#attaching-a-decor-to-a-branch)). They get the material either way, and
+the id everything downstream points at stays the library's.
 The one case that does create an own row is a **retired** library twin: the platform stopped
 listing that product, the workshop still buys it, and its own row is the honest record of
 that.
@@ -236,7 +249,7 @@ reshape of where formats live.
 
 - **Create a format** on a decor — substrate, thickness, then the pair that substrate implies:
   size for panel-shaped, tape width for `kromka`, plus `finished_sides` (1 or 2) for
-  `ldsp` / `dsp` / `mdf`. Sizes are **normalized** so `length ≥ width`: 1830×2750 and
+  `ldsp` / `lmdf`. Sizes are **normalized** so `length ≥ width`: 1830×2750 and
   2750×1830 are one format. A wrong shape for the substrate is refused by name
   (`decor_format_shape_mismatch`), and a duplicate is refused naming the row that already
   exists (`decor_format_exists`).
@@ -268,7 +281,7 @@ knob:
 | Substrate | Qalinlik (mm) | O'lcham / lenta eni (mm) |
 |---|---|---|
 | `ldsp`, `dsp` | 10 · 16 · 18 · 25 | 2750×1830 · 2800×2070 · 2440×1830 |
-| `mdf` | 3 · 8 · 16 · 18 | 2800×2070 · 2440×1220 |
+| `mdf`, `lmdf` | 3 · 8 · 16 · 18 | 2800×2070 · 2440×1220 |
 | `fanera` | 4 · 6 · 9 · 12 · 18 | 2440×1220 · 1525×1525 |
 | `kromka` | 0.4 · 0.8 · 1 · 2 | lenta eni 19 · 22 · 35 · 42 |
 | `yogoch`, `boshqa` | — | — |
@@ -278,10 +291,12 @@ solid timber or for the "everything else" bucket, and inventing one would prefil
 with formats nobody sells. The same sets serve the platform's format form and the workshop's
 own o'lcham block — one table, so a size means the same thing on both.
 
-**`dsp` is not `ldsp`.** They stay separate substrates — chipboard without the laminate is a
-different product at a different price — and `dsp` now prints its own label, «DSP» / «ДСП»,
-instead of borrowing LDSP's. While it borrowed it, the two were indistinguishable on every
-screen and every document.
+**The raw board and the laminated one are never the same substrate.** `dsp` is not `ldsp`, and
+`mdf` is not `lmdf`: chipboard and fibreboard without the decor pressed on are different
+products at different prices, bought for different parts of the same wardrobe. `dsp` prints
+its own label, «DSP» / «ДСП», instead of borrowing LDSP's — while it borrowed it, the two were
+indistinguishable on every screen and every document — and `lmdf` («LMDF» / «ЛМДФ») was split
+off `mdf` on 2026-09-08 for the same reason, taking the finished-faces field with it.
 
 ### Three levels of off
 
@@ -313,7 +328,8 @@ branch's stock item for it (zero on hand).
 
 **Operations (owner, or `manage_catalog` on the branch):**
 
-- **Attach one or more formats** — the two-step flow below.
+- **Attach one decor's formats** — one or more o'lchamlar of one decor, through the two-step
+  flow below.
 - **Edit the price** — never touches existing orders (snapshots).
 - **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
   not selectable in a new cutting; stock and history stay. No delete.
@@ -330,9 +346,10 @@ hidden. The **format's** own status is not a condition either — see
 
 ### Attaching a decor to a branch
 
-**Step one picks the decor; step two picks its formats.** The decision "do I stock this decor"
-and the decision "in which thicknesses and sizes" are different questions with different
-answers, so they are different steps.
+**One decor at a time: step one picks it, step two prices its o'lchamlar.** The decision "do I
+stock this decor" and the decision "in which thicknesses and sizes" are different questions
+with different answers, so they are different steps — and the sheet holds exactly one answer
+to the first at a time. It closes on save, and «+ Material» is the way to the next decor.
 
 - **Step one — decor picker.** Every `active` decor the workshop can see — the library plus
   its own — searched and filtered server-side by substrate and manufacturer (substrate here
@@ -341,51 +358,72 @@ answers, so they are different steps.
   numeric token means
   "sold in an active format with this thickness or panel dimension", matched by value through
   the decor's formats, so `18` and `sonoma 18` find what a price list names (the platform's own
-  decor table is the one list where a bare number matches nothing). Every row carries a count
-  chip that is **also its disclosure**: `3 o'lcham` when the branch carries none, `2/3 o'lcham
-  bor` while it carries some, `Hammasi bor` when nothing is left to add — press it and the
-  decor's platform formats list underneath, each named by o'lcham alone and the carried ones
-  marked. A decor with **nothing left to add has no checkbox at all** — the row and its
-  o'lcham list stay, because that is how the operator confirms it *is* carried, but ticking
-  it led to a step two of disabled rows and a submit that refused, with neither screen saying
-  why. When the whole filter is in that state, «Filtrdagi hammasi» is disabled and says so. A decor the branch **already carries stays in the list** (carrying 18 mm is no reason
-  to hide the row from someone adding 16 mm), and the two depths answer the two questions in
-  place: *is it already in?* off the chip, *which sizes, then?* off the panel — neither costing
-  a trip into step two and back. The panel is a **preview, not a second place to tick**: what is
-  carried is read here, what to add is chosen and priced one step on, so a tick never means two
-  different things on two screens. Formats are fetched per decor on first open — a hundred
-  decors' formats is a payload nobody reads — and what step one fetched, step two reuses.
-- **Step two — the decor's active formats**, as checkable rows — `LDSP · 18 mm · 2800×2070`,
-  `Kromka · 0.8 mm · 22 mm` — with a price input per checked row. Formats the branch already
-  carries **stay in the list, disabled and labelled**: hiding
-  them would leave the operator wondering whether the size exists at all, which is the exact
-  question the sheet is there to answer. Two shortcuts, for the two shapes the job takes:
-  - **One decor with one addable format arrives ticked.** There is nothing to choose, only a
-    price to type. The pre-tick stops at one decor on purpose: a wrongly attached row can be
-    deactivated but never deleted, so a batch is confirmed row by row, never guessed.
-  - **Quick-pick chips** above the rows gather the o'lchamlar the selection shares — `LDSP ·
-    2800×2070×18 mm (30)`, most shared first — and `Hammasi (N)`. Registering a
-    supplier's list is many decors in one size; a chip ticks that size under every selected
-    decor in one press and a second press unticks exactly those. The chips appear once there
-    are at least two addable rows — with one, they would only restate it.
+  decor table is the one list where a bare number matches nothing). **Every row is a door** —
+  press it and step two opens on that decor. There is no checkbox and no «Davom etish»: one
+  press, one decor, one screen forward. The row's count is plain text — `3 o'lcham` when the
+  branch carries none, `2/3 o'lcham bor` while it carries some, `Hammasi bor` when nothing is
+  left to add — and a fully carried decor is a door like every other, because "show me what I
+  already carry" is a real reason to open one. A decor the branch **already carries stays in
+  the list**: carrying 18 mm is no reason to hide the row from someone adding 16 mm. Formats
+  are fetched for the decor that was opened, not for the page — a hundred decors' formats is a
+  payload nobody reads.
+- **Step two — «O'lchamlar va narx».** A header naming the decor (swatch, name, manufacturer,
+  «Sizniki» when it is the workshop's own) and a back arrow to the list, which kept its search
+  and its place. Under it **one table, o'lcham and narx**: a checkbox per active format —
+  `LDSP · 2800×2070×18 mm`, `Kromka · 0.8×22 mm` — and a price input with its unit beside it,
+  board substrates first and kromka last. Ticking a row enables its price and the first one
+  takes focus; the price may be left empty (see [*Price is optional*](#price-is-optional)).
+  Formats the branch already carries **stay in the list, disabled and labelled «Allaqachon
+  bor»**: hiding them would leave the operator wondering whether the size exists at all, which
+  is the exact question the sheet is there to answer. The footer counts what is ticked —
+  «Qo'shish (n)», disabled at nothing — and on success the sheet **closes** with
+  «{dekor} · {n} ta o'lcham qo'shildi» while the table behind it reloads.
+
+**This reverses the batch attach of 2026-09-06.** Step one was multi-select — «Filtrdagi
+hammasi», an «n ta tanlandi» line, a per-decor disclosure panel — and step two was a
+cross-decor price table with quick-pick chips that ticked one o'lcham under every selected
+decor at once, all of it built for registering a supplier's price list in one sitting. On
+2026-09-08 the owner chose the smaller shape: the batch screen asked the operator to hold two
+questions at once, its cheapest mistake was a row that can be deactivated but never deleted,
+and the second question — the prices — is the one the sheet actually exists to answer. Revisit
+if a workshop registers hundred-format price lists often enough that pressing «+ Material»
+again is the bottleneck; the answer then is an import, not a second selection model.
 
 **What the search does not find, the sheet lets the workshop enter — without leaving it.**
 
-- **«+ Yangi dekor»**, in step one, opens a create step between pick and price: the substrate
-  as a chip row, the manufacturer (existing or named inline), name, optional code, grain,
-  optional photo, and an o'lchamlar block where the same standard chips compose one format at
-  a time into a list — **at least one**. The button sits quietly in the footer, and the
+- **«+ Yangi dekor»**, in step one, opens a create step between pick and price: the
+  manufacturer (existing or named inline), name, optional code, grain, optional photo, and an
+  o'lchamlar block where the substrate chips and the standard sets compose one format at a
+  time into a list — **at least one**. The button sits quietly in the footer, and the
   **«Dekor topilmadi» empty state carries it as its own primary action** with the footer copy
   hidden while that state shows: one control for one intent, never two on one screen. What was
   typed into the search is what the operator was looking for, so it arrives prefilled as the
   decor's name. Saving lands on step two with the new decor's formats ticked and the price
   fields waiting — the sheet was opened to attach materials, and it still ends by attaching
   them.
-- **«+ Boshqa o'lcham»**, under a decor's format rows in step two, adds one format to the decor
-  in hand — the library's as readily as the workshop's own — from the same chip block. The new
-  row appears ticked and unpriced; a size the decor already has in an active format ticks that
-  row instead and says so («Bu o'lcham allaqachon bor — belgilandi»), because the point is to
-  end up carrying it, not to own a copy of it.
+- **«+ Boshqa o'lcham»**, under the rows in step two, composes one more format for the decor in
+  hand — the library's as readily as the workshop's own — from the same block: substrate,
+  thickness, size or tape width, and «1 tomonlama» where the substrate has finished faces to
+  count. The new row appears ticked and unpriced.
+
+**A size that already exists is silently that size.** The operator has no way of knowing which
+rows the library happens to list, and being told they guessed a duplicate teaches them nothing
+they could have acted on. So a composed shape that matches a row already on screen simply ticks
+that row and puts the cursor in its price; a shape the server already holds comes back as
+`decor_format_exists` naming it, and the sheet ticks that row the same way, appending it to the
+list first if the list had not shown it. Nothing is created, nothing is said. The single case
+that does speak is a row the branch **already carries** — there is nothing left to add, so a
+quiet «Sizda bor» stands beside it for a moment while the composer keeps its values. Until
+2026-09-08 every one of these paths announced itself («Bu o'lcham allaqachon bor —
+belgilandi»).
+
+**The footer never scrolls away.** All three screens of the sheet are a fixed header, fixed
+filters and a fixed footer around **one** scrolling region. It shipped as a single scrolling
+column, and with thirty decors in the list the «+ Yangi dekor» and «Bekor» buttons sat below
+the fold: the way out of a list that did not have what the operator wanted was the one thing
+that list pushed off screen. The frame is the modal contract in
+[`web/DESIGN.md`](https://github.com/qadam-uz/mebel-pro/blob/main/web/DESIGN.md), not this
+sheet's own trick.
 
 The «Nostandart · faqat sizda» group of the branch-owned era does not come back: what a
 workshop enters here is a real decor and a real format, listed and searched beside the
