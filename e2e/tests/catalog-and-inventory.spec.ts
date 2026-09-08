@@ -1316,6 +1316,22 @@ test('the dekor picker folds Cyrillic and Latin onto the same dekor', async ({
   // three tiers stay empty. It has to be trigram-alien rather than merely
   // fold-different: `zzz-${id}` folds against keys that all carry `${id}`, and
   // the typo tier rightly reads it as a mistyped code.
+  //
+  // But CI runs the whole suite in one worker against one shared database, so
+  // by the time this test runs, the platform library also holds every other
+  // test's decors and manufacturers — names and codes that embed their own
+  // random run ids. The typo tier's word_similarity floor (0.3) can fuzzy-match
+  // `qwxzvk` against one of THOSE unrelated ids by pure chance, which makes
+  // "nothing found" depend on what the rest of the run happened to seed. Narrow
+  // the candidate set to this test's own manufacturer first: `_decor_filters`'s
+  // `manufacturer_id` predicate (backend/app/modules/catalog/service.py) runs
+  // on the base query, strictly before `apply_decor_search` scores any tier —
+  // so once the filter is on, the typo tier has only `latin` and `cyrillic`'s
+  // two search_keys to score `qwxzvk` against, and it shares no trigram with
+  // either. That makes the empty state deterministic no matter how many other
+  // tests' garbage ids are sitting in the shared database.
+  await pickStep.getByRole('combobox', { name: 'Ishlab chiqaruvchi' }).click()
+  await pickStep.getByRole('option', { name: `Search Maker ${id}` }).click()
   await search.fill('qwxzvk')
   await expect(pickStep.getByText('Dekor topilmadi')).toBeVisible()
 })
