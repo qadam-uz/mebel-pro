@@ -178,10 +178,10 @@ async def _create_format(
     return str(created.json()["id"])
 
 
-# The two numbers that belong to the branch, not to the product. A test writes
-# them inline next to the format they apply to; `_attach` routes them to the
-# attach item and keeps them out of the platform-side create.
-_BRANCH_KEYS = frozenset({"price_tiyin", "min_stock"})
+# The one number that belongs to the branch, not to the product. A test writes it
+# inline next to the format it applies to; `_attach` routes it to the attach item
+# and keeps it out of the platform-side create.
+_BRANCH_KEYS = frozenset({"price_tiyin"})
 
 
 async def _attach(
@@ -193,7 +193,6 @@ async def _attach(
     platform_access: str,
     formats: list[dict[str, object]] | None = None,
     price_tiyin: int | None = None,
-    min_stock: int | None = None,
 ) -> Response:
     """Create the platform format(s), then have the branch carry them."""
     items: list[dict[str, object]] = []
@@ -203,11 +202,8 @@ async def _attach(
             "decor_format_id": await _create_format(client, platform_access, decor_id, body)
         }
         row_price = body.get("price_tiyin", price_tiyin)
-        row_min_stock = body.get("min_stock", min_stock)
         if row_price is not None:
             item["price_tiyin"] = row_price
-        if row_min_stock is not None:
-            item["min_stock"] = row_min_stock
         items.append(item)
     return await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
@@ -225,7 +221,6 @@ async def _attach_one(
     platform_access: str,
     formats: list[dict[str, object]] | None = None,
     price_tiyin: int | None = None,
-    min_stock: int | None = None,
 ) -> dict[str, object]:
     """Attach a single format and return the one created branch material."""
     response = await _attach(
@@ -236,7 +231,6 @@ async def _attach_one(
         platform_access=platform_access,
         formats=formats,
         price_tiyin=price_tiyin,
-        min_stock=min_stock,
     )
     assert response.status_code == 201, response.text
     created = response.json()["created"]
@@ -289,7 +283,6 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
         branch_id,
         decor_id,
         price_tiyin=25500000,
-        min_stock=2,
         platform_access=platform_access,
     )
     # The substrate is the format's, not the decor's, so the MDF-ness of this
@@ -302,7 +295,6 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
         second_decor_id,
         formats=[{**PANEL_FORMAT, "type": "mdf"}],
         price_tiyin=18800000,
-        min_stock=1,
         platform_access=platform_access,
     )
     stock_item = await db_session.scalar(
@@ -313,15 +305,15 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
     )
     assert stock_item is not None
     assert stock_item.on_hand == 0
-    # The threshold is NOT mirrored here — `stock_items` is only the balance.
-    # The value the operator typed lives once, on the branch material.
+    # `stock_items` is only the balance, and the branch material is only the
+    # price now — the retired threshold is on neither.
     assert not hasattr(stock_item, "min_stock")
-    assert branch_material["min_stock"] == 2
+    assert "min_stock" not in branch_material
 
     edited = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{branch_material['id']}",
         headers=_auth(owner_access),
-        json={"min_stock": 4},
+        json={"price_tiyin": 19_000_000},
     )
     manufacturer_filter = await client.get(
         f"/api/v1/workshop/branches/{branch_id}/materials?manufacturer_id={manufacturer_id}",
@@ -341,11 +333,8 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
     assert picker.json()["items"][0]["decor"]["id"] == decor_id
     assert picker.json()["total"] == len(picker.json()["items"])
     assert second_branch_material.status_code == 201
-    assert branch_material["min_stock"] == 2
     assert edited.status_code == 200
-    # Editing the threshold is a single write to the branch material — there is
-    # no second copy to propagate to, which is the point of dropping the mirror.
-    assert edited.json()["min_stock"] == 4
+    assert edited.json()["price_tiyin"] == 19_000_000
     assert manufacturer_filter.status_code == 200
     assert [row["decor"]["id"] for row in manufacturer_filter.json()] == [decor_id]
     assert tur_filter.status_code == 200
@@ -584,7 +573,6 @@ async def test_inventory_stock_in_adjustment_notifications_and_pricing(
         branch_id,
         decor_id,
         price_tiyin=100000,
-        min_stock=2,
         platform_access=platform_access,
     )
     branch_material_id = material["id"]
@@ -645,7 +633,9 @@ async def test_inventory_stock_in_adjustment_notifications_and_pricing(
     assert adjustment.json()["balance_after"] == 2
     assert stock.status_code == 200
     assert stock.json()[0]["on_hand"] == 2
-    assert stock.json()[0]["is_low_stock"] is True
+    # Two sheets on the shelf is not an alarm: the only one left is a negative
+    # balance (the threshold that used to fire here was retired 2026-09-08).
+    assert stock.json()[0]["is_low_stock"] is False
     assert transactions.status_code == 200
     assert [row["type"] for row in transactions.json()] == ["adjust", "stock_in"]
     assert transactions.json()[0]["actor_name"] == "Workshop Owner"
@@ -694,7 +684,6 @@ async def test_branch_scoped_staff_authorization(
         branch_id,
         decor_id,
         price_tiyin=150000,
-        min_stock=1,
         platform_access=platform_access,
     )
     branch_material_id = add_material["id"]
@@ -711,7 +700,7 @@ async def test_branch_scoped_staff_authorization(
     inventory_edit_catalog = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{branch_material_id}",
         headers=_auth(inventory_staff),
-        json={"min_stock": 3},
+        json={"price_tiyin": 300_000},
     )
     inventory_stock_in = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
@@ -731,7 +720,6 @@ async def test_branch_scoped_staff_authorization(
         branch_id,
         decor_id,
         price_tiyin=150000,
-        min_stock=1,
         platform_access=platform_access,
     )
     deactivated = await client.post(
@@ -836,7 +824,6 @@ async def test_stock_in_pricing_math_last_price_and_validation(
             branch_id,
             panel_decor_id,
             price_tiyin=100000,
-            min_stock=0,
             platform_access=platform_access,
         )
     )["id"]
@@ -982,7 +969,6 @@ async def test_client_catalog_is_public_shape_and_visibility_filtered(
         branch_id,
         decor_id,
         price_tiyin=250000,
-        min_stock=5,
         platform_access=platform_access,
     )
     branch_material_id = material["id"]
@@ -1081,7 +1067,6 @@ async def test_material_image_visibility_follows_client_branch_visibility(
         branch_id,
         image_decor_id,
         price_tiyin=250000,
-        min_stock=1,
         platform_access=platform_access,
     )
     visible_image = await client.get(
@@ -1126,7 +1111,7 @@ async def test_platform_decors_list_reports_branch_usage_count(
         branch_id,
         decor_id,
         formats=[
-            {**PANEL_FORMAT, "price_tiyin": 25_500_000, "min_stock": 2},
+            {**PANEL_FORMAT, "price_tiyin": 25_500_000},
             {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": 20_000_000},
         ],
         platform_access=platform_access,
@@ -1208,7 +1193,6 @@ async def test_workshop_material_lists_paginate(
             branch_id,
             decor_id,
             price_tiyin=1_000_000,
-            min_stock=1,
             platform_access=platform_access,
         )
 
@@ -1301,7 +1285,6 @@ async def test_branch_catalog_picker_keeps_attached_decors_and_reports_total(
         branch_id,
         first_decor_id,
         price_tiyin=500_000,
-        min_stock=5,
         platform_access=platform_access,
     )
     after = await client.get(
@@ -1417,7 +1400,7 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         branch_id,
         panel_decor_id,
         formats=[
-            {**PANEL_FORMAT, "price_tiyin": 500_000, "min_stock": 5},
+            {**PANEL_FORMAT, "price_tiyin": 500_000},
             {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": -1},
         ],
         platform_access=platform_access,
@@ -1439,8 +1422,8 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         branch_id,
         panel_decor_id,
         formats=[
-            {**PANEL_FORMAT, "price_tiyin": 500_000, "min_stock": 5},
-            {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": 12_000, "min_stock": 50_000},
+            {**PANEL_FORMAT, "price_tiyin": 500_000},
+            {**PANEL_FORMAT, "thickness_mm": "16", "price_tiyin": 12_000},
             {**PANEL_FORMAT, "length_mm": 2750, "width_mm": 1830, "price_tiyin": 700_000},
         ],
         platform_access=platform_access,
@@ -1457,8 +1440,7 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         ("16", 2800),
         ("18", 2750),
     }
-    # Each attach opens the branch's stock row at zero. The threshold is the
-    # branch material's alone, so there is nothing on the stock row to compare.
+    # Each attach opens the branch's stock row at zero.
     thin = next(row for row in rows if row["decor_format"]["thickness_mm"] == "16")
     thin_stock = await db_session.scalar(
         select(StockItem).where(StockItem.branch_material_id == uuid.UUID(str(thin["id"])))
@@ -1466,7 +1448,6 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
     assert thin_stock is not None
     assert thin_stock.on_hand == 0
     assert thin_stock.branch_id == branch_id
-    assert thin["min_stock"] == 50_000
 
     # A format a concurrent attach already registered is skipped, not an error,
     # and the existing row keeps its price.
@@ -1480,7 +1461,7 @@ async def test_branch_materials_attach_is_atomic_and_skips_races(
         owner_access,
         branch_id,
         panel_decor_id,
-        formats=[{**PANEL_FORMAT, "price_tiyin": 900_000, "min_stock": 9}],
+        formats=[{**PANEL_FORMAT, "price_tiyin": 900_000}],
         platform_access=platform_access,
     )
     assert replayed.status_code == 201
@@ -1529,7 +1510,6 @@ async def test_price_is_optional_on_attach_and_flags_the_gap(
     )
     assert attached["price_tiyin"] == 0
     assert attached["price_unset"] is True
-    assert attached["min_stock"] == 0
 
     client_row = Client(phone="+998909999111", name="Client")
     db_session.add(client_row)
@@ -1598,7 +1578,6 @@ async def test_manufacturer_facets_separate_what_is_offered_from_what_is_carried
         branch_id,
         carried_decor,
         price_tiyin=500_000,
-        min_stock=5,
         platform_access=platform_access,
     )
 
@@ -1657,16 +1636,15 @@ async def test_branch_material_search_reaches_the_olcham_numbers(
         sonoma,
         platform_access=platform_access,
         formats=[
-            dict(PANEL_FORMAT, price_tiyin=500_000, min_stock=5),
+            dict(PANEL_FORMAT, price_tiyin=500_000),
             dict(
                 PANEL_FORMAT,
                 thickness_mm="16",
                 length_mm=2750,
                 width_mm=1830,
                 price_tiyin=400_000,
-                min_stock=5,
             ),
-            dict(KROMKA_FORMAT, price_tiyin=1_700, min_stock=20),
+            dict(KROMKA_FORMAT, price_tiyin=1_700),
         ],
     )
     assert attached.status_code == 201, attached.text
@@ -1676,7 +1654,7 @@ async def test_branch_material_search_reaches_the_olcham_numbers(
         branch_id,
         other,
         platform_access=platform_access,
-        formats=[dict(PANEL_FORMAT, price_tiyin=500_000, min_stock=5)],
+        formats=[dict(PANEL_FORMAT, price_tiyin=500_000)],
     )
 
     async def search(term: str) -> list[str]:

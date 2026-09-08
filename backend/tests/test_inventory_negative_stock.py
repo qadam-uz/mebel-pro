@@ -28,7 +28,7 @@ from app.modules.inventory.api import (
     restore_order_stock,
     stock_value,
 )
-from app.modules.inventory.contracts import StockItem
+from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.inventory.schemas import StockAdjustmentRequest
 from app.modules.support.contracts import Notification
 from sqlalchemy import select
@@ -48,7 +48,6 @@ async def _stock_item(
     branch_id: uuid.UUID,
     branch_material_id: uuid.UUID,
     on_hand: int,
-    min_stock: int = 0,
 ) -> StockItem:
     item = StockItem(
         branch_id=branch_id,
@@ -292,3 +291,40 @@ async def test_negative_rows_sort_first_and_count_against_stock_value(
     # Never priced, so the figure is zero — but the negative row must not be
     # dropped by a `> 0` filter on the way there.
     assert await stock_value(db_session, principal=principal, branch_id=branch.id) == 0
+
+
+async def test_a_priced_negative_row_lowers_the_branchs_stock_value(
+    db_session: AsyncSession,
+) -> None:
+    """The dashboard's «Ombor qiymati» card must not read too high.
+
+    Clamping a negative balance to zero would hide exactly the arrival nobody
+    entered, and the card would report stock the branch does not have. Four
+    sheets at 100 000 minus two at 50 000 is 300 000 — an arithmetic assertion,
+    because "counts negatively" is a claim about the sign, not about the filter.
+    """
+
+    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+    staff = await _inventory_staff(db_session, workshop_id=workshop.id, branch_id=branch.id)
+    healthy = await _material_named(db_session, branch_id=branch.id, maker="Aaa", name="Aaa panel")
+    negative = await _material_named(db_session, branch_id=branch.id, maker="Zzz", name="Zzz panel")
+    for material, on_hand, unit_price in ((healthy, 4, 100_000), (negative, -2, 50_000)):
+        item = await _stock_item(
+            db_session, branch_id=branch.id, branch_material_id=material.id, on_hand=on_hand
+        )
+        db_session.add(
+            StockTransaction(
+                stock_item_id=item.id,
+                type=StockTransactionType.STOCK_IN,
+                quantity=1,
+                balance_after=on_hand,
+                unit_price_tiyin=unit_price,
+                total_price_tiyin=unit_price,
+                actor_user_id=staff.id,
+                created_at=datetime.now(UTC),
+            )
+        )
+    await db_session.flush()
+    principal = _owner_principal(owner_id=owner.id, workshop_id=workshop.id)
+
+    assert await stock_value(db_session, principal=principal, branch_id=branch.id) == 300_000

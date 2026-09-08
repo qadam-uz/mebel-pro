@@ -1,14 +1,18 @@
 """Catalog, decor format and branch material API schemas.
 
-Two surfaces, deliberately disjoint:
+Three surfaces:
 
-- **Platform (decors + decor formats)** — the product. Identity (manufacturer,
+- **Platform (decors + decor formats)** — the *library*. Identity (manufacturer,
   code, name, image, grain) and every concrete format it is made in (substrate,
   thickness, size or tape width, finished sides). No price: a platform operator
   does not set a workshop's prices.
-- **Workshop (branch materials)** — the decision to carry one platform format,
-  with this branch's own price and reorder threshold. No dimensions: a branch
-  does not invent formats.
+- **Workshop catalog (own decors + own formats)** — the same product shape,
+  written by a workshop for itself when the library lacks it, and visible only to
+  that workshop. Every product response carries `own` so a list can badge the row
+  without a second call.
+- **Workshop (branch materials)** — the decision to carry one format, at this
+  branch's own price. No dimensions: the branch row is a commercial decision, not
+  a product fact.
 """
 
 import uuid
@@ -39,6 +43,11 @@ class ManufacturerResponse(APIModel):
     country: str | None
     note: str | None
     status: MaterialStatus
+    # True when the reader's own workshop wrote the row (`workshop_id IS NOT
+    # NULL`). The owning workshop's id is deliberately absent: a reader either
+    # sees a row or does not, so the only fact a screen needs is "mine" vs "the
+    # library's". Platform responses are always `false` — they list the library.
+    own: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -78,12 +87,14 @@ class DecorResponse(APIModel):
     branch_usage_count: int = 0
     # Active formats. A decor with none is a name nobody can attach anything of.
     format_count: int = 0
+    # This workshop wrote the decor — the «Sizniki» chip. See ManufacturerResponse.
+    own: bool = False
     created_at: datetime
     updated_at: datetime
 
 
 class DecorFormatCreateRequest(BaseModel):
-    """One concrete product of a decor. Platform-only; immutable once written.
+    """One concrete product of a decor. Immutable once written.
 
     Which fields are required follows `type`: `kromka` carries `tape_width_mm`
     and nothing else; every other type carries `length_mm`/`width_mm`, and the
@@ -111,6 +122,9 @@ class DecorFormatResponse(APIModel):
     finished_sides: int | None
     status: MaterialStatus
     label: str
+    # This workshop wrote the format. True on a format of a *library* decor too:
+    # "Egger H1145 exists, the 16 mm is ours" is the common case.
+    own: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -128,13 +142,17 @@ class BranchCatalogFormatOption(APIModel):
 
 
 class BranchMaterialAttachItem(BaseModel):
-    """One platform format the branch wants to carry, with its own numbers."""
+    """One format the branch wants to carry, at its own price.
+
+    A stale client still sending the retired `min_stock` is **ignored**, not
+    refused: Pydantic drops unknown fields, and a 422 would break an old tab
+    mid-attach over a number nothing reads any more.
+    """
 
     decor_format_id: uuid.UUID
-    # Both optional: a branch routinely registers its whole list before it knows
+    # Optional: a branch routinely registers its whole list before it knows
     # prices. 0 means "not priced yet" and hides the row from clients.
     price_tiyin: int = 0
-    min_stock: int = 0
 
 
 class BranchMaterialAttachRequest(BaseModel):
@@ -149,10 +167,12 @@ class BranchMaterialAttachRequest(BaseModel):
 
 
 class BranchMaterialPatchRequest(BaseModel):
-    """Price and threshold only — the format is this row's identity."""
+    """Price only — the format is this row's identity.
+
+    A stale `min_stock` is ignored for the same reason as on the attach item.
+    """
 
     price_tiyin: int | None = None
-    min_stock: int | None = None
 
 
 class BranchMaterialResponse(APIModel):
@@ -167,7 +187,10 @@ class BranchMaterialResponse(APIModel):
     # price_tiyin == 0 means unpriced, not free. Client-facing listings drop these
     # rows; workshop-facing ones flag them so the gap is visible where it is fixable.
     price_unset: bool
-    min_stock: int
+    # The decor is this workshop's own — the Materiallar table badges the row and
+    # offers the edit menu on it. Nested `decor.own` says the same thing; this is
+    # the flat read the table's row template wants.
+    decor_own: bool = False
     status: MaterialStatus
     label: str
     created_at: datetime
@@ -219,3 +242,62 @@ class BranchCatalogFiltersResponse(APIModel):
     """
 
     manufacturers: list[BranchCatalogManufacturerOption]
+
+
+# --------------------------------------------------------------------------- #
+# The workshop's own catalog rows
+# --------------------------------------------------------------------------- #
+
+
+class WorkshopManufacturerOption(APIModel):
+    """One row of the create form's manufacturer combobox."""
+
+    id: uuid.UUID
+    name: str
+    own: bool
+
+
+class WorkshopDecorCreateRequest(BaseModel):
+    """«Yangi dekor» — one decor and its first sizes, in one save.
+
+    `manufacturer_id` **or** `manufacturer_name`, never both and never neither
+    (`manufacturer_required`): the combobox either picked a row or offered
+    «+ „Kastamonu“ ni qo'shish», and a payload carrying both would make the
+    server choose which half of what the operator said to honour.
+
+    There is no `workshop_id`: the owning workshop is the branch's, and a request
+    field would be an id one workshop could type to plant a row in another's
+    catalog.
+    """
+
+    manufacturer_id: uuid.UUID | None = None
+    manufacturer_name: str | None = None
+    name: str
+    code: str | None = None
+    has_grain: bool = False
+    image_file_id: uuid.UUID | None = None
+    # At least one (`decor_formats_required`). A decor with no format is a name
+    # nobody can attach anything of, and the form's next step prices these rows.
+    formats: list[DecorFormatCreateRequest] = []
+
+
+class WorkshopDecorPatchRequest(BaseModel):
+    """Fix an own decor. Formats are absent on purpose — they stay immutable."""
+
+    manufacturer_id: uuid.UUID | None = None
+    manufacturer_name: str | None = None
+    code: str | None = None
+    name: str | None = None
+    has_grain: bool | None = None
+    image_file_id: uuid.UUID | None = None
+
+
+class WorkshopDecorCreateResponse(APIModel):
+    """The new decor plus every format it was created with, all active.
+
+    The sheet lands on its price step with exactly these rows ticked, so they
+    travel back with the decor rather than costing a second round trip.
+    """
+
+    decor: DecorResponse
+    formats: list[DecorFormatResponse]

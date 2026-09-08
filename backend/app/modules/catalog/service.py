@@ -1,11 +1,20 @@
-"""Platform decor catalog, decor format and branch material use cases.
+"""Decor catalog, decor format and branch material use cases.
 
-The split this module enforces: the platform owns the *product* — the decor's
-identity (`decors`) and every concrete format it is made in (`decor_formats`) —
-while a branch owns only the *commercial decision* (`branch_materials`: we carry
-this format, at this price, with this threshold). Nothing on the branch surface
-may create or edit a format, and nothing on the platform surface may name a
-price.
+The split this module enforces: the *product* — the decor's identity (`decors`)
+and every concrete format it is made in (`decor_formats`) — is one fact, while a
+branch owns only the *commercial decision* (`branch_materials`: we carry this
+format, at this price). Nothing on the platform surface may name a price.
+
+Since 2026-09-07 the product half has two writers. The platform maintains a
+**library** (`workshop_id IS NULL`) transcribed from manufacturer catalogs; a
+workshop may add the manufacturer, decor or format the library lacks, and what it
+adds is stamped with its `workshop_id` and visible only to itself. Every
+workshop-facing read therefore carries the predicate
+`workshop_id IS NULL OR workshop_id = :ws` on all three tables — see
+`_owner_predicate`, which is the single spelling of it — and every platform read
+carries `workshop_id IS NULL`. A row of another workshop does not exist for this
+one: not listed, not attachable, and 404 rather than 403 by id, because the id
+must not leak that something is there.
 """
 
 import uuid
@@ -16,13 +25,14 @@ from enum import StrEnum
 from typing import Any
 
 from fastapi import status
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import ColumnElement, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.core.errors import APIError
 from app.core.material_label import edge_label, material_label
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.core.search_fold import build_search_key
+from app.core.search_fold import build_search_key, fold
 from app.core.search_query import (
     SearchPlan,
     capped,
@@ -55,6 +65,8 @@ from app.modules.catalog.schemas import (
     DecorPatchRequest,
     ManufacturerCreateRequest,
     ManufacturerPatchRequest,
+    WorkshopDecorCreateRequest,
+    WorkshopDecorPatchRequest,
 )
 from app.modules.platform.api import require_platform_operator
 from app.modules.support.api import (
@@ -78,6 +90,42 @@ _DECOR_ENTITY_TYPE = "dekor"
 _DECOR_FORMAT_ENTITY_TYPE = "decor_format"
 
 
+# --------------------------------------------------------------------------- #
+# Ownership and visibility
+# --------------------------------------------------------------------------- #
+
+
+# Throughout this section a `workshop_id` of `None` means the platform reader:
+# the library and nothing else.
+def _owner_predicate(
+    column: InstrumentedAttribute[uuid.UUID | None], workshop_id: uuid.UUID | None
+) -> ColumnElement[bool]:
+    """`visible_to(ws)` as SQL, over one table's `workshop_id`.
+
+    The single spelling of the rule. A workshop reader sees the library plus its
+    own rows; a platform reader (`workshop_id=None`) sees the library only, which
+    is why the admin app never renders a workshop's private decor.
+    """
+
+    if workshop_id is None:
+        return column.is_(None)
+    return or_(column.is_(None), column == workshop_id)
+
+
+def _decor_visibility(workshop_id: uuid.UUID | None) -> tuple[ColumnElement[bool], ...]:
+    """The predicate for a query that has both `Decor` and `Manufacturer` in scope.
+
+    Both halves are needed: a workshop's own decor of a library manufacturer is
+    visible, a library decor of a foreign workshop's manufacturer cannot exist,
+    and neither may leak the other way round.
+    """
+
+    return (
+        _owner_predicate(Decor.workshop_id, workshop_id),
+        _owner_predicate(Manufacturer.workshop_id, workshop_id),
+    )
+
+
 @dataclass(frozen=True)
 class DecorRecord:
     decor: Decor
@@ -95,6 +143,19 @@ class DecorFormatRecord:
     manufacturer: Manufacturer
     # Set only by the workshop attach list: does this branch already carry it.
     carried: bool = False
+
+
+@dataclass(frozen=True)
+class WorkshopDecorCreateResult:
+    """What one «Yangi dekor» save produced — the pattern and its first sizes.
+
+    Returned together because the sheet moves straight to the price step with
+    every one of these formats ticked; a second round trip to list them would
+    show an empty step two for as long as it took.
+    """
+
+    decor: DecorRecord
+    formats: list[DecorFormatRecord]
 
 
 @dataclass(frozen=True)
@@ -272,7 +333,11 @@ async def list_manufacturers(
     status_filter: MaterialStatus | None = None,
 ) -> list[Manufacturer]:
     require_platform_operator(principal)
-    query = select(Manufacturer).order_by(Manufacturer.name)
+    # The library only: a workshop's own manufacturer is that workshop's private
+    # row, and the admin app has no screen — and no mandate — for it.
+    query = (
+        select(Manufacturer).where(Manufacturer.workshop_id.is_(None)).order_by(Manufacturer.name)
+    )
     if status_filter is not None:
         query = query.where(Manufacturer.status == status_filter)
     normalized = _optional_text(search)
@@ -289,7 +354,7 @@ async def create_manufacturer(
 ) -> Manufacturer:
     require_platform_operator(principal)
     name = _required_text(payload.name, "manufacturer_name_required")
-    await _ensure_manufacturer_name_available(db, name=name)
+    await _ensure_manufacturer_name_available(db, name=name, workshop_id=None)
     row = Manufacturer(
         name=name,
         country=_optional_text(payload.country),
@@ -339,7 +404,9 @@ async def update_manufacturer(
     if "name" in payload.model_fields_set and payload.name is not None:
         name = _required_text(payload.name, "manufacturer_name_required")
         renamed = name != row.name
-        await _ensure_manufacturer_name_available(db, name=name, exclude_id=row.id)
+        await _ensure_manufacturer_name_available(
+            db, name=name, workshop_id=None, exclude_id=row.id
+        )
         row.name = name
     if "country" in payload.model_fields_set:
         row.country = _optional_text(payload.country)
@@ -422,7 +489,7 @@ async def list_decors(
             Decor,
             Manufacturer,
             func.count(func.distinct(BranchMaterial.branch_id)),
-            _active_format_count_subquery(),
+            _active_format_count_subquery(None),
         )
         .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
         .outerjoin(DecorFormat, DecorFormat.decor_id == Decor.id)
@@ -430,9 +497,11 @@ async def list_decors(
             BranchMaterial,
             and_(BranchMaterial.decor_format_id == DecorFormat.id),
         )
+        .where(*_decor_visibility(None))
     )
     query = _decor_filters(
         query,
+        workshop_id=None,
         type_=type_,
         types=types,
         manufacturer_id=manufacturer_id,
@@ -473,7 +542,7 @@ async def create_decor(
     payload: DecorCreateRequest,
 ) -> DecorRecord:
     require_platform_operator(principal)
-    manufacturer = await _active_manufacturer(db, payload.manufacturer_id)
+    manufacturer = await _active_manufacturer(db, payload.manufacturer_id, workshop_id=None)
     name = _required_text(payload.name, "decor_name_required")
     code = _optional_text(payload.code)
     await _ensure_decor_identity_available(
@@ -481,6 +550,7 @@ async def create_decor(
         manufacturer_id=manufacturer.id,
         code=code,
         name=name,
+        workshop_id=None,
     )
     row = Decor(
         manufacturer_id=manufacturer.id,
@@ -520,7 +590,10 @@ async def get_decor(
     decor_id: uuid.UUID,
 ) -> DecorRecord:
     require_platform_operator(principal)
-    record = await _decor_record(db, decor_id)
+    # Library-scoped, so every platform write that resolves through here — patch,
+    # activate, add a format — refuses a workshop's own decor with a 404 without
+    # each of them repeating the check.
+    record = await _decor_record(db, decor_id, workshop_id=None)
     if record is None:
         raise APIError(
             "decor_not_found",
@@ -541,7 +614,7 @@ async def update_decor(
     row = record.decor
     manufacturer = record.manufacturer
     if "manufacturer_id" in payload.model_fields_set and payload.manufacturer_id is not None:
-        manufacturer = await _active_manufacturer(db, payload.manufacturer_id)
+        manufacturer = await _active_manufacturer(db, payload.manufacturer_id, workshop_id=None)
         row.manufacturer_id = manufacturer.id
     if "name" in payload.model_fields_set and payload.name is not None:
         row.name = _required_text(payload.name, "decor_name_required")
@@ -564,6 +637,7 @@ async def update_decor(
         manufacturer_id=row.manufacturer_id,
         code=row.code,
         name=row.name,
+        workshop_id=None,
         exclude_id=row.id,
     )
     # Recomputed unconditionally: every input to the key (name, code, maker) is
@@ -626,13 +700,21 @@ async def list_decor_formats(
     principal: AuthenticatedPrincipal,
     decor_id: uuid.UUID,
 ) -> list[DecorFormatRecord]:
-    """Every format of one decor, active first — the platform's own view."""
+    """Every library format of one decor, active first — the platform's own view.
+
+    Library only: a workshop's own 16 mm hanging off this library decor is that
+    workshop's private row, and the admin screen would otherwise offer to
+    deactivate a format the platform never wrote.
+    """
 
     record = await get_decor(db, principal=principal, decor_id=decor_id)
     rows = (
         await db.scalars(
             select(DecorFormat)
-            .where(DecorFormat.decor_id == record.decor.id)
+            .where(
+                DecorFormat.decor_id == record.decor.id,
+                DecorFormat.workshop_id.is_(None),
+            )
             .order_by(*_format_ordering())
         )
     ).all()
@@ -670,13 +752,15 @@ async def create_decor_format(
         tape_width_mm=payload.tape_width_mm,
         finished_sides=payload.finished_sides,
     )
-    existing = await _find_decor_format(db, decor_id=record.decor.id, shape=shape)
-    if existing is not None:
+    existing = await _find_decor_formats(
+        db, decor_id=record.decor.id, shape=shape, workshop_id=None
+    )
+    if existing:
         raise APIError(
             "decor_format_exists",
             "This decor already has that format",
             status_code=status.HTTP_409_CONFLICT,
-            details={"decor_format_id": str(existing.id)},
+            details={"decor_format_id": str(existing[0].id)},
         )
     row = DecorFormat(
         decor_id=record.decor.id,
@@ -725,7 +809,7 @@ async def set_decor_format_status(
 
     record = await get_decor(db, principal=principal, decor_id=decor_id)
     row = await db.get(DecorFormat, decor_format_id)
-    if row is None or row.decor_id != record.decor.id:
+    if row is None or row.decor_id != record.decor.id or row.workshop_id is not None:
         raise APIError(
             "decor_format_not_found",
             "Decor format not found",
@@ -794,12 +878,13 @@ async def list_branch_catalog_options(
         permission=Permission.MANAGE_CATALOG,
     )
     filtered = _decor_filters(
-        _attachable_decors_query(),
+        _attachable_decors_query(scope.workshop_id),
+        workshop_id=scope.workshop_id,
         type_=type_,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
-    available = _active_format_count_subquery()
+    available = _active_format_count_subquery(scope.workshop_id)
     carried = (
         select(func.count(BranchMaterial.id))
         .join(DecorFormat, DecorFormat.id == BranchMaterial.decor_format_id)
@@ -807,6 +892,7 @@ async def list_branch_catalog_options(
             BranchMaterial.branch_id == scope.branch_id,
             DecorFormat.decor_id == Decor.id,
             DecorFormat.status == MaterialStatus.ACTIVE,
+            _owner_predicate(DecorFormat.workshop_id, scope.workshop_id),
         )
         .correlate(Decor)
         .scalar_subquery()
@@ -869,7 +955,7 @@ async def list_branch_catalog_formats(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    record = await _decor_record(db, decor_id)
+    record = await _decor_record(db, decor_id, workshop_id=scope.workshop_id)
     if record is None:
         raise APIError(
             "decor_not_found",
@@ -891,6 +977,7 @@ async def list_branch_catalog_formats(
             .where(
                 DecorFormat.decor_id == record.decor.id,
                 DecorFormat.status == MaterialStatus.ACTIVE,
+                _owner_predicate(DecorFormat.workshop_id, scope.workshop_id),
             )
             .order_by(*_format_ordering())
         )
@@ -942,19 +1029,19 @@ async def list_branch_catalog_facets(
             .where(BranchMaterial.branch_id == resolved.branch_id)
         )
     else:
-        query = _attachable_decors_query().with_only_columns(Manufacturer)
+        query = _attachable_decors_query(resolved.workshop_id).with_only_columns(Manufacturer)
     manufacturers = list(
         (await db.scalars(query.distinct().order_by(Manufacturer.name, Manufacturer.id))).all()
     )
     return BranchCatalogFacets(manufacturers=manufacturers)
 
 
-def _attachable_decors_query() -> Any:
-    """Active decors from active manufacturers that have at least one format.
+def _attachable_decors_query(workshop_id: uuid.UUID | None) -> Any:
+    """Visible active decors from active manufacturers with at least one format.
 
-    A decor with no active format is a name nobody can attach anything of, so it
-    is not an option — showing it would mean a two-step picker whose step two is
-    empty.
+    A decor with no active *visible* format is a name nobody can attach anything
+    of, so it is not an option — showing it would mean a two-step picker whose
+    step two is empty.
     """
 
     return (
@@ -963,8 +1050,468 @@ def _attachable_decors_query() -> Any:
         .where(
             Decor.status == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
-            _has_active_format(),
+            *_decor_visibility(workshop_id),
+            _has_active_format(workshop_id),
         )
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Workshop-owned catalog rows
+# --------------------------------------------------------------------------- #
+#
+# What the library lacks, the workshop writes for itself. Every function here
+# needs `MANAGE_CATALOG` on the branch, and the owning workshop is *the branch's*
+# — never a request field, because a request field is an id one workshop could
+# type to plant a row in another's catalog.
+
+
+async def list_workshop_manufacturers(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> list[Manufacturer]:
+    """Visible active manufacturers, library first, then the workshop's own.
+
+    Feeds the create form's combobox. The two groups are ordered rather than
+    labelled here — the response carries `own` per row, and the reader wants the
+    names it has seen on a price list before the names it typed itself.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    rows = await db.scalars(
+        select(Manufacturer)
+        .where(
+            Manufacturer.status == MaterialStatus.ACTIVE,
+            _owner_predicate(Manufacturer.workshop_id, scope.workshop_id),
+        )
+        .order_by(Manufacturer.workshop_id.is_not(None), Manufacturer.name, Manufacturer.id)
+    )
+    return list(rows.all())
+
+
+async def create_workshop_decor(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    payload: WorkshopDecorCreateRequest,
+) -> WorkshopDecorCreateResult:
+    """A decor and its first formats, written by the workshop, in ONE transaction.
+
+    The whole point of the form is that the operator does not wait: they name the
+    maker (picking one, or typing a new one), the decor and at least one size,
+    and the next screen is the price step. So it is one call — a decor with no
+    format is a name nobody can attach anything of, and a half-written pair is
+    exactly the state a two-call flow leaves behind when the second call fails.
+
+    Nothing is written until every format has passed `validate_decor_format_shape`
+    and the in-request duplicate check, so a bad third size leaves no decor, no
+    manufacturer and no audit rows.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    name = _required_text(payload.name, "decor_name_required")
+    code = _optional_text(payload.code)
+    shapes = _validate_new_format_shapes(payload.formats)
+
+    manufacturer, manufacturer_created = await _resolve_workshop_manufacturer(
+        db,
+        workshop_id=scope.workshop_id,
+        manufacturer_id=payload.manufacturer_id,
+        manufacturer_name=payload.manufacturer_name,
+    )
+    await _ensure_decor_identity_available(
+        db,
+        manufacturer_id=manufacturer.id,
+        code=code,
+        name=name,
+        workshop_id=scope.workshop_id,
+    )
+
+    actor = actor_from_principal(principal)
+    if manufacturer_created:
+        await record_action(
+            db,
+            actor=actor,
+            action="catalog.manufacturer.create",
+            entity_type="manufacturer",
+            entity_id=manufacturer.id,
+            workshop_id=scope.workshop_id,
+            branch_id=scope.branch_id,
+            summary=f"Created manufacturer {manufacturer.name}",
+            details={"workshop_owned": True},
+        )
+
+    decor = Decor(
+        manufacturer_id=manufacturer.id,
+        workshop_id=scope.workshop_id,
+        code=code,
+        name=name,
+        has_grain=payload.has_grain,
+        status=MaterialStatus.ACTIVE,
+        search_key=_search_key(name=name, code=code, manufacturer_name=manufacturer.name),
+    )
+    db.add(decor)
+    await db.flush()
+    decor.image_file_id = await attach_file(
+        db,
+        principal=principal,
+        file_id=payload.image_file_id,
+        entity_type=_IMAGE_ENTITY_TYPE,
+        entity_id=decor.id,
+        allowed_content_types=IMAGE_CONTENT_TYPES,
+    )
+    await record_action(
+        db,
+        actor=actor,
+        action="catalog.dekor.create",
+        entity_type=_DECOR_ENTITY_TYPE,
+        entity_id=decor.id,
+        workshop_id=scope.workshop_id,
+        branch_id=scope.branch_id,
+        summary=f"Created decor {decor_label(decor, manufacturer)}",
+        details={"manufacturer_id": str(manufacturer.id), "workshop_owned": True},
+    )
+
+    record = DecorRecord(decor=decor, manufacturer=manufacturer, format_count=len(shapes))
+    formats = [
+        await _write_workshop_format(db, actor=actor, record=record, scope=scope, shape=shape)
+        for shape in shapes
+    ]
+    # After the formats, so the substrate words of the rows just written are in
+    # the key: «ldsp oq yog'och» has to find the decor the operator just created.
+    await _recompute_search_key_after_format_write(db, record)
+    # Flush before the refresh: `refresh` re-reads the row and would otherwise
+    # throw away the key that was just assigned in memory, silently — the decor
+    # would be findable by name and never by substrate.
+    await db.flush()
+    await db.refresh(decor)
+    return WorkshopDecorCreateResult(decor=record, formats=formats)
+
+
+async def create_workshop_decor_format(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    decor_id: uuid.UUID,
+    payload: DecorFormatCreateRequest,
+) -> DecorFormatRecord:
+    """One more size on any decor the branch can see — library or its own.
+
+    The twin rule: if the shape already exists as an **active** visible format,
+    the answer is a 409 naming that row, and the sheet ticks it instead of
+    creating a second id for one physical product. An **inactive library** twin
+    does not block — the platform discontinued it, the workshop still buys it —
+    and the workshop gets its own row.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    record = await _decor_record(db, decor_id, workshop_id=scope.workshop_id)
+    if record is None:
+        raise APIError(
+            "decor_not_found",
+            "Decor not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if record.decor.status is not MaterialStatus.ACTIVE:
+        raise APIError(
+            "decor_inactive",
+            "Cannot add a format to an inactive decor",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    shape = validate_decor_format_shape(
+        type_=payload.type,
+        thickness_mm=payload.thickness_mm,
+        length_mm=payload.length_mm,
+        width_mm=payload.width_mm,
+        tape_width_mm=payload.tape_width_mm,
+        finished_sides=payload.finished_sides,
+    )
+    twins = await _find_decor_formats(
+        db, decor_id=record.decor.id, shape=shape, workshop_id=scope.workshop_id
+    )
+    blocking = next(
+        (
+            twin
+            for twin in twins
+            # An active twin of either owner is attachable, so it is the answer.
+            # A retired *own* twin blocks too: there is nothing to attach and
+            # nothing to create — the workshop already wrote this shape once, and
+            # a format's status is not editable in this release.
+            if twin.status is MaterialStatus.ACTIVE or twin.workshop_id is not None
+        ),
+        None,
+    )
+    if blocking is not None:
+        raise APIError(
+            "decor_format_exists",
+            "This decor already has that format",
+            status_code=status.HTTP_409_CONFLICT,
+            details={"decor_format_id": str(blocking.id)},
+        )
+    row = await _write_workshop_format(
+        db,
+        actor=actor_from_principal(principal),
+        record=record,
+        scope=scope,
+        shape=shape,
+    )
+    await _recompute_search_key_after_format_write(db, record)
+    return row
+
+
+async def update_workshop_decor(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    decor_id: uuid.UUID,
+    payload: WorkshopDecorPatchRequest,
+) -> DecorRecord:
+    """Fix a decor this workshop wrote. Its formats stay immutable.
+
+    Two refusals, deliberately different: a **library** decor is 403
+    `decor_not_owned` — the operator can see the row, so the honest answer is
+    "not yours" — while another workshop's decor is 404, because admitting the id
+    resolves would leak that it exists.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    record = await _decor_record(db, decor_id, workshop_id=scope.workshop_id)
+    if record is None:
+        raise APIError(
+            "decor_not_found",
+            "Decor not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if record.decor.workshop_id is None:
+        raise APIError(
+            "decor_not_owned",
+            "This decor belongs to the platform library",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    row = record.decor
+    manufacturer = record.manufacturer
+    fields = payload.model_fields_set
+    if "manufacturer_id" in fields or "manufacturer_name" in fields:
+        manufacturer, created = await _resolve_workshop_manufacturer(
+            db,
+            workshop_id=scope.workshop_id,
+            manufacturer_id=payload.manufacturer_id,
+            manufacturer_name=payload.manufacturer_name,
+        )
+        row.manufacturer_id = manufacturer.id
+        if created:
+            await record_action(
+                db,
+                actor=actor_from_principal(principal),
+                action="catalog.manufacturer.create",
+                entity_type="manufacturer",
+                entity_id=manufacturer.id,
+                workshop_id=scope.workshop_id,
+                branch_id=scope.branch_id,
+                summary=f"Created manufacturer {manufacturer.name}",
+                details={"workshop_owned": True},
+            )
+    if "name" in fields and payload.name is not None:
+        row.name = _required_text(payload.name, "decor_name_required")
+    if "code" in fields:
+        row.code = _optional_text(payload.code)
+    if "has_grain" in fields and payload.has_grain is not None:
+        row.has_grain = payload.has_grain
+    if "image_file_id" in fields:
+        row.image_file_id = await replace_attached_file(
+            db,
+            principal=principal,
+            file_id=payload.image_file_id,
+            current_file_id=row.image_file_id,
+            entity_type=_IMAGE_ENTITY_TYPE,
+            entity_id=row.id,
+            allowed_content_types=IMAGE_CONTENT_TYPES,
+        )
+    await _ensure_decor_identity_available(
+        db,
+        manufacturer_id=row.manufacturer_id,
+        code=row.code,
+        name=row.name,
+        workshop_id=scope.workshop_id,
+        exclude_id=row.id,
+    )
+    await _recompute_decor_search_key(db, row, manufacturer.name)
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="catalog.dekor.update",
+        entity_type=_DECOR_ENTITY_TYPE,
+        entity_id=row.id,
+        workshop_id=scope.workshop_id,
+        branch_id=scope.branch_id,
+        summary=f"Updated decor {decor_label(row, manufacturer)}",
+        details={"workshop_owned": True},
+    )
+    await db.refresh(row)
+    return DecorRecord(
+        decor=row,
+        manufacturer=manufacturer,
+        branch_usage_count=record.branch_usage_count,
+        format_count=record.format_count,
+    )
+
+
+async def _resolve_workshop_manufacturer(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    manufacturer_id: uuid.UUID | None,
+    manufacturer_name: str | None,
+) -> tuple[Manufacturer, bool]:
+    """Pick a visible manufacturer, or mint the workshop's own. Returns (row, created).
+
+    Exactly one of the two inputs, because "both" has no honest reading: it would
+    silently ignore one of the two things the operator said.
+
+    A typed name is matched on the **folded** key, not on `lower()`: «Kastamonu»,
+    «kastamonu» and «Қастамону» are one maker, and letting them become three
+    would split the workshop's own catalog by keyboard layout. The library is
+    searched before the workshop's own rows, so the first typist to name a maker
+    the platform already lists reuses it instead of forking it.
+    """
+
+    typed = _optional_text(manufacturer_name)
+    if (manufacturer_id is None) == (typed is None):
+        raise APIError(
+            "manufacturer_required",
+            "Ishlab chiqaruvchini tanlang yoki nomini kiriting",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if manufacturer_id is not None:
+        return await _active_manufacturer(db, manufacturer_id, workshop_id=workshop_id), False
+
+    assert typed is not None
+    wanted = fold(typed)
+    candidates = await db.scalars(
+        select(Manufacturer)
+        .where(
+            Manufacturer.status == MaterialStatus.ACTIVE,
+            _owner_predicate(Manufacturer.workshop_id, workshop_id),
+        )
+        .order_by(Manufacturer.workshop_id.is_not(None), Manufacturer.name, Manufacturer.id)
+    )
+    for candidate in candidates.all():
+        if fold(candidate.name) == wanted:
+            return candidate, False
+    await _ensure_manufacturer_name_available(db, name=typed, workshop_id=workshop_id)
+    row = Manufacturer(name=typed, workshop_id=workshop_id, status=MaterialStatus.ACTIVE)
+    db.add(row)
+    await db.flush()
+    return row, True
+
+
+def _validate_new_format_shapes(
+    payloads: Sequence[DecorFormatCreateRequest],
+) -> list[DecorFormatShape]:
+    """Every requested format, validated and normalized, before anything is written.
+
+    Duplicates are refused rather than collapsed: two identical rows in the list
+    mean the operator lost track of what they had added, and silently keeping one
+    would leave the price step showing fewer sizes than they typed.
+    """
+
+    if not payloads:
+        raise APIError(
+            "decor_formats_required",
+            "Kamida bitta o'lcham qo'shing",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    shapes: list[DecorFormatShape] = []
+    for payload in payloads:
+        shape = validate_decor_format_shape(
+            type_=payload.type,
+            thickness_mm=payload.thickness_mm,
+            length_mm=payload.length_mm,
+            width_mm=payload.width_mm,
+            tape_width_mm=payload.tape_width_mm,
+            finished_sides=payload.finished_sides,
+        )
+        if shape in shapes:
+            raise APIError(
+                "decor_format_duplicate_in_request",
+                "Bu o'lcham allaqachon ro'yxatda",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        shapes.append(shape)
+    return shapes
+
+
+async def _write_workshop_format(
+    db: AsyncSession,
+    *,
+    actor: Any,
+    record: DecorRecord,
+    scope: BranchScope,
+    shape: DecorFormatShape,
+) -> DecorFormatRecord:
+    """One workshop-owned `decor_formats` row plus its audit line."""
+
+    row = DecorFormat(
+        decor_id=record.decor.id,
+        workshop_id=scope.workshop_id,
+        type=shape.type,
+        thickness_mm=shape.thickness_mm,
+        length_mm=shape.length_mm,
+        width_mm=shape.width_mm,
+        tape_width_mm=shape.tape_width_mm,
+        finished_sides=shape.finished_sides,
+        status=MaterialStatus.ACTIVE,
+    )
+    db.add(row)
+    await db.flush()
+    await record_action(
+        db,
+        actor=actor,
+        action="catalog.decor_format.create",
+        entity_type=_DECOR_FORMAT_ENTITY_TYPE,
+        entity_id=row.id,
+        workshop_id=scope.workshop_id,
+        branch_id=scope.branch_id,
+        summary=f"Created format {decor_format_label(row, record.decor, record.manufacturer)}",
+        details={
+            "decor_id": str(record.decor.id),
+            "type": row.type.value,
+            "workshop_owned": True,
+        },
+    )
+    return DecorFormatRecord(
+        decor_format=row,
+        decor=record.decor,
+        manufacturer=record.manufacturer,
     )
 
 
@@ -1004,6 +1551,11 @@ async def list_branch_materials(
         query = query.where(DecorFormat.type == type_)
     query = _decor_filters(
         query,
+        # The branch's own rows, so nothing here needs the visibility predicate:
+        # a `branch_materials` row can only exist for a format this workshop was
+        # allowed to attach, and filtering one out would hide a row its stock,
+        # panels and order items still point at.
+        workshop_id=scope.workshop_id,
         manufacturer_id=manufacturer_id,
         status_filter=None,
     )
@@ -1223,12 +1775,14 @@ async def attach_branch_materials(
 
     # Validate the whole batch first — nothing is added to the session until
     # every row passes, so a rejection leaves the transaction untouched.
-    validated: list[tuple[DecorFormatRecord, int, int]] = []
+    validated: list[tuple[DecorFormatRecord, int]] = []
     seen: set[uuid.UUID] = set()
     for item in payload.items:
-        record = await _attachable_format_record(db, item.decor_format_id)
+        record = await _attachable_format_record(
+            db, item.decor_format_id, workshop_id=scope.workshop_id
+        )
         label = decor_format_label(record.decor_format, record.decor, record.manufacturer)
-        _validate_branch_material_numbers(item.price_tiyin, item.min_stock, label=label)
+        _validate_price(item.price_tiyin, label=label)
         if item.decor_format_id in seen:
             raise APIError(
                 "branch_material_duplicate",
@@ -1236,7 +1790,7 @@ async def attach_branch_materials(
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         seen.add(item.decor_format_id)
-        validated.append((record, item.price_tiyin, item.min_stock))
+        validated.append((record, item.price_tiyin))
 
     carried = set(
         (
@@ -1253,7 +1807,7 @@ async def attach_branch_materials(
 
     created: list[BranchMaterialRecord] = []
     skipped: list[uuid.UUID] = []
-    for record, price_tiyin, min_stock in validated:
+    for record, price_tiyin in validated:
         if record.decor_format.id in carried:
             skipped.append(record.decor_format.id)
             continue
@@ -1261,7 +1815,6 @@ async def attach_branch_materials(
             branch_id=scope.branch_id,
             decor_format_id=record.decor_format.id,
             price_tiyin=price_tiyin,
-            min_stock=min_stock,
             status=MaterialStatus.ACTIVE,
         )
         db.add(row)
@@ -1307,7 +1860,7 @@ async def update_branch_material(
     branch_material_id: uuid.UUID,
     payload: BranchMaterialPatchRequest,
 ) -> BranchMaterialRecord:
-    """Price and threshold only.
+    """Price only.
 
     The format is not editable: it *is* this row's identity, and "change the
     format" means attaching the other format and retiring this one — otherwise
@@ -1325,11 +1878,6 @@ async def update_branch_material(
     if payload.price_tiyin is not None:
         _validate_nonnegative(payload.price_tiyin, "invalid_price")
         row.price_tiyin = payload.price_tiyin
-    if payload.min_stock is not None:
-        # No mirror to update: `branch_materials.min_stock` is the only home of
-        # the low-stock threshold, and every reader joins to it.
-        _validate_nonnegative(payload.min_stock, "invalid_min_stock")
-        row.min_stock = payload.min_stock
     updated_label = branch_material_label(
         record.decor_format, record.decor, record.manufacturer, row.id
     )
@@ -1393,52 +1941,6 @@ async def set_branch_material_status(
     return record
 
 
-async def set_branch_material_min_stock(
-    db: AsyncSession,
-    *,
-    branch_material_id: uuid.UUID,
-    branch_id: uuid.UUID,
-    min_stock: int,
-) -> BranchMaterial:
-    """Write one branch material's low-stock threshold and nothing else.
-
-    The narrow door the inventory module needs: the threshold is warehouse
-    policy, set at the shelf by `manage_inventory`, while the catalog edit form
-    keeps the same field for `manage_catalog`. The value lives once, here on
-    `branch_materials` — no mirror anywhere.
-
-    Deliberately takes no principal: the *caller* owns the permission check (it
-    is a different grant on each surface), and this function only guarantees the
-    row belongs to the branch it is being written through.
-    """
-
-    if min_stock < 0:
-        raise APIError(
-            "min_stock_invalid",
-            "Threshold cannot be negative",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    row = await db.scalar(
-        select(BranchMaterial).where(
-            BranchMaterial.id == branch_material_id,
-            BranchMaterial.branch_id == branch_id,
-        )
-    )
-    if row is None:
-        raise APIError(
-            "branch_material_not_found",
-            "Material is not selected in this branch",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    row.min_stock = min_stock
-    await db.flush()
-    # `updated_at` carries an `onupdate`, so the flush expires it. The caller
-    # renders this row straight into its response — a lazy load there would be
-    # IO outside the greenlet and 500 the request.
-    await db.refresh(row)
-    return row
-
-
 # --------------------------------------------------------------------------- #
 # Lookups
 # --------------------------------------------------------------------------- #
@@ -1474,7 +1976,9 @@ async def _branch_material_record_for_write(
     return BranchMaterialRecord(bm, decor_format, decor, manufacturer), scope
 
 
-async def _decor_record(db: AsyncSession, decor_id: uuid.UUID) -> DecorRecord | None:
+async def _decor_record(
+    db: AsyncSession, decor_id: uuid.UUID, *, workshop_id: uuid.UUID | None
+) -> DecorRecord | None:
     # The same two derived counts the list carries — the admin detail page used
     # to read "0 ta filial" for a decor that two branches carried, because the
     # single read never computed usage. Formats are outer-joined through the
@@ -1489,9 +1993,9 @@ async def _decor_record(db: AsyncSession, decor_id: uuid.UUID) -> DecorRecord | 
     )
     row = (
         await db.execute(
-            select(Decor, Manufacturer, usage, _active_format_count_subquery())
+            select(Decor, Manufacturer, usage, _active_format_count_subquery(workshop_id))
             .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
-            .where(Decor.id == decor_id)
+            .where(Decor.id == decor_id, *_decor_visibility(workshop_id))
         )
     ).one_or_none()
     if row is None:
@@ -1506,13 +2010,15 @@ async def _decor_record(db: AsyncSession, decor_id: uuid.UUID) -> DecorRecord | 
 
 
 async def _attachable_format_record(
-    db: AsyncSession, decor_format_id: uuid.UUID
+    db: AsyncSession, decor_format_id: uuid.UUID, *, workshop_id: uuid.UUID
 ) -> DecorFormatRecord:
-    """One active format of an active decor of an active manufacturer, or 4xx.
+    """One visible active format of an active decor of an active manufacturer, or 4xx.
 
     Three separate refusals collapse into two codes on purpose: a branch that
     cannot see the decor at all gets "not found", while a decor it *can* see
-    whose format the platform has retired gets a message it can act on.
+    whose format has been retired gets a message it can act on. Another
+    workshop's format takes the first door — `decor_format_not_found`, never a
+    403, so the id does not confirm that a row is there.
     """
 
     row = (
@@ -1520,7 +2026,11 @@ async def _attachable_format_record(
             select(DecorFormat, Decor, Manufacturer)
             .join(Decor, Decor.id == DecorFormat.decor_id)
             .join(Manufacturer, Manufacturer.id == Decor.manufacturer_id)
-            .where(DecorFormat.id == decor_format_id)
+            .where(
+                DecorFormat.id == decor_format_id,
+                _owner_predicate(DecorFormat.workshop_id, workshop_id),
+                *_decor_visibility(workshop_id),
+            )
         )
     ).one_or_none()
     if row is None:
@@ -1548,21 +2058,29 @@ async def _attachable_format_record(
     )
 
 
-async def _find_decor_format(
+async def _find_decor_formats(
     db: AsyncSession,
     *,
     decor_id: uuid.UUID,
     shape: DecorFormatShape,
-) -> DecorFormat | None:
-    """The natural-key lookup, mirroring `uq_decor_formats_natural_key`.
+    workshop_id: uuid.UUID | None,
+) -> list[DecorFormat]:
+    """Every *visible* row with this natural key, mirroring the two unique indexes.
 
     Checked in Python as well as in the DB so the client gets a 409 naming the
     existing row rather than an IntegrityError 500 — and so SQLite, where the
     COALESCE expression index is the only enforcement, behaves the same.
+
+    A list rather than one row because a workshop reader can legitimately see two
+    of them: a retired library format and its own live replacement. Scoped by
+    visibility, so a foreign workshop's identically-shaped format neither blocks
+    nor gets named in the 409. Active first, so a caller taking the head takes
+    the live twin.
     """
 
-    row: DecorFormat | None = await db.scalar(
-        select(DecorFormat).where(
+    rows = await db.scalars(
+        select(DecorFormat)
+        .where(
             DecorFormat.decor_id == decor_id,
             DecorFormat.type == shape.type,
             DecorFormat.thickness_mm == shape.thickness_mm,
@@ -1570,13 +2088,28 @@ async def _find_decor_format(
             func.coalesce(DecorFormat.width_mm, 0) == (shape.width_mm or 0),
             func.coalesce(DecorFormat.tape_width_mm, 0) == (shape.tape_width_mm or 0),
             func.coalesce(DecorFormat.finished_sides, 0) == (shape.finished_sides or 0),
+            _owner_predicate(DecorFormat.workshop_id, workshop_id),
+        )
+        .order_by((DecorFormat.status != MaterialStatus.ACTIVE), DecorFormat.id)
+    )
+    return list(rows.all())
+
+
+async def _active_manufacturer(
+    db: AsyncSession, manufacturer_id: uuid.UUID, *, workshop_id: uuid.UUID | None
+) -> Manufacturer:
+    """One visible, active manufacturer by id, or 404.
+
+    Another workshop's maker is 404 rather than 403 for the same reason a foreign
+    decor is: the id must not confirm that a row exists.
+    """
+
+    row = await db.scalar(
+        select(Manufacturer).where(
+            Manufacturer.id == manufacturer_id,
+            _owner_predicate(Manufacturer.workshop_id, workshop_id),
         )
     )
-    return row
-
-
-async def _active_manufacturer(db: AsyncSession, manufacturer_id: uuid.UUID) -> Manufacturer:
-    row = await db.get(Manufacturer, manufacturer_id)
     if row is None or row.status is not MaterialStatus.ACTIVE:
         raise APIError(
             "manufacturer_not_found",
@@ -1590,9 +2123,21 @@ async def _ensure_manufacturer_name_available(
     db: AsyncSession,
     *,
     name: str,
+    workshop_id: uuid.UUID | None,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
-    query = select(Manufacturer.id).where(func.lower(Manufacturer.name) == name.lower())
+    """Mirror of the two ownership arms of the manufacturer name index.
+
+    Scoped, not global: a workshop that entered «Kastamonu» of its own must not
+    stop the platform adding Kastamonu to the library later, and vice versa.
+    """
+
+    query = select(Manufacturer.id).where(
+        func.lower(Manufacturer.name) == name.lower(),
+        Manufacturer.workshop_id.is_(None)
+        if workshop_id is None
+        else Manufacturer.workshop_id == workshop_id,
+    )
     if exclude_id is not None:
         query = query.where(Manufacturer.id != exclude_id)
     if await db.scalar(query) is not None:
@@ -1609,17 +2154,24 @@ async def _ensure_decor_identity_available(
     manufacturer_id: uuid.UUID,
     code: str | None,
     name: str,
+    workshop_id: uuid.UUID | None,
     exclude_id: uuid.UUID | None = None,
 ) -> None:
-    """Mirror of the two partial unique indexes on `decors`.
+    """Mirror of the four partial unique indexes on `decors`.
 
-    Checked here as well as in the DB because the indexes are `postgresql_where`
-    and do not exist on SQLite, and because a 409 with a message beats an
-    IntegrityError 500 either way. `type` is deliberately not part of this test
-    any more — a board and its matching kromka are one decor now.
+    Checked here as well as in the DB because the predicates do not survive on
+    every dialect, and because a 409 with a message beats an IntegrityError 500
+    either way. `type` is deliberately not part of this test — a board and its
+    matching kromka are one decor now.
+
+    Scoped to one ownership arm: a workshop's own «Egger · H1145» and the
+    library's are two rows by design, and neither may refuse the other.
     """
 
-    query = select(Decor.id).where(Decor.manufacturer_id == manufacturer_id)
+    query = select(Decor.id).where(
+        Decor.manufacturer_id == manufacturer_id,
+        Decor.workshop_id.is_(None) if workshop_id is None else Decor.workshop_id == workshop_id,
+    )
     if code is not None:
         query = query.where(func.lower(Decor.code) == code.lower())
     else:
@@ -1721,10 +2273,14 @@ def _format_ordering() -> tuple[Any, ...]:
     )
 
 
-def _active_format_count_subquery() -> Any:
-    """How many active formats this decor has.
+def _active_format_count_subquery(workshop_id: uuid.UUID | None) -> Any:
+    """How many *visible* active formats this decor has.
 
-    `.correlate(Decor)` is load-bearing: `list_decors` already has
+    Visibility is load-bearing here rather than cosmetic: without it a library
+    decor would report a foreign workshop's private 16 mm as "available", and the
+    picker would offer a step two that lists nothing.
+
+    `.correlate(Decor)` is load-bearing too: `list_decors` already has
     `decor_formats` in its own FROM (it outer-joins through it to count carrying
     branches), and SQLAlchemy's auto-correlation would then correlate BOTH
     tables away and leave the subquery with no FROM clause at all. Naming the
@@ -1736,14 +2292,15 @@ def _active_format_count_subquery() -> Any:
         .where(
             DecorFormat.decor_id == Decor.id,
             DecorFormat.status == MaterialStatus.ACTIVE,
+            _owner_predicate(DecorFormat.workshop_id, workshop_id),
         )
         .correlate(Decor)
         .scalar_subquery()
     )
 
 
-def _has_active_format(types: list[DecorType] | None = None) -> Any:
-    """`EXISTS (an active format of this decor[, of one of these types])`.
+def _has_active_format(workshop_id: uuid.UUID | None, types: list[DecorType] | None = None) -> Any:
+    """`EXISTS (a visible active format of this decor[, of one of these types])`.
 
     What the decor-level `type` filter means now that a decor has no type of its
     own: "sells at least one active product of this substrate".
@@ -1754,6 +2311,7 @@ def _has_active_format(types: list[DecorType] | None = None) -> Any:
         .where(
             DecorFormat.decor_id == Decor.id,
             DecorFormat.status == MaterialStatus.ACTIVE,
+            _owner_predicate(DecorFormat.workshop_id, workshop_id),
         )
         .correlate(Decor)
     )
@@ -1765,6 +2323,7 @@ def _has_active_format(types: list[DecorType] | None = None) -> Any:
 def _decor_filters(
     query: Any,
     *,
+    workshop_id: uuid.UUID | None,
     manufacturer_id: uuid.UUID | None,
     status_filter: MaterialStatus | None,
     type_: DecorType | None = None,
@@ -1772,11 +2331,15 @@ def _decor_filters(
     manufacturer_ids: list[uuid.UUID] | None = None,
 ) -> Any:
     """The non-search decor filters. Search is `apply_decor_search`'s job — it
-    runs per tier, and the tier ladder is above these filters, not inside them."""
+    runs per tier, and the tier ladder is above these filters, not inside them.
+
+    `workshop_id` scopes only the format EXISTS the `type` filter reaches
+    through; the decor and manufacturer halves of the visibility predicate belong
+    to the caller's base query, which is where the two tables are joined."""
 
     wanted = [*([type_] if type_ is not None else []), *(types or [])]
     if wanted:
-        query = query.where(_has_active_format(wanted))
+        query = query.where(_has_active_format(workshop_id, wanted))
     if manufacturer_id is not None:
         query = query.where(Decor.manufacturer_id == manufacturer_id)
     if manufacturer_ids:
@@ -1888,8 +2451,8 @@ def validate_decor_format_shape(
     return DecorFormatShape(type_, thickness, length, width, None, finished_sides)
 
 
-def _validate_branch_material_numbers(price_tiyin: int, min_stock: int, *, label: str) -> None:
-    """Price and threshold rules — shared by attach and patch so they can't drift.
+def _validate_price(price_tiyin: int, *, label: str) -> None:
+    """The attach row's one number.
 
     Price 0 is legal and means "not priced yet": a branch registers its format
     list first and prices it later. Client-facing listings drop unpriced rows;
@@ -1900,12 +2463,6 @@ def _validate_branch_material_numbers(price_tiyin: int, min_stock: int, *, label
         raise APIError(
             "invalid_price",
             f"«{label}» uchun narx noto'g'ri",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    if min_stock < 0:
-        raise APIError(
-            "invalid_min_stock",
-            f"«{label}» uchun chegara noto'g'ri",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 

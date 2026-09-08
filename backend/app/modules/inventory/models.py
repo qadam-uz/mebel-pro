@@ -20,13 +20,14 @@ class StockItem(UUIDPrimaryKey, Base):
     # the matching arrival was never entered (QAD-150). Manual paths still guard
     # in the service layer.
     #
-    # There is deliberately **no `min_stock` here**. The low-stock threshold is a
-    # property of what the branch carries, so it lives once on
-    # `branch_materials.min_stock`. It used to be mirrored onto this row so the
-    # low-stock filter could be a single-table predicate, kept in step by an
-    # explicit sync call — which is precisely how the two drift: any write path
-    # that forgets the call leaves the alert reading a stale number, silently and
-    # forever. `stock_items` is now only the balance.
+    # There is no threshold column here, and none on `branch_materials` either.
+    # The per-material low-stock threshold was mirrored onto this row (so the
+    # filter could be a single-table predicate), then moved to its one home on
+    # the branch material, then retired outright on 2026-09-08: a branch that
+    # registered its supplier's whole price list saw the warning on every
+    # zero-balance row, and a warning that is everywhere is nowhere. What is left
+    # is `on_hand < 0`, which needs no stored number. `stock_items` is the
+    # balance, and only the balance.
 
     # `branch_id` is kept alongside `branch_material_id` because every inventory
     # query scopes by branch and the join would otherwise be mandatory. It is a

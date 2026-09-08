@@ -1,17 +1,23 @@
-"""Platform decor catalog, decor formats and branch material/pricing models.
+"""Decor catalog, decor formats and branch material/pricing models.
 
-The platform owns the whole product fact. `decors` is *pattern identity* — who
-makes it, what it is called, what it looks like. `decor_formats` is the concrete
-product — substrate, thickness, sheet size or tape width, finished sides. A
-branch owns only the commercial decision: `branch_materials` is "we carry this
-format, at this price, with this reorder threshold, and it is on/off".
+`decors` is *pattern identity* — who makes it, what it is called, what it looks
+like. `decor_formats` is the concrete product — substrate, thickness, sheet size
+or tape width, finished sides. A branch owns only the commercial decision:
+`branch_materials` is "we carry this format, at this price, and it is on/off".
 
-This reverses the earlier "a branch owns the format" split (see
-`docs/ref/features/catalog-inventory.md`). A format is the manufacturer's fact,
-not the branch's, and the owner wants one id per physical product across every
-workshop — the basis for cross-workshop analytics, central price-list import and
-board-to-tape pairing. The cost, a branch waiting on the platform for a new
-size, is accepted and made visible in the attach sheet.
+**Who owns a row** (2026-09-07). The platform catalog is a *library*, not an
+authority: a pre-filled list so a workshop does not type Egger's 300 decors by
+hand. `workshop_id` on `manufacturers`, `decors` and `decor_formats` says who
+wrote the row — `NULL` is the library, a value is one workshop's own. An own row
+is visible only to that workshop (its branches, its staff, the clients pinned to
+its branches): `visible_to(ws) := workshop_id IS NULL OR workshop_id = ws`.
+Nothing is moderated and nothing is promoted; the column exists so the door to a
+future merge stays open at zero cost, not because anything walks through it.
+
+This softens — not reverses — the 2026-08-22 move of formats off the branch. A
+format is still the manufacturer's fact and still keyed by id everywhere
+downstream; what changed is that a workshop no longer *waits* for the platform to
+enter a size it already buys.
 """
 
 import uuid
@@ -38,13 +44,47 @@ DECOR_FORMAT_SHAPE_CHECK = (
 )
 
 
+# The owning workshop of a catalog row, or NULL for a library row. Spelled once
+# because all three tables carry the identical column, and because the visibility
+# predicate reads off it: `workshop_id IS NULL OR workshop_id = :ws`.
+_WORKSHOP_OWNED_WHERE = "workshop_id IS NOT NULL"
+_LIBRARY_WHERE = "workshop_id IS NULL"
+
+
+def _workshop_owner_column() -> Mapped[uuid.UUID | None]:
+    return mapped_column(ForeignKey("workshops.id"), index=True)
+
+
 class Manufacturer(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "manufacturers"
-    __table_args__ = (Index("uq_manufacturers_name_ci", func.lower(text("name")), unique=True),)
+    __table_args__ = (
+        # One index per ownership arm. NULLs are distinct in a unique index, so a
+        # single index over (workshop_id, lower(name)) would let the library hold
+        # «Kastamonu» twice; and a single index over lower(name) alone would stop
+        # a workshop entering a maker the library already lists under a name it
+        # cannot see the row of. Two partial indexes say the actual rule: names
+        # are unique inside the library, and unique inside each workshop.
+        Index(
+            "uq_manufacturers_name_ci",
+            func.lower(text("name")),
+            unique=True,
+            postgresql_where=text(_LIBRARY_WHERE),
+            sqlite_where=text(_LIBRARY_WHERE),
+        ),
+        Index(
+            "uq_manufacturers_ws_name_ci",
+            "workshop_id",
+            func.lower(text("name")),
+            unique=True,
+            postgresql_where=text(_WORKSHOP_OWNED_WHERE),
+            sqlite_where=text(_WORKSHOP_OWNED_WHERE),
+        ),
+    )
 
     name: Mapped[str] = mapped_column(nullable=False)
     country: Mapped[str | None]
     note: Mapped[str | None]
+    workshop_id: Mapped[uuid.UUID | None] = _workshop_owner_column()
     status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),
         default=MaterialStatus.ACTIVE,
@@ -72,21 +112,44 @@ class Decor(UUIDPrimaryKey, Timestamped, Base):
         # creates the index but drops the WHERE, so the test DB enforced
         # name-uniqueness even for two decors with different codes — a rule
         # production does not have. `tur` used to be in the tuple and hid that.
+        # Each of the two rules gets an ownership arm, for the reason spelled on
+        # `manufacturers` above: the library is unique to itself, and each
+        # workshop is unique to itself. A workshop entering «Egger · H1145» of
+        # its own while the library already has one is a duplicate the owner
+        # accepted — the alternative is refusing a row the operator cannot see.
         Index(
             "uq_decors_manufacturer_code_ci",
             "manufacturer_id",
             func.lower(text("code")),
             unique=True,
-            postgresql_where=text("code IS NOT NULL"),
-            sqlite_where=text("code IS NOT NULL"),
+            postgresql_where=text(f"code IS NOT NULL AND {_LIBRARY_WHERE}"),
+            sqlite_where=text(f"code IS NOT NULL AND {_LIBRARY_WHERE}"),
         ),
         Index(
             "uq_decors_manufacturer_name_ci",
             "manufacturer_id",
             func.lower(text("name")),
             unique=True,
-            postgresql_where=text("code IS NULL"),
-            sqlite_where=text("code IS NULL"),
+            postgresql_where=text(f"code IS NULL AND {_LIBRARY_WHERE}"),
+            sqlite_where=text(f"code IS NULL AND {_LIBRARY_WHERE}"),
+        ),
+        Index(
+            "uq_decors_ws_manufacturer_code_ci",
+            "workshop_id",
+            "manufacturer_id",
+            func.lower(text("code")),
+            unique=True,
+            postgresql_where=text(f"code IS NOT NULL AND {_WORKSHOP_OWNED_WHERE}"),
+            sqlite_where=text(f"code IS NOT NULL AND {_WORKSHOP_OWNED_WHERE}"),
+        ),
+        Index(
+            "uq_decors_ws_manufacturer_name_ci",
+            "workshop_id",
+            "manufacturer_id",
+            func.lower(text("name")),
+            unique=True,
+            postgresql_where=text(f"code IS NULL AND {_WORKSHOP_OWNED_WHERE}"),
+            sqlite_where=text(f"code IS NULL AND {_WORKSHOP_OWNED_WHERE}"),
         ),
         Index("ix_decors_search_key", "search_key"),
         # The typo tier of the search (`word_similarity`) is only affordable
@@ -109,6 +172,7 @@ class Decor(UUIDPrimaryKey, Timestamped, Base):
     name: Mapped[str] = mapped_column(nullable=False)
     image_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     has_grain: Mapped[bool] = mapped_column(nullable=False)
+    workshop_id: Mapped[uuid.UUID | None] = _workshop_owner_column()
     status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),
         default=MaterialStatus.ACTIVE,
@@ -125,11 +189,13 @@ class Decor(UUIDPrimaryKey, Timestamped, Base):
 class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
     """One concrete product of a decor — the thing a supplier actually sells.
 
-    Platform-owned and **immutable**: there is no PATCH for dimensions. A wrong
-    format is deactivated and a correct one created, because branch rows, stock,
-    cutting panels and order history all resolve through it and a silent
-    re-dimension would rewrite what those rows mean. `status` is the only
-    mutable column.
+    **Immutable**: there is no PATCH for dimensions. A wrong format is
+    deactivated and a correct one created, because branch rows, stock, cutting
+    panels and order history all resolve through it and a silent re-dimension
+    would rewrite what those rows mean. `status` is the only mutable column.
+
+    A workshop-owned format may hang off a **library** decor — the common case is
+    "Egger H1145 exists, the 16 mm does not" — or off the workshop's own decor.
     """
 
     __tablename__ = "decor_formats"
@@ -137,6 +203,12 @@ class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
         # NULLs are distinct in a Postgres unique index, so a plain
         # UniqueConstraint over the nullable columns would let
         # (decor, ldsp, 18, NULL, NULL, ...) in twice. COALESCE collapses them.
+        # Split by ownership arm like the decor indexes: one shape per decor
+        # inside the library, and one per decor inside each workshop. The service
+        # is what stops a workshop duplicating a shape the library *actively*
+        # offers (it attaches that row instead); the DB only stops a workshop
+        # duplicating its own — an inactive library twin is a shape the workshop
+        # legitimately still buys.
         Index(
             "uq_decor_formats_natural_key",
             "decor_id",
@@ -147,6 +219,22 @@ class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
             func.coalesce(text("tape_width_mm"), text("0")),
             func.coalesce(text("finished_sides"), text("0")),
             unique=True,
+            postgresql_where=text(_LIBRARY_WHERE),
+            sqlite_where=text(_LIBRARY_WHERE),
+        ),
+        Index(
+            "uq_decor_formats_ws_natural_key",
+            "workshop_id",
+            "decor_id",
+            "type",
+            "thickness_mm",
+            func.coalesce(text("length_mm"), text("0")),
+            func.coalesce(text("width_mm"), text("0")),
+            func.coalesce(text("tape_width_mm"), text("0")),
+            func.coalesce(text("finished_sides"), text("0")),
+            unique=True,
+            postgresql_where=text(_WORKSHOP_OWNED_WHERE),
+            sqlite_where=text(_WORKSHOP_OWNED_WHERE),
         ),
         CheckConstraint("thickness_mm > 0", name="ck_decor_formats_thickness_positive"),
         CheckConstraint(
@@ -157,6 +245,7 @@ class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
     )
 
     decor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("decors.id"), nullable=False)
+    workshop_id: Mapped[uuid.UUID | None] = _workshop_owner_column()
     type: Mapped[DecorType] = mapped_column(enum_type(DecorType, "decor_type"), nullable=False)
     thickness_mm: Mapped[Decimal] = mapped_column(nullable=False)
     # Panel-shaped formats carry length/width; tape-shaped ones carry
@@ -182,9 +271,11 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
     """A decor format one branch has decided to carry — "the material".
 
     Everything downstream (stock, cutting panels, order items) points here, not
-    at the format: the price and the shelf are the branch's, while what the
-    sheet physically *is* belongs to the platform. Four facts are the whole row
-    — carrying it, its price, its threshold, its own on/off switch.
+    at the format: the price and the shelf are the branch's, while what the sheet
+    physically *is* belongs to whoever wrote the format. Three facts are the
+    whole row — carrying it, its price, its own on/off switch. The low-stock
+    threshold used to be a fourth; it was retired 2026-09-08 (a warning that is
+    everywhere is nowhere), leaving `on_hand < 0` as the only stock alarm.
     """
 
     __tablename__ = "branch_materials"
@@ -200,7 +291,6 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
             unique=True,
         ),
         CheckConstraint("price_tiyin >= 0", name="ck_branch_materials_price_nonnegative"),
-        CheckConstraint("min_stock >= 0", name="ck_branch_materials_min_stock_nonnegative"),
     )
 
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
@@ -212,7 +302,6 @@ class BranchMaterial(UUIDPrimaryKey, Timestamped, Base):
     price_tiyin: Mapped[int] = mapped_column(
         BigInteger, nullable=False, server_default=text("0"), default=0
     )
-    min_stock: Mapped[int] = mapped_column(default=0, nullable=False)
     status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),
         default=MaterialStatus.ACTIVE,

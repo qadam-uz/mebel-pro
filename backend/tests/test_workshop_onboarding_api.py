@@ -124,7 +124,6 @@ async def test_onboarding_status_derives_from_setup_progress(
                 {
                     "decor_format_id": str(thick_format_id),
                     "price_tiyin": 25500000,
-                    "min_stock": 2,
                 }
             ],
         },

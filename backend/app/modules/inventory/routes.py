@@ -14,13 +14,12 @@ from app.modules.inventory.api import (
     create_supplier,
     display_unit,
     get_last_price,
-    is_low_stock,
+    is_negative_stock,
     list_stock,
     list_suppliers,
     list_transactions,
     record_adjustment,
     record_stock_in,
-    set_min_stock,
     set_supplier_status,
     stock_row_for_material,
     stock_unit,
@@ -32,7 +31,6 @@ from app.modules.inventory.schemas import (
     StockInRequest,
     StockItemResponse,
     StockLastPriceResponse,
-    StockMinStockRequest,
     StockTransactionResponse,
     StockValueResponse,
     SupplierCreateRequest,
@@ -41,9 +39,8 @@ from app.modules.inventory.schemas import (
 )
 
 router = APIRouter(prefix="/workshop/branches/{branch_id}", tags=["inventory"])
-# The stock surface's one write that moves no stock. It lives under the module's
-# `/workshop/inventory` prefix (the one `invoice_routes` already uses) because
-# the threshold is a policy edit on a material, not a movement on a balance.
+# The material-detail read, addressed by branch material rather than by branch —
+# the same `/workshop/inventory` prefix `invoice_routes` uses.
 stock_router = APIRouter(prefix="/workshop/inventory", tags=["inventory"])
 SUPPLIER_STATUS_QUERY = Query(default=None, alias="status")
 # Opt-in cap for callers that render a preview rather than the table (the global
@@ -61,7 +58,9 @@ async def stock_index(
     principal: AccountReadyPrincipal,
     db: Session,
     search: str | None = None,
-    low_stock: bool = False,
+    # Renamed from `low_stock` when the threshold was retired: the filter has
+    # only ever had one honest meaning left, and the chip now says «Manfiy».
+    negative: bool = False,
     # Off by default so every existing caller — the global search preview, the
     # material pickers — keeps seeing the branch's whole catalog. Only the
     # Zaxira table asks for the moved scope.
@@ -74,7 +73,7 @@ async def stock_index(
         principal=principal,
         branch_id=branch_id,
         search=search,
-        low_stock_only=low_stock,
+        negative_only=negative,
         moved_only=moved_only,
         types=types,
         limit=limit,
@@ -271,27 +270,6 @@ async def material_stock_get(
     return _stock_response(row)
 
 
-@stock_router.put(
-    "/branches/{branch_id}/stock/{branch_material_id}/min-stock",
-    response_model=StockItemResponse,
-)
-async def stock_min_stock_update(
-    branch_id: uuid.UUID,
-    branch_material_id: uuid.UUID,
-    payload: StockMinStockRequest,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> StockItemResponse:
-    row = await set_min_stock(
-        db,
-        principal=principal,
-        branch_id=branch_id,
-        branch_material_id=branch_material_id,
-        min_stock=payload.min_stock,
-    )
-    return _stock_response(row)
-
-
 def _stock_response(row: StockRecord) -> StockItemResponse:
     item = row.stock_item
     return StockItemResponse(
@@ -305,8 +283,7 @@ def _stock_response(row: StockRecord) -> StockItemResponse:
         stock_unit=stock_unit(row.decor_format.type),
         display_unit=display_unit(row.decor_format.type),
         on_hand=item.on_hand,
-        min_stock=row.branch_material.min_stock,
-        is_low_stock=is_low_stock(item.on_hand, row.branch_material.min_stock),
+        is_low_stock=is_negative_stock(item.on_hand),
         updated_at=item.updated_at,
     )
 

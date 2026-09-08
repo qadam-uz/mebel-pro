@@ -451,9 +451,7 @@ async def test_two_branches_carry_one_format_at_their_own_prices(
         return await client.post(
             f"/api/v1/workshop/branches/{branch_id}/materials",
             headers=_auth(access),
-            json={
-                "items": [{"decor_format_id": board["id"], "price_tiyin": price, "min_stock": 2}]
-            },
+            json={"items": [{"decor_format_id": board["id"], "price_tiyin": price}]},
         )
 
     first = await attach(first_access, first_branch, 500_000)
@@ -571,7 +569,7 @@ async def test_deactivating_a_format_only_removes_it_from_the_attach_list(
         headers=_auth(owner_access),
         json={
             "items": [
-                {"decor_format_id": board["id"], "price_tiyin": 500_000, "min_stock": 3},
+                {"decor_format_id": board["id"], "price_tiyin": 500_000},
                 {"decor_format_id": tape["id"], "price_tiyin": 9_000},
             ]
         },
@@ -623,13 +621,9 @@ async def test_deactivating_a_format_only_removes_it_from_the_attach_list(
     )
 
     assert deactivated.status_code == 200
-    # The branch row is exactly as it was — price, threshold, status.
+    # The branch row is exactly as it was — price and status.
     row_after = next(row for row in after_workshop.json() if row["decor_format_id"] == board["id"])
-    assert (row_after["price_tiyin"], row_after["min_stock"], row_after["status"]) == (
-        500_000,
-        3,
-        "active",
-    )
+    assert (row_after["price_tiyin"], row_after["status"]) == (500_000, "active")
     assert row_after["decor_format"]["status"] == "inactive"
     # Clients see the same shelf before and after: the sheets are still there.
     assert [row["id"] for row in before_client.json()] == [row["id"] for row in after_client.json()]
@@ -699,7 +693,6 @@ async def test_the_branch_format_pair_is_unique_at_the_database(db_session: Asyn
             branch_id=branch.id,
             decor_format_id=carried.decor_format_id,
             price_tiyin=1,
-            min_stock=0,
         )
     )
     with pytest.raises(IntegrityError):

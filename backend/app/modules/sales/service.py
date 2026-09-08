@@ -3477,11 +3477,12 @@ def _stock_warnings_from_demands(
         item = stock_by_branch_material.get(branch_material_id)
         material = materials.get(branch_material_id)
         on_hand = item.on_hand if item is not None else 0
-        # The threshold is the branch material's, not the balance row's — a
-        # material the branch stopped carrying has no threshold to warn against.
-        min_stock = material[0].min_stock if material is not None else 0
         projected = on_hand - required
-        if projected >= 0 and projected > min_stock:
+        # One arm since 2026-09-08: the cut takes the books below zero. The
+        # per-material threshold this used to also fire on is gone — approving an
+        # order was never blocked by it, and a warning on every thinly-stocked
+        # row taught the approver to scroll past the line that matters.
+        if projected >= 0:
             continue
         warnings.append(
             OrderStockWarning(

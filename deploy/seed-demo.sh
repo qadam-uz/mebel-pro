@@ -56,7 +56,7 @@
 #   operator cannot know what a workshop's supplier actually sells.
 #
 #   A *branch material* is one dekor in one concrete format, carried by one
-#   branch: qalinlik + (uzunlik×eni | kromka_eni) + price + min_stock. THAT is
+#   branch: qalinlik + (uzunlik×eni | kromka_eni) + price. THAT is
 #   the id every stock row, cutting panel and order item points at — and it is
 #   per branch, so B1's id for "Oq 2800×2070×18" is not B2's.
 #
@@ -465,13 +465,13 @@ attach() { # branch_id dekor_id formats_json -> response body
 # `qalinlik_mm` goes over the wire as a STRING: it is a Decimal server-side, and
 # 0.4 as a JSON float is the one value in this file that a float round-trip could
 # nudge. Everything else is an integer.
-format_json() { # qalinlik uzunlik eni kromka_eni price min_stock   ("" = omit the field)
+format_json() { # qalinlik uzunlik eni kromka_eni price   ("" = omit the field)
   local out="\"qalinlik_mm\":\"$1\""
   [ -n "$2" ] && out="$out,\"uzunlik_mm\":$2"
   [ -n "$3" ] && out="$out,\"eni_mm\":$3"
   [ -n "$4" ] && out="$out,\"kromka_eni_mm\":$4"
   [ -n "$5" ] && out="$out,\"price_tiyin\":$5"     # omitted → server default 0
-  printf '{%s,"min_stock":%s}' "$out" "$6"
+  printf '{%s}' "$out"
 }
 
 # Match a created row back to the format we asked for by its own numbers, not by
@@ -493,7 +493,10 @@ stockin() { # branch_id branch_material_id quantity supplier_id unit_price_tiyin
     "{\"branch_material_id\":\"$2\",\"quantity\":$3,\"unit_price_tiyin\":$5,\"supplier_id\":\"$4\",\"note\":\"Demo boshlang'ich zaxira\"}" >/dev/null
 }
 
-# Two decors that no order touches, planted below min_stock for the low-stock UI.
+# Two decors that no order touches, stocked thin so the Zaxira table has rows
+# near the bottom to look at. Not an alarm any more — the per-material threshold
+# was retired 2026-09-08 and `on_hand < 0` is the only warning left — but a
+# warehouse where every row is deep is a warehouse nobody scrolls.
 LOWSTOCK="u636 u560"
 is_lowstock() { case " $LOWSTOCK " in *" $1 "*) return 0;; *) return 1;; esac; }
 
@@ -523,11 +526,10 @@ for i in "${!DEKOR_KEY[@]}"; do
         IFS='x' read -r len wid thick <<< "$spec"
         price="$(panel_price "$i" "$f" "$bump")"
         [ "$unpriced" = 1 ] && price=""
-        mins=5; if is_lowstock "$decor"; then mins=60; fi
-        item="$(format_json "$thick" "$len" "$wid" "" "$price" "$mins")"
+        item="$(format_json "$thick" "$len" "$wid" "" "$price")"
       else
         IFS='x' read -r thick ew <<< "$spec"
-        item="$(format_json "$thick" "" "" "$ew" "$(kromka_price "$i" "$f" "$bump")" 20000)"
+        item="$(format_json "$thick" "" "" "$ew" "$(kromka_price "$i" "$f" "$bump")")"
       fi
       items="${items:+$items,}$item"
       f=$((f+1))
@@ -557,7 +559,7 @@ for i in "${!DEKOR_KEY[@]}"; do
     done
   done
 done
-ok "$n_bm branch materials attached and stocked (low-stock: Vanil, Ko'k · unpriced: Sonoma eman 16 mm)"
+ok "$n_bm branch materials attached and stocked (thin stock: Vanil, Ko'k · unpriced: Sonoma eman 16 mm)"
 
 # ============================================================================
 # 9 · Skeleton workshops (so the admin list looks real)
