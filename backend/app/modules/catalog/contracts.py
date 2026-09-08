@@ -26,13 +26,21 @@ def is_panel(type_: DecorType) -> bool:
     return type_.panel_shaped
 
 
-# The board types whose finished-face count is a product fact rather than a
-# constant. Mirrors the `finished_sides` half of the DB shape CHECK.
-FINISHED_SIDES_TYPES = frozenset({DecorType.LDSP, DecorType.DSP, DecorType.MDF})
+# The *faced* board types — the ones that arrive with a laminate on one or both
+# sides, so how many faces are finished is a product fact rather than a constant.
+# Narrowed to LDSP + LMDF on 2026-09-08: `dsp` and `mdf` are the bare substrates,
+# and asking "1 or 2 faces?" about a raw chipboard sheet was a question with no
+# answer — every such row was entered as the meaningless «2». Mirrors the
+# `finished_sides` half of the DB shape CHECK; the migration nulled the rows.
+FINISHED_SIDES_TYPES = frozenset({DecorType.LDSP, DecorType.LMDF})
 
 
 def requires_finished_sides(type_: DecorType) -> bool:
-    """True when a format of this type must record how many faces are finished."""
+    """True when a format of this type must record how many faces are finished.
+
+    False for every other type, and there it is not merely optional: the value
+    must be absent (`finished_sides IS NULL`), which is what the CHECK enforces.
+    """
     return type_ in FINISHED_SIDES_TYPES
 
 

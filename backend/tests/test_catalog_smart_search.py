@@ -484,22 +484,26 @@ async def test_the_layout_tier_only_runs_when_the_first_found_nothing(
 # --------------------------------------------------------------------------- #
 
 
+async def _kulrang_id(client: AsyncClient, catalog: Catalog) -> str:
+    """The id of the seeded «Kulrang eman» — the decor the substrate tests hang formats on."""
+
+    rows = (
+        await client.get(
+            "/api/v1/platform/catalog/decors",
+            headers=_auth(catalog.platform_access),
+            params={"search": "kulrang"},
+        )
+    ).json()
+    return str(next(row["id"] for row in rows))
+
+
 async def test_a_new_format_makes_its_substrate_searchable(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     catalog = await _seed_catalog(db_session)
     assert await _platform_decors(client, catalog, "mdf") == []
 
-    kulrang = next(
-        row["id"]
-        for row in (
-            await client.get(
-                "/api/v1/platform/catalog/decors",
-                headers=_auth(catalog.platform_access),
-                params={"search": "kulrang"},
-            )
-        ).json()
-    )
+    kulrang = await _kulrang_id(client, catalog)
     created = await client.post(
         f"/api/v1/platform/catalog/decors/{kulrang}/formats",
         headers=_auth(catalog.platform_access),
@@ -508,7 +512,6 @@ async def test_a_new_format_makes_its_substrate_searchable(
             "thickness_mm": "16",
             "length_mm": 2800,
             "width_mm": 2070,
-            "finished_sides": 2,
         },
     )
     assert created.status_code == 201, created.text
@@ -522,3 +525,36 @@ async def test_a_new_format_makes_its_substrate_searchable(
     )
     assert retired.status_code == 200, retired.text
     assert await _platform_decors(client, catalog, "mdf") == []
+
+
+async def test_the_new_lmdf_substrate_is_searchable_in_both_scripts(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """«lmdf» and «лмдф» are one query typed on two keyboards.
+
+    The type word enters `decors.search_key` as the raw enum value and the query
+    is folded the same way, so a substrate added to `DecorType` is searchable in
+    both scripts the moment its first format exists — there is no per-type
+    vocabulary anywhere to forget to extend. Worth pinning on the type that was
+    added *after* the key was designed: it is the only proof the mechanism is
+    general rather than a list that happened to be complete.
+    """
+
+    catalog = await _seed_catalog(db_session)
+    assert await _platform_decors(client, catalog, "lmdf") == []
+
+    created = await client.post(
+        f"/api/v1/platform/catalog/decors/{await _kulrang_id(client, catalog)}/formats",
+        headers=_auth(catalog.platform_access),
+        json={
+            "type": "lmdf",
+            "thickness_mm": "16",
+            "length_mm": 2800,
+            "width_mm": 2070,
+            "finished_sides": 1,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    for query in ("lmdf", "LMDF", "лмдф", "ЛМДФ"):
+        assert await _platform_decors(client, catalog, query) == ["Kulrang eman"], query

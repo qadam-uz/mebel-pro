@@ -90,6 +90,15 @@ PANEL_FORMAT = {
     "finished_sides": 2,
 }
 KROMKA_FORMAT = {"type": "kromka", "thickness_mm": "2", "tape_width_mm": 19}
+# The same sheet in a bare substrate — what the `?type=` filters are read back
+# against. `finished_sides` is deliberately absent: since 2026-09-08 only the
+# faced types (ldsp/lmdf) carry one, and sending it here is a 400.
+MDF_FORMAT = {
+    "type": "mdf",
+    "thickness_mm": "18",
+    "length_mm": 2800,
+    "width_mm": 2070,
+}
 
 
 def _name_suffix() -> str:
@@ -272,7 +281,7 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
     # is not an option at all. (`_create_format` is idempotent, so the attaches
     # below reuse these two rows rather than making new ones.)
     await _create_format(client, platform_access, decor_id)
-    await _create_format(client, platform_access, second_decor_id, {**PANEL_FORMAT, "type": "mdf"})
+    await _create_format(client, platform_access, second_decor_id, MDF_FORMAT)
     picker = await client.get(
         f"/api/v1/workshop/branches/{branch_id}/catalog/decors",
         headers=_auth(owner_access),
@@ -293,7 +302,7 @@ async def test_platform_catalog_crud_and_branch_material_stock_row(
         owner_access,
         branch_id,
         second_decor_id,
-        formats=[{**PANEL_FORMAT, "type": "mdf"}],
+        formats=[MDF_FORMAT],
         price_tiyin=18800000,
         platform_access=platform_access,
     )

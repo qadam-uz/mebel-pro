@@ -582,18 +582,22 @@ async def test_catalog_column_checks_hold_at_the_db(
         board(tape_width_mm=19),
         # Orientation is normalised on write, so an un-normalised row is a bug.
         board(length_mm=1830, width_mm=2750),
-        # A board type's finished-face count may only be 1 or 2.
+        # A faced type's finished-face count may only be 1 or 2.
         #
         # `board(finished_sides=None)` is deliberately NOT in this list: a SQL
         # CHECK passes whenever it evaluates to NULL rather than FALSE, and
         # `NULL IN (1, 2)` is NULL, so the shape CHECK cannot catch a *missing*
-        # finished-face count on a board type in either dialect. That branch of
+        # finished-face count on a faced type in either dialect. That branch of
         # the rule is the service's alone — see the format-create tests in
         # tests/test_catalog_decor_formats.py, which pin
         # `decor_format_shape_mismatch` on exactly this input.
         board(finished_sides=0),
         board(finished_sides=3),
-        # A non-board type must not.
+        # Nothing but ldsp/lmdf may carry one at all. DSP and MDF are in this
+        # list since 2026-09-08: they are the bare substrates, and every row that
+        # used to carry a «2» here carried a number nobody had measured.
+        board(type=DecorType.DSP, finished_sides=2),
+        board(type=DecorType.MDF, finished_sides=2),
         board(type=DecorType.FANERA, finished_sides=2),
         # A tape carries a tape width and nothing else.
         board(type=DecorType.KROMKA, finished_sides=None),

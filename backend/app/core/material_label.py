@@ -65,6 +65,9 @@ from typing import Any
 _PANEL_TYPE_LABELS = {
     # decor_type
     "ldsp": "LDSP",
+    # Laminated MDF — faced fibreboard, and to a buyer a different product from
+    # the bare `mdf` a facade is milled from, exactly as LDSP is from DSP.
+    "lmdf": "LMDF",
     # DSP is chipboard without the laminate — a different product from LDSP at a
     # different price, and it used to borrow LDSP's label, which made the two
     # indistinguishable on every screen and document.
@@ -81,7 +84,10 @@ _PANEL_TYPE_LABELS = {
 }
 
 # Printed only for a one-sided board. Two-sided is the norm and saying so on
-# every row would be noise; one-sided is the exception a buyer must see.
+# every row would be noise; one-sided is the exception a buyer must see. Since
+# 2026-09-08 only LDSP and LMDF carry a face count at all, so this can only ever
+# appear on those two — the reader still gets it from `finished_sides` rather
+# than from the type, because a frozen snapshot may carry either vocabulary.
 _ONE_SIDED_LABEL = "1 tomonlama"
 
 

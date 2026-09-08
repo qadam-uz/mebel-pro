@@ -33,14 +33,21 @@ from app.models.enums import DecorType, MaterialStatus, enum_type
 # The shape rule of a decor format, as one SQL predicate. Expressible as a table
 # CHECK now that `type` lives on the format itself — it could not be before,
 # when `type` was a column of the decor and unreachable from `branch_materials`.
+#
+# The faced types are spelled as literals rather than interpolated from
+# `FINISHED_SIDES_TYPES`: the predicate is DDL text, and the database holds
+# whatever the migration that created it wrote — a generated string would read
+# as if editing the Python set changed a live constraint, which it does not.
+# Narrowing it to (ldsp, lmdf) took `c8e2a1f60b47`; the two are kept in step by
+# hand, and tests/test_catalog_lmdf_migration.py fails when they drift.
 DECOR_FORMAT_SHAPE_CHECK = (
     "(type = 'kromka' AND tape_width_mm IS NOT NULL "
     "AND length_mm IS NULL AND width_mm IS NULL AND finished_sides IS NULL) "
     "OR (type <> 'kromka' AND tape_width_mm IS NULL "
     "AND length_mm IS NOT NULL AND width_mm IS NOT NULL "
     "AND length_mm >= width_mm "
-    "AND ((type IN ('ldsp', 'dsp', 'mdf') AND finished_sides IN (1, 2)) "
-    "OR (type NOT IN ('ldsp', 'dsp', 'mdf') AND finished_sides IS NULL)))"
+    "AND ((type IN ('ldsp', 'lmdf') AND finished_sides IN (1, 2)) "
+    "OR (type NOT IN ('ldsp', 'lmdf') AND finished_sides IS NULL)))"
 )
 
 
@@ -255,10 +262,11 @@ class DecorFormat(UUIDPrimaryKey, Timestamped, Base):
     width_mm: Mapped[int | None]
     tape_width_mm: Mapped[int | None]
     # How many faces are finished — laminate, film or paint. Required for the
-    # board types (ldsp/dsp/mdf), NULL for everything else. One-sided is the
-    # norm for facade MDF and for the cheap white LDSP used on hidden parts: a
-    # different product at a different price, not a variant of the two-sided
-    # sheet.
+    # faced types (ldsp/lmdf), NULL for everything else: a bare `dsp` or `mdf`
+    # sheet has no finished face to count, and a kromka is not a sheet at all.
+    # One-sided is the norm for the cheap white LDSP used on hidden parts and for
+    # faced LMDF backs: a different product at a different price, not a variant
+    # of the two-sided sheet.
     finished_sides: Mapped[int | None] = mapped_column(SmallInteger)
     status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),
