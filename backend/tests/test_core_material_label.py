@@ -196,7 +196,7 @@ def test_material_label_renders_every_decor_type() -> None:
     assert label("mdf").startswith("MDF ")
     assert label("fanera").startswith("Fanera ")
     assert label("yogoch").startswith("Yog'och ")
-    assert label("boshqa").startswith("List ")
+    assert label("boshqa").startswith("Boshqa ")
     assert label("kromka").startswith("Kromka ")
 
 
