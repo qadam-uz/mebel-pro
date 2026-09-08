@@ -53,8 +53,8 @@ function stockRow(id: string): StockItem {
       decor: {} as BranchMaterial['decor'],
       price_tiyin: 0,
       price_unset: true,
-      min_stock: 2,
       status: 'active',
+      decor_own: false,
       label: `LDSP Egger ${id}`,
       created_at: '2026-07-26T09:00:00Z',
       updated_at: '2026-07-26T09:00:00Z',
@@ -63,8 +63,7 @@ function stockRow(id: string): StockItem {
     stock_unit: 'sheet',
     display_unit: 'sheet',
     on_hand: 4,
-    min_stock: 2,
-    is_low_stock: false,
+    is_negative_stock: false,
     updated_at: '2026-07-26T09:00:00Z',
   }
 }
@@ -101,10 +100,10 @@ describe('reads the server refuses', () => {
     expect(workshop.stockItems).toHaveLength(1)
   })
 
-  it('drops the low-stock, transaction and supplier lists on a refusal', async () => {
+  it('drops the negative-stock, transaction and supplier lists on a refusal', async () => {
     const workshop = useWorkshopStore()
     vi.mocked(api.get).mockResolvedValueOnce([stockRow('stock-1')])
-    await workshop.loadLowStock(['branch-1'])
+    await workshop.loadNegativeStock(['branch-1'])
     vi.mocked(api.get).mockResolvedValueOnce([{ id: 'tx-1' }])
     await workshop.loadStockTransactions('branch-1')
     vi.mocked(api.get).mockResolvedValueOnce([{ id: 'supplier-1' }])
@@ -112,11 +111,11 @@ describe('reads the server refuses', () => {
     expect(workshop.stockTransactions).toHaveLength(1)
 
     vi.mocked(api.get).mockRejectedValue(new ApiError(403, { code: 'forbidden' }))
-    await expect(workshop.loadLowStock(['branch-1'])).rejects.toBeInstanceOf(ApiError)
+    await expect(workshop.loadNegativeStock(['branch-1'])).rejects.toBeInstanceOf(ApiError)
     await expect(workshop.loadStockTransactions('branch-1')).rejects.toBeInstanceOf(ApiError)
     await expect(workshop.loadSuppliers('branch-1')).rejects.toBeInstanceOf(ApiError)
 
-    expect(workshop.lowStockItems).toEqual([])
+    expect(workshop.negativeStockItems).toEqual([])
     expect(workshop.stockTransactions).toEqual([])
     expect(workshop.stockTransactionsHasMore).toBe(false)
     expect(workshop.suppliers).toEqual([])

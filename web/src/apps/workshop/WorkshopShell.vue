@@ -981,9 +981,13 @@ onBeforeUnmount(() => {
                       {{ item.material.decor.manufacturer_name }} · {{ item.display_unit }}
                     </small>
                   </span>
-                  <em :class="{ danger: item.is_low_stock }">
+                  <!-- `is_negative_stock` is the shelf's only red flag now: the
+                       per-format threshold is retired (2026-09-08). -->
+                  <em :class="{ danger: item.is_negative_stock }">
                     {{
-                      item.is_low_stock ? $t('shell.search.stockLow') : $t('shell.search.stockOk')
+                      item.is_negative_stock
+                        ? $t('shell.search.stockNegative')
+                        : $t('shell.search.stockOk')
                     }}
                   </em>
                 </RouterLink>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatDraftKey,
+  formatDraftLabel,
+  hasFinishedSides,
   normalizePanelSize,
   normalizeThickness,
   standardFormatSet,
@@ -56,5 +59,47 @@ describe('normalizePanelSize', () => {
     expect(normalizePanelSize(1830, 2750)).toEqual({ length_mm: 2750, width_mm: 1830 })
     expect(normalizePanelSize(2750, 1830)).toEqual({ length_mm: 2750, width_mm: 1830 })
     expect(normalizePanelSize(1525, 1525)).toEqual({ length_mm: 1525, width_mm: 1525 })
+  })
+})
+
+describe('format drafts', () => {
+  const board = {
+    type: 'ldsp' as const,
+    thickness_mm: '18',
+    length_mm: 2750,
+    width_mm: 1830,
+    tape_width_mm: null,
+    finished_sides: 2,
+  }
+  const tape = {
+    type: 'kromka' as const,
+    thickness_mm: '0.8',
+    length_mm: null,
+    width_mm: null,
+    tape_width_mm: 22,
+    finished_sides: null,
+  }
+
+  it('keys a draft by every field that makes it a different product', () => {
+    // A one-sided sheet is a different product at a different price, so the two
+    // must never collapse into one row of the pending list.
+    expect(formatDraftKey(board)).not.toBe(formatDraftKey({ ...board, finished_sides: 1 }))
+    // …while `18` and `18.00` are the same thickness written twice.
+    expect(formatDraftKey({ ...board, thickness_mm: '18.00' })).toBe(formatDraftKey(board))
+  })
+
+  it('reads a draft back in the order it was composed', () => {
+    expect(formatDraftLabel(board)).toBe('18 mm · 2750×1830')
+    expect(formatDraftLabel(tape)).toBe('0.8 mm · 22 mm')
+    // Two finished faces is the norm and says nothing; one is the exception.
+    expect(formatDraftLabel({ ...board, finished_sides: 1 }, '1 tomonlama')).toBe(
+      '18 mm · 2750×1830 · 1 tomonlama',
+    )
+    expect(formatDraftLabel(board, '1 tomonlama')).toBe('18 mm · 2750×1830')
+  })
+
+  it('gives a finished-face count to the boards and nothing else', () => {
+    expect((['ldsp', 'dsp', 'mdf'] as const).every(hasFinishedSides)).toBe(true)
+    expect((['fanera', 'yogoch', 'kromka', 'boshqa'] as const).some(hasFinishedSides)).toBe(false)
   })
 })

@@ -21,9 +21,14 @@ import {
   isCatalogFiltered,
   type CatalogScope,
 } from '@/shared/app/catalogScope'
+import {
+  catalogSections,
+  manufacturerChips,
+  type CatalogDecorGroup,
+} from '@/shared/app/catalogGrouping'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
-import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import {
   DECOR_TYPES,
   decorTypeLabel,
@@ -35,14 +40,11 @@ import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import {
-  thresholdUnit,
-  lowStockThresholdHint,
-  lowStockThresholdLabel,
-} from '@/shared/app/lowStockThreshold'
+import ActionMenu from '@/shared/components/ActionMenu.vue'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import BranchDecorCreateForm from '@/shared/components/BranchDecorCreateForm.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
 import FilterStatus from '@/shared/components/FilterStatus.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -51,12 +53,7 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import {
-  formatStockQuantity,
-  formatTiyin,
-  parseDisplayQuantity,
-  parseSomToTiyin,
-} from '@/shared/formatters'
+import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import type { Decor, DecorType, MaterialStatus } from '@/shared/stores/admin'
 import {
   useWorkshopStore,
@@ -115,13 +112,17 @@ const materialForm = reactive({
   // Deliberately empty, not '0': a pre-filled 0 satisfies `required` and lets a
   // hurried owner publish a 0 so'm material to the client-facing catalog.
   priceTiyin: '',
-  minStock: '',
 })
 const priceFieldError = ref<string | null>(null)
-const minStockFieldError = ref<string | null>(null)
+// The own decor being corrected, if any — «Dekorni tahrirlash» on its header.
+const editingDecor = ref<Decor | null>(null)
+const decorModalOpen = ref(false)
 const priceTiyinParsed = computed(() => parseSomToTiyin(materialForm.priceTiyin))
 
 const canUseCatalog = computed(() => permissions.can(p.manageCatalog))
+// One item, so the menu is a menu only in shape — but a bare pencil beside a
+// decor name would be a destructive-looking glyph with no word (DESIGN.md).
+const decorMenuItems = computed(() => [{ label: t('catalog.action.editDecor'), icon: 'pencil' }])
 const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageCatalog]),
 )
@@ -157,47 +158,42 @@ const turOptions = computed<DropdownOption[]>(() => [
   { value: 'all', label: t('catalog.filter.turAll') },
   ...DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
 ])
-// The manufacturers this branch actually **carries**, not the platform's whole
-// offer — the attach sheet's list would name brands that match no row here.
-const manufacturerOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: t('catalog.filter.manufacturerAll') },
-  ...workshop.carriedCatalogFilters.manufacturers.map((row) => ({
-    value: row.id,
-    label: row.name,
-  })),
-])
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
 )
-// The threshold's own copy lives in `lowStockThreshold.ts` so the attach sheet,
-// this form and the table can never name it differently.
-const thresholdLabel = computed(() => lowStockThresholdLabel())
-const thresholdHint = computed(() => lowStockThresholdHint())
-const materialThresholdUnit = computed(() => {
-  const row = editingBranchMaterial.value
-  return row ? thresholdUnit(row.decor_format.type) : t('catalog.unit.piece')
-})
 const materialPriceUnit = computed(() => {
   const row = editingBranchMaterial.value
   return row ? priceUnit(row.decor_format.type) : ''
 })
 
-interface DecorGroup {
-  decor: Decor
-  rows: BranchMaterial[]
-}
+/**
+ * The page in hand, cut into manufacturer sections and decor groups. The server
+ * order stays; `catalogGrouping.ts` only decides where the breaks fall (and
+ * puts a decor's kromka after its boards).
+ */
+const sections = computed(() => catalogSections(workshop.branchMaterials))
+const decorGroups = computed(() => sections.value.flatMap((section) => section.groups))
 
-// Grouped in server order, first appearance wins: the list is paginated, so the
-// grouping must never reorder rows or a "load more" would shuffle the table.
-const decorGroups = computed<DecorGroup[]>(() => {
-  const groups = new Map<string, DecorGroup>()
-  for (const row of workshop.branchMaterials) {
-    const group = groups.get(row.decor_format.decor_id)
-    if (group) group.rows.push(row)
-    else groups.set(row.decor_format.decor_id, { decor: row.decor, rows: [row] })
-  }
-  return [...groups.values()]
-})
+/**
+ * The chip row's contents, remembered from the last **unfiltered** page.
+ *
+ * Pressing «Egger» reloads the table with only Egger's rows, so recomputing the
+ * chips from what is on screen would leave one chip and no way back. The row is
+ * a property of the branch, not of the current filter, so it is captured while
+ * the filter is off and held while it is on.
+ */
+const manufacturerChipRow = ref<ReturnType<typeof manufacturerChips>>([])
+watch(
+  () => [manufacturerFilter.value, workshop.branchMaterials] as const,
+  ([filter]) => {
+    if (filter !== 'all') return
+    manufacturerChipRow.value = manufacturerChips(
+      workshop.branchMaterials,
+      t('catalog.manufacturerChips.all'),
+    )
+  },
+  { immediate: true, deep: false },
+)
 
 function routeSearchValue() {
   const value = route.query.search
@@ -218,25 +214,6 @@ function priceUnit(type: DecorType) {
   return isTape(type) ? t('catalog.unit.perMetre') : t('catalog.unit.perPanel')
 }
 
-// Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
-// digits stay aligned on the column's right edge.
-function thresholdParts(row: BranchMaterial) {
-  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type))
-  const splitAt = text.lastIndexOf(' ')
-  return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
-}
-
-// Below `sm` the threshold loses its column and therefore its header, so it
-// names itself there instead. `0` is monitoring switched off, not a level
-// somebody chose — the QAD-159 resolution — so it says so in words rather than
-// printing "kam qoldiq: 0 dona", which reads as a deliberate setting.
-function thresholdInline(row: BranchMaterial) {
-  if (row.min_stock === 0) return t('catalog.stock.thresholdOff')
-  return t('catalog.stock.thresholdInline', {
-    value: formatStockQuantity(row.min_stock, thresholdUnit(row.decor_format.type)),
-  })
-}
-
 function swatchSource(decor: Decor) {
   return { id: decor.id, name: decor.name, code: decor.code }
 }
@@ -255,7 +232,7 @@ function toggleDecor(decorId: string) {
 // Collapse a group today and its rows' «Narx yo'q» pills go with it — on the one
 // screen that can fix an unpriced o'lcham. The count rides on the header so the
 // gap survives the fold.
-function unpricedCount(group: DecorGroup) {
+function unpricedCount(group: CatalogDecorGroup<BranchMaterial>) {
   return group.rows.filter((row) => row.price_unset).length
 }
 
@@ -281,10 +258,10 @@ async function loadBranchTable(offset = 0) {
 }
 
 // Full refresh (mount, branch switch, after save): reset the table to page one.
-// No stock read — the catalog shows the two numbers the branch *sets* (price and
-// the low-stock threshold); the balance those are judged against is Ombor's, and
-// duplicating it here made the two screens near-copies of each other. The attach
-// sheet loads its own decor options when it opens.
+// No stock read — the catalog shows the one number the branch *sets* (price);
+// the balance it is judged against is Ombor's, and duplicating it here made the
+// two screens near-copies of each other. The attach sheet loads its own decor
+// options when it opens.
 function refreshCatalog() {
   if (!selectedBranchId.value) return Promise.resolve()
   return Promise.all([
@@ -304,13 +281,7 @@ async function saveBranchMaterial() {
   materialSaving.value = true
   materialError.value = null
   priceFieldError.value = null
-  minStockFieldError.value = null
   try {
-    const row = editingBranchMaterial.value
-    const minStock = parseDisplayQuantity(
-      materialForm.minStock,
-      row && isTape(row.decor_format.type) ? 'm' : 'pcs',
-    )
     // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100
     // tiyin). null covers both unparseable input and 0 — a 0 so'm material must
     // never reach the client catalog by accident.
@@ -319,13 +290,8 @@ async function saveBranchMaterial() {
       priceFieldError.value = t('catalog.form.priceInvalid')
       return
     }
-    if (!Number.isFinite(minStock) || minStock < 0) {
-      minStockFieldError.value = t('catalog.form.thresholdInvalid')
-      return
-    }
     await workshop.updateBranchMaterial(selectedBranchId.value, editingBranchMaterialId.value, {
       price_tiyin: priceTiyin,
-      min_stock: minStock,
     })
     resetMaterialForm()
     materialModalOpen.value = false
@@ -361,11 +327,6 @@ function editBranchMaterial(row: BranchMaterial) {
   // An unpriced format opens with an empty field, not "0" — the operator is here
   // to set a price, and a prefilled 0 is the value we are asking them to replace.
   materialForm.priceTiyin = row.price_unset ? '' : String(row.price_tiyin / 100)
-  // Existing rows keep whatever threshold they were saved with — the per-type
-  // defaults apply to new attachments only (no backfill, QAD-159).
-  materialForm.minStock = isTape(row.decor_format.type)
-    ? String(row.min_stock / 1000)
-    : String(row.min_stock)
   materialError.value = null
   materialModalOpen.value = true
 }
@@ -378,9 +339,32 @@ function closeMaterialModal() {
 function resetMaterialForm() {
   editingBranchMaterialId.value = null
   materialForm.priceTiyin = ''
-  materialForm.minStock = ''
   priceFieldError.value = null
-  minStockFieldError.value = null
+}
+
+/**
+ * «Dekorni tahrirlash» — identity only, and only on the workshop's own decors.
+ *
+ * The formats are immutable (a branch row, its stock and every order line
+ * resolve through the format id), so a wrong o'lcham is deactivated and the
+ * right one attached instead. What CAN be corrected is the name, code, grain
+ * and photo the operator typed.
+ */
+function openDecorEditor(decor: Decor) {
+  editingDecor.value = decor
+  decorModalOpen.value = true
+  void workshop.loadBranchManufacturers(selectedBranchId.value).catch(() => undefined)
+}
+
+function closeDecorEditor() {
+  decorModalOpen.value = false
+  editingDecor.value = null
+}
+
+async function onDecorUpdated() {
+  closeDecorEditor()
+  await refreshCatalog()
+  toast.success(t('catalog.toast.decorSaved'))
 }
 
 async function toggleVisibility(row: BranchMaterial) {
@@ -421,20 +405,13 @@ watch(
     if (clean !== value) materialForm.priceTiyin = clean
   },
 )
-watch(
-  () => materialForm.minStock,
-  (value) => {
-    const clean = sanitizeQuantityInput(value)
-    if (clean !== value) materialForm.minStock = clean
-  },
-)
-
 // Reset (and close) the add/edit dialog whenever the topbar switches the branch —
 // a draft priced for one branch must not silently save into another — and reload
 // the table + picker for the new branch.
 watch(selectedBranchId, () => {
   materialModalOpen.value = false
   attachSheetOpen.value = false
+  closeDecorEditor()
   collapsedDecorIds.value = new Set()
   // A manufacturer id picked in one branch is a filter for a list the next
   // branch may not carry at all — it would read as an empty catalog.
@@ -492,16 +469,6 @@ onBeforeUnmount(() => {
           :options="turOptions"
           top-label
         />
-        <!-- Hidden until the branch carries a second brand: «Barcha» plus one
-             manufacturer is a control that cannot narrow anything, and the bar
-             already runs four controls wide. -->
-        <ProjectDropdown
-          v-if="manufacturerOptions.length > 2"
-          v-model="manufacturerFilter"
-          :label="$t('catalog.filter.manufacturerLabel')"
-          :options="manufacturerOptions"
-          top-label
-        />
         <SegmentedControl
           v-model="statusFilter"
           class="mp-filter-segment"
@@ -515,6 +482,34 @@ onBeforeUnmount(() => {
           @click="openAttachSheet"
         >
           {{ $t('catalog.action.attach') }}
+        </button>
+      </div>
+
+      <!-- The brand row: a break the filter bar's dropdown could not draw. Same
+           chips and pressed treatment as the rest of the app (`select-chip`,
+           DESIGN.md — selection is neutral), counts in `ink-muted`. -->
+      <div
+        v-if="manufacturerChipRow.length > 0"
+        class="mb-4 flex flex-wrap items-center gap-2"
+        role="radiogroup"
+        :aria-label="$t('catalog.filter.manufacturerLabel')"
+      >
+        <button
+          v-for="chip in manufacturerChipRow"
+          :key="chip.value"
+          type="button"
+          role="radio"
+          class="mp-chip cursor-pointer transition-colors"
+          :class="
+            manufacturerFilter === chip.value
+              ? 'border-select-chip-line bg-select-chip text-ink'
+              : 'hover:border-accent'
+          "
+          :aria-checked="manufacturerFilter === chip.value"
+          @click="manufacturerFilter = chip.value"
+        >
+          {{ chip.label }}
+          <span class="font-normal text-ink-muted">{{ chip.count }}</span>
         </button>
       </div>
 
@@ -537,6 +532,22 @@ onBeforeUnmount(() => {
         @attached="onMaterialsAttached"
       />
 
+      <!-- Identity only: a decor_format is immutable, so the form drops its
+           O'lchamlar block in edit mode. -->
+      <AppModal
+        :open="decorModalOpen"
+        :title="$t('inventory.attach.editTitle')"
+        @close="closeDecorEditor"
+      >
+        <BranchDecorCreateForm
+          v-if="editingDecor"
+          :branch-id="selectedBranchId"
+          :decor="editingDecor"
+          @updated="onDecorUpdated"
+          @back="closeDecorEditor"
+        />
+      </AppModal>
+
       <AppModal
         :open="materialModalOpen"
         :title="$t('catalog.form.title')"
@@ -544,8 +555,8 @@ onBeforeUnmount(() => {
       >
         <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
           <!-- The format itself is fixed once attached — show the server label in a
-               plain disabled field (finance-modal precedent); price and threshold
-               are the only editable values. -->
+               plain disabled field (finance-modal precedent); the price is the
+               only editable value. -->
           <label class="field">
             <span>{{ $t('catalog.form.material') }}</span>
             <input class="mp-input" :value="editingBranchMaterial?.label ?? ''" disabled />
@@ -579,14 +590,6 @@ onBeforeUnmount(() => {
             <small v-else-if="editingBranchMaterial?.price_unset" class="text-warning">
               {{ $t('catalog.price.unsetHint') }}
             </small>
-          </label>
-          <label class="field">
-            <span>{{ thresholdLabel }} ({{ materialThresholdUnit }})</span>
-            <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
-            <small v-if="minStockFieldError" class="mp-field-error">
-              {{ minStockFieldError }}
-            </small>
-            <small v-else class="text-ink-muted">{{ thresholdHint }}</small>
           </label>
           <p
             v-if="materialError"
@@ -641,180 +644,215 @@ onBeforeUnmount(() => {
                 <th class="nowrap w-px">{{ $t('catalog.table.tur') }}</th>
                 <th>{{ $t('catalog.table.format') }}</th>
                 <th class="nowrap right hidden sm:table-cell">{{ $t('catalog.table.price') }}</th>
-                <th class="nowrap right hidden sm:table-cell">{{ thresholdLabel }}</th>
                 <th class="nowrap right">{{ $t('catalog.table.status') }}</th>
               </tr>
             </thead>
-            <tbody v-for="group in decorGroups" :key="group.decor.id">
-              <!-- Group header: the decor's identity once, then its o'lchamlar.
+            <!-- Two levels in one continuous table: a `sunk` section row per
+                 manufacturer, sticky under the head while its own decors scroll
+                 past, then the decor headers a step in from it. The section row
+                 is emitted when the manufacturer CHANGES between consecutive
+                 rows, so a "load more" that lands mid-brand does not repeat its
+                 heading (catalogGrouping.ts). -->
+            <template v-for="section in sections" :key="section.manufacturerId">
+              <tbody>
+                <tr>
+                  <!-- 35px is the sticky `th`'s own height, so the section row
+                       parks flush under the head instead of leaving a sliver of
+                       the row above it showing. `hairline-strong` because it is
+                       the one line weight that survives on `sunk`. -->
+                  <td colspan="4" class="sticky top-[35px] border-t border-hairline-strong bg-sunk">
+                    <div class="grid gap-0.5">
+                      <span class="font-display text-[15px] font-bold tracking-[-0.01em] text-ink">
+                        {{ section.manufacturerName }}
+                      </span>
+                      <small class="text-ink-muted">
+                        {{
+                          $t('catalog.section.count', {
+                            n: section.decorCount,
+                            m: section.formatCount,
+                          })
+                        }}
+                      </small>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+              <tbody v-for="group in section.groups" :key="group.decor.id">
+                <!-- Group header: the decor's identity once, then its o'lchamlar.
                    `track`, not `sunk`: the row hover is a `sunk` fill by
                    design-system rule, so a `sunk` heading made a hovered o'lcham
                    row indistinguishable from the heading above it. The heading is
-                   what moves off the shared value. -->
-              <tr class="bg-track">
-                <td colspan="5">
-                  <button
-                    type="button"
-                    class="flex w-full min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    :aria-expanded="!isCollapsed(group.decor.id)"
-                    :aria-label="$t('catalog.table.expandDekor', { name: group.decor.label })"
-                    @click="toggleDecor(group.decor.id)"
-                  >
-                    <!-- Resting glyph is `chevron-down`, rotated when the group is
+                   what moves off the shared value — and off the section row above
+                   it, which owns `sunk`. -->
+                <tr class="bg-track">
+                  <td colspan="4">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <button
+                        type="button"
+                        class="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                        :aria-expanded="!isCollapsed(group.decor.id)"
+                        :aria-label="$t('catalog.table.expandDekor', { name: group.decor.label })"
+                        @click="toggleDecor(group.decor.id)"
+                      >
+                        <!-- Resting glyph is `chevron-down`, rotated when the group is
                          open (CuttingKromkaPanel's disclosure, and the one glyph
                          DESIGN.md names for expand/collapse). Until now the header
                          carried no indicator at all — sixteen groups folded and
                          nothing on screen said they could. -->
-                    <AppIcon
-                      name="chevron-down"
-                      class="size-4 shrink-0 text-ink-soft transition-transform"
-                      :class="isCollapsed(group.decor.id) ? '' : 'rotate-180'"
-                    />
-                    <AuthFileImage
-                      v-if="group.decor.image_file_id"
-                      :file-id="group.decor.image_file_id"
-                      :alt="group.decor.label"
-                      class="size-10 shrink-0 rounded-md object-cover"
-                    />
-                    <span
-                      v-else
-                      class="sw size-10"
-                      :class="materialSwatchClass(swatchSource(group.decor))"
-                    ></span>
-                    <span class="grid min-w-0 flex-1 gap-0.5">
-                      <span class="nm break-words">{{ group.decor.label }}</span>
-                      <small class="block break-words text-ink-muted">
-                        {{ group.decor.manufacturer_name }} ·
-                        {{ $t('catalog.meta.formatCount', { n: group.rows.length }) }}
-                      </small>
-                    </span>
-                    <!-- The group's unpriced count, on the heading rather than only
+                        <AppIcon
+                          name="chevron-down"
+                          class="size-4 shrink-0 text-ink-soft transition-transform"
+                          :class="isCollapsed(group.decor.id) ? '' : 'rotate-180'"
+                        />
+                        <AuthFileImage
+                          v-if="group.decor.image_file_id"
+                          :file-id="group.decor.image_file_id"
+                          :alt="group.decor.label"
+                          class="size-10 shrink-0 rounded-md object-cover"
+                        />
+                        <span
+                          v-else
+                          class="sw size-10"
+                          :class="materialSwatchClass(swatchSource(group.decor))"
+                        ></span>
+                        <span class="grid min-w-0 flex-1 gap-0.5">
+                          <span class="flex min-w-0 flex-wrap items-center gap-2">
+                            <span class="nm break-words">{{ group.decor.label }}</span>
+                            <!-- Provenance, not status: this decor exists for this
+                             workshop and nobody else. -->
+                            <span v-if="group.own" class="mp-chip shrink-0">
+                              {{ $t('catalog.ownBadge') }}
+                            </span>
+                          </span>
+                          <!-- The manufacturer is the section row above; repeating it
+                           on every decor is what made the table read «aralash». -->
+                          <small class="block break-words text-ink-muted">
+                            {{ $t('catalog.group.formatCount', { n: group.rows.length }) }}
+                          </small>
+                        </span>
+                        <!-- The group's unpriced count, on the heading rather than only
                          on the rows: folded away, a «Narx yo'q» pill takes with it
                          the one screen that can fix it. -->
-                    <span v-if="unpricedCount(group) > 0" class="pill p-warn shrink-0">
-                      <span class="pd"></span>
-                      {{
-                        $t(
-                          'catalog.price.unsetGroup',
-                          { n: unpricedCount(group) },
-                          unpricedCount(group),
-                        )
-                      }}
-                    </span>
-                  </button>
-                </td>
-              </tr>
-              <template v-if="!isCollapsed(group.decor.id)">
-                <tr v-for="row in group.rows" :key="row.id" class="row-clickable">
-                  <!-- The pills are inset from the heading's chevron by a shared
-                       padding, so they still read as the group's children while
-                       staying aligned as a column of their own. -->
-                  <td class="nowrap pl-6">
-                    <span :class="decorTypePillClass(row.decor_format.type)">
-                      <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
-                    </span>
-                  </td>
-                  <td>
-                    <div class="grid min-w-0 gap-0.5">
-                      <!-- The format is the edit control, stretched over the row
-                           (QAD-184) — the row no longer ends in a button column. -->
-                      <button
-                        type="button"
-                        class="nm row-open row-open-text break-words"
-                        :aria-label="$t('catalog.table.editRow', { name: row.label })"
-                        @click="editBranchMaterial(row)"
-                      >
-                        {{ formatLabel(row) }}
+                        <span v-if="unpricedCount(group) > 0" class="pill p-warn shrink-0">
+                          <span class="pd"></span>
+                          {{
+                            $t(
+                              'catalog.price.unsetGroup',
+                              { n: unpricedCount(group) },
+                              unpricedCount(group),
+                            )
+                          }}
+                        </span>
                       </button>
-                      <!-- Below `sm` the Narx and threshold columns are gone — a
-                           phone cannot hold five columns plus a wrapping format
-                           label without scrolling sideways. The numbers move here
-                           rather than being dropped, and the threshold names
-                           itself, having lost its header on the way. -->
-                      <small class="block text-ink-muted sm:hidden">
-                        {{ thresholdInline(row) }}
-                      </small>
-                      <small class="block sm:hidden">
-                        <span v-if="row.price_unset" class="pill p-warn">
-                          <span class="pd"></span>{{ $t('catalog.price.unset') }}
-                        </span>
-                        <span v-else class="text-ink-muted">
-                          {{ formatTiyin(row.price_tiyin) }}
-                          {{ priceUnit(row.decor_format.type) }}
-                        </span>
-                      </small>
+                      <!-- Only an own decor can be corrected: a library decor is the
+                       platform's row, and a format is immutable either way — so
+                       the menu holds exactly one item and never appears empty. -->
+                      <ActionMenu
+                        v-if="group.own && canUseCatalog"
+                        :items="decorMenuItems"
+                        :label="$t('catalog.table.decorMenu', { name: group.decor.label })"
+                        @select="openDecorEditor(group.decor)"
+                      />
                     </div>
                   </td>
-                  <!-- The «Narx yo'q» flag belongs to the price, so it sits in
+                </tr>
+                <template v-if="!isCollapsed(group.decor.id)">
+                  <tr v-for="row in group.rows" :key="row.id" class="row-clickable">
+                    <!-- The pills are inset from the heading's chevron by a shared
+                       padding, so they still read as the group's children while
+                       staying aligned as a column of their own. -->
+                    <td class="nowrap pl-6">
+                      <span :class="decorTypePillClass(row.decor_format.type)">
+                        <span class="pd"></span>{{ decorTypeLabel(row.decor_format.type) }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="grid min-w-0 gap-0.5">
+                        <!-- The format is the edit control, stretched over the row
+                           (QAD-184) — the row no longer ends in a button column. -->
+                        <button
+                          type="button"
+                          class="nm row-open row-open-text break-words"
+                          :aria-label="$t('catalog.table.editRow', { name: row.label })"
+                          @click="editBranchMaterial(row)"
+                        >
+                          {{ formatLabel(row) }}
+                        </button>
+                        <!-- Below `sm` the Narx column is gone — a phone cannot
+                           hold four columns plus a wrapping format label without
+                           scrolling sideways — so the price moves here rather
+                           than being dropped. -->
+                        <small class="block sm:hidden">
+                          <span v-if="row.price_unset" class="pill p-warn">
+                            <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                          </span>
+                          <span v-else class="text-ink-muted">
+                            {{ formatTiyin(row.price_tiyin) }}
+                            {{ priceUnit(row.decor_format.type) }}
+                          </span>
+                        </small>
+                      </div>
+                    </td>
+                    <!-- The «Narx yo'q» flag belongs to the price, so it sits in
                        the price column — and it replaces the figure rather than
                        joining it: an unpriced row printed «0 so'm», a number
                        nobody chose, which is exactly the gap the pill exists to
                        report. -->
-                  <td class="amt nowrap hidden sm:table-cell">
-                    <span v-if="row.price_unset" class="pill p-warn">
-                      <span class="pd"></span>{{ $t('catalog.price.unset') }}
-                    </span>
-                    <template v-else>
-                      {{ formatTiyin(row.price_tiyin) }}
-                      <small class="block font-normal text-ink-muted">
-                        {{ priceUnit(row.decor_format.type) }}
-                      </small>
-                    </template>
-                  </td>
-                  <!-- The threshold is the branch's *other* typed-in number, so it
-                       sits beside the price rather than beside a balance this page
-                       no longer shows. `0` says «kuzatilmaydi» in words: a printed
-                       0 reads as a level somebody chose. -->
-                  <td class="amt muted nowrap hidden sm:table-cell">
-                    <template v-if="row.min_stock > 0">
-                      {{ thresholdParts(row).value }}
-                      <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
-                    </template>
-                    <span v-else class="font-normal">{{ $t('catalog.threshold.off') }}</span>
-                  </td>
-                  <!-- `row-above` lifts the switch over the row's stretched click
+                    <td class="amt nowrap hidden sm:table-cell">
+                      <span v-if="row.price_unset" class="pill p-warn">
+                        <span class="pd"></span>{{ $t('catalog.price.unset') }}
+                      </span>
+                      <template v-else>
+                        {{ formatTiyin(row.price_tiyin) }}
+                        <small class="block font-normal text-ink-muted">
+                          {{ priceUnit(row.decor_format.type) }}
+                        </small>
+                      </template>
+                    </td>
+                    <!-- `row-above` lifts the switch over the row's stretched click
                        layer, so toggling Faol never opens the edit modal. -->
-                  <td class="nowrap right row-above">
-                    <button
-                      type="button"
-                      role="switch"
-                      :aria-checked="row.status === 'active'"
-                      :aria-label="$t('catalog.table.statusToggle', { name: row.label })"
-                      :aria-busy="rowActionId === row.id || undefined"
-                      :disabled="rowActionId === row.id"
-                      class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
-                      @click="toggleVisibility(row)"
-                    >
-                      <span
-                        class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
-                        :class="row.status === 'active' ? 'bg-accent' : 'bg-hairline-strong'"
-                        aria-hidden="true"
+                    <td class="nowrap right row-above">
+                      <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="row.status === 'active'"
+                        :aria-label="$t('catalog.table.statusToggle', { name: row.label })"
+                        :aria-busy="rowActionId === row.id || undefined"
+                        :disabled="rowActionId === row.id"
+                        class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
+                        @click="toggleVisibility(row)"
                       >
                         <span
-                          class="absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform"
-                          :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
-                        ></span>
-                      </span>
-                      <!-- The switch carries its own accessible name, so below `sm`
+                          class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+                          :class="row.status === 'active' ? 'bg-accent' : 'bg-hairline-strong'"
+                          aria-hidden="true"
+                        >
+                          <span
+                            class="absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform"
+                            :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
+                          ></span>
+                        </span>
+                        <!-- The switch carries its own accessible name, so below `sm`
                            the visible label can go rather than wrap one letter per line. -->
-                      <span
-                        class="hidden text-xs font-bold sm:inline"
-                        :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
-                      >
-                        {{
-                          row.status === 'active'
-                            ? $t('catalog.status.active')
-                            : $t('catalog.status.inactive')
-                        }}
-                      </span>
-                    </button>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
+                        <span
+                          class="hidden text-xs font-bold sm:inline"
+                          :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
+                        >
+                          {{
+                            row.status === 'active'
+                              ? $t('catalog.status.active')
+                              : $t('catalog.status.inactive')
+                          }}
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </template>
             <tbody v-if="decorGroups.length === 0">
               <tr>
-                <td colspan="5">
+                <td colspan="4">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="catalogFiltered">
                       <h3>{{ $t('catalog.empty.filteredTitle') }}</h3>

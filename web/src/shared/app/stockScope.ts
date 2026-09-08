@@ -13,8 +13,8 @@ import type { StockListFilters } from '@/shared/stores/workshop'
 export interface StockScope {
   /** The raw search box value; trimmed here so callers can't forget to. */
   search: string
-  /** «Kam qolganlar» — the low-stock filter chip. */
-  lowOnly: boolean
+  /** «Manfiy» — the negative-balance filter chip. */
+  negativeOnly: boolean
   /** «Butun katalog» — the operator asked to leave the moved scope. */
   wholeCatalog: boolean
   /**
@@ -30,18 +30,19 @@ export interface StockScope {
 /**
  * True when the table shows only rows that have moved.
  *
- * Search and the low filter always query the whole catalog, whatever the chip
- * says: the scope exists to cut browse noise, not to hide results. An operator
- * searching for a material wants to find it — that is usually the prelude to
- * recording its first arrival — and the low set is filtered by definition.
+ * Search and the «Manfiy» filter always query the whole catalog, whatever the
+ * chip says: the scope exists to cut browse noise, not to hide results. An
+ * operator searching for a material wants to find it — that is usually the
+ * prelude to recording its first arrival — and a negative balance is by
+ * definition a row that has moved.
  */
 export function isMovedScope(scope: StockScope): boolean {
-  return !scope.wholeCatalog && !scope.lowOnly && scope.search.trim() === ''
+  return !scope.wholeCatalog && !scope.negativeOnly && scope.search.trim() === ''
 }
 
-/** True when search or the low chip is overriding the «Butun katalog» toggle. */
+/** True when search or «Manfiy» is overriding the «Butun katalog» toggle. */
 export function isScopeWidened(scope: StockScope): boolean {
-  return scope.lowOnly || scope.search.trim() !== ''
+  return scope.negativeOnly || scope.search.trim() !== ''
 }
 
 /**
@@ -60,7 +61,7 @@ export function isStockFiltered(scope: StockScope): boolean {
 export function stockListFilters(scope: StockScope): StockListFilters {
   return {
     search: scope.search.trim(),
-    low_stock: scope.lowOnly ? true : null,
+    negative: scope.negativeOnly ? true : null,
     moved_only: isMovedScope(scope),
     types: scope.types.length > 0 ? scope.types : null,
   }

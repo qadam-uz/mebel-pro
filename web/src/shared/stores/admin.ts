@@ -113,6 +113,10 @@ export interface Manufacturer {
   country: string | null
   note: string | null
   status: MaterialStatus
+  // True when THIS workshop entered the row rather than the platform library.
+  // Derived server-side from `workshop_id IS NOT NULL`, and always `false` in
+  // the admin app, which reads the library only.
+  own: boolean
   created_at: string
   updated_at: string
 }
@@ -145,6 +149,9 @@ export interface Decor {
   branch_usage_count: number
   // Active formats. A decor with none is a name nobody can attach anything of.
   format_count: number
+  // The workshop entered this decor itself — the library did not have it. Only
+  // that workshop ever sees the row, and only it may edit the decor.
+  own: boolean
   created_at: string
   updated_at: string
 }
@@ -173,6 +180,8 @@ export interface DecorFormat {
   finished_sides: number | null
   status: MaterialStatus
   label: string
+  // The workshop added this size to a decor the library did not carry it in.
+  own: boolean
   created_at: string
   updated_at: string
 }

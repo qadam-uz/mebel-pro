@@ -1401,7 +1401,7 @@ onBeforeUnmount(() => {
         role="status"
       >
         <div class="grow">
-          {{ hasShortfall ? $t('orders.detail.shortfall') : $t('orders.detail.lowStock') }}
+          {{ hasShortfall ? $t('orders.detail.shortfall') : $t('orders.detail.negativeAfterCut') }}
           <b>
             {{
               order.stock_warnings
