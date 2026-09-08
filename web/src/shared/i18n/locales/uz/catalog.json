@@ -138,7 +138,8 @@
   },
   "ownBadge": "Sizniki",
   "manufacturerChips": {
-    "all": "Barchasi"
+    "all": "Barchasi",
+    "unit": "dekor | dekor"
   },
   "section": {
     "count": "{n} dekor · {m} o'lcham"

@@ -510,6 +510,14 @@ onBeforeUnmount(() => {
         >
           {{ chip.label }}
           <span class="font-normal text-ink-muted">{{ chip.count }}</span>
+          <!-- Read aloud, the chip was «Egger 3» — a bare number with nothing
+               saying what it counts. The unit rides in the accessible name
+               rather than in an `aria-label`, which would replace the name the
+               row is located by; sighted readers get it from the column the
+               chip sits in. -->
+          <span class="sr-only">
+            {{ $t('catalog.manufacturerChips.unit', { n: chip.count }, chip.count) }}
+          </span>
         </button>
       </div>
 
