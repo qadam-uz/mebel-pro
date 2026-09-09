@@ -83,12 +83,31 @@ onMounted(() => {
   // The row is `md:hidden` on the orders page, so it may mount with zero width;
   // and a chip chosen from a link has to be visible without a swipe.
   void nextTick(() => {
-    document
-      .getElementById(chipId(props.modelValue))
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    revealChip(props.modelValue)
     measure()
   })
 })
+
+/**
+ * Bring the selected chip into the ROW, moving nothing else.
+ *
+ * `scrollIntoView` was doing this, and it also scrolls every scrollable
+ * ancestor: mounted inside a modal it dragged the whole form down by the height
+ * of whatever sat above the row — measured at 37px in «Yangi dekor», enough to
+ * hide the first field's label on open. The chip's vertical position is never
+ * the point here; its horizontal one is.
+ */
+function revealChip(value: string) {
+  const element = row.value
+  const chip = document.getElementById(chipId(value))
+  if (!element || !chip) return
+  const left = chip.offsetLeft
+  const right = left + chip.offsetWidth
+  if (left < element.scrollLeft) element.scrollLeft = left
+  else if (right > element.scrollLeft + element.clientWidth) {
+    element.scrollLeft = right - element.clientWidth
+  }
+}
 
 onBeforeUnmount(() => observer?.disconnect())
 

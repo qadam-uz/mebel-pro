@@ -98,9 +98,9 @@ class DecorFormatCreateRequest(BaseModel):
 
     Which fields are required follows `type`: `kromka` carries `tape_width_mm`
     and nothing else; every other type carries `length_mm`/`width_mm`, and the
-    board types (`ldsp`/`dsp`/`mdf`) additionally carry `finished_sides`. The
-    service enforces the whole rule with `decor_format_shape_mismatch`, and the
-    DB backs it with a CHECK.
+    faced types (`ldsp`/`lmdf`) additionally carry `finished_sides` — which every
+    other type must leave unset, not merely omit. The service enforces the whole
+    rule with `decor_format_shape_mismatch`, and the DB backs it with a CHECK.
     """
 
     type: DecorType

@@ -32,7 +32,7 @@ import {
   type FieldErrors,
 } from '@/shared/app/adminValidation'
 import { traceSuffix } from '@/shared/app/errorTrace'
-import { decorTypeChoiceLabel } from '@/shared/app/materialLabel'
+import { decorTypeLabel } from '@/shared/app/materialLabel'
 import { foldIncludes } from '@/shared/app/searchFold'
 import { formatDraftKey, formatDraftLabel, type FormatDraft } from '@/shared/app/standardFormats'
 import AppIcon from '@/shared/components/AppIcon.vue'
@@ -51,8 +51,17 @@ const props = withDefaults(
     initialName?: string
     /** An own decor being corrected — identity only, no formats block. */
     decor?: Decor | null
+    /**
+     * Render the form's own action row.
+     *
+     * The attach sheet turns it off and drives `submit()` from the modal's
+     * fixed footer instead (§3.1): a footer that scrolls away with the form is
+     * the defect the fixed frame exists to fix, and the buttons belong to the
+     * modal frame rather than to this form when it is a step inside one.
+     */
+    actions?: boolean
   }>(),
-  { initialName: '', decor: null },
+  { initialName: '', decor: null, actions: true },
 )
 
 const emit = defineEmits<{
@@ -204,10 +213,9 @@ function removeImage() {
 const draftRows = computed(() =>
   drafts.value.map((draft) => ({
     key: formatDraftKey(draft),
-    label: [
-      decorTypeChoiceLabel(draft.type, t('inventory.attach.typeOther')),
-      formatDraftLabel(draft, t('catalog.finishedSides.1')),
-    ].join(' · '),
+    label: [decorTypeLabel(draft.type), formatDraftLabel(draft, t('catalog.finishedSides.1'))].join(
+      ' · ',
+    ),
   })),
 )
 
@@ -315,6 +323,10 @@ async function submit() {
     saving.value = false
   }
 }
+
+// The host's footer needs both halves: the action to fire and the progress to
+// show while it runs (see the `actions` prop).
+defineExpose({ submit, saving })
 </script>
 
 <template>
@@ -338,6 +350,7 @@ async function submit() {
           :id="fieldIds.name"
           v-model="form.name"
           class="mp-input"
+          :placeholder="$t('inventory.attach.namePlaceholder')"
           required
           :aria-invalid="fieldErrors.name ? 'true' : undefined"
           :aria-describedby="fieldErrors.name ? `${fieldIds.name}-error` : undefined"
@@ -405,7 +418,7 @@ async function submit() {
       {{ saveError }}{{ traceSuffix(saveTraceId) }}
     </p>
 
-    <div class="flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+    <div v-if="actions" class="flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
       <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
         {{
           saving

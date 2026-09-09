@@ -59,18 +59,23 @@ const LDSP_SET = PANEL_SET(
  * one would offer the operator a number no manufacturer actually makes. Those
  * two are typed in full.
  */
+const MDF_SET = PANEL_SET(
+  ['3', '8', '16', '18'],
+  [
+    { length_mm: 2800, width_mm: 2070 },
+    { length_mm: 2440, width_mm: 1220 },
+  ],
+)
+
 export const STANDARD_FORMATS: Readonly<Record<DecorType, StandardFormatSet>> = {
   ldsp: LDSP_SET,
   // DSP is the same sheet geometry as LDSP without the laminate, so the chips
   // are shared even though the two are different products at different prices.
   dsp: LDSP_SET,
-  mdf: PANEL_SET(
-    ['3', '8', '16', '18'],
-    [
-      { length_mm: 2800, width_mm: 2070 },
-      { length_mm: 2440, width_mm: 1220 },
-    ],
-  ),
+  mdf: MDF_SET,
+  // Same board, laminated — the press does not change what the mill cut, so
+  // LMDF is offered the MDF thicknesses and sheet sizes (2026-09-08).
+  lmdf: MDF_SET,
   fanera: PANEL_SET(
     ['4', '6', '9', '12', '18'],
     [
@@ -161,9 +166,15 @@ export function formatDraftLabel(draft: FormatDraft, oneSided = ''): string {
 }
 
 /**
- * Types whose sheets have a finished-face count — the boards. Everything else
- * (fanera, yog'och, kromka, boshqa) carries `null`, matching `decor_formats`.
+ * Types whose sheets have a finished-face count — the **laminated** boards, and
+ * only those two (2026-09-08, owner review).
+ *
+ * A finished face is the laminate, so counting them on a bare DSP or MDF panel
+ * was asking about a surface that does not exist: both faces are raw chipboard.
+ * Everything else (dsp, mdf, fanera, yog'och, kromka, boshqa) carries `null`,
+ * which `validate_decor_format_shape` and the `ck_decor_formats_shape` CHECK
+ * now enforce.
  */
 export function hasFinishedSides(type: DecorType): boolean {
-  return type === 'ldsp' || type === 'dsp' || type === 'mdf'
+  return type === 'ldsp' || type === 'lmdf'
 }

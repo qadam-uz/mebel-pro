@@ -32,10 +32,10 @@ per bounded context.
 - **Decor** — one decor **pattern**: its manufacturer, its
   code, its name, its photo, whether it has a grain. On screen the word stays «Dekor».
   **Identity only — no substrate, no thickness, no size, no price.**
-- **Decor format** — one concrete product of a decor: substrate (`ldsp` / `dsp` / `mdf` /
-  `fanera` / `yogoch` / `kromka` / `boshqa`), thickness, sheet size or tape width, and how
-  many faces are finished. **Immutable** — a wrong one is deactivated and replaced, never
-  edited.
+- **Decor format** — one concrete product of a decor: substrate (`ldsp` / `lmdf` / `dsp` /
+  `mdf` / `fanera` / `yogoch` / `kromka` / `boshqa`), thickness, sheet size or tape width, and
+  — on the laminated boards `ldsp` and `lmdf` alone — how many faces are finished.
+  **Immutable** — a wrong one is deactivated and replaced, never edited.
 - **Catalog library** — the platform's manufacturers, decors and formats, shared by every
   workshop. A workshop may add any of the three for itself when the library lacks it; what it
   adds is visible to that workshop alone.

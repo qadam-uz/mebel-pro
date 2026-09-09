@@ -8,7 +8,13 @@ from decimal import Decimal
 from app.core.security import hash_password
 from app.models.enums import DecorType, MaterialStatus, ProductionMode
 from app.modules.access.contracts import PlatformUser, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, Decor, DecorFormat, Manufacturer
+from app.modules.catalog.contracts import (
+    FINISHED_SIDES_TYPES,
+    BranchMaterial,
+    Decor,
+    DecorFormat,
+    Manufacturer,
+)
 
 # The one formula for `decors.search_key`. Tests insert decors straight
 # through the ORM (no service call), so they must fill the key the same way
@@ -206,11 +212,14 @@ async def seed_decor_format(
 ) -> DecorFormat:
     """One concrete product of a decor.
 
-    `finished_sides` defaults to the two-sided norm for the board types and to
+    `finished_sides` defaults to the two-sided norm for the faced types and to
     NULL for everything else, so a caller that does not care about it still
-    produces a row the shape CHECK accepts.
+    produces a row the shape CHECK accepts. Which types those are is read from
+    the catalog's own `FINISHED_SIDES_TYPES` rather than re-listed here — the
+    duplicate list is exactly what made every dsp/mdf fixture carry an invented
+    «2» until 2026-09-08.
     """
-    if finished_sides is None and type in (DecorType.LDSP, DecorType.DSP, DecorType.MDF):
+    if finished_sides is None and type in FINISHED_SIDES_TYPES:
         finished_sides = 2
     row = DecorFormat(
         decor_id=decor.id,

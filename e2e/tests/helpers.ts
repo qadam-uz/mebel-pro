@@ -858,12 +858,20 @@ export async function expectPdfOpensInTab(
   return popup;
 }
 
+/** The attach sheet's two screens, by the title each one gives the dialog. */
+export const attachPickTitle = "Dekor tanlash";
+export const attachPriceTitle = "O'lchamlar va narx";
+
 /**
- * Tick one dekor in the attach sheet's step 1.
+ * Open one dekor's o'lchamlar from the attach sheet's step 1.
+ *
+ * A row is a **door**, not a checkbox: the sheet carries one dekor at a time, so
+ * pressing the row is what «Davom etish» used to be
+ * (`docs/ref/features/catalog-inventory.md` → *Attaching a decor to a branch*).
  *
  * Narrow to this run's dekor first: the picker lists every active dekor on the
  * platform, 100 to a page (`BranchMaterialAttachSheet.vue`), so rows seeded by
- * the other workers push ours off page one and the checkbox never renders.
+ * the other workers push ours off page one and the door never renders.
  * Searching is also what a real operator does in a catalog this size.
  *
  * The suite recreates its database per run, so a clean machine only has to
@@ -874,10 +882,63 @@ export async function expectPdfOpensInTab(
  * `e2e/AGENTS.md`. Either way the fix is the same, which is why it is here and
  * not in the environment.
  */
-export async function tickDecor(
+export async function openDecor(
   pickStep: Locator,
   decor: { code?: string | null; name?: string; label: string },
 ) {
   await pickStep.getByLabel("Qidirish").fill(decor.code ?? decor.name ?? decor.label);
-  await pickStep.getByRole("checkbox", { name: new RegExp(escapeRegExp(decor.label)) }).check();
+  await pickStep.getByRole("button", { name: new RegExp(escapeRegExp(decor.label)) }).click();
+}
+
+/**
+ * The dimension tail of a composed label — `2800×2070×18 mm`, `2×19 mm`.
+ *
+ * Step two names each row by its o'lcham («LDSP · 2800×2070×18 mm»), while the
+ * server's `label` puts the whole identity — maker, kod, dekor nomi — in front
+ * of the same tail. The tail is the part the two agree on, so it is what these
+ * helpers locate by; picking the last segment blindly would return
+ * «1 tomonlama» on a one-sided board.
+ */
+export function formatDims(label: string) {
+  return label.split(" · ").find((part) => part.endsWith("mm")) ?? label;
+}
+
+/** Step two's checkbox for one o'lcham row. */
+export function formatCheckbox(formatStep: Locator, format: { label: string }) {
+  return formatStep.getByRole("checkbox", {
+    name: new RegExp(escapeRegExp(formatDims(format.label))),
+  });
+}
+
+/** Step two's price box for one o'lcham row — «… narxi». */
+export function formatPrice(formatStep: Locator, format: { label: string }) {
+  return formatStep.getByLabel(
+    new RegExp(`${escapeRegExp(formatDims(format.label))}.*narxi$`),
+  );
+}
+
+/** Step two's footer primary — «Qo'shish (n)», n = the ticked rows. */
+export function attachSubmit(formatStep: Locator, n: number) {
+  return formatStep.getByRole("button", { name: new RegExp(`^Qo.shish \\(${n}\\)$`) });
+}
+
+/**
+ * Drive the attach sheet for ONE dekor: open its door, tick the o'lchamlar to
+ * carry, and hand back step two so the caller can price and submit.
+ *
+ * Step two lists what the catalog holds for that dekor — the library's rows plus
+ * this workshop's own. Creating one is a different door («+ Yangi dekor»,
+ * «+ Boshqa o'lcham»), driven by the test that is about it.
+ */
+export async function attachThroughSheet(
+  page: Page,
+  decor: { code?: string | null; name?: string; label: string },
+  formats: { label: string }[],
+) {
+  await openDecor(page.getByRole("dialog", { name: attachPickTitle }), decor);
+  const formatStep = page.getByRole("dialog", { name: attachPriceTitle });
+  for (const format of formats) {
+    await formatCheckbox(formatStep, format).check();
+  }
+  return formatStep;
 }

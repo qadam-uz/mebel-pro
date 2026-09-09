@@ -187,11 +187,16 @@ def test_material_label_renders_every_decor_type() -> None:
     # indistinguishable on every screen and document — including on the historical
     # snapshots above, which is why those now read «DSP» too.
     assert label("ldsp").startswith("LDSP ")
+    # And `lmdf` is to `mdf` what `ldsp` is to `dsp` — faced fibreboard against
+    # the bare panel a facade is milled from. A wire value with no entry here
+    # falls through to printing itself in lowercase, which is how a missing
+    # label ships silently.
+    assert label("lmdf").startswith("LMDF ")
     assert label("dsp").startswith("DSP ")
     assert label("mdf").startswith("MDF ")
     assert label("fanera").startswith("Fanera ")
     assert label("yogoch").startswith("Yog'och ")
-    assert label("boshqa").startswith("List ")
+    assert label("boshqa").startswith("Boshqa ")
     assert label("kromka").startswith("Kromka ")
 
 
@@ -309,6 +314,16 @@ def test_material_label_marks_a_one_sided_board() -> None:
     assert (
         material_label(_board(finished_sides=1), "id")
         == "LDSP Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm · 1 tomonlama"
+    )
+
+
+def test_material_label_marks_a_one_sided_lmdf_board() -> None:
+    # Since 2026-09-08 only LDSP and LMDF carry a face count, so these two are
+    # the only labels «1 tomonlama» can appear on — and the new type must reach
+    # it, or a one-sided LMDF facade sells at the two-sided price.
+    assert (
+        material_label(_board(type="lmdf", finished_sides=1), "id")
+        == "LMDF Egger H1334 ST9 · Sonoma eman · 2750×1830×18 mm · 1 tomonlama"
     )
 
 

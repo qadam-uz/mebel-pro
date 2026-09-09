@@ -218,10 +218,10 @@ async def list_stock(
         select(StockItem, BranchMaterial, DecorFormat, Decor, Manufacturer)
     ).where(StockItem.branch_id == scope.branch_id)
     if types:
-        # Plural, mirroring the catalog's `types`: one label the operator reads
-        # can cover more than one wire value — `ldsp` and `dsp` are both «LDSP»
-        # on every screen — and a filter must never make the reader guess which
-        # of two identical-looking options is theirs.
+        # Plural, mirroring the catalog's `types`: what the operator calls
+        # «listlar» is several wire values at once — `ldsp` + `lmdf` + `dsp` +
+        # `mdf` are one shelf to the person counting sheets — and a filter must
+        # never make them pick the substrates off one by one to see it.
         query = query.where(DecorFormat.type.in_(types))
     if negative_only:
         query = query.where(negative_stock_condition())

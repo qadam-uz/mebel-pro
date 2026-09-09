@@ -97,11 +97,21 @@ class DecorType(StrEnum):
     It hangs off `decor_formats`, not off the decor: one decor (Egger H1145) is
     sold as an LDSP board *and* as a kromka, and making the substrate part of
     the decor's identity is what produced the duplicate twin rows the format
-    reshape merged away. The DB type is `decor_type`; the values are unchanged
-    and are the same strings the web catalogs key their labels on.
+    reshape merged away. The DB type is `decor_type`; the values are the same
+    strings the web catalogs key their labels on.
+
+    Declaration order is the order the reader sees everywhere (chips, filters,
+    admin select) — laminated first, then bare, then the rest. The Postgres type
+    carries the same order: `lmdf` was added `AFTER 'ldsp'` so `ORDER BY type`
+    reads the same on the server as the chips do on screen.
     """
 
     LDSP = "ldsp"
+    # Laminated MDF (2026-09-08). Its own product, not a variant of `mdf`: MDF is
+    # the bare fibreboard a facade is milled and painted from, LMDF arrives
+    # already faced — a different price and a different shelf. Together with
+    # `ldsp` it is one of the only two types that carry finished faces.
+    LMDF = "lmdf"
     DSP = "dsp"
     MDF = "mdf"
     FANERA = "fanera"

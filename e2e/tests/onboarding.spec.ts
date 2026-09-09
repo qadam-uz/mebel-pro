@@ -1,9 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
+  attachSubmit,
+  attachThroughSheet,
   carryOneFormat,
   continueButton,
   createCatalogDecors,
+  formatPrice,
   ownerReadyPassword,
   panelNumbers,
   passwordLabel,
@@ -12,7 +15,6 @@ import {
   readyOwnerToken,
   runId,
   seedPlatform,
-  tickDecor,
   updateBranchPricing,
 } from "./helpers";
 
@@ -88,21 +90,11 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await expect(catalogHint).toHaveCount(0);
 
   // The catalog reshape split identity from format, so attaching is two steps:
-  // tick the dekor (step 1 is multi-select), then tick the platform formats and
-  // price them. The result rows are named by dekor as well as format.
-  const pickStep = page.getByRole("dialog", { name: "Dekor tanlash" });
-  await tickDecor(pickStep, panel);
-  await pickStep.getByRole("button", { name: "Davom etish" }).click();
-
-  const formatStep = page.getByRole("dialog", { name: "O'lchamlar va narx" });
-  // Step two lists the PLATFORM's formats — the branch picks, it does not invent.
-  await formatStep
-    .getByRole("checkbox", { name: panel.format.label })
-    .check();
-  await formatStep
-    .getByLabel(`${panel.label} · ${panel.format.label} narxi`)
-    .fill("250000");
-  await formatStep.getByRole("button", { name: /o'lchamni qo'shish/ }).click();
+  // open the dekor's door — one dekor at a time — then tick its o'lchamlar and
+  // price them. Step two lists what the catalog holds; the branch picks.
+  const formatStep = await attachThroughSheet(page, panel, [panel.format]);
+  await formatPrice(formatStep, panel.format).fill("250000");
+  await attachSubmit(formatStep, 1).click();
 
   await expect(
     page.getByText("Dastlabki sozlash yakunlandi", { exact: false }),

@@ -1,49 +1,42 @@
 <script setup lang="ts">
 /**
- * "+ Material" — have this branch carry catalog formats.
+ * "+ Material" — have this branch carry catalog formats, **one decor at a time**.
  *
- * Two steps, because the platform owns the product and the branch owns only the
- * decision to sell it: step 1 picks the *decors* (a pattern — manufacturer,
- * code, name, photo), step 2 picks which of that decor's **formats** the branch
- * carries. A decor already carried is never hidden: carrying 18 mm does not stop
- * you adding 16 mm, so it stays in the list with its carried count.
+ * Two screens, because the platform owns the product and the branch owns only
+ * the decision to sell it: step 1 picks the *decor* (a pattern — manufacturer,
+ * code, name, photo), step 2 picks which of that decor's **o'lchamlar** the
+ * branch carries and what it charges for each. A decor already carried is never
+ * hidden: carrying 18 mm does not stop you adding 16 mm, so it stays in the list
+ * with its carried count.
  *
- * Step 1 is multi-select, and that is the point. Most carried decors exist in
- * exactly one format, so the multiplication that matters is MANY DECORS × ONE
- * FORMAT: a branch registering its supplier list ticks thirty boards and one
- * sheet size. "Filtrdagi hammasi (N)" therefore covers the whole filter, paging
- * past the loaded page server-side rather than lying about the page it can see.
- * Step 2 carries the other half of that: the o'lchamlar the selection shares
- * become **quick-pick chips** («LDSP · 2800×2070×18 mm (30)»), so thirty boards
- * in one size is one tick rather than thirty, and «Hammasi (N)» ticks the lot.
- *
- * **Step 1 shows the o'lchamlar too.** A decor row opens to the platform's
- * formats for it, each marked carried or not — the question "do I stock this
- * decor" is answered by the sizes behind it, and answering it used to cost a
- * round trip into step 2 and back. The rows are a preview, not a second place to
- * tick: what is carried is read there, what to add is chosen (and priced) one
- * step on, so there is never a tick in two places meaning two different things.
- *
- * The one-decor case is shorter still: a single decor with a single addable
- * format arrives in step 2 already ticked — there is nothing to choose, only
- * a price to type if the operator has one. The pre-tick is deliberately NOT
- * extended to multi-decor selections: a wrongly attached row can only be
- * deactivated, never deleted, so a batch is something the operator confirms
- * row by row (or chip by chip), not something the sheet guesses.
+ * **One decor, not a batch** (owner review, 2026-09-08). The sheet used to be a
+ * multi-select: tick thirty decors, then tick the sheet size they share. It
+ * registered a price list in one pass and cost everything else — a selection to
+ * keep track of, a master checkbox that had to page the server to be honest, a
+ * quick-pick chip row, a price table with a decor column, and two places where a
+ * tick meant two different things. The owner chose the smaller shape: a row is a
+ * **door**, it opens the o'lchamlar of that decor, and «+ Material» is the way
+ * to the next one. Everything the batch needed is gone rather than disabled.
  *
  * **The branch can enter what the library lacks** (2026-09-07). The platform
  * catalog is a pre-filled list, not an authority: «+ Yangi dekor» opens the
  * create form for a decor nobody has entered, and «+ Boshqa o'lcham» adds one
  * size to a decor that already exists. Both are visible to this workshop only.
  * The sheet itself stays a router — `pick → create → price` — and the form is
- * `BranchDecorCreateForm`, so this file does not grow a fourth job.
+ * `BranchDecorCreateForm`, so this file does not grow a third job.
+ *
+ * **A size that already exists is merged in silence** (owner item 2): the
+ * operator types a shape the catalog already holds and gets the row that holds
+ * it, ticked. No warning, no toast, nothing to read — a duplicate is the app's
+ * problem, not theirs. The one thing they are told is the one thing they can
+ * act on: the shape is already ON THE SHELF, so there is nothing to add.
  *
  * Price is optional and defaults to 0: a branch routinely registers its whole
  * list before it knows prices. The low-stock threshold that used to sit beside
  * it is retired (2026-09-08) — a negative balance is the only shelf fact the
  * app watches, and it needs no number behind it.
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { apiTraceId, ApiError } from '@/shared/api/client'
@@ -65,7 +58,6 @@ import BranchDecorCreateForm from '@/shared/components/BranchDecorCreateForm.vue
 import BranchDecorFormatPicker from '@/shared/components/BranchDecorFormatPicker.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import { useToast } from '@/shared/composables/useToast'
 import { parseSomToTiyin } from '@/shared/formatters'
 import type { Decor, DecorFormat, DecorType } from '@/shared/stores/admin'
 import {
@@ -78,18 +70,20 @@ import {
 const props = defineProps<{ open: boolean; branchId: string }>()
 const emit = defineEmits<{
   close: []
-  // Both halves travel: a duplicate o'lcham is *skipped* server-side, never an
-  // error, so the caller has to be able to say "3 added, 1 already there".
-  attached: [result: { created: number; skipped: number }]
+  // The decor travels with the counts: the toast names what was added, and a
+  // duplicate is *skipped* server-side rather than refused, so the caller has to
+  // be able to say "3 added, 1 already there".
+  attached: [result: { created: number; skipped: number; decorLabel: string }]
 }>()
 
-// Server-side page size for the decor picker. "Filtrdagi hammasi" pages past it
-// using the endpoint's `total`, so this bounds the DOM, not the selection.
+/** Server-side page size for the decor picker; «Yana» pages past it. */
 const PAGE_LIMIT = 100
+
+/** How long «Sizda bor» stays beside a row the branch already carries. */
+const CARRIED_NOTE_MS = 3000
 
 const { t } = useI18n()
 const workshop = useWorkshopStore()
-const toast = useToast()
 
 /** `pick → create → price`. The sheet only routes; the form is its own file. */
 type Step = 'pick' | 'create' | 'price'
@@ -102,41 +96,22 @@ const total = ref(0)
 const loading = ref(false)
 const loadingMore = ref(false)
 const loadError = ref(false)
-const selectAllPending = ref(false)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 const saveTraceId = ref<string | null>(null)
 
-// Decor ids matching the current filter. Until "Filtrdagi hammasi" pages through
-// the rest, only the loaded page is known — `filterComplete` says which it is, so
-// the master checkbox never claims to cover rows nobody has fetched.
-const filterIds = ref<string[]>([])
-const filterComplete = ref(false)
+/** The one decor step 2 is about. `null` only while step 1 is open. */
+const picked = ref<Decor | null>(null)
 
-// Keyed by decor id so the selection survives filter changes, paging, and the
-// step-1 ⇄ step-2 round trip. Insertion order is the order rows are rendered in.
-const selected = ref(new Map<string, Decor>())
-const selectedDecors = computed(() => [...selected.value.values()])
-const selectedCount = computed(() => selected.value.size)
-
-// Step two's data: this branch's answer for each selected decor's ACTIVE
-// formats. Fetched on entering step 2 rather than with the decor list — a
-// hundred decors' formats is a payload nobody reads, and the selection is
-// usually a handful.
+// Step two's data: this branch's answer for each ACTIVE format of the picked
+// decor. Cached per decor so a step-2 → back → step-2 round trip does not
+// refetch what was on screen a second ago.
 const formatsByDecor = ref<Record<string, BranchCatalogFormatOption[]>>({})
 const formatsLoading = ref(false)
 const formatsError = ref(false)
 
-// Format ids the operator has ticked. Carried ones are rendered disabled and can
-// never enter this set.
+/** Format ids the operator ticked. A carried row can never enter this set. */
 const checked = ref<Set<string>>(new Set())
-
-// Step 1's open decor rows, and the per-row state of their preview fetch. Kept
-// per decor rather than as one flag: several rows can be open at once, and one
-// that failed must be retryable without closing the others.
-const expanded = ref<Set<string>>(new Set())
-const previewLoading = ref<Set<string>>(new Set())
-const previewFailed = ref<Set<string>>(new Set())
 
 // Price text per FORMAT id. Read with a default rather than pre-seeded: a
 // synced map would either mutate during render or lose what the operator
@@ -144,17 +119,27 @@ const previewFailed = ref<Set<string>>(new Set())
 const priceByKey = ref<Record<string, string>>({})
 const priceErrorKeys = ref<Set<string>>(new Set())
 
-// The decor whose «+ Boshqa o'lcham» block is open, and that block's state.
-const addFormatDecorId = ref<string | null>(null)
-const addFormatBusy = ref(false)
-const addFormatError = ref<string | null>(null)
+// The «+ Boshqa o'lcham» composer, and the row that is answering it with
+// «Sizda bor» — the one outcome the operator has to act on.
+const composerOpen = ref(false)
+const composerBusy = ref(false)
+const composerError = ref<string | null>(null)
+const carriedNoteKey = ref<string | null>(null)
+let carriedNoteTimer: number | undefined
 
 // The create step: what step 1 had typed, and a failed manufacturer read.
 const createSeedName = ref('')
 const createError = ref<string | null>(null)
-// Bound as a `ref` array so the first price input can take the caret after a
-// create, without the sheet guessing at a generated id.
-const priceInputs = ref<(HTMLInputElement | null)[]>([])
+const createFormRef = ref<InstanceType<typeof BranchDecorCreateForm> | null>(null)
+const createSaving = computed(() => createFormRef.value?.saving ?? false)
+
+// The modal frame, so a step change starts the new screen at its own top rather
+// than at the offset the previous one was scrolled to.
+const modalRef = ref<InstanceType<typeof AppModal> | null>(null)
+
+// Price inputs by format id — the row just ticked takes the caret, since typing
+// the number is the only thing left to do on it.
+const priceInputs = new Map<string, HTMLInputElement>()
 
 // `FormSelect`, not `ProjectDropdown`: the latter teleports its panel at z-50 and
 // would render behind the modal layer (z-80) — see web/DESIGN.md → Shapes.
@@ -162,38 +147,12 @@ const manufacturerOptions = computed<ChoiceOption[]>(() => [
   { value: 'all', label: t('inventory.attach.manufacturerAll') },
   ...workshop.catalogFilters.manufacturers.map((row) => ({ value: row.id, label: row.name })),
 ])
-// Every `type` is offered, including `dsp` — it is a distinct wire value even
-// though it shares the `LDSP` label, and dropping it would leave those decors
-// unreachable by filter.
+// Every `type` is offered, including `dsp` — the workshop calls it by its own
+// word, and dropping it would leave those decors unreachable by filter.
 const turOptions = computed<ChoiceOption[]>(() => [
   { value: 'all', label: t('inventory.attach.turAll') },
   ...DECOR_TYPES.map((value) => ({ value, label: decorTypeLabel(value) })),
 ])
-
-// The master checkbox reflects the filter, not the page: it is checked once every
-// decor matching the current filter sits in the selection. With more matches than
-// one page holds, that is only knowable after the select-all pass has paged
-// through them — before that the box stays unchecked rather than lying.
-const filterFullySelected = computed(
-  () =>
-    filterComplete.value &&
-    filterIds.value.length > 0 &&
-    filterIds.value.every((id) => selected.value.has(id)),
-)
-
-/**
- * A decor with nothing left to add is **not tickable** — its checkbox is gone,
- * not merely unchecked.
- *
- * Ticking one used to be allowed and led somewhere useless: step two full of
- * disabled rows, «0 ta o'lchamni qo'shish» refusing to save, and no explanation
- * on either screen. The row itself stays — it is how the operator confirms the
- * decor IS carried, and its o'lchamlar still open — but the one thing it cannot
- * do any more is enter a batch it can contribute nothing to.
- */
-function canAttach(option: BranchCatalogOption) {
-  return option.carried_format_count < option.available_format_count
-}
 
 const stepTitle = computed(() => {
   if (step.value === 'create') return t('inventory.attach.createTitle')
@@ -207,193 +166,96 @@ const showEmptyState = computed(
   () => !loading.value && !loadError.value && options.value.length === 0,
 )
 
-/**
- * The substrate «+ Boshqa o'lcham» **opens on** — never the substrate it is
- * limited to.
- *
- * The type is a property of the format, not of the decor, so a board decor must
- * still be able to take a kromka (Egger H1145 is one decor with both). The
- * composer carries its own chip row; this only spares the common case — another
- * size of what the decor already has — one press.
- */
-function groupInitialType(group: { rows: FormatRow[] }): DecorType {
-  return group.rows[0]?.type ?? 'ldsp'
-}
-
-/** Loaded rows that still have something to add — what select-all may collect. */
-const attachableOptions = computed(() => options.value.filter(canAttach))
-
-/** Everything in the filter is carried, and the filter is fully known. */
-const nothingLeftToAdd = computed(
-  () => options.value.length > 0 && filterComplete.value && attachableOptions.value.length === 0,
-)
-
 interface FormatRow {
   /** Row identity — the platform format's own id. */
   key: string
-  decor: Decor
   type: DecorType
   format: BranchCatalogFormatOption['decor_format']
   label: string
   carried: boolean
 }
 
-/** One block per selected decor, its active formats under it. */
-const groupedRows = computed<{ decor: Decor; rows: FormatRow[] }[]>(() =>
-  selectedDecors.value.map((decor) => ({
-    decor,
-    rows: (formatsByDecor.value[decor.id] ?? []).map((option) => ({
+/**
+ * The picked decor's o'lchamlar: boards first and kromka last, thinnest first
+ * inside each substrate.
+ *
+ * A decor's tape is the accessory to its board — Egger H1145 is a sheet you buy
+ * and an edge you buy *for* it — so the board rows are what the eye should land
+ * on, and the sizes read as a ladder rather than in whatever order the platform
+ * happened to enter them.
+ */
+const rows = computed<FormatRow[]>(() =>
+  (formatsByDecor.value[picked.value?.id ?? ''] ?? [])
+    .map((option) => ({
       key: option.decor_format.id,
-      decor,
       type: option.decor_format.type,
       format: option.decor_format,
-      // The server composes the label from the same formatter the PDF and the
-      // order history use, so step two reads exactly like the Zaxira row it
-      // will become.
-      label: option.decor_format.label,
+      // Identity-free: the decor is the header right above these rows, and
+      // repeating it on every line buries the one thing that differs.
+      label: shortFormatLabel(option.decor_format),
       carried: option.carried,
-    })),
-  })),
-)
-
-const rows = computed<FormatRow[]>(() => groupedRows.value.flatMap((group) => group.rows))
-
-/** The pricing table: only what the operator actually ticked. */
-const pricedGroups = computed(() =>
-  groupedRows.value
-    .map((group) => ({
-      decor: group.decor,
-      rows: group.rows.filter((row) => !row.carried && checked.value.has(row.key)),
     }))
-    .filter((group) => group.rows.length > 0),
+    .sort((a, b) => rowOrder(a) - rowOrder(b) || thickness(a) - thickness(b)),
 )
 
-/** Ticked, and not already on the shelf. */
+function rowOrder(row: FormatRow) {
+  return isTape(row.type) ? DECOR_TYPES.length : DECOR_TYPES.indexOf(row.type)
+}
+
+function thickness(row: FormatRow) {
+  const value = Number(row.format.thickness_mm)
+  return Number.isFinite(value) ? value : 0
+}
+
+/** Ticked, and not already on the shelf — what «Qo'shish» will post. */
 const pendingRows = computed(() =>
   rows.value.filter((row) => !row.carried && checked.value.has(row.key)),
 )
 
-/** Everything the branch could still add from this selection. */
-const addableRows = computed(() => rows.value.filter((row) => !row.carried))
-
-interface QuickPick {
-  /** The o'lcham identity — every format field except the decor. */
-  key: string
-  label: string
-  rowKeys: string[]
-  allChecked: boolean
-}
+/** The decor came back with no active format at all. */
+const noFormats = computed(
+  () => !formatsLoading.value && !formatsError.value && rows.value.length === 0,
+)
 
 /**
- * The o'lchamlar the selection has in common, one chip each, most shared first.
- * Thirty decors × one sheet size is the registering-a-price-list case, and it
- * is one chip here. Only shown once there is something to gather: a selection
- * with a single addable row has nothing a chip could say that the row doesn't.
+ * What the composer's type row opens on — the decor's first o'lcham.
+ *
+ * It seeds the row, it does not pin it: the type is a property of the format, so
+ * a board decor must still be able to take a kromka (Egger H1145 is one decor
+ * with both). This only spares the common case — another size of what the decor
+ * already has — one press.
  */
-const quickPicks = computed<QuickPick[]>(() => {
-  if (addableRows.value.length < 2) return []
-  const groups = new Map<string, { label: string; rowKeys: string[] }>()
-  for (const row of addableRows.value) {
-    const f = row.format
-    const key = [f.type, f.thickness_mm, f.length_mm, f.width_mm, f.tape_width_mm, f.finished_sides]
-      .map((part) => String(part ?? ''))
-      .join('|')
-    let group = groups.get(key)
-    if (!group) {
-      const sides = finishedSidesNote(f.finished_sides)
-      const label = [decorTypeLabel(f.type), formatDimensionsLabel(f), sides]
-        .filter(Boolean)
-        .join(' · ')
-      group = { label, rowKeys: [] }
-      groups.set(key, group)
-    }
-    group.rowKeys.push(row.key)
-  }
-  return [...groups.entries()]
-    .map(([key, group]) => ({
-      key,
-      label: group.label,
-      rowKeys: group.rowKeys,
-      allChecked: group.rowKeys.every((rowKey) => checked.value.has(rowKey)),
-    }))
-    .sort((a, b) => b.rowKeys.length - a.rowKeys.length || a.label.localeCompare(b.label))
-})
-
-const allAddableChecked = computed(
-  () =>
-    addableRows.value.length > 0 && addableRows.value.every((row) => checked.value.has(row.key)),
-)
-
-/** A chip ticks every row of its o'lcham; a second press unticks exactly those. */
-function toggleQuickPick(pick: QuickPick) {
-  const next = new Set(checked.value)
-  if (pick.allChecked) for (const key of pick.rowKeys) next.delete(key)
-  else for (const key of pick.rowKeys) next.add(key)
-  checked.value = next
-}
-
-function toggleAllAddable() {
-  checked.value = allAddableChecked.value
-    ? new Set()
-    : new Set(addableRows.value.map((row) => row.key))
-}
-
-/** Every selected decor came back with nothing the branch could add. */
-const noFormatsAtAll = computed(
-  () => !formatsLoading.value && rows.value.length === 0 && selectedCount.value > 0,
-)
+const composerType = computed<DecorType>(() => rows.value[0]?.type ?? 'ldsp')
 
 function isChecked(key: string) {
   return checked.value.has(key)
 }
 
+/** Tick a row and give it the caret; unticking leaves the typed price alone. */
 function toggleFormat(row: FormatRow) {
   if (row.carried) return
   const next = new Set(checked.value)
-  if (next.has(row.key)) next.delete(row.key)
-  else next.add(row.key)
-  checked.value = next
-}
-
-function withId(set: Set<string>, id: string, present: boolean) {
-  const next = new Set(set)
-  if (present) next.add(id)
-  else next.delete(id)
-  return next
-}
-
-/** One decor's active formats, fetched once and reused by both steps. */
-async function ensureFormats(decorId: string) {
-  if (formatsByDecor.value[decorId] || previewLoading.value.has(decorId)) return
-  previewLoading.value = withId(previewLoading.value, decorId, true)
-  previewFailed.value = withId(previewFailed.value, decorId, false)
-  try {
-    const rows = await workshop.fetchCatalogFormats(props.branchId, decorId)
-    formatsByDecor.value = { ...formatsByDecor.value, [decorId]: rows }
-  } catch {
-    previewFailed.value = withId(previewFailed.value, decorId, true)
-  } finally {
-    previewLoading.value = withId(previewLoading.value, decorId, false)
+  if (next.has(row.key)) {
+    next.delete(row.key)
+    checked.value = next
+    return
   }
+  next.add(row.key)
+  checked.value = next
+  void focusPrice(row.key)
 }
 
-/** Open (or close) one decor's o'lcham list in step 1. */
-function toggleFormatPreview(decor: Decor) {
-  const open = !expanded.value.has(decor.id)
-  expanded.value = withId(expanded.value, decor.id, open)
-  if (open) void ensureFormats(decor.id)
+async function focusPrice(key: string) {
+  await nextTick()
+  priceInputs.get(key)?.focus()
 }
 
-/** The preview's rows: the o'lcham alone — the decor name is the heading above. */
-function previewRows(decorId: string) {
-  return (formatsByDecor.value[decorId] ?? []).map((option) => ({
-    key: option.decor_format.id,
-    label: shortFormatLabel(option.decor_format),
-    carried: option.carried,
-  }))
+function setPriceInput(key: string, el: unknown) {
+  if (el instanceof HTMLInputElement) priceInputs.set(key, el)
+  else priceInputs.delete(key)
 }
 
-/** `LDSP · 2800×2070×18 mm · 2 tomonlama` — identity-free, for use under a decor. */
+/** `LDSP · 2800×2070×18 mm`, `Kromka · 0.8×22 mm` — the o'lcham alone. */
 function shortFormatLabel(format: BranchCatalogFormatOption['decor_format']) {
   return [
     decorTypeLabel(format.type),
@@ -405,12 +267,11 @@ function shortFormatLabel(format: BranchCatalogFormatOption['decor_format']) {
 }
 
 /**
- * The count chip, which is also the disclosure control: `3 o'lcham` when none is
- * carried, `2/3 o'lcham bor` while some are, `Hammasi bor` when nothing is left
- * to add. One control, because "how many are in?" and "which ones?" are the same
- * question asked at two depths.
+ * The count on a door: `3 o'lcham` when none is carried, `2/3 o'lcham bor`
+ * while some are, `Hammasi bor` when nothing is left to add. Text, not a
+ * control — the whole row is the control now.
  */
-function formatCountChip(option: BranchCatalogOption) {
+function formatCountText(option: BranchCatalogOption) {
   if (option.carried_format_count === 0) {
     return t('catalog.meta.formatCount', { n: option.available_format_count })
   }
@@ -423,30 +284,29 @@ function formatCountChip(option: BranchCatalogOption) {
 }
 
 async function loadFormats() {
-  formatsLoading.value = true
+  const decor = picked.value
+  if (!decor) return
   formatsError.value = false
-  try {
-    // Only what step 1 has not already fetched: a previewed decor carries its
-    // formats into step 2 rather than being asked for twice.
-    const missing = selectedDecors.value.filter((decor) => !formatsByDecor.value[decor.id])
-    const pairs = await Promise.all(
-      missing.map(
-        async (decor) =>
-          [decor.id, await workshop.fetchCatalogFormats(props.branchId, decor.id)] as const,
-      ),
-    )
-    if (pairs.length > 0) {
-      formatsByDecor.value = { ...formatsByDecor.value, ...Object.fromEntries(pairs) }
+  // Cached from an earlier visit to this decor: `carried` cannot change while
+  // the sheet is open, so a back-and-forth costs no round trip.
+  if (!formatsByDecor.value[decor.id]) {
+    formatsLoading.value = true
+    try {
+      const fetched = await workshop.fetchCatalogFormats(props.branchId, decor.id)
+      formatsByDecor.value = { ...formatsByDecor.value, [decor.id]: fetched }
+    } catch {
+      formatsError.value = true
+      return
+    } finally {
+      formatsLoading.value = false
     }
-    // One decor, one addable o'lcham: nothing to choose, so it arrives ticked.
-    // See the header for why this stops at one decor.
-    if (selectedDecors.value.length === 1 && addableRows.value.length === 1) {
-      checked.value = new Set([addableRows.value[0].key])
-    }
-  } catch {
-    formatsError.value = true
-  } finally {
-    formatsLoading.value = false
+  }
+  // Exactly one o'lcham to add means there is nothing to choose — only a price
+  // to type, if the operator has one.
+  const addable = rows.value.filter((row) => !row.carried)
+  if (addable.length === 1) {
+    checked.value = new Set([addable[0].key])
+    void focusPrice(addable[0].key)
   }
 }
 
@@ -454,8 +314,8 @@ function swatchSource(decor: Decor) {
   return { id: decor.id, name: decor.name, code: decor.code }
 }
 
-// Follows the ROW's type, not one global flag: a batch can hold both a board
-// priced per list and a kromka priced per metre.
+// Follows the ROW's type, not one global flag: a decor is priced per list for
+// its board and per metre for its kromka.
 function priceUnit(type: DecorType) {
   return isTape(type) ? t('inventory.attach.priceUnitMetre') : t('inventory.attach.priceUnitSheet')
 }
@@ -493,14 +353,10 @@ async function loadOptions() {
     const page = await workshop.fetchCatalogOptions(props.branchId, filters())
     options.value = page.items
     total.value = page.total
-    filterIds.value = page.items.filter(canAttach).map((option) => option.decor.id)
-    filterComplete.value = page.items.length >= page.total
   } catch {
     loadError.value = true
     options.value = []
     total.value = 0
-    filterIds.value = []
-    filterComplete.value = false
   } finally {
     loading.value = false
   }
@@ -513,8 +369,6 @@ async function loadMoreOptions() {
     const page = await workshop.fetchCatalogOptions(props.branchId, filters(options.value.length))
     options.value = [...options.value, ...page.items]
     total.value = page.total
-    filterIds.value = attachableOptions.value.map((option) => option.decor.id)
-    filterComplete.value = options.value.length >= page.total
   } catch {
     loadError.value = true
   } finally {
@@ -522,74 +376,34 @@ async function loadMoreOptions() {
   }
 }
 
-function toggleDecor(decor: Decor) {
-  const next = new Map(selected.value)
-  if (next.has(decor.id)) next.delete(decor.id)
-  else next.set(decor.id, decor)
-  selected.value = next
-}
-
-/**
- * "Filtrdagi hammasi" must select every match, not just the loaded page — page
- * through the rest server-side before adding them all in one go.
- */
-async function toggleSelectAllInFilter() {
-  if (filterFullySelected.value) {
-    const next = new Map(selected.value)
-    // Unchecking removes exactly what checking added — the filter's whole set,
-    // not just the page still on screen.
-    for (const id of filterIds.value) next.delete(id)
-    selected.value = next
-    return
-  }
-  selectAllPending.value = true
-  try {
-    // Paging is counted in ROWS (the offset the server pages by), while only the
-    // attachable ones are collected — a filter of carried decors must still walk
-    // to its end rather than looping on an offset that stops advancing.
-    let seen = options.value.length
-    const collected: Decor[] = attachableOptions.value.map((option) => option.decor)
-    while (seen < total.value) {
-      const page = await workshop.fetchCatalogOptions(props.branchId, filters(seen))
-      if (page.items.length === 0) break
-      seen += page.items.length
-      collected.push(...page.items.filter(canAttach).map((option) => option.decor))
-    }
-    const next = new Map(selected.value)
-    for (const decor of collected) if (!next.has(decor.id)) next.set(decor.id, decor)
-    selected.value = next
-    filterIds.value = collected.map((decor) => decor.id)
-    filterComplete.value = true
-  } catch {
-    loadError.value = true
-  } finally {
-    selectAllPending.value = false
-  }
-}
-
-function clearSelection() {
-  selected.value = new Map()
-}
-
 function resetStepTwo() {
-  // The fetched formats are NOT dropped: they are step 1's preview data too, and
-  // a step-2 → back → step-2 round trip should not refetch what is on screen.
   formatsError.value = false
   checked.value = new Set()
   priceByKey.value = {}
   priceErrorKeys.value = new Set()
-  addFormatDecorId.value = null
-  addFormatBusy.value = false
-  addFormatError.value = null
+  closeComposer()
+  clearCarriedNote()
   saveError.value = null
   saveTraceId.value = null
 }
 
-/** Step 1 → step 2. The formats are fetched here, for the selection only. */
-async function goToFormats() {
+/** A door opens: step 1 → step 2 for that decor, its o'lchamlar fetched here. */
+async function openDecor(decor: Decor) {
   resetStepTwo()
+  picked.value = decor
   step.value = 'price'
+  scrollToTop()
   await loadFormats()
+}
+
+/** Back to the list, which kept its search, filters and paging. */
+function backToPick() {
+  step.value = 'pick'
+  scrollToTop()
+}
+
+function scrollToTop() {
+  void nextTick(() => modalRef.value?.scrollToTop())
 }
 
 // ---- «+ Yangi dekor» ------------------------------------------------------
@@ -605,41 +419,60 @@ function openCreateForm() {
   createSeedName.value = search.value.trim()
   createError.value = null
   step.value = 'create'
+  scrollToTop()
   void workshop.loadBranchManufacturers(props.branchId).catch(() => {
     createError.value = t('inventory.attach.manufacturersFailed')
   })
 }
 
 /**
- * A created decor goes straight to pricing as the ONLY selection, every one of
- * its brand-new o'lchamlar ticked: the operator just typed them, so there is
- * nothing left to choose — only a price to put against each.
+ * A created decor goes straight to pricing with every one of its brand-new
+ * o'lchamlar ticked: the operator just typed them, so there is nothing left to
+ * choose — only a price to put against each.
  */
 async function onDecorCreated(result: { decor: Decor; formats: DecorFormat[] }) {
   resetStepTwo()
-  selected.value = new Map([[result.decor.id, result.decor]])
+  picked.value = result.decor
   formatsByDecor.value = {
     ...formatsByDecor.value,
     [result.decor.id]: result.formats.map((decor_format) => ({ decor_format, carried: false })),
   }
   checked.value = new Set(result.formats.map((row) => row.id))
   step.value = 'price'
-  await nextTick()
-  focusFirstPrice()
-}
-
-/** The first price input, so the one thing left to do already has the caret. */
-function focusFirstPrice() {
-  const input = priceInputs.value.find(Boolean)
-  input?.focus()
+  scrollToTop()
+  const first = rows.value.find((row) => checked.value.has(row.key))
+  if (first) await focusPrice(first.key)
 }
 
 // ---- «+ Boshqa o'lcham» ---------------------------------------------------
 
-function toggleAddFormat(decorId: string) {
-  addFormatError.value = null
-  addFormatDecorId.value = addFormatDecorId.value === decorId ? null : decorId
+function toggleComposer() {
+  composerError.value = null
+  composerOpen.value = !composerOpen.value
 }
+
+function closeComposer() {
+  composerOpen.value = false
+  composerBusy.value = false
+  composerError.value = null
+}
+
+/** «Sizda bor» beside a row, for as long as it takes to read it. */
+function showCarriedNote(key: string) {
+  clearCarriedNote()
+  carriedNoteKey.value = key
+  carriedNoteTimer = window.setTimeout(() => {
+    carriedNoteKey.value = null
+  }, CARRIED_NOTE_MS)
+}
+
+function clearCarriedNote() {
+  window.clearTimeout(carriedNoteTimer)
+  carriedNoteTimer = undefined
+  carriedNoteKey.value = null
+}
+
+onBeforeUnmount(clearCarriedNote)
 
 /** The format id a 409 `decor_format_exists` names — the twin already on file. */
 function existingFormatId(error: unknown): string | null {
@@ -652,50 +485,6 @@ function existingFormatId(error: unknown): string | null {
   return typeof id === 'string' ? id : null
 }
 
-/**
- * Add one o'lcham to a decor already on screen — library or own.
- *
- * A 409 is not a failure here: the shape exists, so the sheet ticks the row it
- * already has and says so. Creating a duplicate is the only outcome that would
- * be wrong.
- */
-async function addDecorFormat(decor: Decor, draft: FormatDraft) {
-  addFormatBusy.value = true
-  addFormatError.value = null
-  try {
-    const created = await workshop.createBranchDecorFormat(props.branchId, decor.id, draft)
-    formatsByDecor.value = {
-      ...formatsByDecor.value,
-      [decor.id]: [
-        ...(formatsByDecor.value[decor.id] ?? []),
-        { decor_format: created, carried: false },
-      ],
-    }
-    checked.value = new Set([...checked.value, created.id])
-    addFormatDecorId.value = null
-  } catch (caught) {
-    const twinId = existingFormatId(caught)
-    const rows = formatsByDecor.value[decor.id] ?? []
-    // The id is authoritative; the shape is the fallback for a server that
-    // reports the clash without naming the row.
-    const twin =
-      rows.find((row) => row.decor_format.id === twinId) ??
-      rows.find((row) => formatDraftKey(toDraft(row.decor_format)) === formatDraftKey(draft))
-    if (twin && !twin.carried) {
-      checked.value = new Set([...checked.value, twin.decor_format.id])
-      addFormatDecorId.value = null
-      toast.success(t('inventory.attach.formatExistsTicked'))
-    } else if (twin) {
-      addFormatDecorId.value = null
-      toast.warn(t('inventory.attach.formatExistsCarried'))
-    } else {
-      addFormatError.value = t('inventory.attach.formatCreateFailed')
-    }
-  } finally {
-    addFormatBusy.value = false
-  }
-}
-
 /** A stored format read as the draft shape, so the two compare by one key. */
 function toDraft(format: DecorFormat): FormatDraft {
   return {
@@ -705,6 +494,105 @@ function toDraft(format: DecorFormat): FormatDraft {
     width_mm: format.width_mm,
     tape_width_mm: format.tape_width_mm,
     finished_sides: format.finished_sides,
+  }
+}
+
+/** Take the row into the selection and give it the caret — the silent outcome. */
+function absorbRow(row: FormatRow) {
+  checked.value = new Set([...checked.value, row.key])
+  closeComposer()
+  void focusPrice(row.key)
+}
+
+/**
+ * Add one o'lcham to the picked decor — library or own — and **merge in
+ * silence** when it turns out to exist (owner item 2).
+ *
+ * Three outcomes, and only the last one says anything:
+ *
+ * - the shape is a row already on screen, or a row the server names in a 409 →
+ *   tick it. Nothing is created, nothing is announced: the operator asked for a
+ *   size and got the size, which is the whole of what they wanted to know.
+ * - the shape is new → `201`, the row appears ticked with an empty price.
+ * - the shape is already CARRIED by this branch → there is nothing to add, and
+ *   that is the one fact they cannot see for themselves, so the row says
+ *   «Sizda bor» for a moment and the composer keeps what was typed.
+ */
+async function addDecorFormat(draft: FormatDraft) {
+  const decor = picked.value
+  if (!decor) return
+  clearCarriedNote()
+  const key = formatDraftKey(draft)
+
+  // Client-side first: the sheet already knows every active o'lcham of this
+  // decor, so the common twin costs no round trip at all.
+  const local = rows.value.find((row) => formatDraftKey(toDraft(row.format)) === key)
+  if (local) {
+    if (local.carried) showCarriedNote(local.key)
+    else absorbRow(local)
+    return
+  }
+
+  composerBusy.value = true
+  composerError.value = null
+  try {
+    const created = await workshop.createBranchDecorFormat(props.branchId, decor.id, draft)
+    appendFormat(decor.id, { decor_format: created, carried: false })
+    absorbRow({
+      key: created.id,
+      type: created.type,
+      format: created,
+      label: shortFormatLabel(created),
+      carried: false,
+    })
+  } catch (caught) {
+    await absorbTwin(decor.id, caught, key)
+  } finally {
+    composerBusy.value = false
+  }
+}
+
+/**
+ * The 409 half of the silent merge: find the row the server refused to
+ * duplicate and tick it.
+ *
+ * The twin can be one the sheet never listed — a format the branch cannot
+ * attach, a library row that went inactive after this list was fetched — so a
+ * miss is answered by re-reading the decor's formats before giving up. If it is
+ * still nowhere, the sheet has nothing to tick and says so: silence would leave
+ * a pressed button with no effect anywhere on the screen.
+ */
+async function absorbTwin(decorId: string, caught: unknown, draftKey: string) {
+  const twinId = existingFormatId(caught)
+  if (twinId === null) {
+    composerError.value = t('inventory.attach.formatCreateFailed')
+    return
+  }
+  let row = rows.value.find((candidate) => candidate.key === twinId)
+  if (!row) {
+    try {
+      const fetched = await workshop.fetchCatalogFormats(props.branchId, decorId)
+      formatsByDecor.value = { ...formatsByDecor.value, [decorId]: fetched }
+    } catch {
+      composerError.value = t('inventory.attach.formatCreateFailed')
+      return
+    }
+    row =
+      rows.value.find((candidate) => candidate.key === twinId) ??
+      rows.value.find((candidate) => formatDraftKey(toDraft(candidate.format)) === draftKey)
+  }
+  if (!row) {
+    composerError.value = t('inventory.attach.formatCreateFailed')
+    return
+  }
+  if (row.carried) showCarriedNote(row.key)
+  else absorbRow(row)
+}
+
+function appendFormat(decorId: string, option: BranchCatalogFormatOption) {
+  formatsByDecor.value = {
+    ...formatsByDecor.value,
+    [decorId]: [...(formatsByDecor.value[decorId] ?? []), option],
   }
 }
 
@@ -730,7 +618,8 @@ function parsePrice(text: string): number | null {
 async function submit() {
   saveError.value = null
   saveTraceId.value = null
-  if (pendingRows.value.length === 0) {
+  const decor = picked.value
+  if (!decor || pendingRows.value.length === 0) {
     saveError.value = t('inventory.attach.selectFormats')
     return
   }
@@ -752,7 +641,13 @@ async function submit() {
   saving.value = true
   try {
     const result = await workshop.attachBranchMaterials(props.branchId, { items })
-    emit('attached', { created: result.created.length, skipped: result.skipped.length })
+    // The sheet is done: the caller closes it and reloads the table, and
+    // «+ Material» is the way to the next decor.
+    emit('attached', {
+      created: result.created.length,
+      skipped: result.skipped.length,
+      decorLabel: decor.label,
+    })
   } catch (caught) {
     saveError.value = apiMessage(caught) ?? t('inventory.attach.saveFailed')
     saveTraceId.value = apiTraceId(caught)
@@ -768,16 +663,11 @@ function reset() {
   search.value = ''
   manufacturerFilter.value = 'all'
   turFilter.value = 'all'
-  selected.value = new Map()
-  filterIds.value = []
-  filterComplete.value = false
-  selectAllPending.value = false
   loadError.value = false
+  picked.value = null
   // A reopened sheet may be pointed at another branch, where `carried` differs.
   formatsByDecor.value = {}
-  expanded.value = new Set()
-  previewLoading.value = new Set()
-  previewFailed.value = new Set()
+  priceInputs.clear()
   resetStepTwo()
 }
 
@@ -803,13 +693,18 @@ watch(
 </script>
 
 <template>
-  <AppModal :open="open" :title="stepTitle" max-width="max-w-4xl" @close="emit('close')">
-    <!-- Step 1 — pick the decors. Photo-first: an operator recognises a decor by
-         its surface long before its code. Multi-select, because the job is many
-         decors in one o'lcham. -->
-    <div v-if="step === 'pick'" class="grid gap-3">
+  <AppModal
+    ref="modalRef"
+    :open="open"
+    :title="stepTitle"
+    max-width="max-w-4xl"
+    @close="emit('close')"
+  >
+    <!-- The filters never scroll away: they are how the list on the other side
+         of them is changed (owner item 3, §3.1). -->
+    <template v-if="step === 'pick'" #head>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <label class="field">
+        <label class="field !mb-0">
           <span>{{ $t('inventory.attach.searchLabel') }}</span>
           <input
             v-model="search"
@@ -819,52 +714,53 @@ watch(
         </label>
         <FormSelect
           v-model="turFilter"
+          class="!mb-0"
           :label="$t('inventory.attach.turLabel')"
           :options="turOptions"
         />
         <FormSelect
           v-model="manufacturerFilter"
+          class="!mb-0"
           :label="$t('inventory.attach.manufacturerLabel')"
           :options="manufacturerOptions"
         />
       </div>
+    </template>
 
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-hairline bg-sunk px-3 py-2"
-      >
-        <label
-          class="flex min-h-11 min-w-0 cursor-pointer items-center gap-2 text-sm font-bold text-ink"
+    <!-- Step 2's identity bar: which decor these o'lchamlar belong to, and the
+         way back to the list. Fixed, like the filters it replaces. -->
+    <template v-else-if="step === 'price' && picked" #head>
+      <div class="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          class="mp-row-icon shrink-0"
+          :aria-label="$t('inventory.attach.back')"
+          @click="backToPick"
         >
-          <input
-            type="checkbox"
-            class="size-4 shrink-0 accent-accent"
-            :checked="filterFullySelected"
-            :disabled="total === 0 || selectAllPending || nothingLeftToAdd"
-            @change="toggleSelectAllInFilter"
-          />
-          <span class="min-w-0">
-            {{
-              selectAllPending
-                ? $t('inventory.attach.selectAllPending')
-                : $t('inventory.attach.selectAllInFilter', { count: total })
-            }}
+          <AppIcon name="chevron-left" />
+        </button>
+        <AuthFileImage
+          v-if="picked.image_file_id"
+          :file-id="picked.image_file_id"
+          :alt="picked.label"
+          class="size-[34px] shrink-0 rounded-md object-cover"
+        />
+        <span v-else class="sw shrink-0" :class="materialSwatchClass(swatchSource(picked))" />
+        <span class="grid min-w-0 gap-0.5">
+          <span class="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span class="break-words text-sm font-extrabold text-ink">{{ picked.label }}</span>
+            <span v-if="picked.own" class="mp-chip shrink-0">
+              {{ $t('inventory.attach.ownBadge') }}
+            </span>
           </span>
-        </label>
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="text-sm font-bold text-ink-muted" aria-live="polite">
-            {{ $t('inventory.attach.selectedCount', { n: selectedCount }, selectedCount) }}
-          </span>
-          <button
-            v-if="selectedCount > 0"
-            type="button"
-            class="mp-button mp-button-outline"
-            @click="clearSelection"
-          >
-            {{ $t('inventory.attach.clearSelection') }}
-          </button>
-        </div>
+          <small class="break-words text-ink-muted">{{ picked.manufacturer_name }}</small>
+        </span>
       </div>
+    </template>
 
+    <!-- Step 1 — pick ONE decor. Photo-first: an operator recognises a decor by
+         its surface long before its code. Every row is a door. -->
+    <div v-if="step === 'pick'" class="grid gap-3">
       <div v-if="loading" class="grid gap-3 p-2" aria-live="polite">
         <span class="sk-line"></span>
         <span class="sk-line"></span>
@@ -877,7 +773,7 @@ watch(
       <!-- The empty state carries the create action itself, and the footer's
            copy of it is hidden while it shows: one control, not two, on the one
            screen where the whole point is that nothing was found (QAD-182). -->
-      <div v-else-if="options.length === 0" class="st-empty !py-8">
+      <div v-else-if="showEmptyState" class="st-empty !py-8">
         <div class="client-empty-icon"><AppIcon name="layers" /></div>
         <h3>{{ $t('inventory.attach.emptyTitle') }}</h3>
         <p>{{ $t('inventory.attach.emptyBody') }}</p>
@@ -886,138 +782,50 @@ watch(
         </button>
       </div>
       <template v-else>
-        <ul class="grid max-h-[44dvh] gap-2 overflow-y-auto overflow-x-hidden sm:grid-cols-2">
+        <ul class="grid gap-2 sm:grid-cols-2">
           <li v-for="option in options" :key="option.decor.id" class="min-w-0">
-            <div
-              class="min-w-0 rounded-md border transition-colors"
-              :class="
-                selected.has(option.decor.id)
-                  ? 'border-accent-tint bg-accent-soft'
-                  : 'border-hairline bg-elevated'
-              "
+            <!-- One control per row, filling it: the row IS the choice, so
+                 there is nothing beside it that could take the press and mean
+                 something else. -->
+            <button
+              type="button"
+              class="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-md border border-hairline bg-elevated px-3 py-2 text-left transition-colors hover:border-accent hover:bg-sunk"
+              @click="openDecor(option.decor)"
             >
-              <div class="flex min-w-0 items-center gap-3 px-3 py-2">
-                <!-- A `label` only while there is a control to label: a decor
-                     with nothing left to add has no checkbox, and a pointer
-                     cursor over a row that cannot be picked is a lie. -->
-                <component
-                  :is="canAttach(option) ? 'label' : 'div'"
-                  class="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  :class="canAttach(option) ? 'cursor-pointer' : ''"
-                >
-                  <input
-                    v-if="canAttach(option)"
-                    type="checkbox"
-                    class="size-4 shrink-0 accent-accent"
-                    :checked="selected.has(option.decor.id)"
-                    @change="toggleDecor(option.decor)"
-                  />
-                  <!-- Holds the checkbox's column so the photos stay in line. -->
-                  <span v-else class="size-4 shrink-0" aria-hidden="true"></span>
-                  <AuthFileImage
-                    v-if="option.decor.image_file_id"
-                    :file-id="option.decor.image_file_id"
-                    :alt="option.decor.label"
-                    class="size-[34px] shrink-0 rounded-md object-cover"
-                  />
-                  <span
-                    v-else
-                    class="sw"
-                    :class="materialSwatchClass(swatchSource(option.decor))"
-                  />
-                  <span class="grid min-w-0 flex-1 gap-0.5">
-                    <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                      <span class="break-words text-sm font-bold text-ink">
-                        {{ option.decor.label }}
-                      </span>
-                      <!-- A row only this workshop can see. Quiet on purpose:
-                           it is provenance, not a status. -->
-                      <span v-if="option.decor.own" class="mp-chip shrink-0">
-                        {{ $t('inventory.attach.ownBadge') }}
-                      </span>
-                    </span>
-                    <small class="break-words text-ink-muted">
-                      {{ option.decor.manufacturer_name }}
-                    </small>
+              <AuthFileImage
+                v-if="option.decor.image_file_id"
+                :file-id="option.decor.image_file_id"
+                :alt="option.decor.label"
+                class="size-[34px] shrink-0 rounded-md object-cover"
+              />
+              <span
+                v-else
+                class="sw shrink-0"
+                :class="materialSwatchClass(swatchSource(option.decor))"
+              />
+              <span class="grid min-w-0 flex-1 gap-0.5">
+                <span class="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span class="break-words text-sm font-bold text-ink">
+                    {{ option.decor.label }}
                   </span>
-                </component>
-                <!-- The count chip IS the disclosure: `3 o'lcham` when none is
-                     carried, `2/3 o'lcham bor` while some are, `Hammasi bor`
-                     when nothing is left to add — and it opens the list behind
-                     the number. A carried decor is never hidden (carrying 18 mm
-                     does not stop you adding 16 mm), so the number is the row's
-                     answer to "why would I open this?" and the panel is the
-                     answer to "which ones, then?". It sits OUTSIDE the label so
-                     that opening the o'lchamlar does not tick the decor. -->
-                <button
-                  type="button"
-                  class="mp-chip shrink-0 cursor-pointer hover:border-accent"
-                  :aria-expanded="expanded.has(option.decor.id)"
-                  :aria-label="
-                    $t('inventory.attach.previewAria', {
-                      name: option.decor.label,
-                      summary: formatCountChip(option),
-                    })
-                  "
-                  @click="toggleFormatPreview(option.decor)"
-                >
-                  {{ formatCountChip(option) }}
-                  <AppIcon
-                    name="chevron-down"
-                    class="size-[15px] flex-none text-ink-muted transition-transform"
-                    :class="expanded.has(option.decor.id) ? 'rotate-180' : ''"
-                  />
-                </button>
-              </div>
-
-              <!-- A preview, not a second place to tick: what the branch already
-                   carries is READ here, what to add is chosen and priced one
-                   step on. -->
-              <div v-if="expanded.has(option.decor.id)" class="border-t border-hairline px-3 py-2">
-                <p v-if="previewLoading.has(option.decor.id)" class="text-xs text-ink-muted">
-                  {{ $t('inventory.attach.loading') }}
-                </p>
-                <div
-                  v-else-if="previewFailed.has(option.decor.id)"
-                  class="flex flex-wrap items-center gap-2"
-                >
-                  <span class="text-xs text-ink-muted">
-                    {{ $t('inventory.attach.loadFailed') }}
+                  <!-- A row only this workshop can see. Quiet on purpose: it is
+                       provenance, not a status. -->
+                  <span v-if="option.decor.own" class="mp-chip shrink-0">
+                    {{ $t('inventory.attach.ownBadge') }}
                   </span>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline"
-                    @click="ensureFormats(option.decor.id)"
-                  >
-                    {{ $t('inventory.action.retry') }}
-                  </button>
-                </div>
-                <p
-                  v-else-if="previewRows(option.decor.id).length === 0"
-                  class="text-xs text-ink-muted"
-                >
-                  {{ $t('inventory.attach.noFormats') }}
-                </p>
-                <ul v-else class="grid gap-1">
-                  <li
-                    v-for="row in previewRows(option.decor.id)"
-                    :key="row.key"
-                    class="flex min-w-0 items-center justify-between gap-2 text-xs"
-                    :class="row.carried ? 'text-ink-muted' : 'text-ink'"
-                  >
-                    <span class="min-w-0 break-words">{{ row.label }}</span>
-                    <span v-if="row.carried" class="mp-chip shrink-0">
-                      {{ $t('inventory.attach.carried') }}
-                    </span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+                </span>
+                <small class="break-words text-ink-muted">
+                  {{ option.decor.manufacturer_name }}
+                </small>
+              </span>
+              <!-- Text, not a chip: it answers "how many sizes are behind this
+                   door", and a chip here used to be a second control on a row
+                   that now has exactly one. -->
+              <span class="shrink-0 text-xs text-ink-muted">{{ formatCountText(option) }}</span>
+              <AppIcon name="chevron-right" class="size-[15px] flex-none text-ink-muted" />
+            </button>
           </li>
         </ul>
-        <p v-if="nothingLeftToAdd" class="text-xs text-ink-muted">
-          {{ $t('inventory.attach.nothingLeftToAdd') }}
-        </p>
         <div v-if="options.length < total" class="flex justify-center">
           <button
             type="button"
@@ -1029,31 +837,6 @@ watch(
           </button>
         </div>
       </template>
-
-      <div class="flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-        <button
-          type="button"
-          class="mp-button mp-button-primary"
-          :disabled="selectedCount === 0"
-          @click="goToFormats"
-        >
-          {{ $t('inventory.attach.continue') }}
-        </button>
-        <!-- Quiet, and beside «Davom etish» rather than behind a search: the
-             door has to be findable without first proving the library lacks the
-             decor. It steps aside when the empty state offers the same action. -->
-        <button
-          v-if="!showEmptyState"
-          type="button"
-          class="mp-button mp-button-outline"
-          @click="openCreateForm"
-        >
-          {{ $t('inventory.attach.newDecor') }}
-        </button>
-        <button type="button" class="mp-button mp-button-outline" @click="emit('close')">
-          {{ $t('inventory.action.cancel') }}
-        </button>
-      </div>
     </div>
 
     <!-- Step «create» — the workshop enters what the library lacks. Its own
@@ -1066,20 +849,20 @@ watch(
         {{ createError }}
       </p>
       <BranchDecorCreateForm
+        ref="createFormRef"
         :branch-id="branchId"
         :initial-name="createSeedName"
+        :actions="false"
         @created="onDecorCreated"
-        @back="step = 'pick'"
+        @back="backToPick"
       />
     </div>
 
-    <!-- Step 2 — pick the o'lchamlar, then price them (price optional). One chip
-         block per type in the selection; a board and its kromka have different axes. -->
+    <!-- Step 2 — one decor's o'lchamlar, each with the price this branch
+         charges. Carried rows stay in the table, disabled: hiding them would
+         leave the branch wondering whether the size exists at all, which is the
+         exact question this step is here to answer. -->
     <div v-else class="grid gap-3">
-      <p class="text-sm font-bold text-ink-muted">
-        {{ $t('inventory.attach.selectedCount', { n: selectedCount }, selectedCount) }}
-      </p>
-
       <p v-if="formatsLoading" class="text-sm text-ink-muted">
         {{ $t('inventory.attach.loading') }}
       </p>
@@ -1091,189 +874,93 @@ watch(
       </div>
 
       <template v-else>
-        <!-- Quick picks: the o'lchamlar the selection shares, one chip each. A
-             price list is many decors in one size; this is where that becomes
-             one press instead of one tick per decor. -->
-        <div
-          v-if="quickPicks.length > 0"
-          class="flex flex-wrap items-center gap-2 rounded-md border border-hairline bg-sunk px-3 py-2"
-        >
-          <span class="text-sm font-bold text-ink">{{ $t('inventory.attach.quickPick') }}</span>
-          <button
-            v-for="pick in quickPicks"
-            :key="pick.key"
-            type="button"
-            class="mp-chip cursor-pointer transition-colors"
-            :class="
-              pick.allChecked
-                ? 'border-select-chip-line bg-select-chip text-ink'
-                : 'hover:border-accent'
-            "
-            :aria-pressed="pick.allChecked"
-            @click="toggleQuickPick(pick)"
-          >
-            {{ pick.label }} ({{ pick.rowKeys.length }})
-          </button>
-          <button
-            type="button"
-            class="mp-chip cursor-pointer transition-colors"
-            :class="
-              allAddableChecked
-                ? 'border-select-chip-line bg-select-chip text-ink'
-                : 'hover:border-accent'
-            "
-            :aria-pressed="allAddableChecked"
-            @click="toggleAllAddable"
-          >
-            {{ $t('inventory.attach.quickPickAll', { n: addableRows.length }) }}
-          </button>
-        </div>
-
-        <!-- One block per selected decor, listing the formats the PLATFORM has
-             entered for it. Carried ones stay in the list, disabled: hiding them
-             would leave the branch wondering whether the size exists at all,
-             which is the exact question this step is here to answer. -->
-        <div
-          v-for="group in groupedRows"
-          :key="`formats-${group.decor.id}`"
-          class="grid gap-2 rounded-md border border-hairline px-3 py-3"
-        >
-          <div class="flex min-w-0 items-center gap-2">
-            <AuthFileImage
-              v-if="group.decor.image_file_id"
-              :file-id="group.decor.image_file_id"
-              :alt="group.decor.label"
-              class="size-[28px] shrink-0 rounded-md object-cover"
-            />
-            <span
-              v-else
-              class="sw shrink-0"
-              :class="materialSwatchClass(swatchSource(group.decor))"
-            />
-            <span class="min-w-0 break-words text-sm font-extrabold text-ink">
-              {{ group.decor.label }}
-            </span>
-            <span v-if="group.decor.own" class="mp-chip shrink-0">
-              {{ $t('inventory.attach.ownBadge') }}
-            </span>
-          </div>
-
-          <p v-if="group.rows.length === 0" class="text-xs text-ink-muted">
-            {{ $t('inventory.attach.noFormats') }}
-          </p>
-
-          <label
-            v-for="row in group.rows"
-            :key="row.key"
-            class="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-sunk"
-            :class="row.carried ? 'cursor-default opacity-60' : ''"
-          >
-            <input
-              type="checkbox"
-              class="mp-checkbox shrink-0"
-              :checked="isChecked(row.key)"
-              :disabled="row.carried"
-              @change="toggleFormat(row)"
-            />
-            <span class="min-w-0 flex-1 break-words text-sm text-ink">{{ row.label }}</span>
-            <span v-if="row.carried" class="mp-chip shrink-0">
-              {{ $t('inventory.attach.carried') }}
-            </span>
-          </label>
-
-          <!-- The size the library does not have, added here rather than waited
-               for. Works on a library decor and on an own one alike: the size is
-               the workshop's fact either way. -->
-          <div class="grid gap-2">
-            <button
-              type="button"
-              class="justify-self-start text-xs font-bold text-accent-deep hover:underline"
-              :aria-expanded="addFormatDecorId === group.decor.id"
-              @click="toggleAddFormat(group.decor.id)"
-            >
-              {{ $t('inventory.attach.addOtherFormat') }}
-            </button>
-            <BranchDecorFormatPicker
-              v-if="addFormatDecorId === group.decor.id"
-              :initial-type="groupInitialType(group)"
-              :busy="addFormatBusy"
-              :error="addFormatError"
-              @add="addDecorFormat(group.decor, $event)"
-            />
-          </div>
-        </div>
-
-        <p v-if="noFormatsAtAll" class="text-xs text-ink-muted">
+        <p v-if="noFormats" class="text-sm text-ink-muted">
           {{ $t('inventory.attach.noFormats') }}
         </p>
-      </template>
-
-      <template v-if="pendingRows.length > 0">
-        <div class="table-wrap">
+        <div v-else class="table-wrap">
           <table class="tbl tbl-fluid">
             <thead>
               <tr>
-                <!-- The decor name is the longest string in the table and `auto`
-                     layout would otherwise starve it down to one word per line
-                     while the o'lcham column keeps slack it has no use for. -->
-                <th class="min-w-[190px]">{{ $t('inventory.attach.columnDekor') }}</th>
                 <th class="w-full">{{ $t('inventory.attach.columnFormat') }}</th>
                 <th class="nowrap right">{{ $t('inventory.attach.columnPrice') }}</th>
               </tr>
             </thead>
             <tbody>
-              <template v-for="group in pricedGroups" :key="group.decor.id">
-                <tr v-for="(row, index) in group.rows" :key="row.key">
-                  <!-- One identity cell per decor, spanning its o'lchamlar: with
-                       many decors the o'lcham label alone is ambiguous, and
-                       repeating the name on every row buries the o'lchamlar. -->
-                  <td v-if="index === 0" :rowspan="group.rows.length" class="align-top">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <AuthFileImage
-                        v-if="group.decor.image_file_id"
-                        :file-id="group.decor.image_file_id"
-                        :alt="group.decor.label"
-                        class="size-[28px] shrink-0 rounded-md object-cover"
-                      />
-                      <span
-                        v-else
-                        class="sw shrink-0"
-                        :class="materialSwatchClass(swatchSource(group.decor))"
-                      />
-                      <div class="grid min-w-0 gap-0.5">
-                        <span class="break-words font-bold text-ink">{{ group.decor.label }}</span>
-                        <small class="break-words text-ink-muted">
-                          {{ group.decor.manufacturer_name }}
-                        </small>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="grid min-w-0 gap-0.5">
-                      <span class="break-words font-bold text-ink">{{ row.label }}</span>
-                    </div>
-                  </td>
-                  <td class="nowrap right">
+              <tr v-for="row in rows" :key="row.key">
+                <td>
+                  <label
+                    class="flex min-w-0 items-center gap-2"
+                    :class="row.carried ? 'cursor-default' : 'cursor-pointer'"
+                  >
                     <input
-                      ref="priceInputs"
+                      type="checkbox"
+                      class="mp-checkbox shrink-0"
+                      :checked="isChecked(row.key)"
+                      :disabled="row.carried"
+                      @change="toggleFormat(row)"
+                    />
+                    <span
+                      class="min-w-0 break-words text-sm"
+                      :class="row.carried ? 'text-ink-muted' : 'text-ink'"
+                    >
+                      {{ row.label }}
+                    </span>
+                  </label>
+                </td>
+                <td class="nowrap right">
+                  <!-- A carried row has no price to type here: the o'lcham is
+                       already on the shelf, and its price is edited in Materiallar. -->
+                  <template v-if="row.carried">
+                    <span
+                      v-if="carriedNoteKey === row.key"
+                      class="text-sm font-bold text-accent-deep"
+                      aria-live="polite"
+                    >
+                      {{ $t('inventory.attach.carriedNow') }}
+                    </span>
+                    <span v-else class="text-sm text-ink-muted">
+                      {{ $t('inventory.attach.carried') }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    <input
+                      :ref="(el) => setPriceInput(row.key, el)"
                       class="mp-input w-28 text-right"
                       inputmode="numeric"
+                      :disabled="!isChecked(row.key)"
                       :value="priceOf(row.key)"
-                      :aria-label="
-                        $t('inventory.attach.priceAria', {
-                          name: `${group.decor.label} · ${row.label}`,
-                        })
-                      "
+                      :aria-label="$t('inventory.attach.priceAria', { name: row.label })"
                       :aria-invalid="priceErrorKeys.has(row.key) || undefined"
                       :class="priceErrorKeys.has(row.key) ? '!border-danger' : ''"
                       @input="setPrice(row.key, ($event.target as HTMLInputElement).value)"
                     />
                     <small class="block text-ink-muted">{{ priceUnit(row.type) }}</small>
-                  </td>
-                </tr>
-              </template>
+                  </template>
+                </td>
+              </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- The size the library does not have, added here rather than waited
+             for. Works on a library decor and on an own one alike: the size is
+             the workshop's fact either way. -->
+        <div class="grid gap-2">
+          <button
+            type="button"
+            class="justify-self-start text-xs font-bold text-accent-deep hover:underline"
+            :aria-expanded="composerOpen"
+            @click="toggleComposer"
+          >
+            {{ $t('inventory.attach.addOtherFormat') }}
+          </button>
+          <BranchDecorFormatPicker
+            v-if="composerOpen"
+            :initial-type="composerType"
+            :busy="composerBusy"
+            :error="composerError"
+            @add="addDecorFormat"
+          />
         </div>
 
         <p class="text-xs text-ink-muted">{{ $t('inventory.attach.priceOptional') }}</p>
@@ -1282,8 +969,39 @@ watch(
       <p v-if="saveError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
         {{ saveError }}<template v-if="saveTraceId"> · trace_id: {{ saveTraceId }}</template>
       </p>
+    </div>
 
-      <div class="flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+    <template #footer>
+      <template v-if="step === 'pick'">
+        <!-- Quiet, and beside «Bekor» rather than behind a search: the door has
+             to be findable without first proving the library lacks the decor. It
+             steps aside when the empty state offers the same action. -->
+        <button
+          v-if="!showEmptyState"
+          type="button"
+          class="mp-button mp-button-outline"
+          @click="openCreateForm"
+        >
+          {{ $t('inventory.attach.newDecor') }}
+        </button>
+        <button type="button" class="mp-button mp-button-outline" @click="emit('close')">
+          {{ $t('inventory.action.cancel') }}
+        </button>
+      </template>
+      <template v-else-if="step === 'create'">
+        <button
+          type="button"
+          class="mp-button mp-button-primary"
+          :disabled="createSaving"
+          @click="createFormRef?.submit()"
+        >
+          {{ createSaving ? $t('inventory.attach.saving') : $t('inventory.attach.createSubmit') }}
+        </button>
+        <button type="button" class="mp-button mp-button-outline" @click="backToPick">
+          {{ $t('inventory.attach.back') }}
+        </button>
+      </template>
+      <template v-else>
         <button
           type="button"
           class="mp-button mp-button-primary"
@@ -1293,13 +1011,13 @@ watch(
           {{
             saving
               ? $t('inventory.attach.saving')
-              : $t('inventory.attach.submit', { n: pendingRows.length }, pendingRows.length)
+              : $t('inventory.attach.submit', { n: pendingRows.length })
           }}
         </button>
-        <button type="button" class="mp-button mp-button-outline" @click="step = 'pick'">
+        <button type="button" class="mp-button mp-button-outline" @click="backToPick">
           {{ $t('inventory.attach.back') }}
         </button>
-      </div>
-    </div>
+      </template>
+    </template>
   </AppModal>
 </template>

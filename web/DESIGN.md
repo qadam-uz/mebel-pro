@@ -379,7 +379,13 @@ off-scale values.
   reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
   the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
   `ProjectDropdown` teleports its panel at z-50 and would render behind the modal layer
-  (z-80).
+  (z-80). **A modal whose body can outgrow the viewport is a fixed frame around one scroller:**
+  header, any filter bar and the footer buttons stay put; a single middle region carries
+  `overflow-y: auto` + `min-height: 0` and is the only thing that moves, under a
+  `max-height: min(85dvh, …)` cap. Give that region `tabindex="-1"` so PageDown reaches it.
+  The failure this prevents is not cosmetic: a modal that scrolls as one column pushes its own
+  buttons below the fold exactly when its list is long, so the way out of a list that has the
+  wrong contents is the first thing a long list hides.
 - **Forms** — required fields get a compact `*` beside the persistent label, backed by
   `required`/`aria-required` semantics and inline errors; unmarked fields are optional.
 - **Numeric input** sanitizes **as you type** (the PhoneInput pattern — an invalid character
@@ -687,6 +693,8 @@ the product does; the name beside it says who.
   coloured glow to anything.
 - Don't use uppercase, wide-tracked labels, or a serif or monospace face anywhere.
 - Don't use native `<select>` as visible UI, or `ProjectDropdown` inside a modal.
+- Don't let a modal scroll as one column — the header and the footer buttons are fixed, and
+  only the region between them moves.
 - Don't use placeholders as labels, or clear a form on a validation error.
 - Don't swallow an error code in a bare `catch {}`, or ship a string with a backtick
   apostrophe, an English fallback, or a term that isn't in the glossary.
