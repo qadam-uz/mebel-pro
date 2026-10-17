@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-09-08
+updated: 2026-10-17
 order: 20
 ---
 
@@ -701,9 +701,9 @@ that declaration, so a new route has to state where it stands.
 
 | Scope | What it means | Picker | Pages |
 | --- | --- | --- | --- |
-| `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Saqlangan chizmalar · Kesish · Krom · Ombor · Material katalogi · Tushum va xarajat · Qarzdorlik · Xodimlar mehnati · Yangi buyurtma |
+| `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Qoralamalar · Kesish · Krom · Ombor · Material katalogi · Tushum va xarajat · Qarzdorlik · Xodimlar mehnati · Yangi buyurtma |
 | `workshop` | Workshop-wide by design | disabled, the reason stacked beneath the card | Filiallar · Xodimlar ro'yxati · Sozlamalar · Bildirishnomalar · Profil |
-| `entity` | Takes its branch from the record on screen | disabled, the reason stacked beneath the card | Buyurtma tafsilotlari · Chizma (ish) · Kesim chizmasi + natija + rasmiylashtirish · Filial tafsilotlari · Xodim tafsilotlari |
+| `entity` | Takes its branch from the record on screen | disabled, the reason stacked beneath the card | Buyurtma tafsilotlari · Chizma (ish) · Chizma + Materiallar + Tasdiqlash · Filial tafsilotlari · Xodim tafsilotlari |
 
 **The whole finance module is `branch`.** `Qarzdorlik` included: every term in the debt fold —
 invoice, supplier payment, order, adjustment — names a branch, so a branch's balance is a real

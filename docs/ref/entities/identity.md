@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-10-17
 order: 10
 ---
 
@@ -99,7 +99,7 @@ branch per order. Uses the client app.
 | `telegram_user_id` | bigint? | **unique when set** — the Telegram account that signs in as this client; linked by the bot's contact step, relinked when a new account proves the same phone; `null` on a staff-created row until first bot sign-in. Private-chat id equals user id, so bot messages are sent to it directly |
 | `telegram_unreachable_at` | timestamp? | set when a bot send bounces with 403 (client blocked the bot); cleared on the next `/start` or successful send; while set, Telegram delivery is skipped — the inbox is unaffected |
 | `name` | text | required; the client's display name (1–80 chars) — prefilled from the Telegram profile at registration, client-editable, never re-synced; how the workshop addresses them |
-| `preferred_branch_id` | UUID? | the **pin**: the branch, and through it the workshop, the client app is scoped to ([`client-entry.md`](../features/client-entry.md)). Seeds the `preferred_branch_id` of every new cutting draft this client opens unless the drawing was started at another branch; a draft's own branch never writes back here. Written by exactly two operations and by no profile form: applying a workshop-link entry, which cross-checks the branch against the link's code before it writes (the star's «Asosiy qilish» is that same operation), and placing a client order, which pins the order's branch. It is **left untouched** when a link does not settle a branch, and by a branch row's «Yangi chizma», which pins nothing. Surfaced as the **Asosiy** star on a branch row, never as a bare branch field |
+| `preferred_branch_id` | UUID? | the **pin**: the branch, and through it the workshop, the client app is scoped to ([`client-entry.md`](../features/client-entry.md)). Preselects the branch on the first step of every order this client places ([`orders.md`](../features/orders.md#placing-an-order)); drawings carry no branch, so nothing else reads it. Written by exactly two operations and by no profile form: applying a workshop-link entry, which cross-checks the branch against the link's code before it writes (the star's «Asosiy qilish» is that same operation), and placing a client order, which pins the order's branch. It is **left untouched** when a link does not settle a branch. Surfaced as the **Asosiy** star on a branch row, never as a bare branch field |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 

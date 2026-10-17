@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-09-08
+updated: 2026-10-17
 order: 20
 ---
 
@@ -28,15 +28,19 @@ an integration (payments, refunds), that's a considered substitution.
   arrivals grouped under a supplier invoice carrying the document's discount, automatic
   consumption driven by orders, and negative-balance surfacing. There is no reservation
   balance in v1.
+- **Drawings** — a client's parts list in material groups (substrate and thickness), free of
+  any workshop, decor or price; reusable ones kept as **saved drawings**; 2D-Place `.map`
+  layouts imported by the workshop as locked groups.
 - **Optimized cutting** — multiple cutting-optimization algorithms run against the same input
   in one request; the platform returns the best result and **names the winning algorithm**.
   Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a
   print-ready cutting map.
-- **Orders** — orders from a finalized cutting result — placed by the client, or by workshop
-  staff on behalf of a walk-in client — with **frozen pricing** and a small production workflow
-  (verify → cut → band → ready → collected, pickup-only) that a branch collapses into one
-  **Tayyor** action, operator revert, and reasoned cancellation. The order tracks production
-  only — it moves no money and holds no stock.
+- **Orders** — placed from a drawing at one of the client's workshops, each group's decor
+  chosen or left to the workshop — by the client, or by workshop staff on behalf of a walk-in
+  client — repeatable as a **re-order**, with pricing **frozen at confirmation** and a small
+  production workflow (verify → cut → band → ready → collected, pickup-only) that a branch
+  collapses into one **Tayyor** action, operator revert, and reasoned cancellation. The order
+  tracks production only — it moves no money and holds no stock.
 - **Finance & accounting** — a workshop money ledger: income (incl. order payments) and
   expenses (incl. staff salary) recorded by hand, worker-production reports the accountant
   uses to compute pay, and revenue / expense / net reporting by branch and period — enough
@@ -88,9 +92,10 @@ an integration (payments, refunds), that's a considered substitution.
   Revisit when the platform itself brings the demand a marketplace would allocate; until
   then nothing may be built toward it, and nothing may make the pivot harder.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
-  edits, multiple panel sizes, 3D nesting, CNC paths.
-- **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion
-  complaints, client ratings.
+  edits, multiple panel sizes, 3D nesting, CNC paths, and file imports other than 2D-Place
+  `.map` (the CSV and БАЗИС XML importers were removed in 2026-10: neither format is fixed).
+- **Advanced orders** — batching, partial fulfilment, post-completion complaints, client
+  ratings, and client-side choice of own material (staff set it).
 - **Multi-currency** — local currency only.
 - **Automatic purchase orders, procurement planning, remnant tracking, barcode scanning** —
   future. Supplier **payables** are in v1: an arrival is recorded as a supplier invoice, and

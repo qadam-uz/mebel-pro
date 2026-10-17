@@ -2,7 +2,7 @@
 title: Client entry & workshop links
 status: draft
 owner: shape
-updated: 2026-09-06
+updated: 2026-10-17
 order: 25
 ---
 
@@ -12,8 +12,8 @@ How a client arrives in the client app: a workshop hands out a link or a printed
 client follows it, and the app is **pinned to one of its branches** from then on. This page
 owns the workshop code, the entry flow, the pin, the client's own workshops and their
 profiles, and the scoping the pin imposes on the rest of the client app. The screens it
-narrows keep their own homes — the drawing's branch in [`cutting.md`](cutting.md), the client
-home dashboard and order screens in [`orders.md`](orders.md#ux-client-app).
+narrows keep their own homes — the order step's branch choice, the client home dashboard and
+the order screens in [`orders.md`](orders.md#ux-client-app).
 
 ## Problem
 
@@ -115,10 +115,10 @@ Applying an entry writes **two things**, and they answer two different questions
 
 **Certainty is the whole rule for the pin.** A branch link names its counter; a one-branch
 workshop has only one counter to name; a multi-branch link names none, and nothing may guess
-which counter the client stood at — so that client draws from Ustaxonalarim instead, where
-each branch row's **Yangi chizma** opens the editor at that branch, and the order placed from
-it settles the pin. The earlier "pin the workshop now, the branch later" state is gone with
-the workshop-level pin it needed.
+which counter the client stood at — so that client picks the branch on the order step's first
+screen ([`orders.md`](orders.md#placing-an-order)), and the order placed there settles the
+pin. The earlier "pin the workshop now, the branch later" state is gone with the
+workshop-level pin it needed.
 
 **Three paths write the pin**, and every one of them is the client saying where they collect:
 
@@ -138,13 +138,12 @@ the workshop-level pin it needed.
 - **Latest wins**, with no confirmation friction: entering a door means walking through it,
   and ordering from a counter means that counter is now yours. Re-following the same link is
   idempotent.
-- **«Yangi chizma» never pins** (owner, 2026-09-06: *"shunchaki bosib ko'rishi ham mumkin"* —
-  they may just be having a look). It opens the editor at that branch by carrying the branch
-  in the URL, and the drawing keeps it; the pin only follows if an order is placed from it.
-  Nor does the editor itself ever pin.
-- **The pin seeds, it does not enforce.** New cutting drafts take their branch from it unless
-  the URL named another visible branch, and a drawing keeps its own branch for life — nothing
-  written in the editor reaches the profile.
+- **Drawing never pins.** A drawing carries no branch at all
+  ([`cutting.md`](cutting.md#what-a-drawing-is)), and choosing a branch on the order step
+  writes nothing either — only placing the order does (owner, 2026-09-06: *"shunchaki bosib
+  ko'rishi ham mumkin"* — a client may just be having a look).
+- **The pin preselects, it does not enforce.** It is the default answer on the order step's
+  first screen; the client may pick any other of their branches there.
 - **A blocked workshop unpins in effect.** The session read that carries the pinned workshop
   and branch names returns them as null while the workshop is `blocked`, and that pair is the
   app's whole "is pinned" signal — so scoping silently stops applying rather than trapping the
@@ -173,23 +172,17 @@ than vanishing mid-history.
 Scoping is **read-time and offer-side only**: the server's client read scope is unchanged,
 and the pin narrows what the app *offers*, never what data it can render.
 
-- **Pinned** → home shows the **Ustaxonangiz** card and its **+ Yangi chizma**, which starts a
-  drawing at the pinned branch. The workshop entry point — the phone's **Ustaxona** tab and
-  the desktop nav's **Ustaxona**, one label and one target for both — opens that workshop's
-  profile directly when the client deals with exactly one workshop, and Ustaxonalarim (the
-  page, which keeps its own name) when there are several or the list has not loaded yet.
-- **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → **home offers
-  no drawing action**: its card is replaced by the **Ustaxona tanlang** prompt into
-  Ustaxonalarim, where every branch row's **Yangi chizma** still works. A direct URL to the
-  new-drawing route that names no branch is redirected to Ustaxonalarim before any editor
-  renders. A drawing needs a branch, and Ustaxonalarim is where an un-pinned client finds one.
-- **A drawing only ever starts from a workshop** — the pin, or a branch row's **Yangi
-  chizma**, which hands the editor that branch in the URL. The editor holds no workshop or
-  branch state of its own, so *"which branch will you collect from?"* is answered by the
-  button that started the drawing and never asked again ([`cutting.md`](cutting.md)).
-- **An existing draft keeps its own branch** even when that branch is outside the current pin,
-  and still renders normally. The pin scopes *new* choices; it never rewrites data or hides a
-  drawing the client already made.
+- **Pinned** → home shows the **Ustaxonangiz** card, and the order step preselects its
+  branch. The workshop entry point — the phone's **Ustaxona** tab and the desktop nav's
+  **Ustaxona**, one label and one target for both — opens that workshop's profile directly
+  when the client deals with exactly one workshop, and Ustaxonalarim (the page, which keeps
+  its own name) when there are several or the list has not loaded yet.
+- **Not pinned** (multi-branch link, organic signup, blocked pinned workshop) → the card is
+  replaced by the **Ustaxona tanlang** prompt into Ustaxonalarim. **+ Yangi chizma** works
+  regardless: a drawing needs no workshop, and the order step lists the client's branches —
+  or, with none, explains that a workshop is joined through its link or QR.
+- **"Which branch will you collect from?" is asked once, on the order step**, with the pin as
+  the default answer. Neither home nor the editor asks it, and a drawing never stores it.
 
 ## User stories
 
@@ -224,9 +217,8 @@ flowchart TD
 **There is no branch-choice step at entry.** It was asked here until 2026-09-05, on a
 workshop-level link with several branches, and it was the wrong moment: the client has not
 drawn anything, does not yet know what they are collecting, and the question only matters when
-a drawing starts. It is now answered by the per-branch **Yangi chizma** buttons on
-Ustaxonalarim and the workshop profile — and even they only open the editor at that branch;
-the answer is not written down as a pin until an order is placed.
+an order is placed. It is now answered on the order step's first screen, the pin preselected;
+the answer is not written down as a pin until the order is placed.
 
 ### Landing (`/w/…`)
 
@@ -277,19 +269,18 @@ visible branch — the same row the profile uses.
 **The branch row is where the pin and the actions live**, because the pin is a branch. Its
 title line names the branch (or the workshop, for a one-branch workshop — the naming rule),
 with a status pill and reason only when `temporarily_closed`; then address, every tap-to-call
-phone and **Xaritada ko'rish** when the branch has coordinates; then two small buttons, primary
-**Yangi chizma** and outline **Katalog**.
+phone and **Xaritada ko'rish** when the branch has coordinates; then an outline **Katalog**
+button. There is no drawing action on a branch row: a drawing has no branch, and the order
+step asks where to collect.
 
 The mark is a **star**: the pinned row carries a filled one, labelled *Asosiy*; every other row
 carries an outline star **button**, *Asosiy qilish*, which pins that branch in place — the star
-fills, the previous empties, a toast names it, and nothing navigates. **Yangi chizma** on a
-non-pinned row writes nothing at all — it opens the editor at that branch and leaves the star
-where it is until an order is placed. There is no «Asosiy» pill and no
-«Asosiy qilish» text button: a star is the affordance people already know for this, and it
-fits on a row that also has to hold two buttons on a phone.
+fills, the previous empties, a toast names it, and nothing navigates. There is no «Asosiy»
+pill and no «Asosiy qilish» text button: a star is the affordance people already know for
+this, and it fits on a row beside the catalog button on a phone.
 
 Empty state (**"Hali ustaxona ulanmagan"**) explains that the app is joined through a
-workshop's link or QR — and offers no drawing action, because a drawing needs a branch.
+workshop's link or QR — drawing still works from home; ordering needs a workshop.
 **The platform-wide directory is gone**, and nothing in the client app links to a list of all
 workshops any more.
 
@@ -305,12 +296,11 @@ workshops](#related-workshops). Any other workshop id renders the ordinary not-f
   none, and none are added to fill a page.
 - **Catalog** (`/c/workshops/:workshopId/catalog?branch=…`) — one branch's **read-only price
   list**: the branch as a dropdown in the head, a search field, a decor-type chip row, and
-  decor-first rows exactly as the editor's material picker draws them — a decor thumbnail that
+  decor-first rows exactly as the order step's decor picker draws them — a decor thumbnail that
   opens a lightbox on tap, the decor name, a grain mark, and the price where a concrete format
   is named (per sheet for panels, per metre for tape; a decor carried in several formats lists
   them beneath itself, each with its own size and price). `discontinued` materials are not
-  listed. There is **no add-to-draft and no drawing CTA** — the page is a price list, and the
-  one **Yangi chizma** is a tap back on the profile.
+  listed. There is **no add-to-draft and no drawing CTA** — the page is a price list.
 
 *Why read-only, and why only inside the client's own workshops.* The marketplace stays a later
 phase ([`scope.md`](../../scope.md)); a price list of the shop the client already stands in is
@@ -363,20 +353,19 @@ the role base path for `/client`.
   and home shows **Ustaxona tanlang**. This is the designed outcome, not a failure.
 - **Pinned branch later goes `inactive`** → the pin is not scope-enforced. Ustaxonalarim and
   the profile keep showing the workshop, list its remaining visible branches, and any of them
-  can be starred or drawn from.
+  can be starred or ordered at.
 - **Pinned workshop later blocked** → the session read nulls the pinned names, so the app
   behaves as un-pinned: home shows **Ustaxona tanlang** and the workshop drops off
   Ustaxonalarim (its profile and catalog answer not-found too). The stored
   `preferred_branch_id` is left alone and revives on unblock.
-- **Entry while a draft is open elsewhere** → the pin changes; the open draft keeps its
-  branch. No draft is ever re-branched implicitly.
-- **Order placed at a branch other than the pin** (a drawing started with **Yangi chizma** on
-  another row) → the pin moves to the order's branch, and home names that branch as
-  **Ustaxonangiz** from then on. The client is not asked to confirm: they just collected a
-  decision's worth of evidence about where they collect.
-- **Un-pinned client with a hand-edited branch in the URL** → an id outside the client's own
-  visible branches is ignored; the editor falls back to the pin, and with no pin either it
-  redirects to Ustaxonalarim like any other pin-less arrival.
+- **Entry while an order step is open elsewhere** → the pin changes; drafts carry no branch,
+  and an order step past its first screen keeps the branch it chose.
+- **Order placed at a branch other than the pin** (another branch picked on the order step) →
+  the pin moves to the order's branch, and home names that branch as **Ustaxonangiz** from then
+  on. The client is not asked to confirm: they just collected a decision's worth of evidence
+  about where they collect.
+- **A hand-edited branch in the order step's URL** → an id outside the client's own visible
+  branches is ignored, and the step opens on the pin as if nothing was named.
 - **Same link followed twice** → idempotent; the toast shows again, nothing else changes.
 - **Two tabs, two links, one login** → the last applied entry wins, and both toasts
   truthfully name what they connected.
@@ -394,7 +383,8 @@ the role base path for `/client`.
 
 ## Next
 
-- [`cutting.md`](cutting.md) — the drawing whose branch the pin settles.
+- [`orders.md`](orders.md#placing-an-order) — the order step whose first screen the pin
+  preselects.
 - [`orders.md`](orders.md#ux-client-app) — the home, list and order screens the pin feeds.
 - [`workshop.md`](workshop.md) — the branch and settings screens that publish the link.
 - [`identity.md`](../entities/identity.md#client) — the client record the pin lives on.

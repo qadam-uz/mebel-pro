@@ -574,7 +574,13 @@ Russian and appear in the Russian column on purpose.
 | A client's cutting order               | `buyurtma`          | `заказ`              | `zakaz`                           |
 | A cut piece on a drawing               | `detal`             | `деталь`             | `qism`, `part`                    |
 | A distinct part size on a drawing      | `xil`               | `типоразмер`         | `qator`, `tur`                    |
-| A saved cutting drawing                | `chizma`            | `раскрой`            | `eskiz`, `draft`                  |
+| A client's parts list (any state)      | `chizma`            | `раскрой`            | `eskiz`, `draft`                  |
+| A drawing not yet ordered              | `qoralama`          | `черновик`           | `draft`, `tugallanmagan`          |
+| A drawing kept for reuse               | `saqlangan chizma`  | `сохранённый раскрой` | `shablon`, `andoza`              |
+| One decor slot of a drawing            | `guruh`             | `группа`             | `material guruhi`, `qatlam`       |
+| A material left to the workshop        | `Ustaxona belgilaydi` | `Выберет мастерская` | `farqi yo'q`                    |
+| Sheets the client brings               | `mijoz materiali`   | `материал клиента`   | `o'z materiali`                   |
+| An order repeated from an order        | `qayta buyurtma`    | `повторить заказ`    | `takrorlash`, `dublikat`          |
 | A panel sheet                          | `list`              | `лист`               | `plita`, `panel`                  |
 | A layout's material yield              | `chiqim`            | `выход`              | `vixod`, `foyda`                  |
 | One buyable size of a dekor            | `o'lcham`           | `размер`             | `format`                          |
@@ -607,6 +613,11 @@ Russian and appear in the Russian column on purpose.
 arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
 income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
 of the interface) are different words for different things.
+
+`saqlangan` belongs to the client's **saved drawings** and nothing else: autosave never says
+*saqlandi* — beside a library called «Saqlangan chizmalar» it would claim a draft is in it. An
+unordered drawing is a `qoralama` in both apps, which is why the workshop's list of unfinished
+walk-in drawings is **Qoralamalar** too.
 
 `yon menyu` names the 264px column itself, and it is the one word copy uses to send someone
 there — below 921px the same content becomes the drawer, so "yon menyuda" stays true on a phone
