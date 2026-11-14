@@ -1,0 +1,73 @@
+# Reference config for the HOST-level nginx that terminates TLS for mebel-pro.
+# Not deployed by this repo — the host nginx (shared with another project on
+# the box) is managed on the server. Replace `mebelapp.uz` everywhere if the
+# apex changes; it must equal BASE_DOMAIN in deploy/.env.
+#
+# Order of operations (first time):
+#   1. DNS: A records for mebelapp.uz, www, app, workshop, admin → the box.
+#   2. Get the certificate WITHOUT letting certbot edit any config — nginx is
+#      already running for the other project, and the nginx authenticator
+#      answers the HTTP-01 challenge through it temporarily:
+#        sudo certbot certonly --nginx -d mebelapp.uz -d www.mebelapp.uz \
+#          -d app.mebelapp.uz -d workshop.mebelapp.uz -d admin.mebelapp.uz
+#      One certificate, stored under /etc/letsencrypt/live/mebelapp.uz/.
+#   3. Install this file as-is (its ssl_certificate paths now exist):
+#        sudo cp nginx-host.conf.example /etc/nginx/sites-available/mebelapp.uz
+#        sudo ln -s /etc/nginx/sites-available/mebelapp.uz /etc/nginx/sites-enabled/
+#        sudo nginx -t && sudo systemctl reload nginx
+#   4. Deploy mebel-pro (the edge listens on 127.0.0.1:8080).
+# Renewal is certbot's systemd timer; `certbot renew --dry-run` to check.
+# Installing this file before step 2 fails `nginx -t` (missing cert files).
+
+# Plain HTTP: everything goes to HTTPS. (certbot's nginx authenticator injects
+# its own challenge handling during issue/renew, so no acme location needed.)
+server {
+    listen 80;
+    # listen [::]:80;   # uncomment if the host serves IPv6 (AAAA records)
+    server_name mebelapp.uz www.mebelapp.uz app.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
+    return 301 https://$host$request_uri;
+}
+
+# www → apex.
+server {
+    listen 443 ssl;
+    # listen [::]:443 ssl;
+    server_name www.mebelapp.uz;
+
+    ssl_certificate     /etc/letsencrypt/live/mebelapp.uz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mebelapp.uz/privkey.pem;
+
+    return 301 https://mebelapp.uz$request_uri;
+}
+
+# Apex + the three app subdomains → the mebel-pro Caddy edge, which routes by
+# Host (deploy/Caddyfile).
+server {
+    listen 443 ssl;
+    # listen [::]:443 ssl;
+    server_name mebelapp.uz app.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
+
+    ssl_certificate     /etc/letsencrypt/live/mebelapp.uz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mebelapp.uz/privkey.pem;
+
+    # Must be >= the Caddyfile's `request_body max_size 25MB` — otherwise nginx
+    # rejects uploads (decor photos, receipts, cutting imports) the app accepts.
+    client_max_body_size 25m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        # OVERWRITE, never append ($proxy_add_x_forwarded_for): a client-supplied
+        # X-Forwarded-For must not pass through, or anyone could pick the IP the
+        # backend's per-IP login limits are keyed on.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Cutting optimisation and PDF generation are synchronous and can take
+        # a while; don't cut them off at nginx's 60 s default.
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}

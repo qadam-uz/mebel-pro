@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-09-06
+updated: 2026-11-14
 order: 70
 ---
 
@@ -43,35 +43,38 @@ the check gates run before shipping.
 ```mermaid
 flowchart TD
     Net([Internet])
-    Edge["<b>Caddy edge</b><br/>terminates HTTPS · auto-renews Let's Encrypt<br/>only published service in prod"]
+    Nginx["<b>Host nginx</b><br/>terminates HTTPS · certbot<br/>shared with another project on the box"]
+    Edge["<b>Caddy edge</b><br/>plain HTTP on loopback · routes by subdomain<br/>only published service in prod"]
     App["<b>FastAPI app</b> (1 process)<br/>modular monolith · in-process scheduler<br/>+ live docs site (/docs)"]
     DB[("PostgreSQL<br/>single DB")]
     Files[("MinIO / S3<br/>file store")]
     TG([Telegram Bot API<br/>client sign-in + notifications])
 
-    Net ==>|HTTPS| Edge
+    Net ==>|HTTPS| Nginx
+    Nginx ==>|HTTP| Edge
     Edge ==> App
     App ==> DB
     App ==> Files
     App -.->|send bot messages| TG
-    TG -.->|bot webhook| Edge
+    TG -.->|bot webhook| Nginx
 ```
 
-Caddy (config in `deploy/Caddyfile`) routes by **subdomain** under a single apex
-(`BASE_DOMAIN`, e.g. `mebel-pro.uz`):
+A **host-level nginx** (certbot-managed certificates) terminates TLS, redirects `www` to the
+apex, and proxies to the Caddy edge on `127.0.0.1` over plain HTTP. Caddy (config in
+`deploy/Caddyfile`) routes by **subdomain** under a single apex (`BASE_DOMAIN`, e.g.
+`mebelapp.uz`):
 
 | Host                    | Target                                                                                                    |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| `mebel-pro.uz`          | static SEO landing (1 HTML)                                                                               |
-| `app.mebel-pro.uz`      | client SPA (+ `/api/*` → backend)                                                                         |
-| `workshop.mebel-pro.uz` | workshop SPA (+ `/api/*` → backend)                                                                       |
-| `admin.mebel-pro.uz`    | superadmin SPA (+ `/api/*` → backend, + `/docs` · `/api-docs` · `/api-redoc` → backend, HTTP Basic-gated) |
+| `mebelapp.uz`           | static SEO landing (1 HTML)                                                                               |
+| `app.mebelapp.uz`       | client SPA (+ `/api/*` → backend)                                                                         |
+| `workshop.mebelapp.uz`  | workshop SPA (+ `/api/*` → backend)                                                                       |
+| `admin.mebelapp.uz`     | superadmin SPA (+ `/api/*` → backend, + `/docs` · `/api-docs` · `/api-redoc` → backend, HTTP Basic-gated) |
 
 Each SPA stays same-origin with its API (no CORS).
 
-The prod edge additionally fronts one unrelated project on the same VPS (**taqsim**, its own
-domain) — a Caddyfile change here redeploys the edge for both projects; the coupling and its
-failure mode are documented in the repo's `deploy/AGENTS.md`.
+The host nginx is shared with an unrelated project on the same VPS and is configured outside
+this repo; a reference copy lives at `deploy/nginx-host.conf.example`.
 
 - **One FastAPI process** — Python 3.12, async end-to-end (asyncio + asyncpg + SQLAlchemy 2.0,
   Alembic, pydantic-settings). Also renders `docs/` as a live site.
@@ -87,7 +90,8 @@ failure mode are documented in the repo's `deploy/AGENTS.md`.
   webhook through the edge, authenticated by Telegram's `secret_token` header; sends go
   straight to the Bot API. No polling process, no queue.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
-  (the only published service in prod — HTTPS + Let's Encrypt). Push to `main`.
+  (the only published service in prod — plain HTTP on loopback, behind the host nginx that
+  terminates HTTPS). Push to `main`.
 
 ## Backend modules
 

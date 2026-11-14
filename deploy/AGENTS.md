@@ -15,27 +15,19 @@ this file carries only the map and the gotchas.
 | File                | Stack |
 | ------------------- | ----- |
 | `compose.yaml`      | **Dev**, self-contained: `postgres` (17-alpine), `minio` + `createbuckets` one-shot, `backend` (source-mounted, autoreload, repo `docs/` bind-mounted, optional `cutting-engine` checkout — see gotchas), `web` (Vite dev server, HMR). Host ports: 5432, 9000/9001, 8000, 5173. |
-| `compose.prod.yaml` | **Prod**, self-contained. No local data services — backend joins the external `infra-net` network and uses the shared `postgres` + `minio`. Built images; a **Caddy edge** is the only published service (80/443/443-udp, auto-HTTPS). Subdomain routing (apex / `app.*` / `workshop.*` / `admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. |
-| `Caddyfile`         | Edge config, **baked into the edge image** (not bind-mounted — a mounted file's changes are invisible to `compose up`, stranding Caddy on stale config; a change ships via `up -d --build`). Also fronts the **taqsim** project — see below. |
-| `edge.Dockerfile`   | `FROM caddy:2.8-alpine` + `COPY Caddyfile`. Per-env values (`BASE_DOMAIN`, `ACME_EMAIL`) stay runtime env. |
+| `compose.prod.yaml` | **Prod**, self-contained. No local data services — backend joins the external `infra-net` network and uses the shared `postgres` + `minio`. Built images; a **Caddy edge** is the only published service — `127.0.0.1:8080`, plain HTTP; the host nginx in front terminates TLS. Subdomain routing (apex / `app.*` / `workshop.*` / `admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. |
+| `Caddyfile`         | Edge config, **baked into the edge image** (not bind-mounted — a mounted file's changes are invisible to `compose up`, stranding Caddy on stale config; a change ships via `up -d --build`). Plain HTTP (`auto_https off`), trusts the host nginx's `X-Forwarded-For` via the gateway. |
+| `edge.Dockerfile`   | `FROM caddy:2.8-alpine` + `COPY Caddyfile`. The per-env value (`BASE_DOMAIN`) stays runtime env. |
+| `nginx-host.conf.example` | **Reference copy** of the host-level nginx site (TLS via certbot, www → apex, proxy to `127.0.0.1:8080`). The live file is on the server, not deployed by this repo — keep the two in step by hand. Its header has the install order. |
 | `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF` (a hard reset — server-side edits are destroyed), re-exec the fresh script once, verify `deploy/.env` + `infra-net`, `compose -f compose.prod.yaml up -d --build --remove-orphans`, wait for the backend healthcheck, prune. Idempotent; runnable manually. |
 | `seed-demo.sh`      | Deterministic fixed-credential demo world for the running **dev** stack. Credentials, catalog shape, and counts live in the script's own header; `--reset` wipes volumes (`down -v`) and re-seeds. Needs the **docker** backend container (execs `app.cli` inside it). |
 | `seed-assets/`      | Catalog images the seed uploads; a missing file just skips that material's image. |
 | `.env.dev.example` / `.env.prod.example` | The env contract — dev copy runs as-is; prod has every secret as `{{change-me}}`. |
 
 > The `web` *container* has its own minimal nginx config (`../web/nginx.conf`, SPA history
-> fallback) — a plain static server behind the edge, never touching TLS. `deploy/Caddyfile`
-> is the edge that terminates HTTPS.
-
-## The edge also fronts taqsim
-
-The VPS is shared: **taqsim** (a separate project at `/opt/taqsim`) publishes no host ports,
-so this edge's `{$TAQSIM_DOMAIN}` site block (default `taqsim-ai.uz`) is its only way in —
-`reverse_proxy taqsim-web:80` over `infra-net`. Consequences: a Caddyfile edit here rebuilds
-the edge **for both projects**, a taqsim domain change needs a mebel-pro `.env` edit, and
-`TAQSIM_DOMAIN` must never be set to an *empty string* (an anonymous server block makes Caddy
-reject the entire config and takes mebel-pro down; the `:-` default handles unset/empty).
-Mechanics and the alias contract are commented in `compose.prod.yaml` and the `Caddyfile`.
+> fallback) — a plain static server behind the edge, never touching TLS. Nothing in this
+> repo's containers terminates TLS: the **host nginx** (shared with an unrelated project on
+> the box) does, then hands plain HTTP to the Caddy edge on loopback.
 
 ## Commands
 
@@ -68,16 +60,24 @@ local convenience.
 
 ## First-time setup on the VPS
 
-One-time and already done: repo cloned at `/opt/mebel-pro`; `deploy/.env` created from
-`.env.prod.example` with **every** `{{change-me}}` filled (the backend refuses to boot in
-prod with `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, or `TELEGRAM_LOGIN_CODE_PEPPER`
-left empty — a missed one
-crash-loops the first deploy, fail-safe); shared Postgres DB/user and MinIO key/bucket
-provisioned by hand on `infra-net` (prod never auto-creates the bucket); DNS for the apex +
-three subdomains pointed at the box, ports 80/443 open. The first `up` provisions five
-Let's Encrypt certificates (apex + three subdomains + the taqsim domain); they live in the
-`caddy-data` volume and renew automatically — don't delete that volume. `deploy.sh` refuses
-to run without `deploy/.env` and `infra-net`, and prints the fix for each.
+One-time, in this order (repo at `/opt/mebel-pro`):
+
+1. **Host nginx + certbot** are installed and own ports 80/443 (already true — the box's
+   other project runs on them).
+2. **`docker network create infra-net`**, with the shared `postgres` and `minio` containers
+   attached to it. The backend resolves them by those bare names, so they must be **unique on
+   `infra-net`** — no other project's container named or aliased `postgres`/`minio` may join
+   it, or Docker resolves to whichever answers. Provision the DB/user and the MinIO key +
+   bucket by hand (prod never auto-creates the bucket).
+3. **DNS**: A records for the apex, `www`, `app`, `workshop`, `admin` → the box.
+4. **`deploy/.env`** from `.env.prod.example` with **every** `{{change-me}}` filled (the
+   backend refuses to boot in prod with `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, or
+   `TELEGRAM_LOGIN_CODE_PEPPER` empty — a missed one crash-loops the first deploy, fail-safe).
+5. **Certificate + nginx site**: follow `nginx-host.conf.example`'s header —
+   `certbot certonly --nginx` for all five names, then install the file into
+   `sites-available`/`sites-enabled`, `nginx -t`, reload.
+6. **Deploy** (`deploy.sh`, or a push to `main`). `deploy.sh` refuses to run without
+   `deploy/.env` and `infra-net`, and prints the fix for each.
 
 ## Conventions / gotchas
 
@@ -115,13 +115,18 @@ to run without `deploy/.env` and `infra-net`, and prints the fix for each.
   stamps against prod.
 - New deployable service? Add it to both compose files; in prod give it `expose` (not
   `ports`), route it through the edge in the Caddyfile — and give it a **project-unique
-  network alias** (the Caddyfile proxies to `mebel-web:80`, not `web:80`: on the shared
-  `infra-net` a bare `web` once resolved to a *neighbour project's* container and every
-  mebel-pro SPA served taqsim's frontend).
+  network alias** (the Caddyfile proxies to `mebel-web:80`, not `web:80`: when the edge sat
+  on a shared network, a bare `web` once resolved to a *neighbour project's* container and
+  every mebel-pro SPA served that project's frontend).
 - Don't revert the prod edge to `image: caddy` + a bind-mounted Caddyfile — `compose up -d`
   won't recreate a container for a mounted file's content change, so Caddy silently keeps
   stale config. Keep it baked via `edge.Dockerfile`.
-- Auto-HTTPS needs the edge reachable on **80 and 443** from the internet — don't remap them.
+- **The edge publishes only `127.0.0.1:8080`, plain HTTP.** The host nginx owns 80/443 and
+  TLS (certbot); never publish the edge on a public interface or re-enable Caddy's
+  auto-HTTPS — it would fight nginx for the ports, and a public edge would let anyone forge
+  `X-Forwarded-For` through the trusted gateway. The host nginx must **overwrite**
+  `X-Forwarded-For` with `$remote_addr` (not append), and its `client_max_body_size` must stay
+  ≥ the Caddyfile's 25 MB `request_body` cap — change them together.
 - Pin image tags (`postgres:17-alpine`, `pgsty/minio:RELEASE.…`, `caddy:2.8-alpine`,
   `nginx:1.27-alpine`, `node:22-slim`); never `latest`.
 - **MinIO images come from `pgsty/minio` + `pgsty/mc`** (the community fork). Upstream pulled
@@ -132,8 +137,11 @@ to run without `deploy/.env` and `infra-net`, and prints the fix for each.
   and the shared prod instance need nothing extra; a managed Postgres that withholds it leaves
   the search's last fallback returning no rows instead of erroring, but any *other* Postgres
   swap has to keep the contrib extensions available.
-- The prod `default` subnet (`172.29.0.0/24`) and `TRUSTED_PROXY_CIDRS` move **together** —
-  the backend trusts `X-Forwarded-For` only from that subnet, and the per-IP
-  Telegram-login limits are
-  inert without it. If the subnet collides on the VPS, change both in one commit. `infra-net`
-  must never be listed as trusted (shared with other projects).
+- The prod `default` subnet (`172.29.0.0/24`), `TRUSTED_PROXY_CIDRS`, and the Caddyfile's
+  `trusted_proxies static 172.29.0.1/32` move **together**. The chain is client → host nginx
+  (sets `X-Forwarded-For` to the client) → docker gateway `172.29.0.1` (the loopback port's
+  source) → Caddy (keeps nginx's header, appends `172.29.0.1`) → backend, which takes the
+  right-most hop outside the trusted CIDRs — the real client. The per-IP limits are inert
+  without it (every request would key on the gateway). If the subnet collides on the VPS,
+  change all three in one commit. `infra-net` must never be listed as trusted (shared with
+  other projects).

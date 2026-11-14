@@ -14,7 +14,7 @@ don't silently code around it.
 | `backend/`    | REST API (JSON, `/api/v1`)                                                    | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/AGENTS.md`](backend/AGENTS.md)  |
 | `web/`        | Web client — 3 SPAs (client / workshop / admin) + static landing              | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/AGENTS.md`](web/AGENTS.md)          |
 | `e2e/`        | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/AGENTS.md`](e2e/AGENTS.md)          |
-| `deploy/`     | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/AGENTS.md`](deploy/AGENTS.md)    |
+| `deploy/`     | Container orchestration                                                       | Docker Compose · Caddy (edge, behind host nginx TLS) · nginx · Postgres · MinIO       | [`deploy/AGENTS.md`](deploy/AGENTS.md)    |
 | `docs/`       | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill |
 | `impl_specs/` | Historical implementation handoffs (specs, prototypes) — **not canon**; on conflict `docs/` wins | Markdown · HTML                                                    | —                                         |
 

@@ -1,8 +1,15 @@
-# Edge reverse proxy for the production stack — the only container published to
-# the host. Terminates HTTP/HTTPS and routes by subdomain to the internal
-# services. Mounted into the `edge` service by compose.prod.yaml.
+# Edge router for the production stack. Plain HTTP only — it does NOT
+# terminate TLS. Routes by subdomain to the internal services. Baked into the
+# `edge` image (edge.Dockerfile); compose.prod.yaml publishes it on
+# 127.0.0.1:8080 only.
 #
-# BASE_DOMAIN (from deploy/.env) — the apex, e.g. "mebel-pro.uz". Caddy serves
+# TLS lives on the HOST: the VPS runs a host-level nginx + certbot on 80/443
+# that fronts every project on the box (mebel-pro and an unrelated one). It
+# terminates HTTPS, redirects www → apex, and proxies the four hosts below to
+# 127.0.0.1:8080. That nginx config is managed on the server, not by this repo;
+# the reference copy is deploy/nginx-host.conf.example.
+#
+# BASE_DOMAIN (from deploy/.env) — the apex, e.g. "mebelapp.uz". Caddy serves
 # four sites derived from it:
 #   • {$BASE_DOMAIN}           → static SEO landing
 #   • app.{$BASE_DOMAIN}       → client SPA       (+ /api/* → backend)
@@ -12,14 +19,26 @@
 #                                                    /api-redoc → backend,
 #                                                    HTTP Basic-gated server-side)
 #
-# Auto-HTTPS: the box must be reachable from the internet on 80 and 443 and DNS
-# for the apex and the three subdomains must point at it; Caddy obtains and
-# renews a Let's Encrypt certificate per host.
-#
 # Local stack testing: set BASE_DOMAIN=lvh.me (resolves *.lvh.me → 127.0.0.1)
-# and accept Caddy's internal-CA cert; or add the four hosts to /etc/hosts.
-# ACME_EMAIL is accepted by Compose for future notification wiring. Caddy does
-# not require an email address for ACME, and an empty email directive is invalid.
+# and hit the edge directly over plain HTTP — http://app.lvh.me:8080/ — or
+# without DNS: curl -H 'Host: app.lvh.me' http://127.0.0.1:8080/
+{
+	# No ACME, no certificates, no HTTP→HTTPS redirect — the host nginx owns
+	# TLS. The explicit http:// site addresses below already imply this; the
+	# option makes it impossible to regress by dropping a scheme.
+	auto_https off
+
+	servers {
+		# The host nginx reaches the edge through the published loopback port,
+		# so Caddy sees the `default` network's gateway (172.29.0.1) as the
+		# peer. Trusting it makes Caddy keep nginx's X-Forwarded-For (and
+		# X-Forwarded-Proto) and append to it instead of discarding it — the
+		# backend's per-IP limits depend on that. Nothing else can arrive from
+		# the gateway: the port is bound to 127.0.0.1. Tied to the pinned
+		# subnet in compose.prod.yaml — change both together.
+		trusted_proxies static 172.29.0.1/32
+	}
+}
 
 (common) {
 	encode zstd gzip
@@ -33,7 +52,7 @@
 
 # Apex: the static SEO landing only. Role apps are served only on their
 # documented subdomains; apex app paths intentionally 404.
-{$BASE_DOMAIN} {
+http://{$BASE_DOMAIN} {
 	import common
 
 	handle / {
@@ -52,7 +71,7 @@
 }
 
 # Client SPA + same-origin API.
-app.{$BASE_DOMAIN} {
+http://app.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
@@ -78,7 +97,7 @@ app.{$BASE_DOMAIN} {
 }
 
 # Workshop SPA + same-origin API.
-workshop.{$BASE_DOMAIN} {
+http://workshop.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
@@ -103,19 +122,8 @@ workshop.{$BASE_DOMAIN} {
 	}
 }
 
-# Taqsim Telegram Mini App — a SEPARATE compose stack on this same box
-# (/opt/taqsim). It publishes no host ports, so this edge is its only entry.
-# `taqsim-web` is a network alias on the shared `infra-net`; it serves the SPA
-# and proxies its own /api/* to the taqsim bot, so one line covers the site.
-# Renaming that alias in taqsim's docker-compose.prod.yml breaks this block.
-{$TAQSIM_DOMAIN} {
-	import common
-
-	reverse_proxy taqsim-web:80
-}
-
 # Superadmin SPA + same-origin API + the live docs site + OpenAPI UIs.
-admin.{$BASE_DOMAIN} {
+http://admin.{$BASE_DOMAIN} {
 	import common
 
 	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
