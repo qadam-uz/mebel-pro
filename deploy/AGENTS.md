@@ -20,7 +20,7 @@ this file carries only the map and the gotchas.
 | `edge.Dockerfile`   | `FROM caddy:2.8-alpine` + `COPY Caddyfile`. The per-env value (`BASE_DOMAIN`) stays runtime env. |
 | `scripts/edge-tag.sh` | Prints the edge image's **content tag** (`edge-<16 hex>`, a sha256 over `edge.Dockerfile`, `Caddyfile`, `.dockerignore`) — the only place the formula lives; CI tags the image with it and `deploy.sh` pins it as `EDGE_IMAGE_TAG`. Same bytes, same tag, so a deploy that doesn't touch the edge leaves its container running. A file the edge build starts reading must join its input list. |
 | `nginx-host.conf.example` | **Reference copy** of the host-level nginx site (TLS via certbot, www → apex, proxy to `127.0.0.1:8080`). The live file is on the server, not deployed by this repo — keep the two in step by hand. Its header has the install order. |
-| `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF` (a hard reset — server-side edits are destroyed), re-exec the fresh script once, verify `deploy/.env` (exists, no `{{change-me}}` left, `compose config` resolves), pin `IMAGE_TAG` (= HEAD) and `EDGE_IMAGE_TAG` in it, `pull backend web edge` (never the data-service images), data services `up --wait`, `createbuckets`, migrations in a one-off container (the old backend keeps serving; `SKIP_MIGRATIONS=1` skips them for a rollback), `up -d --wait --remove-orphans`, Telegram webhook (non-fatal), prune mebel-pro's unused images. Idempotent; runnable manually. |
+| `scripts/deploy.sh` | What CI runs on the server over SSH (from `.github/workflows/deploy.yml`): `git fetch` (with the deploy job's token, when given) + `git reset --hard $DEPLOY_REF` (a hard reset — server-side edits are destroyed), re-exec the fresh script once, verify `deploy/.env` (exists, no `{{change-me}}` left, `compose config` resolves), pin `IMAGE_TAG` (= HEAD) and `EDGE_IMAGE_TAG` in it, `pull backend web edge` (logged in with the same token in a throwaway `DOCKER_CONFIG`; never the data-service images), data services `up --wait`, `createbuckets`, migrations in a one-off container (the old backend keeps serving; `SKIP_MIGRATIONS=1` skips them for a rollback), `up -d --wait --remove-orphans`, Telegram webhook (non-fatal), prune mebel-pro's unused images. Idempotent; runnable manually with a token. |
 | `seed-demo.sh`      | Deterministic fixed-credential demo world for the running **dev** stack. Credentials, catalog shape, and counts live in the script's own header; `--reset` wipes volumes (`down -v`) and re-seeds. Needs the **docker** backend container (execs `app.cli` inside it). |
 | `seed-assets/`      | Catalog images the seed uploads; a missing file just skips that material's image. |
 | `.env.dev.example` / `.env.prod.example` | The env contract — dev copy runs as-is; prod has every secret as `{{change-me}}`. |
@@ -75,16 +75,59 @@ builds backend, web and edge **once** — on a PR it stops there (a build smoke 
 `ghcr.io/qadam-uz/mebel-pro-edge:<content tag>`. Tags are **immutable**: an image GHCR
 already has under its tag is neither rebuilt nor re-pushed (a re-push repoints the tag at a
 new digest, and compose would then recreate that container for nothing). Last, on `main`
-only, the deploy job SSHes to the VPS and runs
-`DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh`, which pulls exactly those
-images — so only commits whose CI went green on `main` are deployable, and **Run workflow**
-on `main` is a quick redeploy. The SSH secrets (incl. the optional host-key fingerprint and
-how to read it) are listed in `ci.yml`'s header; they live in the `production` environment.
+only, the deploy job calls `.github/workflows/deploy.yml` — **the one place the SSH step
+lives** — which runs `DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh` on the
+VPS; that pulls exactly those images, so only commits whose CI went green on `main` are
+deployable. The SSH secrets (incl. the optional host-key fingerprint and how to read it) are
+listed in `ci.yml`'s header; they live in the `production` environment.
+
+**Redeploy or roll back without SSH**: **Actions → Deploy → Run workflow**, from `main`. `ref`
+empty redeploys `origin/main`; `ref` = the last good SHA with **skip_migrations** ticked is a
+rollback (why the flag: the migrations gotcha below). A SHA CI never published images for
+fails at the pull, before anything on the box changes. **Run workflow** on **CI** still
+re-runs the whole pipeline, deploy included, for `main`'s head.
+
+**The repo and its GHCR packages are private, and the box stores no GitHub credential.** Each
+deploy hands `deploy.sh` the deploy job's own `GITHUB_TOKEN` — `contents: read` +
+`packages: read`, dead when the job ends — as `DEPLOY_GITHUB_TOKEN` (+ `DEPLOY_GITHUB_ACTOR`),
+spent on the `git fetch` (an env-reading credential helper: nothing in argv or `.git/config`)
+and on one `docker login` into a throwaway `DOCKER_CONFIG` for the pull. Whoever calls
+`deploy.yml` must keep two rules, and breaking either fails only at runtime: grant the
+calling job at least those two permissions (a called workflow can't raise its caller's), and
+pass `secrets: inherit` (environment secrets reach a called workflow only when passed —
+unpassed they're silently empty).
 
 CI runs the compose data services with `--env-file .env.dev.example` **directly** — no `.env`
 copy exists there — so the dev template must stay runnable as-is: a `{{placeholder}}` or a
 commented-out required var added to it breaks `verify-backend` and `verify-e2e`, not just
 local convenience.
+
+### Switching an existing box to the private repo (one-time, in this order)
+
+`deploy.sh` fetches with the copy **already on the box**, and only then re-execs the fetched
+one — so the token-aware script must reach the box while an anonymous fetch still works:
+
+1. Merge the token-aware `deploy.sh` + `deploy.yml` to `main` **while the repo is still
+   public**. That CI run deploys it: the old script on the box fetches anonymously, resets to
+   the new commit and re-execs the new script, which logs in to GHCR with the job's token.
+2. Wait for that deploy to go green (its log shows `==> Logging in to ghcr.io …`) — the proof
+   the token pull works.
+3. Only then make the repo private (**Settings → General → Danger Zone → Change
+   visibility**).
+4. **Actions → Deploy → Run workflow** on `main`, `ref` empty — the proof the authenticated
+   fetch works.
+
+Made private too early, the deploy dies at the old script's fetch (`could not read
+Username`). Put the new script in place by hand as `deploy`, then redeploy from Actions:
+
+```bash
+cd /opt/mebel-pro
+read -rs DEPLOY_GITHUB_TOKEN && export DEPLOY_GITHUB_TOKEN   # a classic PAT with repo scope
+GIT_TERMINAL_PROMPT=0 git -c credential.helper= \
+  -c 'credential.helper=!f() { echo username=x-access-token; echo "password=${DEPLOY_GITHUB_TOKEN}"; }; f' \
+  fetch origin
+unset DEPLOY_GITHUB_TOKEN && git reset --hard origin/main
+```
 
 ## First-time setup on the VPS
 
@@ -100,8 +143,22 @@ stack itself — there is no shared infra to provision.
 3. **A `deploy` user in the `docker` group** (`sudo adduser --disabled-password deploy &&
    sudo usermod -aG docker deploy`), with CI's public key in its
    `~/.ssh/authorized_keys`, and `/opt/mebel-pro` created and owned by it.
-4. **Clone** as that user: `git clone https://github.com/qadam-uz/mebel-pro.git
-   /opt/mebel-pro` — the repo is public, so no deploy key.
+4. **Clone** as that user. The repo is private and the box keeps no GitHub credential, so
+   use a **temporary** classic PAT (`repo` scope — or a fine-grained one with read access to
+   this repo's contents; git takes either), fed to git by the same env-reading credential
+   helper `deploy.sh` uses — never in the URL, which git would save in `.git/config`:
+
+   ```bash
+   read -rs DEPLOY_GITHUB_TOKEN && export DEPLOY_GITHUB_TOKEN   # paste the PAT; stays out of history
+   GIT_TERMINAL_PROMPT=0 git -c credential.helper= \
+     -c 'credential.helper=!f() { echo username=x-access-token; echo "password=${DEPLOY_GITHUB_TOKEN}"; }; f' \
+     clone https://github.com/qadam-uz/mebel-pro.git /opt/mebel-pro
+   unset DEPLOY_GITHUB_TOKEN
+   ```
+
+   The `-c`s go **before** `clone` (after it, `clone` writes them into the new repo's
+   config), and the single quotes stay — the helper's own shell expands the variable. Revoke
+   the PAT afterwards: every deploy brings its own token.
 5. **`deploy/.env`** from `.env.prod.example`, `chmod 600`, with **every** `{{change-me}}`
    filled (`openssl rand -hex 32` for secrets). Check from `deploy/` with
    `grep -E '^[[:space:]]*[^#[:space:]].*\{\{change-me\}\}' .env | cut -d= -f1` — no output
@@ -120,26 +177,28 @@ stack itself — there is no shared infra to provision.
    `certbot certonly --nginx` for all five names **with `--deploy-hook "systemctl reload
    nginx"`** (renewed certs only take effect on reload), then install the file into
    `sites-available`/`sites-enabled`, `nginx -t`, reload.
-8. **GHCR packages public**, so the server pulls without credentials. A package a workflow
-   creates with its `GITHUB_TOKEN` "inherits the visibility and permissions model of the
-   repository where the workflow is run" ([GitHub Docs](https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions)),
-   so this public repo's first `main` run should create all three **public** — but other
-   GitHub pages say a new package starts private, so check once after that run: the org's
-   **Packages** tab shows each package's visibility, and an anonymous
-   `docker pull ghcr.io/qadam-uz/mebel-pro-web:<sha>` (and the same for `-backend`, and
-   `-edge:<content tag>`) must succeed. If one is private:
-   package → **Package settings** → **Danger Zone** → **Change visibility** → Public
-   (irreversible — fine, the code is public too). The org setting **Settings → Packages →
-   Package creation** must allow public packages.
-9. **GitHub secrets** in the `production` **environment** the deploy job runs in — repo
-   **Settings → Environments → production → Environment secrets**, not repository secrets
-   (an environment secret also overrides a repository secret of the same name):
+8. **GHCR packages stay private — readable by this repo's workflows.** CI pushes them with
+   this repo's `GITHUB_TOKEN` and the `org.opencontainers.image.source` label, so each one is
+   linked to the repo from its first push and inherits the repo's access — the linked repo's
+   workflows "automatically get access to the package", unless the org turned that
+   inheritance off ([GitHub Docs](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#ensuring-workflow-access-to-your-package)).
+   That is what lets the deploy job's token pull them. Check once after the first `main` run,
+   and whenever a deploy's pull says `denied`: org **Settings → Packages → Default Package
+   Settings → Inherit access from source repository** is ticked (it only applies to packages
+   created while it is), and each package's **Package settings** shows access inherited from
+   `qadam-uz/mebel-pro` or lists it under **Manage Actions access** with at least Read — add
+   it there if neither. Nothing pulls the packages anonymously, so never make them public.
+9. **GitHub secrets** in the `production` **environment** the deploy job (`deploy.yml`) runs in —
+   repo **Settings → Environments → production → Environment secrets**, not repository
+   secrets (an environment secret also overrides a repository secret of the same name):
    `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER` (`deploy`), `DEPLOY_SSH_KEY`, optional
    `DEPLOY_SSH_PORT`, and `DEPLOY_SSH_FINGERPRINT` — `ci.yml`'s header says which host key to
-   read it from (the ECDSA one, not ed25519).
-10. **First deploy**: as `deploy`, `bash /opt/mebel-pro/deploy/scripts/deploy.sh` (deploys
-    `origin/main`, which must be a commit CI published images for), or **Actions → CI → Run
-    workflow** on `main`.
+   read it from (the ECDSA one, not ed25519). Also set the environment's **Deployment
+   branches and tags** to `main` only: that, not a workflow's own `if`, is what keeps an edited
+   workflow pushed on another branch away from these secrets.
+10. **First deploy**: **Actions → Deploy → Run workflow** on `main`, `ref` empty (deploys
+    `origin/main`, which must be a commit CI published images for). On the box itself it
+    needs a token first — see the gotcha on GitHub credentials.
 11. **First platform admin**, from `deploy/`:
     `docker compose -f compose.prod.yaml exec backend python -m app.cli seed-platform-user
     --login <login> --password <throwaway>` — the first sign-in forces a password change.
@@ -182,10 +241,23 @@ stack itself — there is no shared infra to provision.
   first, drop or rename only once no deployed code reads it; the invariant lives in
   [`docs/architecture.md`](../docs/architecture.md) → Current stage). `deploy.sh` migrates
   *before* swapping containers, so the old code serves on the new schema for the length of
-  the deploy — and indefinitely after a rollback. **Rollback** =
-  `DEPLOY_REF=<last good sha> SKIP_MIGRATIONS=1 bash deploy/scripts/deploy.sh` (old code
-  can't `upgrade head` past a revision it doesn't know); only to commits that already have
-  the pull-based `deploy.sh` — an older one builds on the box and wants `infra-net`.
+  the deploy — and indefinitely after a rollback. **Rollback** = **Actions → Deploy → Run
+  workflow** with `ref` = the last good SHA and **skip_migrations** ticked (on the box, with
+  a token exported: `DEPLOY_REF=<last good sha> SKIP_MIGRATIONS=1 bash
+  deploy/scripts/deploy.sh`) — old code can't `upgrade head` past a revision it doesn't know.
+  Only to commits whose `deploy.sh` already logs in with `DEPLOY_GITHUB_TOKEN` (the switch to
+  the private repo onwards): an older one pulls anonymously, which the private packages
+  refuse — and older still builds on the box and wants `infra-net`.
+- **GitHub credentials: the box has none, and anonymous is the fallback.** With
+  `DEPLOY_GITHUB_TOKEN` unset, `deploy.sh` fetches and pulls anonymously, exactly as while the
+  repo was public — against the private repo it stops at the fetch with a hint. So a run on
+  the box needs a token first: a **classic** PAT with `repo` + `read:packages` (GitHub
+  Packages takes no fine-grained PAT), typed blind —
+  `read -rs DEPLOY_GITHUB_TOKEN && export DEPLOY_GITHUB_TOKEN DEPLOY_GITHUB_ACTOR=<github user>`,
+  `unset` after; prefer **Actions → Deploy**. Never `docker login` as `deploy` or put a token
+  in the remote URL: both persist it on the box (`~/.docker/config.json`, `.git/config`), and
+  a stale ghcr.io login in `~/.docker` is what an anonymous pull would then use. Never
+  `set -x` the script or turn on the SSH action's `debug`: both would print the token.
 - **`IMAGE_TAG` and `EDGE_IMAGE_TAG` in `deploy/.env` belong to `deploy.sh`.** It pins the
   deployed commit and the edge's content tag there on every run so manual
   `docker compose -f compose.prod.yaml …` commands resolve the running images; a hand edit is
