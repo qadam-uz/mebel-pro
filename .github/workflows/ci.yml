@@ -12,21 +12,57 @@
 #      These mirror the per-directory check gates documented in the repo
 #      AGENTS.md. Run them locally before pushing; CI is the safety net.
 #
-#   2. Docker build smoke (PR + push to main, after verify)
-#        - Just verifies the backend + web images still compile. No registry.
+#   2. Images (PR + main, after verify)
+#        - Builds the three deployable images ONCE: backend, web, edge.
+#          PRs: build all three, push nothing (a compile smoke test). main —
+#          a push, or "Run workflow" on main — also pushes them to GHCR:
+#            ghcr.io/qadam-uz/mebel-pro-{backend,web}:<full commit sha>
+#            ghcr.io/qadam-uz/mebel-pro-edge:<content tag>
+#          The edge's tag comes from deploy/scripts/edge-tag.sh (a hash of its
+#          build inputs — the one place that formula lives), so a commit that
+#          leaves the Caddyfile alone leaves the running edge alone.
+#        - Tags are immutable: no `latest`, no moving tags, and an image whose
+#          tag GHCR already has is not rebuilt or re-pushed. Re-pushing would
+#          repoint the tag at a new digest (build timestamps aren't
+#          reproducible), compose would recreate that container on the next
+#          deploy — for the edge, needlessly — and a re-run would recompile
+#          the backend for nothing. So the server runs exactly what CI built.
+#        - Auth is the job's own GITHUB_TOKEN; the server pulls anonymously
+#          (the packages are public — deploy/AGENTS.md → First-time setup).
+#        - linux/amd64, the runner's own arch. An arm64 server needs this job
+#          on `ubuntu-24.04-arm` instead — not QEMU, under which the
+#          PackingSolver compile is impractical.
 #
-#   3. Deploy (push to main only, after every other job is green)
+#   3. Deploy (main only — a push, or "Run workflow" on main to redeploy —
+#      after every other job is green)
 #        - SSHes to the VPS as the deploy user and runs
 #            DEPLOY_REF=<sha> bash deploy/scripts/deploy.sh
-#          which `git fetch && git reset --hard <sha>` and brings the prod
-#          stack up. The repo is already cloned on the server. No registry,
-#          no rsync, no docker push/pull.
+#          which `git fetch && git reset --hard <sha>` (the checkout supplies
+#          the compose file and the live docs), pulls that SHA's images,
+#          migrates as a separate gated step while the old release keeps
+#          serving, then swaps the containers. Nothing is built on the server.
 #
-# Required GitHub config (Settings → Secrets and variables → Actions):
-#   secrets.DEPLOY_SSH_HOST     host / IP of the prod server
-#   secrets.DEPLOY_SSH_USER     SSH user (must be in the `docker` group)
-#   secrets.DEPLOY_SSH_KEY      private key for that user (PEM, no passphrase)
-#   secrets.DEPLOY_SSH_PORT     optional — SSH port (default 22)
+# Required GitHub config — secrets of the `production` ENVIRONMENT, which the
+# deploy job runs in (Settings → Environments → production → Environment
+# secrets; not repository secrets — an environment secret also overrides a
+# repository secret of the same name):
+#   secrets.DEPLOY_SSH_HOST         host / IP of the prod server
+#   secrets.DEPLOY_SSH_USER         SSH user (must be in the `docker` group)
+#   secrets.DEPLOY_SSH_KEY          private key for that user (PEM, no passphrase)
+#   secrets.DEPLOY_SSH_PORT         optional — SSH port (default 22)
+#   secrets.DEPLOY_SSH_FINGERPRINT  optional, recommended — the server's SSH host
+#                                   key fingerprint. Unset = the action skips host
+#                                   key verification (accepts any server key).
+#     Value: `SHA256:…` exactly as ssh-keygen prints it, prefix included, taken
+#     ON the server from its ECDSA host key:
+#       ssh-keygen -l -f /etc/ssh/ssh_host_ecdsa_key.pub | cut -d' ' -f2
+#     ECDSA, not the ed25519 key the action's README example uses: the action's
+#     Go SSH client (drone-ssh → golang.org/x/crypto) sets no host-key
+#     preference, and x/crypto's default ranks plain host keys ECDSA first,
+#     RSA next, Ed25519 last; the handshake settles on the first of those the
+#     server holds — ECDSA on a stock Ubuntu box. (No ECDSA key there? Then RSA,
+#     then ed25519.) The wrong key type fails the deploy with "ssh: host key
+#     fingerprint mismatch".
 
 name: CI
 
@@ -41,6 +77,11 @@ on:
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Image names are <prefix>-backend / -web / -edge — the same names
+  # deploy/compose.prod.yaml pulls. Change both together.
+  IMAGE_PREFIX: ghcr.io/qadam-uz/mebel-pro
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -219,50 +260,128 @@ jobs:
         run: docker compose --env-file .env.dev.example -f compose.yaml down -v --remove-orphans
 
   # ---------------------------------------------------------------------------
-  # 4. Docker build smoke — make sure the backend + web images still compile.
-  #    No registry; CD does its own build on the server.
+  # 4. Images — build backend, web and edge once. PRs: build all, push none
+  #    (smoke). main (push or "Run workflow"): push to GHCR whatever isn't
+  #    there yet — backend/web under the commit SHA, the edge under its
+  #    content tag — the exact images the deploy job has the server pull.
   # ---------------------------------------------------------------------------
-  docker-build:
-    name: Docker · build smoke
+  images:
+    name: Docker · images
     runs-on: ubuntu-24.04
     needs: [verify-backend, verify-web, verify-e2e]
-    timeout-minutes: 20
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Same condition as the deploy job's `if`: only main publishes.
+      PUBLISH: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build backend image
+      # backend and web are tagged with the commit SHA; the edge with its
+      # content tag, from the same script deploy.sh pins it with.
+      - name: Edge content tag
+        id: tags
+        run: |
+          edge="$(bash deploy/scripts/edge-tag.sh)"
+          echo "edge=$edge" >> "$GITHUB_OUTPUT"
+          echo "Edge image tag: $edge"
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Immutable tags: an image GHCR already has under its tag is neither
+      # rebuilt nor re-pushed (see the header). Only a registry answer counts
+      # as "not published" — not found, or denied/forbidden, which is how GHCR
+      # answers for a package that doesn't exist yet (a real permission problem
+      # then fails loudly at the push). Anything else, e.g. a network error,
+      # stops the job rather than risk repointing a live tag.
+      - name: Skip images GHCR already has
+        id: published
+        if: env.PUBLISH == 'true'
+        env:
+          EDGE_TAG: ${{ steps.tags.outputs.edge }}
+        run: |
+          check() {  # $1 = output key, $2 = image ref
+            if out="$(docker buildx imagetools inspect "$2" 2>&1)"; then
+              echo "$2 is already published; not rebuilding it."
+              echo "$1=true" >> "$GITHUB_OUTPUT"
+            elif grep -qiE 'not found|manifest unknown|name unknown|denied|unauthorized|forbidden' <<<"$out"; then
+              echo "$2 is not published yet."
+              echo "$1=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Could not check whether $2 exists: $out"
+              exit 1
+            fi
+          }
+          check backend "$IMAGE_PREFIX-backend:$GITHUB_SHA"
+          check web "$IMAGE_PREFIX-web:$GITHUB_SHA"
+          check edge "$IMAGE_PREFIX-edge:$EDGE_TAG"
+
+      # The source label links each package to this repo on GHCR (and is what
+      # deploy.sh's prune filter matches); the revision label records the
+      # commit that built it.
+      - name: Backend image
+        if: steps.published.outputs.backend != 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          push: false
-          load: false
-          tags: mebel-pro-backend:ci
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/qadam-uz/mebel-pro
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      - name: Build web image
+      - name: Web image
+        if: steps.published.outputs.web != 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./web
-          push: false
-          load: false
-          tags: mebel-pro-web:ci
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/qadam-uz/mebel-pro
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
+      # Context is deploy/ — its .dockerignore lets only the Caddyfile in.
+      - name: Edge image
+        if: steps.published.outputs.edge != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy
+          file: ./deploy/edge.Dockerfile
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ env.IMAGE_PREFIX }}-edge:${{ steps.tags.outputs.edge }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/qadam-uz/mebel-pro
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=edge
+          cache-to: type=gha,mode=max,scope=edge
+
   # ---------------------------------------------------------------------------
   # 5. Deploy — SSH to the prod server and run deploy/scripts/deploy.sh.
-  #    Only after every other job is green and only on a push to main.
+  #    Only after every other job is green, and only on main: every push, or
+  #    "Run workflow" on main to redeploy that commit.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to production
     runs-on: ubuntu-24.04
     environment: production
-    needs: [verify-backend, verify-web, verify-e2e, docker-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 25
+    needs: [verify-backend, verify-web, verify-e2e, images]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 15
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -274,18 +393,22 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          # The action's own command timeout defaults to 10m, which a cold
-          # backend image build blows past (the PackingSolver compile alone is
-          # ~7m once the server prunes its build cache) — the 2026-09-02 deploy
-          # died exactly there. Keep it under the job's 25m so the job-level
-          # limit stays the backstop.
-          command_timeout: 20m
+          # Empty (secret unset) = no host key verification; see the header.
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          # Nothing is built on the server any more — a deploy is a pull,
+          # a migration and a container swap. 10m covers a cold first pull
+          # plus both of deploy.sh's 120s `--wait` windows; the job's 15m
+          # stays the backstop.
+          command_timeout: 10m
           # The deploy script does:
-          #   - git fetch + reset --hard $DEPLOY_REF
-          #   - verifies deploy/.env and the infra-net network exist
-          #   - docker compose -f compose.prod.yaml up -d --build --remove-orphans
-          #   - waits for the backend healthcheck
-          #   - prunes dangling images
+          #   - git fetch + reset --hard $DEPLOY_REF (re-execs itself once)
+          #   - refuses a deploy/.env with {{change-me}} left or values missing
+          #   - pins IMAGE_TAG=<sha> + EDGE_IMAGE_TAG in deploy/.env, pulls
+          #     backend/web/edge (never the data-service images)
+          #   - starts postgres + minio, ensures the bucket exists
+          #   - runs migrations in a one-off container (old release still serving)
+          #   - up -d --wait --remove-orphans, re-registers the Telegram webhook
+          #   - prunes mebel-pro's unused images
           # Pin to the exact commit CI verified.
           script: |
             DEPLOY_REF=${{ github.sha }} bash /opt/mebel-pro/deploy/scripts/deploy.sh

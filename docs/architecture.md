@@ -35,8 +35,11 @@ analytics / BI (dashboards are operational-DB aggregates).
 are still the only API consumers, so internal API contracts may move with a coordinated deploy,
 but database history is append-only once applied: create forward-only migrations, never rewrite
 an applied migration to "clean up" history, and treat data removal or destructive backfills as
-explicit production operations. Docs stay the source of truth, security defaults stay locked, and
-the check gates run before shipping.
+explicit production operations. Every migration must also work with the **previous** release's
+code — expand → contract: add first; drop, rename or tighten only in a later release, once no
+deployed code relies on the old shape — because a deploy migrates before the new code replaces
+the old, and a rollback runs old code on the newer schema. Docs stay the source of truth,
+security defaults stay locked, and the check gates run before shipping.
 
 ## Topology
 
@@ -91,7 +94,13 @@ this repo; a reference copy lives at `deploy/nginx-host.conf.example`.
   straight to the Bot API. No polling process, no queue.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
   (the only published service in prod — plain HTTP on loopback, behind the host nginx that
-  terminates HTTPS). Push to `main`.
+  terminates HTTPS). Postgres and MinIO belong to the prod stack, their data in named volumes.
+  Images are built once in CI and published to GHCR under immutable tags — the commit SHA, or
+  for the rarely-changing edge a hash of its content, so an unchanged edge isn't restarted. A
+  green push to `main` has the server pull exactly those images, run the migrations as a
+  separate gated step while the previous release keeps serving, and only then swap the
+  containers. The server never builds: what CI tested is what runs, and a small VPS shared
+  with another production app doesn't spend minutes of CPU and memory compiling.
 
 ## Backend modules
 

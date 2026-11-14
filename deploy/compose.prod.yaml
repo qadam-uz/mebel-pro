@@ -1,40 +1,175 @@
-# Production stack — standalone, NOT an overlay.
+# Production stack — standalone, NOT an overlay of compose.yaml.
 #
-# Usage on the server (from this directory):
+# Driven by deploy/scripts/deploy.sh, which CI runs over SSH for every green
+# push to main; its steps are the canonical order of operations. By hand on
+# the server, from this directory:
 #
-#   docker compose -f compose.prod.yaml up -d --build
+#   docker compose -f compose.prod.yaml ps
+#   docker compose -f compose.prod.yaml logs -f backend
 #
-# Key differences from compose.yaml (dev):
-#   - NO local `postgres` / `minio` services. The VPS already runs them in
-#     an external Docker network called `infra-net`. The backend joins that
-#     network and reaches them by service name: `postgres`, `minio`.
-#   - Adds a Caddy `edge` — the only published service, and only on
-#     127.0.0.1:8080, plain HTTP. Routes by subdomain derived from
-#     BASE_DOMAIN (see ./Caddyfile). TLS is terminated in front of it by the
-#     host-level nginx + certbot that serves every project on the box
-#     (reference config: ./nginx-host.conf.example).
-#   - Built images (no source bind-mounts, no autoreload). `web` is the
-#     nginx image serving the built SPA bundle.
-#   - Resource limits + log rotation, so a runaway query/leak can't OOM
-#     the host and JSON logs can't fill the disk.
-#   - The repo's docs/ tree is bind-mounted into `backend` at /docs — the
-#     live docs site at admin.<BASE_DOMAIN>/docs reads it on every request.
+# What makes it prod:
+#   - backend / web / edge are PREBUILT images from GHCR, built once by CI
+#     (.github/workflows/ci.yml → `images`). backend and web are tagged with
+#     the full commit SHA (IMAGE_TAG); the edge with a tag derived from its own
+#     build inputs (EDGE_IMAGE_TAG, scripts/edge-tag.sh), so a deploy that
+#     doesn't touch the Caddyfile leaves the edge container running instead of
+#     restarting it. deploy.sh pins both in deploy/.env, so manual commands
+#     resolve the deployed images too. There is deliberately no `build:` key
+#     anywhere in this file: with one present, compose can quietly fall back
+#     to building on this small shared box (the PackingSolver compile alone is
+#     ~7 min). The server only ever pulls.
+#   - postgres + minio belong to this stack, with named volumes — nothing else
+#     on the box provides or uses them. deploy.sh never pulls their images (or
+#     mc's): compose fetches them only when missing, so a moved
+#     `postgres:17-alpine` can't restart the database mid-deploy. Bumping one
+#     is a deliberate act — deploy/AGENTS.md.
+#   - The serving backend never migrates. deploy.sh runs `alembic upgrade
+#     head` as a separate, gated one-off container while the previous backend
+#     keeps serving, and only then swaps the containers.
+#   - A Caddy `edge` is the only published service — 127.0.0.1:8080, plain
+#     HTTP. Routes by subdomain derived from BASE_DOMAIN (see ./Caddyfile).
+#     TLS is terminated in front of it by the host-level nginx + certbot that
+#     serves every project on the box (reference config:
+#     ./nginx-host.conf.example).
+#   - Resource limits + log rotation, so a runaway query/leak can't OOM the
+#     host and JSON logs can't fill the disk.
+#   - The repo's docs/ tree is bind-mounted into `backend` at /docs — the live
+#     docs site at admin.<BASE_DOMAIN>/docs reads it on every request, from
+#     the checkout deploy.sh resets to the deployed commit.
 #
-# Required env in deploy/.env (create it on the server, chmod 600):
-#   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
-#   the SHARED minio), DOCS_AUTH_*, BASE_DOMAIN.
+# DATA SAFETY. The database and the uploaded files live in the named volumes
+# `prod-postgres-data` and `prod-minio-data` (on disk: mebel-pro_prod-…).
+# They survive `up`, `pull`, `--remove-orphans`, container recreation and
+# `docker image prune`. Only `docker compose down -v` and `docker volume rm`
+# destroy them — never run either on the server. (There are no backups yet —
+# see deploy/AGENTS.md.)
+#
+# The postgres image applies POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+# only when it initialises an EMPTY volume. Changing POSTGRES_PASSWORD in .env
+# later does not change the database's password — it only locks the backend
+# out. Rotate it inside the DB first (ALTER ROLE … PASSWORD …), then in .env.
+#
+# Required env in deploy/.env (from .env.prod.example, chmod 600):
+#   POSTGRES_*, MINIO_* (initialise this stack's own data services, and are
+#   the credentials the backend connects with), DOCS_AUTH_* (required and
+#   non-empty — an empty pair would open /docs), TELEGRAM_*,
+#   CLIENT_APP_BASE_URL, BASE_DOMAIN — plus IMAGE_TAG and EDGE_IMAGE_TAG,
+#   which deploy.sh manages. The tunables (DB_POOL_*, LOGIN_IP_*,
+#   PUBLIC_LINK_*, the TELEGRAM_LOGIN_* limits) fall back to the template's
+#   values when unset.
 
 name: mebel-pro
 
 services:
-  backend:
-    build:
-      context: ../backend
+  # This stack's own Postgres. No published port: only the backend (and
+  # deploy.sh's one-off migration container) reach it, by service name on the
+  # project network.
+  postgres:
+    image: postgres:17-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set in deploy/.env}
+    volumes:
+      - prod-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `$$` leaves the expansion to the container's shell, so the check uses
+      # exactly the user/db the container was started with. Over TCP, not the
+      # socket: while initialising an empty volume the image runs a temporary
+      # socket-only server, which a socket check would report as ready just
+      # before it restarts.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # This stack's own MinIO (decor photos, logos, receipts). Same "one set of
+  # creds" wiring as dev: MinIO's root user IS the access key the backend uses.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    restart: unless-stopped
+    # S3 API only, on the project network. No console port: nothing outside
+    # this stack needs MinIO, and the box's other project already holds
+    # 127.0.0.1:9001.
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID:?MINIO_ACCESS_KEY_ID must be set in deploy/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY:?MINIO_SECRET_ACCESS_KEY must be set in deploy/.env}
+    volumes:
+      - prod-minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # One-shot: make sure the bucket exists, then exit (idempotent). Behind the
+  # `setup` profile so a plain `up` never starts it — a one-shot that exits
+  # doesn't mix with `up --wait`. deploy.sh runs it explicitly
+  # (`run --rm --no-deps createbuckets`) once minio is healthy.
+  createbuckets:
+    image: pgsty/mc:RELEASE.2026-10-26T00-00-00Z
+    profiles: ["setup"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    # Same commands as dev, but the creds arrive as env and are expanded by
+    # the container's shell (`$$`) instead of being interpolated into the
+    # command line: a secret with shell metacharacters can't break it, and it
+    # never shows up in the host's process list.
+    environment:
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID:?MINIO_ACCESS_KEY_ID must be set in deploy/.env}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY:?MINIO_SECRET_ACCESS_KEY must be set in deploy/.env}
+      MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY_ID" "$$MINIO_SECRET_ACCESS_KEY" &&
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+    restart: "no"
+
+  backend:
+    image: ghcr.io/qadam-uz/mebel-pro-backend:${IMAGE_TAG:?IMAGE_TAG is set by deploy/scripts/deploy.sh}
+    # Serve only — never migrate here. The image's default CMD
+    # (backend/Dockerfile) is `alembic upgrade head && uvicorn …`; dev replaces
+    # it with its own autoreload command, prod with this. Migrations are
+    # deploy.sh's separate, gated step. A container that migrated on start
+    # would turn a failed migration into an outage (it replaces the old
+    # container first) and would crash-loop after a rollback: an older image
+    # can't `alembic upgrade head` against a database at a newer revision.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       ENV: prod
       DEBUG: "false"
-      # Shared infra reachable by service name on `infra-net`.
+      # This stack's own data services, by service name.
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER}
@@ -46,8 +181,11 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
       MINIO_USE_SSL: "false"
       DOCS_DIR: /docs
-      DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
-      DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
+      # `:?` also rejects an EMPTY value: the backend compares Basic-auth
+      # credentials verbatim, so an empty pair would let anyone into /docs and
+      # the OpenAPI UIs. Fail the deploy instead.
+      DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:?DOCS_AUTH_USERNAME must be set (non-empty) in deploy/.env}
+      DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:?DOCS_AUTH_PASSWORD must be set (non-empty) in deploy/.env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
@@ -61,17 +199,28 @@ services:
       TELEGRAM_LOGIN_TOKENS_PER_IP_PER_DAY: ${TELEGRAM_LOGIN_TOKENS_PER_IP_PER_DAY:-100}
       TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP: ${TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP:-10}
       TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS: ${TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS:-60}
+      LOGIN_IP_THROTTLE_ENABLED: ${LOGIN_IP_THROTTLE_ENABLED:-true}
+      LOGIN_IP_MAX_FAILURES: ${LOGIN_IP_MAX_FAILURES:-20}
+      LOGIN_IP_WINDOW_SECONDS: ${LOGIN_IP_WINDOW_SECONDS:-900}
+      PUBLIC_LINK_THROTTLE_ENABLED: ${PUBLIC_LINK_THROTTLE_ENABLED:-true}
+      PUBLIC_LINK_LOOKUPS_PER_IP: ${PUBLIC_LINK_LOOKUPS_PER_IP:-60}
+      PUBLIC_LINK_WINDOW_SECONDS: ${PUBLIC_LINK_WINDOW_SECONDS:-60}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_POOL_MAX_OVERFLOW: ${DB_POOL_MAX_OVERFLOW:-10}
+      DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-10}
+      DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-1800}
       CLIENT_APP_BASE_URL: ${CLIENT_APP_BASE_URL:-}
       # Must match the pinned `default` network subnet below. The chain is
       # client → host nginx (sets X-Forwarded-For to the client) → docker
       # gateway 172.29.0.1 → Caddy edge (appends 172.29.0.1) → backend. The
       # backend takes the right-most hop outside these CIDRs, so the gateway
       # is skipped and the real client IP wins — the per-IP limits are inert
-      # without it. infra-net is shared with other projects and stays untrusted.
+      # without it.
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-["172.29.0.0/24"]}
     volumes:
       # Live docs site reads this on every request — no build step. The repo
-      # is present on the host (the deploy pulls it).
+      # checkout is present on the host (deploy.sh resets it to the deployed
+      # commit).
       - ../docs:/docs:ro
     expose:
       - "8000"
@@ -94,13 +243,9 @@ services:
         reservations:
           memory: 128M
           cpus: "0.25"
-    networks:
-      - default
-      - infra-net
 
   web:
-    build:
-      context: ../web
+    image: ghcr.io/qadam-uz/mebel-pro-web:${IMAGE_TAG:?IMAGE_TAG is set by deploy/scripts/deploy.sh}
     restart: unless-stopped
     depends_on:
       - backend
@@ -127,9 +272,11 @@ services:
           cpus: "0.5"
 
   edge:
-    build:
-      context: .
-      dockerfile: edge.Dockerfile
+    # Content-addressed tag (scripts/edge-tag.sh), not the commit SHA: the
+    # same edge inputs give the same tag, so compose leaves a running edge
+    # alone unless its config really changed. Restarting it would be a 1–2 s
+    # gap of refused connections (host nginx 502s) that no retry covers.
+    image: ghcr.io/qadam-uz/mebel-pro-edge:${EDGE_IMAGE_TAG:?EDGE_IMAGE_TAG is set by deploy/scripts/deploy.sh}
     restart: unless-stopped
     depends_on:
       - web
@@ -145,8 +292,9 @@ services:
       # gateway's X-Forwarded-For in the Caddyfile safe.
       - "127.0.0.1:8080:80"
     volumes:
-      # Caddyfile is baked into the image (see edge.Dockerfile) — not mounted,
-      # so config changes ship as a new image and recreate the edge.
+      # The Caddyfile is baked into the image (see edge.Dockerfile) — not
+      # mounted: a config change arrives as a new image (new content tag) and
+      # recreates the edge.
       - caddy-data:/data       # Caddy runtime state (no certs — TLS is the host nginx's)
       - caddy-config:/config
     logging:
@@ -161,6 +309,11 @@ services:
       - default
 
 volumes:
+  # The data (see DATA SAFETY above). Prefixed `prod-` so they can never be
+  # confused with the dev file's `postgres-data` / `minio-data` — both files
+  # declare `name: mebel-pro`, so the names would otherwise collide.
+  prod-postgres-data:
+  prod-minio-data:
   caddy-data:
   caddy-config:
 
@@ -175,10 +328,3 @@ networks:
     ipam:
       config:
         - subnet: 172.29.0.0/24
-
-  # Created out-of-band on the VPS:
-  #   docker network create infra-net
-  # The shared `postgres` and `minio` services are attached to it; we join
-  # it here so the backend can resolve them by name.
-  infra-net:
-    external: true
