@@ -122,8 +122,11 @@ to run without `deploy/.env` and `infra-net`, and prints the fix for each.
   won't recreate a container for a mounted file's content change, so Caddy silently keeps
   stale config. Keep it baked via `edge.Dockerfile`.
 - Auto-HTTPS needs the edge reachable on **80 and 443** from the internet — don't remap them.
-- Pin image tags (`postgres:17-alpine`, `minio/minio:RELEASE.…`, `caddy:2.8-alpine`,
+- Pin image tags (`postgres:17-alpine`, `pgsty/minio:RELEASE.…`, `caddy:2.8-alpine`,
   `nginx:1.27-alpine`, `node:22-slim`); never `latest`.
+- **MinIO images come from `pgsty/minio` + `pgsty/mc`** (the community fork). Upstream pulled
+  `minio/minio` / `minio/mc` from Docker Hub and quay.io, so those tags no longer pull — a
+  cached copy hides it locally, while CI and any fresh box fail with "pull access denied".
 - **Postgres must be able to `CREATE EXTENSION pg_trgm`** — migration `e1a4c8b70d35` installs
   it for the catalog search's typo tier. `postgres:17-alpine` ships it (1.6), so the dev stack
   and the shared prod instance need nothing extra; a managed Postgres that withholds it leaves

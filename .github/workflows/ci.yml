@@ -48,7 +48,7 @@ jobs:
   # ---------------------------------------------------------------------------
   verify-backend:
     name: Backend · lint · types · tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -113,7 +113,7 @@ jobs:
   # ---------------------------------------------------------------------------
   verify-web:
     name: Web · lint · types · tests · build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -164,7 +164,7 @@ jobs:
   # ---------------------------------------------------------------------------
   verify-e2e:
     name: E2E · browser tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -224,7 +224,7 @@ jobs:
   # ---------------------------------------------------------------------------
   docker-build:
     name: Docker · build smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [verify-backend, verify-web, verify-e2e]
     timeout-minutes: 20
     steps:
@@ -258,7 +258,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     needs: [verify-backend, verify-web, verify-e2e, docker-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
