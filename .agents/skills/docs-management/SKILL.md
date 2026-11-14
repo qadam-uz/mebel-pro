@@ -79,7 +79,7 @@ copy the right one on create, `entity.md` re-applied per entity inside a context
 `backend/app/docs_site.py` renders `docs/` live at `/docs` — markdown → HTML per request, no
 build step; edit the file and refresh. The site, together with the OpenAPI UIs at `/api-docs`
 (Swagger) and `/api-redoc` (ReDoc), sits behind **HTTP Basic** — `DOCS_AUTH_USERNAME` /
-`DOCS_AUTH_PASSWORD`, dev default `docs`/`docs` — *not* the app's session auth. Implications:
+`DOCS_AUTH_PASSWORD` (`docs`/`docs` in the dev env templates; unset = locked) — *not* the app's session auth. Implications:
 
 - **A path is a URL.** `docs/ref/features/orders.md` → `/docs/ref/features/orders`. There is
   **no redirect mechanism** — an unresolved path silently 302s to the docs home, so a stale

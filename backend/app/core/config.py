@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/core/config.py → parents[2] == backend/ ; its parent == repo root.
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
+# The dev templates' public docs password (`.env.dev.example`); never valid in prod.
+_DEV_DOCS_AUTH_PASSWORD = "docs"  # noqa: S105 — the known dev value, rejected in prod
 
 
 class Settings(BaseSettings):
@@ -32,9 +34,12 @@ class Settings(BaseSettings):
     DOCS_DIR: Path = _BACKEND_ROOT.parent / "docs"
 
     # HTTP Basic credentials guarding `/docs` *and* the OpenAPI UIs
-    # (`/api-docs`, `/api-redoc`, the schema). Change these in any real deploy.
-    DOCS_AUTH_USERNAME: str = "docs"
-    DOCS_AUTH_PASSWORD: str = "docs"  # noqa: S105 — dev default; override in prod
+    # (`/api-docs`, `/api-redoc`, the schema). Secret — no default: unset or
+    # empty locks the docs (every request 401s; see `require_docs_auth`), and
+    # prod refuses to boot without a real pair. The `docs`/`docs` dev
+    # convenience lives in the `.env.dev.example` templates.
+    DOCS_AUTH_USERNAME: str = ""
+    DOCS_AUTH_PASSWORD: str = ""
 
     # --- Object storage (MinIO) --------------------------------------------
     # The `files` module stores material images, workshop logos, and receipts in
@@ -151,6 +156,16 @@ class Settings(BaseSettings):
     def validate_security_defaults(self) -> "Settings":
         if self.ENV != "prod":
             return self
+        # The docs + OpenAPI UIs sit behind one Basic credential. Checked before
+        # the Telegram pre-production escape hatch below: it has nothing to do
+        # with the bot. `docs` is the dev template's public password.
+        for name in ("DOCS_AUTH_USERNAME", "DOCS_AUTH_PASSWORD"):
+            if getattr(self, name) in {"", "{{change-me}}"}:
+                msg = f"{name} must be set in production"
+                raise ValueError(msg)
+        if self.DOCS_AUTH_PASSWORD == _DEV_DOCS_AUTH_PASSWORD:
+            msg = "DOCS_AUTH_PASSWORD must not be the dev template value in production"
+            raise ValueError(msg)
         # Dev mode is a full sign-in bypass: any pending token can be confirmed
         # as any phone without Telegram. It stays off in production unless the
         # temporary pre-production testing override is explicitly enabled.

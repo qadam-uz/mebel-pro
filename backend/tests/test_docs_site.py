@@ -4,10 +4,18 @@ the relocated + protected OpenAPI UIs."""
 from pathlib import Path
 
 import pytest
-from app.core.config import settings
+from app.core.config import Settings, settings
 from httpx import AsyncClient
 
-AUTH = (settings.DOCS_AUTH_USERNAME, settings.DOCS_AUTH_PASSWORD)
+# Pinned here, not read from settings: the code default is empty (= locked), and
+# the suite must not depend on whichever `.env` happens to be in the CWD.
+AUTH = ("docs-user", "docs-pass")
+
+
+@pytest.fixture(autouse=True)
+def _docs_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DOCS_AUTH_USERNAME", AUTH[0])
+    monkeypatch.setattr(settings, "DOCS_AUTH_PASSWORD", AUTH[1])
 
 
 @pytest.fixture
@@ -50,6 +58,41 @@ async def test_docs_and_openapi_require_basic_auth(client: AsyncClient, docs_dir
     assert (await client.get("/docs", auth=("nope", "nope"))).status_code == 401
     # health endpoints stay open (used by container healthchecks)
     assert (await client.get("/api/v1/healthz")).status_code == 200
+    # the right pair opens them
+    assert (await client.get("/api-docs", auth=AUTH)).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("username", "password"),
+    [("", ""), ("docs-user", ""), ("", "docs-pass")],
+    ids=["both-empty", "password-empty", "username-empty"],
+)
+async def test_empty_configured_credential_locks_the_docs(
+    client: AsyncClient,
+    docs_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    username: str,
+    password: str,
+) -> None:
+    """Fail safe: an unset credential must lock the docs, never let blanks match."""
+    monkeypatch.setattr(settings, "DOCS_AUTH_USERNAME", username)
+    monkeypatch.setattr(settings, "DOCS_AUTH_PASSWORD", password)
+    for auth in ((username, password), ("", ""), AUTH):
+        for url in ("/docs", "/api-docs", "/api/v1/openapi.json"):
+            assert (await client.get(url, auth=auth)).status_code == 401, (url, auth)
+
+
+async def test_code_default_credentials_lock_the_docs(
+    client: AsyncClient, docs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No usable secret in code: with no env configured the docs stay locked."""
+    monkeypatch.delenv("DOCS_AUTH_USERNAME", raising=False)
+    monkeypatch.delenv("DOCS_AUTH_PASSWORD", raising=False)
+    defaults = Settings(ENV="dev", _env_file=None)
+    monkeypatch.setattr(settings, "DOCS_AUTH_USERNAME", defaults.DOCS_AUTH_USERNAME)
+    monkeypatch.setattr(settings, "DOCS_AUTH_PASSWORD", defaults.DOCS_AUTH_PASSWORD)
+    for auth in (None, ("", ""), ("docs", "docs")):
+        assert (await client.get("/docs", auth=auth)).status_code == 401, auth
 
 
 # --- the docs site ----------------------------------------------------------
