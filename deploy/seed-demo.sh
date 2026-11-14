@@ -40,7 +40,7 @@
 #                                                          inventory @ B2 (home @ B2)
 #     accountant   / HisobchiDemo123   Hisobchi         — finance + reports @ B1+B2
 #
-#   CLIENT SPA  (app.<host>)          — Telegram-bot login (TELEGRAM_LOGIN_DEV_MODE=true):
+#   CLIENT SPA  (my.<host>)           — Telegram-bot login (TELEGRAM_LOGIN_DEV_MODE=true):
 #     +998901112233  Dilshod          6 orders (new→ready) + 2 saved drafts
 #     +998901234455  Aziza            3 orders (completed ×2, cancelled)
 #

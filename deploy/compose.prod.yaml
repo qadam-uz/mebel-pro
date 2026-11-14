@@ -282,7 +282,7 @@ services:
       - web
       - backend
     environment:
-      # The apex. Caddy routes apex + app.* + workshop.* + admin.* derived
+      # The apex. Caddy routes apex + my.* + workshop.* + admin.* derived
       # from it (Host header as forwarded by the host nginx).
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN must be set in deploy/.env}
     ports:

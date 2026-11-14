@@ -76,7 +76,7 @@ beforeEach(() => {
   vi.stubEnv('DEV', false)
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { origin: 'https://workshop.mebel-pro.uz', pathname: '/branches' },
+    value: { origin: 'https://workshop.mebelapp.uz', pathname: '/branches' },
   })
 })
 
@@ -95,7 +95,7 @@ describe('Filiallar list — copying a branch client link from the row', () => {
     await control?.trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith('https://app.mebel-pro.uz/w/ABCD2345/3')
+    expect(writeText).toHaveBeenCalledWith('https://my.mebelapp.uz/w/ABCD2345/3')
     expect(useToast().toasts.value[0].message).toBe('Havola nusxalandi')
   })
 

@@ -102,7 +102,7 @@ beforeEach(() => {
   vi.stubEnv('DEV', false)
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { origin: 'https://workshop.mebel-pro.uz', pathname: '/branches/1/client-link' },
+    value: { origin: 'https://workshop.mebelapp.uz', pathname: '/branches/1/client-link' },
   })
   vi.mocked(api.get).mockReset()
   vi.mocked(api.get).mockImplementation(async (path: string) => {
@@ -125,7 +125,7 @@ describe('the counter sheet', () => {
     expect(view.text()).toContain('Mebel Master')
     expect(view.text()).toContain('Chilonzor')
     expect(view.text()).toContain("Chizmangizni o'zingiz chizing — narxini darhol bilasiz")
-    expect(view.text()).toContain('https://app.mebel-pro.uz/w/ABCD2345/3')
+    expect(view.text()).toContain('https://my.mebelapp.uz/w/ABCD2345/3')
 
     const qr = view.get('svg[role="img"]')
     expect(qr.find('path').attributes('d')).toBeTruthy()
@@ -136,7 +136,7 @@ describe('the counter sheet', () => {
 
     expect(view.text()).toContain('Mebel Master')
     expect(view.text()).not.toContain('Chilonzor')
-    expect(view.text()).toContain('https://app.mebel-pro.uz/w/ABCD2345')
+    expect(view.text()).toContain('https://my.mebelapp.uz/w/ABCD2345')
     // Only the settings read is needed — there is no branch to fetch.
     expect(api.get).toHaveBeenCalledWith('/workshop/settings', expect.anything())
   })

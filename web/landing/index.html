@@ -856,7 +856,10 @@
     </div>
   </header>
 
-  <!-- PRODUCTS -->
+  <!-- PRODUCTS. The role-app links here and in the footer are relative on
+       purpose: the edge answers /go/workshop and /go/client with a redirect to
+       the role subdomain (deploy/Caddyfile), so this page names no host and a
+       domain move never strands it. -->
   <main>
     <section class="products" id="mahsulotlar">
       <div class="wrap">
@@ -891,7 +894,7 @@
                     stroke-linejoin="round" />
                 </svg>Kirim-chiqim hisobi va moliyaviy hisobotlar</li>
             </ul>
-            <a class="card__btn" href="https://workshop.mebel-pro.uz">Portalga kirish <span
+            <a class="card__btn" href="/go/workshop">Portalga kirish <span
                 class="arw">&rarr;</span></a>
           </article>
 
@@ -919,7 +922,7 @@
                     stroke-linejoin="round" />
                 </svg>Buyurtma holatini boshidan oxirigacha kuzatib borasiz</li>
             </ul>
-            <a class="card__btn" href="https://app.mebel-pro.uz">Buyurtma berish <span class="arw">&rarr;</span></a>
+            <a class="card__btn" href="/go/client">Buyurtma berish <span class="arw">&rarr;</span></a>
           </article>
         </div>
       </div>
@@ -967,8 +970,8 @@
           <p class="foot__tag">Mebel panellarini kesish uchun onlayn platforma.</p>
         </div>
         <div class="foot__links">
-          <a href="https://workshop.mebel-pro.uz">Ustaxona portali</a>
-          <a href="https://app.mebel-pro.uz">Buyurtma berish</a>
+          <a href="/go/workshop">Ustaxona portali</a>
+          <a href="/go/client">Buyurtma berish</a>
           <a href="#qanday">Qanday ishlaydi</a>
         </div>
       </div>

@@ -40,7 +40,7 @@ ORDER_ID = uuid.UUID("11111111-2222-3333-4444-555555555555")
 @pytest.fixture(autouse=True)
 def _bot_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "bot-token")
-    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://app.mebel-pro.uz")
+    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://my.mebelapp.uz")
 
 
 def _mock_bot_api(
@@ -121,7 +121,7 @@ def test_the_bot_message_is_the_inbox_sentence_plus_an_order_link() -> None:
     # The number arrives grouped, exactly as the client reads it on screen.
     number = format_order_number("482917")
     assert text == (
-        f"Buyurtma tayyor — Buyurtma {number}\nhttps://app.mebel-pro.uz/c/orders/{ORDER_ID}"
+        f"Buyurtma tayyor — Buyurtma {number}\nhttps://my.mebelapp.uz/c/orders/{ORDER_ID}"
     )
     # An event with no client-facing sentence delivers nothing at all.
     assert (
