@@ -27,25 +27,34 @@
 #          reproducible), compose would recreate that container on the next
 #          deploy — for the edge, needlessly — and a re-run would recompile
 #          the backend for nothing. So the server runs exactly what CI built.
-#        - Auth is the job's own GITHUB_TOKEN; the server pulls anonymously
-#          (the packages are public — deploy/AGENTS.md → First-time setup).
+#        - Auth is the job's own GITHUB_TOKEN. The packages are private, like
+#          the repo; the server pulls with the deploy job's token (3. below).
 #        - linux/amd64, the runner's own arch. An arm64 server needs this job
 #          on `ubuntu-24.04-arm` instead — not QEMU, under which the
 #          PackingSolver compile is impractical.
 #
 #   3. Deploy (main only — a push, or "Run workflow" on main to redeploy —
 #      after every other job is green)
-#        - SSHes to the VPS as the deploy user and runs
+#        - Calls .github/workflows/deploy.yml, the one place the SSH step
+#          lives — also runnable by hand from the Actions tab to redeploy or
+#          roll back (its header has the recipe). It SSHes to the VPS as the
+#          deploy user and runs
 #            DEPLOY_REF=<sha> bash deploy/scripts/deploy.sh
 #          which `git fetch && git reset --hard <sha>` (the checkout supplies
 #          the compose file and the live docs), pulls that SHA's images,
 #          migrates as a separate gated step while the old release keeps
 #          serving, then swaps the containers. Nothing is built on the server.
+#        - The repo and the packages are private, and the server stores no
+#          GitHub credential: the deploy job hands deploy.sh its own
+#          short-lived GITHUB_TOKEN (contents: read + packages: read, expired
+#          when the job ends), spent on the git fetch and the image pull
+#          alone. Hence the calling job below grants exactly those permissions
+#          and passes the secrets on with `secrets: inherit`.
 #
 # Required GitHub config — secrets of the `production` ENVIRONMENT, which the
-# deploy job runs in (Settings → Environments → production → Environment
-# secrets; not repository secrets — an environment secret also overrides a
-# repository secret of the same name):
+# deploy job (deploy.yml) runs in (Settings → Environments → production →
+# Environment secrets; not repository secrets — an environment secret also
+# overrides a repository secret of the same name):
 #   secrets.DEPLOY_SSH_HOST         host / IP of the prod server
 #   secrets.DEPLOY_SSH_USER         SSH user (must be in the `docker` group)
 #   secrets.DEPLOY_SSH_KEY          private key for that user (PEM, no passphrase)
@@ -371,44 +380,24 @@ jobs:
           cache-to: type=gha,mode=max,scope=edge
 
   # ---------------------------------------------------------------------------
-  # 5. Deploy — SSH to the prod server and run deploy/scripts/deploy.sh.
+  # 5. Deploy — .github/workflows/deploy.yml, the one place the SSH step lives.
   #    Only after every other job is green, and only on main: every push, or
   #    "Run workflow" on main to redeploy that commit.
   # ---------------------------------------------------------------------------
   deploy:
-    name: Deploy to production
-    runs-on: ubuntu-24.04
-    environment: production
+    name: Deploy
     needs: [verify-backend, verify-web, verify-e2e, images]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    timeout-minutes: 15
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
-          username: ${{ secrets.DEPLOY_SSH_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          # Empty (secret unset) = no host key verification; see the header.
-          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
-          # Nothing is built on the server any more — a deploy is a pull,
-          # a migration and a container swap. 10m covers a cold first pull
-          # plus both of deploy.sh's 120s `--wait` windows; the job's 15m
-          # stays the backstop.
-          command_timeout: 10m
-          # The deploy script does:
-          #   - git fetch + reset --hard $DEPLOY_REF (re-execs itself once)
-          #   - refuses a deploy/.env with {{change-me}} left or values missing
-          #   - pins IMAGE_TAG=<sha> + EDGE_IMAGE_TAG in deploy/.env, pulls
-          #     backend/web/edge (never the data-service images)
-          #   - starts postgres + minio, ensures the bucket exists
-          #   - runs migrations in a one-off container (old release still serving)
-          #   - up -d --wait --remove-orphans, re-registers the Telegram webhook
-          #   - prunes mebel-pro's unused images
-          # Pin to the exact commit CI verified.
-          script: |
-            DEPLOY_REF=${{ github.sha }} bash /opt/mebel-pro/deploy/scripts/deploy.sh
+    # What deploy.yml's job asks for — a called workflow can only keep or
+    # reduce its caller's permissions, so granting less fails the run. No
+    # `concurrency` here: deploy.yml's job holds the deploy-production group.
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ref: ${{ github.sha }}   # the exact commit CI verified
+    # The DEPLOY_SSH_* secrets live in the `production` environment, and a
+    # called workflow sees them only when they are passed — without this they
+    # arrive as empty strings.
+    secrets: inherit

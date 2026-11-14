@@ -1,0 +1,131 @@
+# Mebel Pro deploy — SSH to the prod server and run deploy/scripts/deploy.sh
+# for one commit. The ONE place the deploy step lives:
+#
+#   - ci.yml calls it after every green push to main (ref = that commit);
+#   - it also runs by hand — Actions → Deploy → Run workflow, from main:
+#       ref empty                                   → redeploy origin/main
+#       ref = the last good sha, skip_migrations on → ROLLBACK
+#     Only commits whose CI went green on main have images; any other ref fails
+#     at deploy.sh's pull, before anything on the server changes.
+#
+# Secrets: the `production` environment's DEPLOY_SSH_* — listed, with how to
+# read the host-key fingerprint, in ci.yml's header. A run started here reads
+# them directly. A CALLER must pass them on (`secrets: inherit`): a reusable
+# workflow's job sees environment secrets only when its caller passes them,
+# and an unpassed one is an empty string, not an error (GitHub Docs, "Reuse
+# workflows").
+#
+# GitHub credentials. The repo and its GHCR packages are private, and the
+# server stores no GitHub credential. This job's own GITHUB_TOKEN —
+# contents: read for the git fetch, packages: read for the image pull — goes
+# along as DEPLOY_GITHUB_TOKEN (+ DEPLOY_GITHUB_ACTOR, the registry username);
+# deploy.sh spends it on exactly those two calls, and it expires when this job
+# ends. A caller job must grant at least these two permissions: a called
+# workflow can keep or reduce the caller's, never raise them, so a caller with
+# less fails at runtime — no linter catches it.
+#
+# How the values travel (appleboy/ssh-action v1.2.5 → drone-ssh v1.8.2): each
+# name in `envs` is looked up in this step's env and prepended to the script
+# as `export NAME='value'` (single-quoted, embedded quotes escaped), and the
+# whole text goes to the server as ONE ssh exec request, which sshd runs as
+# `<login shell> -c '<text>'`. So the token IS on that shell's command line —
+# visible in `ps` to any user on the box while the shell lives. The script
+# `exec`s deploy.sh, replacing that shell at once: deploy.sh's argv carries no
+# secret, and its environment is readable only by `deploy` and root. Accepted:
+# the token is job-scoped and short-lived, and the box's only other privileged
+# user is root, which has everything anyway. (sshd doesn't log the command.)
+# The action prints neither the script nor the exports unless `debug` is on —
+# never turn it on: it also dumps the whole config, SSH key included — and
+# GitHub masks the token in this job's log regardless. Never `allenvs`
+# either: it forwards every INPUT_* variable, the SSH key among them.
+
+name: Deploy
+
+run-name: Deploy ${{ inputs.ref || 'origin/main' }}${{ inputs.skip_migrations && ' without migrations' || '' }}
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit SHA to deploy (7–40 hex characters); empty = origin/main.
+        type: string
+        required: false
+        default: ""
+      skip_migrations:
+        description: Skip the database migrations — for a rollback to an older commit.
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA to deploy (7–40 hex characters); empty = origin/main. Only main commits CI published images for.
+        type: string
+        required: false
+        default: ""
+      skip_migrations:
+        description: Skip the database migrations — tick it to roll back to an older commit.
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-24.04
+    environment: production
+    # Only main's copy of this workflow deploys: a run started from another
+    # branch ("Use workflow from") is skipped. When called, github.ref is the
+    # caller's — ci.yml calls on main only.
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    # One deploy at a time, the CI path and the manual one alike; never
+    # cancelled midway. Only here: the caller's job must not take this group
+    # too, or the two wait on each other.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # A typo must fail here, not as `git reset --hard <typo>` on the server.
+      - name: Check the ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [[ -n "$REF" && ! "$REF" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "::error::ref must be empty (= origin/main) or a commit SHA: 7–40 lowercase hex characters."
+            exit 1
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        # Read by name through `envs` below — see the header for how they
+        # reach the server. Empty DEPLOY_REF = origin/main; SKIP_MIGRATIONS
+        # is "1" or empty, as deploy.sh expects.
+        env:
+          DEPLOY_REF: ${{ inputs.ref }}
+          SKIP_MIGRATIONS: ${{ inputs.skip_migrations && '1' || '' }}
+          DEPLOY_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_GITHUB_ACTOR: ${{ github.actor }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          # Empty (secret unset) = no host key verification; see ci.yml's header.
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          # Nothing is built on the server — a deploy is a pull, a migration
+          # and a container swap. 10m covers a cold first pull plus both of
+          # deploy.sh's 120s `--wait` windows; the job's 15m stays the backstop.
+          command_timeout: 10m
+          envs: DEPLOY_REF,SKIP_MIGRATIONS,DEPLOY_GITHUB_TOKEN,DEPLOY_GITHUB_ACTOR
+          # deploy.sh: git fetch (with the token) + reset --hard $DEPLOY_REF,
+          # re-exec itself once, refuse a deploy/.env with {{change-me}} left
+          # or values missing, pin IMAGE_TAG/EDGE_IMAGE_TAG, pull backend/web/
+          # edge (with the token), start postgres + minio, ensure the bucket,
+          # migrate in a one-off container (unless SKIP_MIGRATIONS) while the
+          # old release serves, `up -d --wait --remove-orphans`, re-register
+          # the Telegram webhook, prune mebel-pro's unused images.
+          script: exec bash /opt/mebel-pro/deploy/scripts/deploy.sh
