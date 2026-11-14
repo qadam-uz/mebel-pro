@@ -11,17 +11,24 @@
 #
 # BASE_DOMAIN (from deploy/.env) — the apex, e.g. "mebelapp.uz". Caddy serves
 # four sites derived from it:
-#   • {$BASE_DOMAIN}           → static SEO landing
-#   • app.{$BASE_DOMAIN}       → client SPA       (+ /api/* → backend)
+#   • {$BASE_DOMAIN}           → static SEO landing (+ /go/client, /go/workshop
+#                                                     → 302 to the role apps)
+#   • my.{$BASE_DOMAIN}        → client SPA       (+ /api/* → backend)
 #   • workshop.{$BASE_DOMAIN}  → workshop SPA     (+ /api/* → backend)
 #   • admin.{$BASE_DOMAIN}     → superadmin SPA   (+ /api/* → backend,
 #                                                  + /docs, /api-docs,
 #                                                    /api-redoc → backend,
 #                                                    HTTP Basic-gated server-side)
 #
+# In the code, the subdomain names live in exactly two places: this file
+# (routing) and web/src/shared/app/workshopLink.ts (the client links the staff
+# SPAs build). A rename touches both — and, outside the code, DNS, the host
+# nginx site + certificate (nginx-host.conf.example) and CLIENT_APP_BASE_URL in
+# deploy/.env.
+#
 # Local stack testing: set BASE_DOMAIN=lvh.me (resolves *.lvh.me → 127.0.0.1)
-# and hit the edge directly over plain HTTP — http://app.lvh.me:8080/ — or
-# without DNS: curl -H 'Host: app.lvh.me' http://127.0.0.1:8080/
+# and hit the edge directly over plain HTTP — http://my.lvh.me:8080/ — or
+# without DNS: curl -H 'Host: my.lvh.me' http://127.0.0.1:8080/
 {
 	# No ACME, no certificates, no HTTP→HTTPS redirect — the host nginx owns
 	# TLS. The explicit http:// site addresses below already imply this; the
@@ -72,8 +79,9 @@
 	}
 }
 
-# Apex: the static SEO landing only. Role apps are served only on their
-# documented subdomains; apex app paths intentionally 404.
+# Apex: the static SEO landing and the two redirects its CTAs use. Role apps
+# are served only on their documented subdomains; apex app paths intentionally
+# 404.
 http://{$BASE_DOMAIN} {
 	import common
 
@@ -87,13 +95,28 @@ http://{$BASE_DOMAIN} {
 		import to_web
 	}
 
+	# The landing links here, never to a host, so a domain move can't strand
+	# its CTAs. 302, not 301: browsers keep a 301 indefinitely, which would pin
+	# today's host names in visitors' caches past the next rename. `https://` is
+	# hardcoded on purpose: the edge only ever sees plain HTTP from the host
+	# nginx (so `{scheme}` would say http), while every public name is served
+	# over TLS by that nginx. Locally (BASE_DOMAIN=lvh.me) nothing serves TLS —
+	# check the Location header rather than following it.
+	handle /go/client {
+		redir https://my.{$BASE_DOMAIN}/ 302
+	}
+
+	handle /go/workshop {
+		redir https://workshop.{$BASE_DOMAIN}/ 302
+	}
+
 	handle {
 		respond "Not found" 404
 	}
 }
 
 # Client SPA + same-origin API.
-http://app.{$BASE_DOMAIN} {
+http://my.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {

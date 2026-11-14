@@ -9,14 +9,16 @@ test('landing surface loads', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Ustaxona uchun' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Mijozlar uchun' })).toBeVisible()
 
-  // The two product CTAs must point at their role apps (they were swapped once).
+  // The two product CTAs must each point at their own role app (they were swapped
+  // once). They name no host: the edge redirects `/go/*` to the role subdomain
+  // (deploy/Caddyfile), so a domain move can't break them.
   await expect(page.getByRole('link', { name: 'Portalga kirish' })).toHaveAttribute(
     'href',
-    'https://workshop.mebel-pro.uz',
+    '/go/workshop',
   )
   await expect(page.getByRole('link', { name: 'Buyurtma berish' }).first()).toHaveAttribute(
     'href',
-    'https://app.mebel-pro.uz',
+    '/go/client',
   )
 })
 

@@ -34,7 +34,7 @@ beforeEach(() => {
   vi.stubEnv('DEV', false)
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { origin: 'https://workshop.mebel-pro.uz', pathname: '/branches/1' },
+    value: { origin: 'https://workshop.mebelapp.uz', pathname: '/branches/1' },
   })
 })
 
@@ -52,7 +52,7 @@ describe('Mijoz havolasi card', () => {
     expect(view.text()).toContain('Mijoz havolasi')
     // The absolute URL a client scans — client host, not the workshop's.
     expect(view.get('#client-link-url').attributes('value')).toBe(
-      'https://app.mebel-pro.uz/w/ABCD2345/3',
+      'https://my.mebelapp.uz/w/ABCD2345/3',
     )
     // A real inline SVG, drawn in the browser — no external QR service.
     const qr = view.get('svg[role="img"]')
@@ -68,7 +68,7 @@ describe('Mijoz havolasi card', () => {
     const view = await mountCard({})
 
     expect(view.get('#client-link-url').attributes('value')).toBe(
-      'https://app.mebel-pro.uz/w/ABCD2345',
+      'https://my.mebelapp.uz/w/ABCD2345',
     )
     expect(view.text()).toContain('filialni')
   })
@@ -87,7 +87,7 @@ describe('Mijoz havolasi card', () => {
       ?.trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith('https://app.mebel-pro.uz/w/ABCD2345/1')
+    expect(writeText).toHaveBeenCalledWith('https://my.mebelapp.uz/w/ABCD2345/1')
     expect(useToast().toasts.value[0].message).toBe('Havola nusxalandi')
   })
 

@@ -15,7 +15,7 @@ this file carries only the map and the gotchas.
 | File                | Stack |
 | ------------------- | ----- |
 | `compose.yaml`      | **Dev**, self-contained: `postgres` (17-alpine), `minio` + `createbuckets` one-shot, `backend` (source-mounted, autoreload, repo `docs/` bind-mounted, optional `cutting-engine` checkout — see gotchas), `web` (Vite dev server, HMR). Host ports: 5432, 9000/9001, 8000, 5173. |
-| `compose.prod.yaml` | **Prod**, self-contained: its own `postgres` + `minio` (named volumes `prod-postgres-data` / `prod-minio-data`, no published ports) and a `createbuckets` one-shot behind the `setup` profile; `backend` / `web` / `edge` are **prebuilt GHCR images** — backend and web pinned by `IMAGE_TAG` (the deployed commit SHA), the edge by `EDGE_IMAGE_TAG` (its content tag) — no `build:` anywhere, the server never builds. A **Caddy edge** is the only published service — `127.0.0.1:8080`, plain HTTP; the host nginx in front terminates TLS. Subdomain routing (apex / `app.*` / `workshop.*` / `admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. |
+| `compose.prod.yaml` | **Prod**, self-contained: its own `postgres` + `minio` (named volumes `prod-postgres-data` / `prod-minio-data`, no published ports) and a `createbuckets` one-shot behind the `setup` profile; `backend` / `web` / `edge` are **prebuilt GHCR images** — backend and web pinned by `IMAGE_TAG` (the deployed commit SHA), the edge by `EDGE_IMAGE_TAG` (its content tag) — no `build:` anywhere, the server never builds. A **Caddy edge** is the only published service — `127.0.0.1:8080`, plain HTTP; the host nginx in front terminates TLS. Subdomain routing (apex / `my.*` / `workshop.*` / `admin.*`) is owned by [`docs/architecture.md`](../docs/architecture.md) → Topology; `Caddyfile` is the implementation. |
 | `Caddyfile`         | Edge config, **baked into the edge image** (not bind-mounted — a mounted file's changes are invisible to `compose up`, stranding Caddy on stale config; a change ships as a new edge image under a new content tag). Plain HTTP (`auto_https off`), trusts the host nginx's `X-Forwarded-For` via the gateway. Every upstream goes through the `(to_backend)` / `(to_web)` snippets, which carry the deploy retry window. |
 | `edge.Dockerfile`   | `FROM caddy:2.8-alpine` + `COPY Caddyfile`. The per-env value (`BASE_DOMAIN`) stays runtime env. |
 | `scripts/edge-tag.sh` | Prints the edge image's **content tag** (`edge-<16 hex>`, a sha256 over `edge.Dockerfile`, `Caddyfile`, `.dockerignore`) — the only place the formula lives; CI tags the image with it and `deploy.sh` pins it as `EDGE_IMAGE_TAG`. Same bytes, same tag, so a deploy that doesn't touch the edge leaves its container running. A file the edge build starts reading must join its input list. |
@@ -60,7 +60,7 @@ docker compose -f compose.prod.yaml pull postgres && docker compose -f compose.p
 prodtest() { IMAGE_TAG=<sha> EDGE_IMAGE_TAG=$(bash scripts/edge-tag.sh) docker compose -p mebel-prodtest -f compose.prod.yaml --env-file smoke.env "$@"; }
 prodtest up -d --wait postgres minio && prodtest run --rm --no-deps createbuckets
 prodtest run --rm --no-deps backend alembic upgrade head && prodtest up -d --wait
-curl -H 'Host: app.lvh.me' http://127.0.0.1:8080/api/v1/readyz
+curl -H 'Host: my.lvh.me' http://127.0.0.1:8080/api/v1/readyz
 prodtest down -v                                     # only ever with -p mebel-prodtest
 ```
 
@@ -115,7 +115,7 @@ stack itself — there is no shared infra to provision.
    a missing or empty required value (e.g. `DOCS_AUTH_PASSWORD`) makes `deploy.sh`'s
    `compose config` check stop it first. Leave `IMAGE_TAG` / `EDGE_IMAGE_TAG` out —
    `deploy.sh` writes them.
-6. **DNS**: A records for the apex, `www`, `app`, `workshop`, `admin` → the box.
+6. **DNS**: A records for the apex, `www`, `my`, `workshop`, `admin` → the box.
 7. **Certificate + nginx site**: follow `nginx-host.conf.example`'s header —
    `certbot certonly --nginx` for all five names **with `--deploy-hook "systemctl reload
    nginx"`** (renewed certs only take effect on reload), then install the file into

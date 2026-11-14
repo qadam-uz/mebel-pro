@@ -70,11 +70,17 @@ apex, and proxies to the Caddy edge on `127.0.0.1` over plain HTTP. Caddy (confi
 | Host                    | Target                                                                                                    |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- |
 | `mebelapp.uz`           | static SEO landing (1 HTML)                                                                               |
-| `app.mebelapp.uz`       | client SPA (+ `/api/*` → backend)                                                                         |
+| `my.mebelapp.uz`        | client SPA (+ `/api/*` → backend)                                                                         |
 | `workshop.mebelapp.uz`  | workshop SPA (+ `/api/*` → backend)                                                                       |
 | `admin.mebelapp.uz`     | superadmin SPA (+ `/api/*` → backend, + `/docs` · `/api-docs` · `/api-redoc` → backend, HTTP Basic-gated) |
 
 Each SPA stays same-origin with its API (no CORS).
+
+The landing names no host: its CTAs link to `/go/client` and `/go/workshop`, which the edge
+answers with a 302 to the client and workshop subdomains — so a domain move never strands them.
+The client host is different: its `/w/{code}` links are printed as QR codes and sent in
+Telegram messages, so once it serves real clients it is effectively permanent — renaming it
+means keeping the old host alive as a redirect.
 
 The host nginx is shared with an unrelated project on the same VPS and is configured outside
 this repo; a reference copy lives at `deploy/nginx-host.conf.example`.

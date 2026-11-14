@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.stubEnv('DEV', false)
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { origin: 'https://admin.mebel-pro.uz', pathname: '/workshops/w-1' },
+    value: { origin: 'https://admin.mebelapp.uz', pathname: '/workshops/w-1' },
   })
 })
 
@@ -44,10 +44,10 @@ describe('Mijoz havolalari — the platform operator card', () => {
 
     expect(view.text()).toContain('Mijoz havolalari')
     expect(view.get('#admin-client-link-workshop').attributes('value')).toBe(
-      'https://app.mebel-pro.uz/w/ABCD2345',
+      'https://my.mebelapp.uz/w/ABCD2345',
     )
-    expect(view.text()).toContain('https://app.mebel-pro.uz/w/ABCD2345/1')
-    expect(view.text()).toContain('https://app.mebel-pro.uz/w/ABCD2345/7')
+    expect(view.text()).toContain('https://my.mebelapp.uz/w/ABCD2345/1')
+    expect(view.text()).toContain('https://my.mebelapp.uz/w/ABCD2345/7')
   })
 
   it('keeps a closed branch copyable and says what state it is in', async () => {
@@ -69,7 +69,7 @@ describe('Mijoz havolalari — the platform operator card', () => {
     await copyButton(view, 'Chilonzor havolasini nusxalash')?.trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith('https://app.mebel-pro.uz/w/ABCD2345/1')
+    expect(writeText).toHaveBeenCalledWith('https://my.mebelapp.uz/w/ABCD2345/1')
     expect(useToast().toasts.value[0].message).toBe('Havola nusxalandi')
   })
 
@@ -82,7 +82,7 @@ describe('Mijoz havolalari — the platform operator card', () => {
     await copyButton(view, 'Ustaxona havolasini nusxalash')?.trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith('https://app.mebel-pro.uz/w/ABCD2345')
+    expect(writeText).toHaveBeenCalledWith('https://my.mebelapp.uz/w/ABCD2345')
   })
 
   it('annotates only the row whose clipboard refused', async () => {

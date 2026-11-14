@@ -32,7 +32,7 @@ def test_set_derives_url_from_client_app_base_url(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(settings, "TELEGRAM_WEBHOOK_SECRET", "hook-secret")
-    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://app.mebel-pro.uz/")
+    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://my.mebelapp.uz/")
 
     cli.main(["telegram-webhook", "set"])
 
@@ -40,7 +40,7 @@ def test_set_derives_url_from_client_app_base_url(
         (
             "setWebhook",
             {
-                "url": "https://app.mebel-pro.uz/api/v1/telegram/webhook",
+                "url": "https://my.mebelapp.uz/api/v1/telegram/webhook",
                 "secret_token": "hook-secret",
                 "allowed_updates": ["message", "callback_query"],
             },
@@ -48,7 +48,7 @@ def test_set_derives_url_from_client_app_base_url(
     ]
     assert json.loads(capsys.readouterr().out) == {
         "status": "set",
-        "url": "https://app.mebel-pro.uz/api/v1/telegram/webhook",
+        "url": "https://my.mebelapp.uz/api/v1/telegram/webhook",
     }
 
 
@@ -57,21 +57,21 @@ def test_set_honors_base_url_override_and_drop_flag(
     recorded_calls: list[tuple[str, dict[str, Any]]],
 ) -> None:
     monkeypatch.setattr(settings, "TELEGRAM_WEBHOOK_SECRET", "hook-secret")
-    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://app.mebel-pro.uz")
+    monkeypatch.setattr(settings, "CLIENT_APP_BASE_URL", "https://my.mebelapp.uz")
 
     cli.main(
         [
             "telegram-webhook",
             "set",
             "--base-url",
-            "https://staging.mebel-pro.uz",
+            "https://staging.mebelapp.uz",
             "--drop-pending-updates",
         ]
     )
 
     method, payload = recorded_calls[0]
     assert method == "setWebhook"
-    assert payload["url"] == "https://staging.mebel-pro.uz/api/v1/telegram/webhook"
+    assert payload["url"] == "https://staging.mebelapp.uz/api/v1/telegram/webhook"
     assert payload["drop_pending_updates"] is True
 
 

@@ -4,12 +4,12 @@
 # apex changes; it must equal BASE_DOMAIN in deploy/.env.
 #
 # Order of operations (first time):
-#   1. DNS: A records for mebelapp.uz, www, app, workshop, admin → the box.
+#   1. DNS: A records for mebelapp.uz, www, my, workshop, admin → the box.
 #   2. Get the certificate WITHOUT letting certbot edit any config — nginx is
 #      already running for the other project, and the nginx authenticator
 #      answers the HTTP-01 challenge through it temporarily:
 #        sudo certbot certonly --nginx -d mebelapp.uz -d www.mebelapp.uz \
-#          -d app.mebelapp.uz -d workshop.mebelapp.uz -d admin.mebelapp.uz \
+#          -d my.mebelapp.uz -d workshop.mebelapp.uz -d admin.mebelapp.uz \
 #          --deploy-hook "systemctl reload nginx"
 #      One certificate, stored under /etc/letsencrypt/live/mebelapp.uz/.
 #      The deploy hook is saved for renewals: nginx only picks up a renewed
@@ -27,7 +27,7 @@
 server {
     listen 80;
     # listen [::]:80;   # uncomment if the host serves IPv6 (AAAA records)
-    server_name mebelapp.uz www.mebelapp.uz app.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
+    server_name mebelapp.uz www.mebelapp.uz my.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
     return 301 https://$host$request_uri;
 }
 
@@ -48,7 +48,7 @@ server {
 server {
     listen 443 ssl;
     # listen [::]:443 ssl;
-    server_name mebelapp.uz app.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
+    server_name mebelapp.uz my.mebelapp.uz workshop.mebelapp.uz admin.mebelapp.uz;
 
     ssl_certificate     /etc/letsencrypt/live/mebelapp.uz/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/mebelapp.uz/privkey.pem;

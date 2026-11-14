@@ -7,7 +7,7 @@
  *
  * - **production** — the Caddy edge routes by subdomain (`deploy/Caddyfile`):
  *   the workshop app is `workshop.<domain>`, the platform app `admin.<domain>`,
- *   the client app `app.<domain>`.
+ *   the client app `my.<domain>`.
  * - **dev** — one Vite server hosts all three SPAs under a role base path, so
  *   the staff app is `/workshop/...` or `/admin/...` and the client app is
  *   `/client/...`.
@@ -18,8 +18,12 @@
  * origin, which is at worst a link the owner can see is wrong.
  */
 
+// In the code, the subdomain names live in exactly two places: these constants
+// (the links the staff SPAs build) and the site addresses in `deploy/Caddyfile`
+// (routing). A rename touches both — and, outside the code, DNS, the host nginx
+// and `CLIENT_APP_BASE_URL` on the server.
 const STAFF_HOST_PREFIXES = ['workshop.', 'admin.']
-const CLIENT_HOST_PREFIX = 'app.'
+const CLIENT_HOST_PREFIX = 'my.'
 const STAFF_DEV_BASES = ['/workshop', '/admin']
 const CLIENT_DEV_BASE = '/client'
 

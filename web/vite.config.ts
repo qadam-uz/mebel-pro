@@ -6,12 +6,25 @@ import { defineConfig } from 'vite'
 
 function roleHistoryFallback() {
   const prefixes = ['/client', '/workshop', '/admin']
+  // The landing's CTAs link to `/go/*`; in prod the Caddy edge redirects them to
+  // the role subdomains (deploy/Caddyfile), here to the dev role bases.
+  const landingLinks = new Map([
+    ['/go/client', '/client/'],
+    ['/go/workshop', '/workshop/'],
+  ])
   return {
     name: 'role-history-fallback',
     configureServer(server: import('vite').ViteDevServer) {
-      server.middlewares.use((req, _res, next) => {
+      server.middlewares.use((req, res, next) => {
         const rawUrl = req.url ?? ''
         const [pathname, query] = rawUrl.split('?')
+        const landingTarget = landingLinks.get(pathname)
+        if (landingTarget) {
+          res.statusCode = 302
+          res.setHeader('Location', landingTarget)
+          res.end()
+          return
+        }
         const prefix = prefixes.find(
           (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
         )
