@@ -8,7 +8,7 @@
 # `compose up -d --build` rebuilds this image whenever the Caddyfile changes,
 # Compose sees a new image, and the edge is recreated deterministically.
 #
-# Per-environment values (BASE_DOMAIN, ACME_EMAIL) stay as runtime env on the
+# Per-environment values (BASE_DOMAIN) stay as runtime env on the
 # service — Caddy substitutes them when it loads the config, so the same image
 # works across environments.
 FROM caddy:2.8-alpine

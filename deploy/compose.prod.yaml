@@ -6,11 +6,13 @@
 #
 # Key differences from compose.yaml (dev):
 #   - NO local `postgres` / `minio` services. The VPS already runs them in
-#     an external Docker network called `infra-net` (also used by other
-#     projects on the same box, e.g. taqsim). The backend joins that
+#     an external Docker network called `infra-net`. The backend joins that
 #     network and reaches them by service name: `postgres`, `minio`.
-#   - Adds a `caddy` edge — the only published service (80/443; auto-HTTPS
-#     per host). Routes by subdomain derived from BASE_DOMAIN. See ./Caddyfile.
+#   - Adds a Caddy `edge` — the only published service, and only on
+#     127.0.0.1:8080, plain HTTP. Routes by subdomain derived from
+#     BASE_DOMAIN (see ./Caddyfile). TLS is terminated in front of it by the
+#     host-level nginx + certbot that serves every project on the box
+#     (reference config: ./nginx-host.conf.example).
 #   - Built images (no source bind-mounts, no autoreload). `web` is the
 #     nginx image serving the built SPA bundle.
 #   - Resource limits + log rotation, so a runaway query/leak can't OOM
@@ -20,7 +22,7 @@
 #
 # Required env in deploy/.env (create it on the server, chmod 600):
 #   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
-#   the SHARED minio), DOCS_AUTH_*, BASE_DOMAIN, ACME_EMAIL.
+#   the SHARED minio), DOCS_AUTH_*, BASE_DOMAIN.
 
 name: mebel-pro
 
@@ -60,9 +62,12 @@ services:
       TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP: ${TELEGRAM_LOGIN_CODE_REDEEMS_PER_IP:-10}
       TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS: ${TELEGRAM_LOGIN_CODE_REDEEM_WINDOW_SECONDS:-60}
       CLIENT_APP_BASE_URL: ${CLIENT_APP_BASE_URL:-}
-      # Must match the pinned `default` network subnet below — the per-IP Telegram
-      # limits only see real client IPs when the edge's X-Forwarded-For is
-      # trusted. infra-net is shared with other projects and stays untrusted.
+      # Must match the pinned `default` network subnet below. The chain is
+      # client → host nginx (sets X-Forwarded-For to the client) → docker
+      # gateway 172.29.0.1 → Caddy edge (appends 172.29.0.1) → backend. The
+      # backend takes the right-most hop outside these CIDRs, so the gateway
+      # is skipped and the real client IP wins — the per-IP limits are inert
+      # without it. infra-net is shared with other projects and stays untrusted.
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-["172.29.0.0/24"]}
     volumes:
       # Live docs site reads this on every request — no build step. The repo
@@ -101,11 +106,11 @@ services:
       - backend
     expose:
       - "80"
-    # Unique alias. The edge joined `infra-net` to reach taqsim, and a bare
-    # `web` is ambiguous the moment any neighbour on that network also has one —
-    # Docker resolved it to theirs and every mebel-pro SPA served taqsim's
-    # frontend. `/api/*` kept working only because `backend` happened to be
-    # unique. Project-specific names on a shared network, always.
+    # Project-unique alias the Caddyfile proxies to. Defensive: the edge sits
+    # on `default` only today, but a bare `web` becomes ambiguous the moment a
+    # container joins a network shared with another project — that once made
+    # every mebel-pro SPA serve a neighbour's frontend. Project-specific names,
+    # always.
     networks:
       default:
         aliases:
@@ -130,26 +135,19 @@ services:
       - web
       - backend
     environment:
-      # The apex. Caddy serves apex + app.* + workshop.* + admin.* derived
-      # from it. Each gets a Let's Encrypt cert automatically (DNS must
-      # point here and ports 80/443 must be reachable).
+      # The apex. Caddy routes apex + app.* + workshop.* + admin.* derived
+      # from it (Host header as forwarded by the host nginx).
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN must be set in deploy/.env}
-      ACME_EMAIL: ${ACME_EMAIL:-}
-      # Taqsim's Telegram Mini App runs its own compose stack on this box and
-      # publishes nothing — the edge is its only way in. Bare host, no scheme.
-      # Defaulted rather than required so the server's deploy/.env needs no
-      # edit. `:-` also swallows an explicitly empty value, which matters: an
-      # empty domain renders an anonymous site block, Caddy rejects the whole
-      # config, and the edge won't start — taking mebel-pro down with it.
-      TAQSIM_DOMAIN: ${TAQSIM_DOMAIN:-taqsim-ai.uz}
     ports:
-      - "80:80"        # HTTP — also the ACME HTTP-01 challenge / HTTPS redirect
-      - "443:443"      # HTTPS
-      - "443:443/udp"  # HTTP/3 (QUIC)
+      # Loopback only, plain HTTP. The host nginx owns 80/443 and TLS for the
+      # whole box and proxies here; binding 127.0.0.1 keeps the edge
+      # unreachable from the internet, which is also what makes trusting the
+      # gateway's X-Forwarded-For in the Caddyfile safe.
+      - "127.0.0.1:8080:80"
     volumes:
       # Caddyfile is baked into the image (see edge.Dockerfile) — not mounted,
       # so config changes ship as a new image and recreate the edge.
-      - caddy-data:/data       # certs + ACME state — must persist
+      - caddy-data:/data       # Caddy runtime state (no certs — TLS is the host nginx's)
       - caddy-config:/config
     logging:
       driver: json-file
@@ -157,12 +155,10 @@ services:
         max-size: "10m"
         max-file: "5"
     networks:
-      # `default` keeps web/backend reachable AND keeps the edge's source IP
-      # inside 172.29.0.0/24, so TRUSTED_PROXY_CIDRS still matches.
-      # `infra-net` is only so the edge can resolve taqsim-web; it stays out
-      # of the trusted list.
+      # `default` only: reaches web/backend, and keeps both the edge's own IP
+      # and its loopback-port gateway (172.29.0.1) inside 172.29.0.0/24, so
+      # TRUSTED_PROXY_CIDRS matches.
       - default
-      - infra-net
 
 volumes:
   caddy-data:
@@ -170,7 +166,9 @@ volumes:
 
 networks:
   # Pinned subnet so TRUSTED_PROXY_CIDRS (backend env above) can trust the
-  # edge's X-Forwarded-For deterministically. If you change one, change both.
+  # edge's X-Forwarded-For deterministically, and the Caddyfile can trust the
+  # gateway (172.29.0.1) the host nginx arrives from. If you change one,
+  # change all three.
   # Before the first deploy, confirm the subnet is free on the VPS:
   #   docker network inspect $(docker network ls -q) | grep 172.29
   default:
