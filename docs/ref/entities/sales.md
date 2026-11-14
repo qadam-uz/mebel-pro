@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-09-05
+updated: 2026-10-17
 order: 50
 ---
 
@@ -15,12 +15,12 @@ finance context ([`finance.md`](finance.md)); the order holds **no payment rows*
 
 ## Order
 
-A client's request for panels cut to size at a branch — the header that owns the items, the
-status history, the production stamps, and a frozen price snapshot. Created by the client —
-or by workshop staff on behalf of a walk-in client — from a cutting draft with a chosen
-algorithm result. v1 is pickup-only; the order references its confirmed cutting result.
-Material source is **per item** for the panel and **per side** for each edge — see
-[Order item](#order-item).
+A client's request for panels cut to size at a branch — the header that owns the drawing it
+was placed from, the items, the status history, the production stamps, and a price snapshot.
+Created from a cutting draft through the order step
+([`orders.md`](../features/orders.md#placing-an-order)) — by the client, or by workshop staff
+for a walk-in client. v1 is pickup-only. Material source is **per item** for the panel and
+**per side** for each edge — see [Order item](#order-item).
 
 **Identity & lifecycle**
 
@@ -30,7 +30,9 @@ Material source is **per item** for the panel and **per side** for each edge —
 | `order_number` | text | the client–workshop handle: **six random decimal digits**, no leading zero (`100000`–`999999`), e.g. `482917`; globally unique. Displayed as `№ 482 917` |
 | `client_id` | UUID | the client the order belongs to — its placer, or the walk-in it was placed for |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
-| `cutting_result_id` | UUID | the confirmed (current) cutting result |
+| `cutting_result_id` | UUID? | the current cutting result: while the order still has [pending groups](#order), a `candidate` covering the resolved ones (`complete = false`); from confirmation on, the `confirmed`, complete one. Null only when every group was left to the workshop |
+| `material_groups` | json | the order's drawing groups ([shape](cutting.md#the-drawings-content)) with each group's choices: material `catalog` (`branch_material_id`) · `workshop` (+ the client's `note`) · `customer` (`customer_board_id`), and kromka `catalog` (tape decor) · `workshop`. A group is **pending** while either choice is `workshop`; staff resolving it rewrite the choice and keep the note for the record |
+| `reorder_of_order_id` / `from_saved_drawing_id` | UUID? / UUID? | provenance carried from the draft: the order this one repeats ([re-ordering](../features/orders.md#re-ordering)), or the saved drawing it was copied from |
 | `status` | enum | `new` / `confirmed` / `cutting` / `edge_banding` / `ready` / `completed` / `cancelled`; default `new` |
 | `version` | int | optimistic-lock counter for status transitions |
 | `contact_name` / `contact_phone` | text | the checkout contact shared with the workshop; copied from the client profile by default but frozen from the checkout form |
@@ -70,8 +72,12 @@ numbers **exactly as stored** — clients hold screenshots and printed cutting m
 nothing reformats history. Both pass through the formatter unchanged, and stay findable
 because search ORs the normalised form beside a raw substring match.
 
-**Pricing snapshot** (frozen at creation against the chosen branch's rates; there is no
-post-placement modification, so it is never re-priced)
+**Pricing snapshot** — computed at placement as a quote against the branch's rates, recomputed
+when staff resolve a pending group or agree a price, and **frozen at confirmation**. A
+staff-placed order is confirmed at creation, so for it the two moments coincide. Afterwards
+only a [revision](../features/orders.md#revising-a-placed-order) re-prices it. While groups are
+pending the subtotals cover the resolved groups only, and every surface labels the total
+«Hozircha».
 
 | Field | Type | Notes |
 |---|---|---|
@@ -109,17 +115,18 @@ its worker ids are optional and may stay `NULL`
 | `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<kromka branch_material_id>": 12500, … }` — consumed banding length in integer millimetres per tape format (only `shop` source). UI/reports display metres. Thickness is part of the format itself. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
-Invariants: created by the client — or by workshop staff on behalf of a walk-in client
-([`orders.md`](../features/orders.md#staff-created-orders-walk-in-clients)) — from a cutting
-draft with a `chosen` result (which becomes `confirmed` and bound); a staff-created order
-lands `confirmed` with `confirmed_at` set at creation; the checkout contact snapshot is
-frozen at creation so later client profile edits do not rewrite the workshop-facing order;
-all money fields are integer
-tiyin; `total_tiyin` follows the formula and can't go negative; the discount and surcharge
-are independent manual adjustments (either, both, or neither), each requiring a reason and
-applied-by stamp when non-zero, settable only while `new`/`confirmed` and cleared by a
-revision; the price snapshot is otherwise frozen
-at creation (no re-pricing — there is no modification); status transitions follow the state
+Invariants: created from a cutting draft — by the client, or by workshop staff for a walk-in
+([`orders.md`](../features/orders.md#staff-created-orders-walk-in-clients)) — with a result
+for every group not left to the workshop; the draft's content moves onto the order and the
+draft is deleted; a staff-created order lands `confirmed` with `confirmed_at` set at creation
+and never carries a pending group — staff choose the material themselves; `new → confirmed`
+requires no pending group, a `complete` result and no unpriced sold material; the checkout
+contact snapshot is frozen at creation so later client profile edits do not rewrite the
+workshop-facing order; all money fields are integer tiyin; `total_tiyin` follows the formula
+and can't go negative; the discount and surcharge are independent manual adjustments
+(either, both, or neither), each requiring a reason and applied-by stamp when non-zero,
+settable only while `new`/`confirmed` and cleared by a revision; the price snapshot is frozen
+at confirmation and re-priced afterwards only by a revision; status transitions follow the state
 machine only, in both production modes, and a status transition is never conditioned on the
 mode the branch happens to run — the mode decides only which action writes it;
 concurrent transitions serialize by `version`; `cutter_user_id` /
@@ -135,36 +142,37 @@ holds no stock balance; `completed` and `cancelled` are terminal; an order is ne
 
 One part line of an order — a panel of given dimensions and quantity, optional edge banding
 **per side**, plus frozen snapshots of the panel and each side's edge (the snapshots are
-authoritative for the order) and the prices used. Items mirror the parts the client entered
-into the cutting wizard for that order.
+authoritative for the order) and the prices used. One item per part of the order's drawing.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `order_id` | UUID | required |
 | `branch_material_id` | UUID? | logical reference to the panel **branch material** — one branch's carried [decor format](catalog.md#decor-format) (the snapshot is authoritative for the order) |
-| `customer_board_id` | UUID? | set instead when the panel was a sheet the client brought — a [customer board](cutting.md#customer-board). **Exactly one of the two id columns is set**, enforced by a CHECK |
+| `customer_board_id` | UUID? | set instead when the panel is cut from the client's own sheets — a [customer board](cutting.md#customer-board). **At most one** of the two id columns is set (DB CHECK), and **neither** while the part's group is pending: the line then carries no material and no material price until staff resolve the group, which rewrites it. From confirmation on exactly one is set (service rule) |
 | `material_source` | enum | `shop` / `own` — for the panel; per-item; an order can mix |
-| `material_snapshot` | json | `{ manufacturer_name, type, code, name, has_grain, thickness_mm, length_mm, width_mm, tape_width_mm, finished_sides, price_tiyin }` as of order creation, plus `customer_supplied` + `stock_material_id` on a customer board. Older rows keep the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`color`, `decor_code`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`) — frozen history is never rewritten, and the label formatter reads all three |
+| `material_snapshot` | json | `{ manufacturer_name, type, code, name, has_grain, thickness_mm, length_mm, width_mm, tape_width_mm, finished_sides, price_tiyin }` as of the latest pricing, plus `customer_supplied` on a customer board (older board snapshots also carry the retired `stock_material_id`). Older rows keep the Uzbek vocabulary (`tur`, `kod`, `nomi`, `tolali`, `qalinlik_mm`, `uzunlik_mm`, `eni_mm`, `kromka_eni_mm`) and the oldest the pre-reshape English one (`color`, `decor_code`, `panel_length_mm`, `panel_width_mm`, `edge_width_mm`) — frozen history is never rewritten, and the label formatter reads all three |
 | `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material / cutting bounds |
 | `quantity` | int | ≥ 1 |
-| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { manufacturer_name, type, code, name, thickness_mm, tape_width_mm, price_tiyin } }`, where `material_id` is a `kromka` branch material (the JSON key kept its name; the values were rewritten, and older snapshots keep the vocabulary they were written with) |
+| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: null (no banding); `{ thickness_mm }` while the group's kromka is left to the workshop; or `{ material_id, source, snapshot: { manufacturer_name, type, code, name, thickness_mm, tape_width_mm, price_tiyin } }`, where `material_id` is a `kromka` branch material (the JSON key kept its name; the values were rewritten, and older snapshots keep the vocabulary they were written with) |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
 | `unit_material_price_tiyin` | bigint | snapshot; 0 when panel `material_source = own`; ≥ 0 |
 | `edge_cost_tiyin` | bigint | snapshot for this line — sum across the four sides of `shop` edge cost; 0 when every banded side is `own`; ≥ 0 |
 | `line_total_tiyin` | bigint | `(unit_cutting + unit_material) × quantity + edge_cost`; ≥ 0 |
 
 Invariants: snapshot fields are never updated to reflect later catalog changes; `part_ref`
-corresponds to a part in the order's cutting result; **exactly one** of `branch_material_id` /
-`customer_board_id` is set (DB CHECK) — a line is cut either from a sheet the branch carries or
-from one the client brought, and a reader that only prints the line never has to branch on
-which, because the label and every price come from `material_snapshot` either way; the branch
+corresponds to a part of the order's drawing; **at most one** of `branch_material_id` /
+`customer_board_id` is set (DB CHECK) and exactly one once the order is confirmed — a line is
+cut either from a sheet the branch carries or from one the client brought, and a reader that
+only prints the line never has to branch on which, because the label and every price come
+from `material_snapshot` either way; the branch
 material, when set, is one of a panel-shaped format; each side's edge `material_id` (when set)
 is a `kromka` branch material; grain is a property of the panel's decor (read from
-`material_snapshot`); parts on a grained material aren't rotated at cutting time; per-side `source` is independent and may differ across sides
-of the same item. There is no modify path — items are created with the order and never
-replaced.
+`material_snapshot`), and a part that follows the grain is not rotated on a grained one;
+per-side `source` is independent and may differ across sides of the same item. Items are
+created with the order and rewritten only by a revision apply or by staff resolving a pending
+group.
 
 ## Order status event
 

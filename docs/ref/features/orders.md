@@ -2,15 +2,16 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-09-08
+updated: 2026-10-17
 order: 30
 ---
 
 # Orders
 
-The order lifecycle: a client places an order from a finished cutting — or workshop staff
-place it for a walk-in client (see [Staff-created orders](#staff-created-orders-walk-in-clients))
-— the workshop verifies it, production runs (step by step, or as one tap — see
+The order lifecycle: a client places an order from a drawing — choosing the workshop and each
+material group's decor, or leaving a material to the workshop — or workshop staff place it for
+a walk-in client (see [Staff-created orders](#staff-created-orders-walk-in-clients)); the
+workshop verifies it, production runs (step by step, or as one tap — see
 [Production mode](#production-mode)), and the client collects it. v1 is **pickup-only**, the order
 **never moves money** (the finance module records what the client paid —
 [`finance.md`](finance.md)) and **never holds stock balances** (the inventory module
@@ -27,33 +28,137 @@ transition a recorded row.
 ## What an order is
 
 A **client's request for panels cut to size at one branch** — the header that owns the
-items, the status history, the production stamps, and a frozen price snapshot. Created
-**by the client — or by workshop staff on behalf of a walk-in client** — from a cutting
-**draft** with a **chosen algorithm result** (no order without one — the draft becomes
-`confirmed` and is bound on creation; see [`cutting.md`](cutting.md)).
+drawing it was placed from, the items, the status history, the production stamps, and a price
+snapshot. Created **by the client — or by workshop staff on behalf of a walk-in client** —
+from a [drawing](cutting.md#what-a-drawing-is) through the [order step](#placing-an-order);
+placement moves the drawing into the order and deletes the draft.
 
 Set at creation:
 
-- **Branch** — the draft's branch, carried straight through. A material *is* a branch's
-  format ([`catalog-inventory.md`](catalog-inventory.md)), so the cutting is already bound to
-  one branch by the time it has parts; the order step shows that branch and links back to the
-  editor to change it, rather than offering a second choice. The branch **freezes pricing**
-  against its rates.
-- **Material source — per-item for panels, per-side for edges.** Each part is `shop` (the
-  workshop supplies the panel; inventory auto-decrements for it) or `own` (the client
-  brings the panel; cutting service only, no stock movement for that panel). Each banded
-  edge side is independently `shop` (workshop supplies that tape; inventory decrements
-  consumed length as integer millimetres internally, shown and priced as metres) or `own`
-  (client brings the tape; no stock movement for that side). The data model and pricing
-  support mixing sources at every level, but the **client cutting editor no longer offers
-  `own`** ([`cutting.md`](cutting.md#parts-and-materials)) — new orders are fully `shop`;
-  `own` remains meaningful for historical orders.
+- **Branch** — picked on the order step's first step, the client's pin preselected. It decides
+  the catalog, the saw settings the layout is computed with, and the rates the price uses.
+- **A material per group** — a decor and size from the branch's catalog, or **«Ustaxona
+  belgilaydi»**, left to the workshop ([Pending materials](#pending-materials)). Staff may put a
+  group on the client's own sheets ([Customer material](#customer-material)).
+- **Material source — per item for panels, per side for edges.** A part is `shop` (the
+  workshop's sheet; inventory auto-decrements for it) or `own` (the client's sheet — a
+  customer board, or a sheet counted in an own-sheet claim; cutting service only, no stock
+  movement). Each banded side is independently `shop` or `own` the same way, priced and
+  decremented as consumed metres. The client app never offers `own`: the client asks for it in
+  a note or by phone, and staff set it.
 - **Handover — pickup only.** The client collects at the branch. Delivery is out of v1
   ([`scope.md`](../../scope.md)).
 
 Post-placement modification is **workshop-side only**, pre-production — a staff **revision**
-(see [Revising a placed order](#revising-a-placed-order)). The client's own path stays
-cancel-and-reorder while `new`.
+(see [Revising a placed order](#revising-a-placed-order)). The client's own path is cancel
+while `new`, and **Qayta buyurtma** for a new order from the same drawing
+([Re-ordering](#re-ordering)).
+
+## Placing an order
+
+**The order step** turns a drawing into a priced layout at one branch, in three steps. It runs
+on the draft — its choices are stored as the draft's `order_setup`, so a client can leave and
+come back — and every choice is re-checked against the branch's current catalog at each step
+and at placement.
+
+```mermaid
+flowchart LR
+    D[Drawing] --> S1["1 · Ustaxona<br/>branch"] --> S2["2 · Materiallar<br/>decor + size per group<br/>or «Ustaxona belgilaydi»"] --> S3["3 · Tasdiqlash<br/>layout · price · contact"] --> O([Order])
+```
+
+**1 · Ustaxona.** The branches of the client's own workshops — the set Ustaxonalarim shows
+([`client-entry.md`](client-entry.md#related-workshops)) — the pinned one first and
+preselected. A `temporarily_closed` branch is listed and disabled with its reason. A drawing
+with a [MAP group](cutting.md#map-groups) disables every branch whose saw does not fit the
+layout or that carries no format of its sheet size, each with the reason in words. When
+exactly one branch is selectable the step is skipped and shown as done; with none, it explains
+that a workshop is joined through its link or QR. A walk-in order's branch is the staffer's,
+and the step is not shown.
+
+**2 · Materiallar.** One card per group, in drawing order, each saying what it needs: the
+group's name, type, thickness, part count and sheet size.
+
+- **The choice.** The client picks **Men tanlayman** or **Ustaxona belgilaydi**. Staff get
+  **Ombordan** or **Mijoz materiali** instead — they are the workshop, so leaving a choice to
+  it means nothing.
+- **Decor, then size.** The decor picker lists the branch's decors holding a format of the
+  group's type and thickness — photographs first, because a board is chosen by looking at it.
+  Picking a decor offers its sizes (one- and two-sided boards are separate sizes), each with its
+  price per sheet. **The drawing's sheet size is preselected when the decor has it** («Chizmadagi
+  o'lcham»); when it does not, the size list says so and the layout is computed on the size
+  picked. A MAP group is offered only formats of exactly its layout's sheet size. An unpriced
+  format is listed with «Narx yo'q» and stays selectable — confirming the order is what refuses
+  it ([Pricing](#pricing)).
+- **Kromka**, on a group with banded sides, defaults to the branch's tape of the same decor and
+  shows the thicknesses it resolves to («0,4 va 2 mm»); when the branch has no tape of that
+  decor the card asks for one. The client may leave just the kromka to the workshop while
+  choosing the board.
+- **Ustaxona belgilaydi** opens an optional note to the workshop («Telefonda oq Kronospan deb
+  kelishdik») and leaves the group's kromka to the workshop too — a tape colour cannot be chosen
+  for a board nobody has picked.
+- A draft copied by [Qayta buyurtma](#re-ordering), or from a saved drawing that was ordered
+  before at this branch, opens with those choices filled in and flagged where they no longer
+  hold. The step continues once every group has a choice.
+
+**3 · Tasdiqlash.** The optimiser runs over every group whose material is known
+([`cutting.md`](cutting.md#the-optimiser)) and the page shows, in order: the result's figures and
+per-group sheets with their thumbnails (**Listlarni ko'rish** opens the full drawing), the
+price, the pickup branch, the contact fields, and one checkbox, **Chizmani saqlab qo'yish** —
+off by default, because most drawings are one-offs — which saves a copy to the client's
+library at placement. A group left to the workshop reads *Ustaxona belgilaydi* in place of its
+sheets, its price line reads *ustaxona aytadi*, and the total is labelled **Hozircha**, under a
+banner saying the workshop will name the price and the client will be notified. **Buyurtma
+berish** places the order; it lands `new` (a walk-in order lands `confirmed`), and the client's
+pin moves to its branch ([`client-entry.md`](client-entry.md#what-entry-writes)).
+
+### Pending materials
+
+A group left to the workshop is **pending**. The order is placed with it: a `new` order whose
+result covers only the resolved groups, whose price is a quote for those, and which carries the
+client's note per pending group. Real life is the reason — the client settled it on the phone,
+or genuinely does not mind which white — and the workshop entering the real material is also
+what keeps its warehouse right.
+
+- **The workshop resolves it before confirming.** The order shows **Material kutilmoqda**; for
+  each pending group staff pick a decor and size from their own catalog — with each format's
+  stock on hand beside its price — or put it on the client's sheets, and the kromka with it.
+  Saving re-runs the optimiser over the whole drawing, binds the new result, rewrites the items
+  and re-prices the order; a discount survives, clamped if the new subtotal can no longer carry
+  it. The order stays `new`.
+- **Confirmation is the gate.** `new → confirmed` is refused with `order_has_pending_materials`
+  while a group is pending, beside the existing unpriced-material gate. Confirming freezes the
+  price.
+- **The client is told twice**: `order.updated` when the materials are resolved, with the price,
+  and `order.confirmed` as always. The client does not accept the price in the app — the
+  workshop agrees it by phone, as it does today, and a client who disagrees calls or cancels
+  while the order is `new`.
+
+### Customer material
+
+Staff put a group on the client's own sheets — **Mijoz materiali** — on a walk-in order's step 2,
+or while resolving or revising a `new` / `confirmed` order. They enter the client's sheet size
+and whether it has grain; the thickness is the group's, and a MAP group's board must match its
+layout's size. The layout is computed on that size and the client brings **every** sheet it
+needs: the order's top card says «Olib kelasiz: {n} ta list — {type} {thickness} mm ·
+{size}», the material line is not charged, and cutting and banding labour are. A client
+supplying only some sheets of a catalog material is the own-sheet claim instead
+([The stock seam](#the-stock-seam)). The client app offers neither.
+
+### Re-ordering
+
+**Qayta buyurtma** — on any order, in the client app and, for walk-ins, in the workshop app —
+copies the order's drawing into a new draft together with its choices: the branch, each group's
+decor and size or its «Ustaxona belgilaydi» with the note, and its kromka. It opens straight on
+step 2:
+
+- a decor or size the branch no longer carries is flagged on its group, which must choose
+  again — or leave it to the workshop;
+- every price is today's, and a line that moved shows its old figure («avval 385 000»);
+- **Detallarni o'zgartirish** opens the copy in the editor — re-cutting two damaged shelves is
+  a re-order with the rest deleted.
+
+The original order is untouched, and the new one records which order it repeats. A customer
+board is not copied: the client may not bring the same sheets twice, so staff set it again.
 
 ## Production mode
 
@@ -111,9 +216,9 @@ identically. So is what the client sees ([UX — client app](#ux-client-app)).
 ## Staff-created orders (walk-in clients)
 
 A walk-in customer at the counter has no app session. Staff holding
-`manage_orders` on the branch place the order **for** them, through the **same cutting
-editor the client app uses** ([`cutting.md`](cutting.md#workshop-side)) — the walk-in flow
-parameterizes the client flow, it doesn't fork it. The flow:
+`manage_orders` on the branch place the order **for** them, through the **same drawing and
+order step the client app uses** ([`cutting.md`](cutting.md#workshop-editor)) — the walk-in
+flow parameterizes the client flow, it doesn't fork it. The flow:
 
 1. **Entry** — the shell's **+ Yangi buyurtma** action in the workshop sidebar, enabled only
    when the staffer holds `manage_orders` on the **currently selected branch** and that branch
@@ -126,14 +231,16 @@ parameterizes the client flow, it doesn't fork it. The flow:
    step; the name is asked only when the number is new; a blocked account reads as a miss. Semantics,
    guardrails, and the decision rationale live in
    [`access-management.md`](access-management.md#staff-resolved-walk-ins-find-or-create).
-3. **Shared editor** — the client app's editor in fixed-branch mode: the branch is locked
-   to the entry branch and frozen into the draft at creation, and a persistent strip names
-   the walk-in (name + phone). Draft visibility and lifecycle rules:
-   [`cutting.md`](cutting.md#access).
-4. **Checkout** — single-branch: a quote at the locked branch, contact prefilled from the
-   resolved client, **Place order**. Pricing setup gaps fail with the same error codes as
-   the client path (see [Pricing](#pricing)); the error copy names the branch and that the
-   owner sets its pricing.
+3. **The drawing** — the workshop editor on a draft owned by the walk-in: the branch is the
+   entry branch, frozen into the draft at creation, and a persistent strip names the walk-in
+   (name + phone). A job that came as a 2D-Place file is a **+ MAP fayl** away. Draft
+   visibility and lifecycle rules: [`cutting.md`](cutting.md#access).
+4. **The order step** at that branch — step 1 is not shown; step 2 offers **Ombordan** or
+   **Mijoz materiali** per group, never «Ustaxona belgilaydi», so a staff-placed order is
+   never pending; step 3 quotes it, the contact prefilled from the resolved client, and
+   **Buyurtma berish** places it. Pricing setup gaps fail with the same error codes as the
+   client path (see [Pricing](#pricing)); the error copy names the branch and that the owner
+   sets its pricing.
 5. **The order lands `confirmed`** and opens on its detail. From `confirmed` onward a
    staff-created order is indistinguishable from a client-placed one — same state machine,
    same stock and money seams.
@@ -166,13 +273,14 @@ pre-approval "change one size" calls that a phone-driven staff revision doesn't 
 The revision is a **scratchpad draft, applied atomically**:
 
 1. **Edit** on the order detail creates — or resumes — the order's **revision draft**: a
-   staff-scoped cutting draft seeded from the confirmed result's parts, branch-locked to the
-   order's branch, linked back to the order (`revision_of_order_id`,
+   staff-scoped cutting draft seeded from the order's drawing and material choices,
+   branch-locked to the order's branch, linked back to the order (`revision_of_order_id`,
    [`cutting` entities](../entities/cutting.md)). One revision per order; Edit is
    idempotent. The order itself is untouched — approving, assigning, discounting, and
    cancelling all stay available while a revision sits open.
-2. Staff edit in the **same shared cutting editor** as the walk-in flow — parts UI,
-   optimise, result pick — with a persistent strip naming the order being revised.
+2. Staff edit in the **same workshop editor and order step** as the walk-in flow — parts,
+   groups, materials — with a persistent strip naming the order being revised. A MAP group
+   stays locked here as everywhere.
 3. **Review & save** shows the current frozen price next to the new quote at the order's
    branch. Saving atomically: rebinds the order to the new chosen result (the superseded
    confirmed result and its panels are deleted), replaces the item snapshots, **re-freezes
@@ -243,8 +351,8 @@ the same rows through one composite action, with the same effects
 
 | From → To | Trigger · who | Effect |
 |---|---|---|
-| — → `new` | client places the order from a chosen cutting result · or `manage_orders` staff place it for a walk-in ([Staff-created orders](#staff-created-orders-walk-in-clients)) | price snapshot frozen |
-| `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) · automatic on a staff-created order (same staff actor, same operation) | — |
+| — → `new` | client places the order through the [order step](#placing-an-order) · or `manage_orders` staff place it for a walk-in ([Staff-created orders](#staff-created-orders-walk-in-clients)) | quote computed; groups left to the workshop stay [pending](#pending-materials) |
+| `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) · automatic on a staff-created order (same staff actor, same operation) | refused while a group is pending or a sold material is unpriced; **price frozen** |
 | `new → cancelled` | **Cancel** · client (only while `new`) or `manage_orders` + reason | — |
 | `confirmed → cutting` | **Start cutting** · `process_production` (the assigned cutter), or `manage_orders` on-behalf — requires a cutter assigned | stamp `cutting_started_at` |
 | `cutting → edge_banding` | **Cutting done** · `process_production`, or `manage_orders` on-behalf — *gateway: a part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
@@ -263,7 +371,7 @@ lifecycle the admin actually sees:
 | Step | Trigger | Internal effect |
 |---|---|---|
 | order placed | client app or the walk-in counter, unchanged | `∅ → new` (walk-in: auto-confirm to `confirmed`) |
-| **Tasdiqlash** (client orders only) | `manage_orders` | `new → confirmed`, with the projected-stock warning and the `order_has_unpriced_materials` gate, unchanged |
+| **Tasdiqlash** (client orders only) | `manage_orders` | `new → confirmed`, with the projected-stock warning and the `order_has_pending_materials` / `order_has_unpriced_materials` gates; freezes the price |
 | **Tayyor** | `manage_orders`, one tap + confirm dialog | every spine event still owed, through to `ready` |
 | **Olib ketdi** | `manage_orders` | `ready → completed`, unchanged |
 | **Orqaga** | `manage_orders` + reason | composite revert `ready → … → confirmed` |
@@ -441,10 +549,8 @@ Driven entirely by this state machine; the mechanics live in
   does not move; only who pays for the sheets it uses, so the order re-prices in the same
   transaction and appends a same-status event. A negotiated discount survives, clamped only
   if the smaller subtotal can no longer carry it. Past `confirmed` the sheets may be cut and
-  the stock seam has already run, so the claim is frozen with them. **The branch's
-  `own_material_allowed` does not gate this** — that setting is about what a client may
-  arrange unattended in the app ([`workshop.md`](workshop.md)), not what the shop can take
-  in at the counter.
+  the stock seam has already run, so the claim is frozen with them. A whole group on the
+  client's sheets is a customer board instead ([Customer material](#customer-material)).
 - **The order names what the client owes.** Each price line carries the client's share
   (`own_panels` / `own_mm`) beside the charged figure rather than folded into it, so a
   material the client supplies entirely reads as "you bring 4 sheets" instead of a free
@@ -498,11 +604,20 @@ counter. No in-system payment, no gateway, no payment-driven status.
 ## Pricing
 
 The system computes everything; the **two manual adjustments — a discount and a surcharge —
-are the only human inputs**, each needing a reason. Frozen onto the order at creation
-against the chosen branch's rates; later catalog or pricing changes never reach an existing
-order on their own — the one re-pricing path is a workshop
-[revision](#revising-a-placed-order), which replaces the whole freeze at the branch's
-current rates.
+are the only human inputs**, each needing a reason. Computed at placement as a **quote**
+against the branch's rates, recomputed whenever staff resolve a pending group, agree a price
+or set an own-sheet claim, and **frozen at confirmation** — a staff-placed order is confirmed
+at creation, so for it the two moments coincide. After the freeze, catalog and price changes
+never reach the order on their own; the one re-pricing path is a workshop
+[revision](#revising-a-placed-order), which replaces the whole freeze at the branch's current
+rates.
+
+*Why the freeze moved from placement to confirmation.* A pending group has no price at
+placement, so freezing there would freeze a hole. Confirmation is already the step that turns
+an order into money owed — the unpriced-material gate lives there — and it is the moment the
+workshop has agreed the price with the client. The cost: a branch price change between
+placement and confirmation reaches the order, and the confirmed figure is the one the client
+is notified of. Revisit if confirmation routinely lags placement by days.
 
 | Component | When | Source |
 |---|---|---|
@@ -551,6 +666,9 @@ missing format ([`catalog-inventory.md`](catalog-inventory.md)). The relevant er
 `missing_cutting_rate`, `missing_edge_banding_rate`, `branch_does_not_carry_panel`,
 `branch_does_not_carry_edge`.
 
+**A pending group stops the order at confirm** with `order_has_pending_materials`, naming the
+groups ([Pending materials](#pending-materials)).
+
 **An unpriced material stops the order at confirm, not before.** Both catalogs list formats
 the branch carries but has not priced, so an order can arrive selling one. A draft may hold
 it and a quote may show it — confirming is the step that turns an order into money owed, so
@@ -567,8 +685,8 @@ avoid).
 
 The client app is **phone-first**: below `md` a five-tab bottom bar (Bosh sahifa · Chizmalar ·
 Buyurtmalar · Ustaxona · Profil) replaces the desktop header nav, and the focused screens —
-the cutting editor, the result stage, the order confirmation, the entry landing, login — carry
-no shell chrome at all, because each already has its own way back.
+the drawing editor, the saved drawing, the order step, the entry landing, login — carry no
+shell chrome at all, because each already has its own way back.
 
 **One date format, everywhere the client looks**: `26-aprel 2026, 09:32` — day, month name,
 year, comma, 24-hour clock (`26 апреля 2026, 09:32` in Russian, `26-апрел 2026, 09:32` in
@@ -581,10 +699,8 @@ a column. The order detail shows no date at all (see below).
 
 Home (`/c`) leads with **what needs attention now**, and on every list here **the row or card
 is the link** — no per-row **Batafsil** or **Kuzatish** button, and no second tap target
-inside a card that is one. The order's branch is the one the draft already carries in its
-`preferred_branch_id` — settled before the editor opened, from the client's pin or the branch
-row the drawing was started from ([`client-entry.md`](client-entry.md)); placement reads it
-rather than asking again.
+inside a card that is one. A drawing carries no branch: the order step's first step picks
+one, the client's pin preselected ([Placing an order](#placing-an-order)).
 
 Order numbers print through the formatter everywhere — `№ 482 917`, or a legacy number
 verbatim ([`sales.md`](../entities/sales.md)).
@@ -636,11 +752,12 @@ inbox rows written before that (`order.status_changed`) still render
   action**, because «Olib ketdi» is the workshop's mark at the counter, so the banner informs
   and links), **Faol buyurtmalar** (at most four rows, `Barchasi →` to `/c/orders`, which
   opens on the same filter) and
-  **Davom ettirish** (at most three drafts; a chosen result opens the result stage, otherwise
-  the editor). Empty sections are omitted rather than shown empty, and a pinned client with
-  nothing active and no drafts gets one first-run prompt under the card.
-  **Un-pinned** — no card, no drawing action anywhere on the page: the **Ustaxona tanlang**
-  prompt takes the card's place and opens Ustaxonalarim, because a drawing needs a branch.
+  **Davom ettirish** (at most three drafts, each opening the editor). Empty sections are
+  omitted rather than shown empty, and a pinned client with nothing active and no drafts gets
+  one first-run prompt under the card.
+  **Un-pinned** — the **Ustaxona tanlang** prompt takes the card's place and opens
+  Ustaxonalarim; **+ Yangi chizma** stays, because a drawing needs no branch — the order step
+  asks for one.
 
   *What went, and why.* The pinned line under the greeting read like a staff badge — the
   client is not the workshop's employee — and the three-up count strip beside it overlapped
@@ -648,14 +765,29 @@ inbox rows written before that (`order.status_changed`) still render
   two of four positions. All three were removed on 2026-09-03/04, and the trust cue they
   carried moved into the Ustaxonangiz card, which is a thing the client can actually use.
 
-- **Cutting wizard** — see [`cutting.md`](cutting.md). Entry point and where the client
-  spends most of their time.
-- **Order confirmation** (`/c/orders/new/:draftId`) — opens from the cutting result's order
-  button. The branch was settled before the drawing opened; this stage never lists or compares
-  branches. It pre-checks that the draft still has a chosen result and preferred branch, quotes
-  only that branch, and renders one page: the **Ustaxona** block as read-only pickup context, a
-  **Mijoz** card, and the price summary with the drawing's four figures (Detallar · Listlar ·
-  Kromka · Foydali qoldiq — [`cutting.md`](cutting.md)) under it.
+- **Drawings** — the **Chizmalar** tab, the saved drawings and the editor; see
+  [`cutting.md`](cutting.md#chizmalar-client). Where the client spends most of their time.
+- **Order step** (`/c/orders/new/:draftId`) — the three steps of
+  [Placing an order](#placing-an-order) as one focused flow under a three-segment progress
+  header (*1 · Ustaxona · 2 · Materiallar · 3 · Tasdiqlash*), each done segment a way back,
+  and one primary per step at the bottom — **Davom etish**, then **Buyurtma berish** — with
+  the reason inline whenever it is disabled.
+
+  - **Ustaxona** — one radio card per branch: the branch by the naming rule, its address and
+    today's hours, the **Asosiy** mark on the pin; a disabled card states why in words.
+  - **Materiallar** — one card per group, on one page. A decided card collapses to the decor
+    swatch, its name, maker · size · sides, the price per sheet, the kromka line and
+    **O'zgartirish**; the open card holds the **Men tanlayman | Ustaxona belgilaydi** segment,
+    the chosen decor with **Boshqa dekor**, the size radios with their prices, and the kromka
+    line; a card left to the workshop shows the pill and the note. The bar beneath says how
+    many groups are priced and how many the workshop will choose.
+  - **The decor picker** is a full-height sheet of photographs: the group as its subtitle, the
+    server's bilingual search ([`catalog-inventory.md`](catalog-inventory.md#bilingual-search)),
+    maker chips, and two-column tiles — photo, name, maker · price from — each saying whether
+    the drawing's size exists in that decor («2750×1830 bor» / «Faqat 2800×2070»), matching
+    decors first. Tapping a photo opens the lightbox instead of selecting.
+  - **Tasdiqlash** — the result's four client figures and per-group sheets, the **Narx** card,
+    the pickup branch, the **Mijoz** card and the **Chizmani saqlab qo'yish** checkbox.
 
   - **Mijoz** — **Ism** and **Telefon**, prefilled from the profile and editable inline, under
     a muted label-style line, *"Ustaxona siz bilan bog'lanishi uchun"*, rather than an info
@@ -667,8 +799,9 @@ inbox rows written before that (`order.status_changed`) still render
     a foreign number, and a workshop that cannot dial its client cannot serve them, so a
     foreign number is rejected on blur and on submit with *"O'zbekiston raqami kerak:
     +998 XX XXX XX XX"* and the confirm button stays disabled until it is fixed.
-  - **Own material is not offered here** — nor anywhere else in the client app in the MVP
-    ([`cutting.md`](cutting.md#parts-and-materials)).
+  - **Own material is not offered here** — nor anywhere else in the client app: a client who
+    brings sheets says so in an «Ustaxona belgilaydi» note or by phone, and staff set it
+    ([Customer material](#customer-material)).
 
   A closed branch, incomplete branch pricing, or material-carrying failure blocks confirmation
   with the branch-specific reason and a retry/back-to-details path; it never falls back to a
@@ -716,6 +849,16 @@ inbox rows written before that (`order.status_changed`) still render
   **Detallar | Chizma** as tabs on desktop. **No dates, no phase track, no phase text, no
   Tarix and no To'lov tab** — the page answers what this costs, where to collect it and what is
   in it; a timeline of statuses the client was already notified about answered none of those.
+
+  Three additions belong to the new drawing model. **While a group is pending** the total reads
+  *Hozircha*, a banner under the header says the workshop is choosing that material and the
+  client will be notified, the Narx card prints *kutilmoqda* on its line, and the group reads
+  *Tanlanmoqda* in the drawing block. **Olib kelasiz** — the client's own sheets
+  ([Customer material](#customer-material)) — is a card of its own directly under the header,
+  marked by a thin signal rule, because it is the one thing on the page the client must act on.
+  And the drawing block carries **Saqlab qo'yish** (a copy to the client's saved drawings,
+  decor-less), while a full-width **Qayta buyurtma** follows the header card
+  ([Re-ordering](#re-ordering)).
 - **Ustaxonalarim** (`/c/branches`) and the **workshop profile** (`/c/workshops/:id`) — the
   workshops the client actually deals with, their branches' pickup and contact details, the pin,
   and each branch's read-only catalog. See [`client-entry.md`](client-entry.md), which owns them.
@@ -778,7 +921,9 @@ picker — renders the six-status vocabulary rather than guessing a collapse.
     phone** field — digits-contains against the order's contact phone, so a partial tail
     or a formatted number both match (non-digits in the input are ignored); branch and
     search come from the shell — the sidebar's branch picker and the header's search field.
-    The filters apply to both modes.
+    A **Material kutilmoqda · N** chip beside them narrows to orders with a pending group; such
+    a row shows *Material kutilmoqda* under its status and its total as a quote (*to'liq
+    emas*), or *narx yo'q* when nothing is priced yet. The filters apply to both modes.
     Empty: "No orders — nothing matches the selected filters." Zero branches: "No branches
     assigned — ask your workshop owner."
 - **New order — walk-in flow** (`manage_orders`) — the sidebar's **+ Yangi buyurtma** action
@@ -788,18 +933,19 @@ picker — renders the six-status vocabulary rather than guessing a collapse.
   - `/workshop/orders/new` — walk-in resolve: a phone field; on a match, a confirm card with
     the registered name; on a new number, a name field; the target (selected) branch named
     throughout.
-  - `/workshop/orders/new/cutting?client=` — the shared editor, new-draft mode.
-  - `/workshop/orders/cutting/:id` — the shared editor on a saved walk-in draft.
-  - `/workshop/orders/new/:draft_id/checkout` — the single-branch checkout (quote at the
-    locked branch, contact prefilled from the resolved client, **Place order**). Two columns:
-    on the left the client as a heading — name, then `phone · branch`, with one **O'zgartirish**
-    link back to step 1 — over the order's contents and the optional note; on the right the
-    price. The client was decided on step 1, so this screen only has to let the operator
-    recognise it, not re-enter it. Each price line names what it was counted from (`2 list`,
-    `26.4 m propil`, `34.3 m lenta`) under its label, so "why this much?" is answerable without
-    leaving the screen. The card ends with the total, the commit, the way back and the
-    condition it commits to, in that order — the button that gets clicked lives with the number
-    it charges.
+  - `/workshop/orders/new/cutting?client=` — the [workshop editor](cutting.md#workshop-editor),
+    new-draft mode; `/workshop/orders/cutting/:id` — the same on a saved walk-in draft.
+  - `/workshop/orders/new/:draft_id/materials` — step 2 of the order step at the locked branch,
+    as a two-pane screen: the groups on the left with their state, the selected group's
+    catalog on the right as a table — decor, maker, size, **stock on hand**, price, and the
+    sheets the layout would take — with **Ombordan | Mijoz materiali** above it.
+  - `/workshop/orders/new/:draft_id/checkout` — step 3. Two columns: on the left the client as
+    a heading — name, then `phone · branch`, with one **O'zgartirish** link back — over the
+    order's contents, the result with its **Kesish xaritasi**, and the optional note; on the
+    right the price. Each price line names what it was counted from (`2 list`,
+    `34.3 m lenta`) under its label, so "why this much?" is answerable without leaving the
+    screen. The card ends with the total, the commit, the way back and the condition it
+    commits to, in that order — the button that gets clicked lives with the number it charges.
 
   Success routes to the order detail, already `confirmed`.
 - **Revision — edit a placed order** (`manage_orders`, status `new` / `confirmed`) — **Edit**
@@ -815,7 +961,24 @@ picker — renders the six-status vocabulary rather than guessing a collapse.
   (added/edited in place, saved on blur; a quiet "add note" ghost when empty), a compact
   phase strip along the bottom, and exactly **one status-appropriate primary action**;
   the status history opens from a header clock button as a modal timeline; rarer actions
-  (edit, discount and surcharge — each a modal, revert, cancel) fold into an overflow menu.
+  (edit, discount and surcharge — each a modal, **Qayta buyurtma**, revert, cancel) fold
+  into an overflow menu.
+
+  **Materials panel.** The order's groups, one row each: the group (name, type · thickness ·
+  part count), the decor and size with its swatch, the sheets, the price per sheet and the
+  stock on hand — warning-coloured when the order would take it below zero — and, on a
+  `new` / `confirmed` order, **Mijoz materiali** to put the group on the client's sheets. A
+  **pending** row is tinted and opens in place: the client's note quoted, a decor-and-size
+  combobox over the branch's formats of that type and thickness (each option with its stock
+  and price), the kromka beside it, and **Mijoz materiali**. Saving re-runs the layout and
+  re-prices the order ([Pending materials](#pending-materials)). For an order with several
+  pending groups, **Alohida ekranda ochish** opens the same two-pane screen the walk-in flow's
+  step 2 uses. While a group is pending the header carries **Material kutilmoqda**, and
+  **Tasdiqlash** is disabled with its reason beneath it — *{n} guruhga material tanlang*.
+  **Mijoz materiali** is a dialog: the client's sheet size (with the common sizes as chips),
+  the group's thickness read-only, whether the board has grain, an optional name, and a preview
+  of its effect — how many sheets the client brings, the material amount leaving the bill, and
+  that cutting and banding stay charged.
 
   Everything on this page reads the **order's own branch [mode](#production-mode)**, off the
   payload — never the sidebar's selection, which may be pointing elsewhere. The **phase
@@ -848,7 +1011,7 @@ picker — renders the six-status vocabulary rather than guessing a collapse.
 
   | Status | Primary | Also (overflow / secondary) |
   |---|---|---|
-  | `new` | **Tasdiqlash** | Edit · discount / surcharge · Cancel |
+  | `new` | **Tasdiqlash** — disabled with its reason while a group is pending | Edit · discount / surcharge · Cancel |
   | `confirmed` | **Tayyor** | Edit · discount / surcharge · Cancel |
   | `cutting` / `edge_banding` (full → simple leftovers) | **Tayyor** | Cancel |
   | `ready` | **Olib ketdi** | **Orqaga qaytarish** (reason) · Cancel |
@@ -953,19 +1116,32 @@ actions are danger-styled and name their effect; modal focus is managed.
 
 - **Cutting draft already used / not the client's / not `draft`** →
   `cutting_result_not_usable`; redirect to its detail.
-- **Branch went `inactive` / `temporarily_closed` between cutting and order** →
-  `branch_closed`; the client picks another branch.
-- **Workshop blocked between cutting and order** → `workshop_blocked`.
+- **Branch went `inactive` / `temporarily_closed` during the order step** →
+  `branch_closed`; the step returns to its first screen with the branch disabled, and picking
+  another clears every catalog choice made for the old one.
+- **Workshop blocked during the order step** → `workshop_blocked`.
 - **Branch's `cutting_rate_tiyin` not set** → `missing_cutting_rate`; the client sees
   "this branch can't take orders right now"; the workshop app flags the branch.
 - **Order has banded parts but the branch's `edge_banding_rate_tiyin` is not set** →
   `missing_edge_banding_rate`; same gating + flag.
-- **A `shop` panel the cutting uses is no longer the branch's** — deactivated, or the draft
-  moved to another branch → `branch_does_not_carry_panel`. A part names a branch material
-  directly now, so this is an id-belongs-to-this-branch-and-is-active test, not a catalog
-  lookup; the editor's material swap covers it earlier and the order step is the final gate.
-- **A `shop` tape a side uses is no longer the branch's** →
-  `branch_does_not_carry_edge`; same test, same recovery.
+- **A material chosen on step 2 is no longer the branch's at placement** — deactivated
+  meanwhile → `branch_does_not_carry_panel`; the step reopens that group to choose again (or
+  to leave it to the workshop). The choice is an id-belongs-to-this-branch-and-is-active test,
+  not a catalog lookup.
+- **A tape a side resolves to is no longer the branch's** → `branch_does_not_carry_edge`;
+  same test, same recovery.
+- **Confirming with a pending group** → `order_has_pending_materials`, naming the groups;
+  **Tasdiqlash** was already disabled with that reason, so this guards a stale page.
+- **Every group left to the workshop** → the order has no result and no price until resolved;
+  the client's list reads *narx yo'q*; nothing else differs.
+- **Staff resolve a group on an order the client just cancelled** → refused as an invalid
+  state; the panel refetches. A cancel racing a resolve loses or wins on the optimistic lock.
+- **Re-order at a branch now closed or blocked** → step 1 opens with it disabled; choosing
+  another clears the copied catalog choices and keeps the «Ustaxona belgilaydi» notes.
+- **A drawing whose MAP group fits no branch** → every branch is disabled on step 1 with its
+  reason (kerf, trim or no format of the layout's size); the drawing is untouched.
+- **«Chizmani saqlab qo'yish» checked and placement fails** → nothing is saved; the copy is
+  written in the placement's transaction.
 - **`shop` material short at verification** → approval is **not** blocked; the operator
   sees a warning and prompts the warehouseman
   ([`catalog-inventory.md`](catalog-inventory.md)).
@@ -1003,10 +1179,9 @@ actions are danger-styled and name their effect; modal focus is managed.
   on-behalf. No auto-timeout.
 - **Client disputes a recorded payment** — out-of-system; the client calls the workshop
   and the accountant corrects the income in the finance module.
-- **Client re-cuts from the same idea after placing** → the existing order's confirmed
-  result stays authoritative. v1 has no client modification path; the workshop can
-  [revise pre-production](#revising-a-placed-order), otherwise the client cancels and
-  places a new order.
+- **Client wants a change after placing** → the placed order stays as it is: the workshop
+  can [revise it pre-production](#revising-a-placed-order), or the client cancels while `new`
+  and starts again with **Qayta buyurtma**.
 - **Revision saved after production started or the order went terminal** →
   `order_edit_not_allowed`; the leftover revision draft can only be discarded (the order
   detail keeps surfacing it with a discard action at any status).

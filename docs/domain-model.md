@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-09-08
+updated: 2026-10-17
 order: 45
 ---
 
@@ -20,7 +20,7 @@ per bounded context.
   entity and no role** — a cutter or edge bander is just a workshop user holding the
   production grant; one person may hold every grant. The system stores no pay rates.
 - **Client** — the workshop's customer; global to the platform. Optionally **pinned** to one
-  branch, which seeds new cutting drafts and scopes what the client app offers.
+  branch, which preselects where orders are placed and scopes what the client app offers.
 - **Client workshop entry** — one row per (client, workshop) the client has entered through a
   link: the stored half of the client's own workshop list
   ([`ref/features/client-entry.md`](ref/features/client-entry.md)).
@@ -42,8 +42,13 @@ per bounded context.
 - **Branch material** — one branch's decision to carry one format: its price and its own
   on/off switch. **This is "the material"**: stock, cutting sheets and
   order lines all point here.
-- **Customer board** — a sheet a walk-in carried in, recorded on the drawing that cuts it.
-  Not a branch material and in no catalog: the branch cuts it and bills only the shortfall
+- **Drawing** — a client's parts list in **material groups**, each a substrate and a
+  thickness with an optional sheet size: **no workshop, no decor, no price** — those are
+  chosen when it is ordered. A **draft** («qoralama») until ordered, when it moves into its
+  order; a **saved drawing** («saqlangan chizma») is a copy the client keeps for reuse. A group
+  imported from a 2D-Place layout is locked as laid out.
+- **Customer board** — the client's own sheets for one material group of an order, recorded by
+  staff. Not a branch material and in no catalog: the branch cuts them and charges labour only
   (fields: [`ref/entities/cutting.md`](ref/entities/cutting.md)).
 - **Stock item** — a branch's on-hand balance for one branch material. **Supplier** — where
   stock arrived from (lightweight, added on demand; distinct from manufacturer).
@@ -52,9 +57,11 @@ per bounded context.
   over these, not over individual arrivals.
 - **Cutting result** — the output of an optimization run; names the winning algorithm.
   Reports sheets needed per panel format and tape metres needed per kromka format.
-- **Order** — a client's request for panels cut at a branch. Aggregates the parts,
-  the per-side edge picks, the status history, and the cutter / edger who completed
-  it (the inputs the production reports read). It holds no money and no stock.
+- **Order** — a client's request for panels cut at a branch. Aggregates the drawing it was
+  placed from with each group's material — a branch material, the client's own sheets, or
+  «ustaxona belgilaydi» until staff choose one — the per-side tapes, the status history, and
+  the cutter / edger who completed it (the inputs the production reports read). It holds no
+  money and no stock.
 - **Income** — money the workshop received; an order payment carries the order it
   settles.
 - **Expense** — money the workshop spent: overheads, consumables it buys, and staff

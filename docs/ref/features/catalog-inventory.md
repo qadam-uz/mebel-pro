@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-09-08
+updated: 2026-10-17
 order: 50
 ---
 
@@ -169,10 +169,10 @@ of decors, where the last tier's cap starts hiding real answers.
 
 **Every catalog search box posts its query to the server** and shows what comes back verbatim:
 re-filtering that page by raw text in the browser would silently drop the very rows the fold
-was built to find. One surface legitimately filters locally — the cutting editor's tape
-picker, which loads the branch's whole tape list once and narrows it in the dialog
-([`cutting.md`](cutting.md)) — and it now runs a TypeScript port of the same fold, tokens and
-ranking, so a Cyrillic query and a typo find there what they find everywhere else.
+was built to find. One surface legitimately filters locally — the order step's tape picker,
+which loads the branch's whole tape list once and narrows it in the dialog
+([`orders.md`](orders.md#placing-an-order)) — and it runs a TypeScript port of the same fold,
+tokens and ranking, so a Cyrillic query and a typo find there what they find everywhere else.
 
 ## Decor formats — the library and the workshop's own
 
@@ -872,11 +872,12 @@ now-redundant branch column:
   The list itself is a shared lookup that `manage_finance` may also **read**, because the
   expense form attributes spending to a supplier; creating and editing one stays here.
 
-The **cutting material picker** — the same component in the client and workshop apps — reads
-this same catalog, branch-scoped and grouped by decor; it is specified in
-[`cutting.md`](cutting.md). Both apps list every format the branch carries, unpriced ones
-included and marked; stock is not a filter either, so an out-of-stock or negative-balance
-material is still pickable, and a retired format is pickable too, wearing the same
+The **order step's decor picker** — the same component in the client and workshop apps —
+reads this same catalog, branch-scoped, narrowed to the group's type and thickness and grouped
+by decor; it is specified in [`orders.md`](orders.md#placing-an-order). Both apps list every
+format the branch carries, unpriced ones included and marked; stock is not a filter either,
+so an out-of-stock or negative-balance material is still pickable (the workshop's view shows
+the balance beside each format), and a retired format is pickable too, wearing the same
 «Ishlab chiqarishdan chiqqan» hint.
 
 States: loading (skeletons); empty (nothing attached yet → "add materials to this
