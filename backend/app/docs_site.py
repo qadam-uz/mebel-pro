@@ -69,7 +69,13 @@ _UNAUTHORIZED = HTTPException(
 
 
 def require_docs_auth(credentials: Annotated[HTTPBasicCredentials, Depends(_basic)]) -> None:
-    """HTTP Basic guard for the docs sites and the OpenAPI UIs (same credentials)."""
+    """HTTP Basic guard for the docs sites and the OpenAPI UIs (same credentials).
+
+    Fails safe: an unset (empty) configured username or password locks the docs
+    — every request 401s — rather than letting empty credentials match.
+    """
+    if not (settings.DOCS_AUTH_USERNAME and settings.DOCS_AUTH_PASSWORD):
+        raise _UNAUTHORIZED
     user_ok = secrets.compare_digest(
         credentials.username.encode("utf-8"), settings.DOCS_AUTH_USERNAME.encode("utf-8")
     )

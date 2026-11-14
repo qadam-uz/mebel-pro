@@ -47,6 +47,8 @@ def _prod_settings(**overrides: object) -> Settings:
         "TELEGRAM_BOT_USERNAME": "mebelpro_bot",
         "TELEGRAM_WEBHOOK_SECRET": "webhook-secret",
         "TELEGRAM_LOGIN_CODE_PEPPER": "prod-pepper",
+        "DOCS_AUTH_USERNAME": "docs",
+        "DOCS_AUTH_PASSWORD": "a-real-docs-password",
         "_env_file": None,
     }
     values.update(overrides)
@@ -95,3 +97,26 @@ def test_prod_requires_every_bot_secret(field: str) -> None:
         _prod_settings(**{field: "{{change-me}}"})
 
     assert _prod_settings().TELEGRAM_API_BASE_URL == "https://api.telegram.org"
+
+
+@pytest.mark.parametrize("field", ["DOCS_AUTH_USERNAME", "DOCS_AUTH_PASSWORD"])
+@pytest.mark.parametrize("value", ["", "{{change-me}}"])
+def test_prod_requires_docs_credentials(field: str, value: str) -> None:
+    """Unset docs credentials are a boot failure in prod, not a locked-but-silent site."""
+    with pytest.raises(ValidationError, match=field):
+        _prod_settings(**{field: value})
+
+
+def test_prod_rejects_the_dev_template_docs_password() -> None:
+    with pytest.raises(ValidationError, match="DOCS_AUTH_PASSWORD"):
+        _prod_settings(DOCS_AUTH_PASSWORD="docs")
+
+
+def test_prod_docs_credentials_checked_even_in_pre_production_dev_mode() -> None:
+    """The Telegram pre-production escape hatch does not waive the docs password."""
+    with pytest.raises(ValidationError, match="DOCS_AUTH_PASSWORD"):
+        _prod_settings(
+            TELEGRAM_LOGIN_DEV_MODE=True,
+            ALLOW_PROD_TELEGRAM_LOGIN_DEV_MODE=True,
+            DOCS_AUTH_PASSWORD="",
+        )
