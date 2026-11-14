@@ -169,5 +169,7 @@ ENV PYTHONUNBUFFERED=1
 USER app
 EXPOSE 8000
 
-# Run migrations then start the server. Override CMD in compose for dev.
+# Run migrations then start the server — the image's standalone default. Both
+# compose files override it: dev for autoreload, prod to serve only (there
+# deploy/scripts/deploy.sh migrates as its own gated step before the swap).
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

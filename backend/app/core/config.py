@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     # --- Object storage (MinIO) --------------------------------------------
     # The `files` module stores material images, workshop logos, and receipts in
     # MinIO. Cutting PDFs are generated on demand from immutable cutting results.
-    # In dev/Compose this is the bundled MinIO container; in prod it's the shared
-    # MinIO on the VPS's `infra-net` Docker network.
+    # Under Compose — dev and prod alike — this is the stack's own MinIO
+    # container (prod keeps its data in a named volume; deploy/compose.prod.yaml).
     # The protocol is S3-compatible, so any boto3-style client works.
     MINIO_ENDPOINT_URL: str = "http://localhost:9000"
     MINIO_REGION: str = "us-east-1"
@@ -121,8 +121,9 @@ class Settings(BaseSettings):
     # 30 s wait); the wait is the one that mattered — on exhaustion a request
     # blocked for half a minute and then succeeded, which reads as "the app
     # froze" and is invisible in logs. A shorter timeout turns that into a
-    # fast, traceable 500. Postgres here is shared infrastructure, so the
-    # ceiling (POOL_SIZE + MAX_OVERFLOW) is deliberately modest.
+    # fast, traceable 500. Prod Postgres is a small memory-capped container on
+    # a host shared with another project, so the ceiling (POOL_SIZE +
+    # MAX_OVERFLOW) is deliberately modest.
     DB_POOL_SIZE: int = 10
     DB_POOL_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT_SECONDS: int = 10

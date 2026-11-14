@@ -9,8 +9,11 @@
 #      already running for the other project, and the nginx authenticator
 #      answers the HTTP-01 challenge through it temporarily:
 #        sudo certbot certonly --nginx -d mebelapp.uz -d www.mebelapp.uz \
-#          -d app.mebelapp.uz -d workshop.mebelapp.uz -d admin.mebelapp.uz
+#          -d app.mebelapp.uz -d workshop.mebelapp.uz -d admin.mebelapp.uz \
+#          --deploy-hook "systemctl reload nginx"
 #      One certificate, stored under /etc/letsencrypt/live/mebelapp.uz/.
+#      The deploy hook is saved for renewals: nginx only picks up a renewed
+#      certificate on reload, so without it the old one expires in place.
 #   3. Install this file as-is (its ssl_certificate paths now exist):
 #        sudo cp nginx-host.conf.example /etc/nginx/sites-available/mebelapp.uz
 #        sudo ln -s /etc/nginx/sites-available/mebelapp.uz /etc/nginx/sites-enabled/

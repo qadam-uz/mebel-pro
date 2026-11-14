@@ -50,6 +50,28 @@
 	}
 }
 
+# Upstreams. Every proxy to the backend or the web container goes through one
+# of these two snippets, so no route can be added without the retry window.
+#
+# Why the retry: each deploy recreates the backend and web containers (stop the
+# old, start the new), and for those seconds the upstream refuses connections
+# or doesn't resolve. Without a retry window Caddy turns that into a hard 502
+# for real users on every merge to main; with it, requests wait out the swap.
+# Not tuning — don't strip it.
+(to_backend) {
+	reverse_proxy backend:8000 {
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+}
+
+(to_web) {
+	reverse_proxy mebel-web:80 {
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+}
+
 # Apex: the static SEO landing only. Role apps are served only on their
 # documented subdomains; apex app paths intentionally 404.
 http://{$BASE_DOMAIN} {
@@ -57,12 +79,12 @@ http://{$BASE_DOMAIN} {
 
 	handle / {
 		rewrite * /landing/index.html
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 
 	@landing_public path /landing/* /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @landing_public {
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 
 	handle {
@@ -75,24 +97,17 @@ http://app.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
-		reverse_proxy backend:8000 {
-			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
-			# the port, so every deploy leaves a window where this upstream refuses
-			# connections. Without a retry window Caddy turns that into a hard 502
-			# for real users on every merge to main. Retry instead of failing.
-			lb_try_duration 30s
-			lb_try_interval 500ms
-		}
+		import to_backend
 	}
 
 	@client_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @client_public {
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 
 	handle {
 		rewrite * /client/index.html
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 }
 
@@ -101,24 +116,17 @@ http://workshop.{$BASE_DOMAIN} {
 	import common
 
 	handle /api/* {
-		reverse_proxy backend:8000 {
-			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
-			# the port, so every deploy leaves a window where this upstream refuses
-			# connections. Without a retry window Caddy turns that into a hard 502
-			# for real users on every merge to main. Retry instead of failing.
-			lb_try_duration 30s
-			lb_try_interval 500ms
-		}
+		import to_backend
 	}
 
 	@workshop_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @workshop_public {
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 
 	handle {
 		rewrite * /workshop/index.html
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 }
 
@@ -128,23 +136,16 @@ http://admin.{$BASE_DOMAIN} {
 
 	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
 	handle @backend {
-		reverse_proxy backend:8000 {
-			# The backend container runs `alembic upgrade head` BEFORE uvicorn binds
-			# the port, so every deploy leaves a window where this upstream refuses
-			# connections. Without a retry window Caddy turns that into a hard 502
-			# for real users on every merge to main. Retry instead of failing.
-			lb_try_duration 30s
-			lb_try_interval 500ms
-		}
+		import to_backend
 	}
 
 	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @admin_public {
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 
 	handle {
 		rewrite * /admin/index.html
-		reverse_proxy mebel-web:80
+		import to_web
 	}
 }

@@ -81,7 +81,8 @@ backend/
                           #   factories.py, fixtures/, test_*.py
   Dockerfile              # multi-stage; compiles a pinned PackingSolver from source (sha256-checked);
                           #   uv installs deps into the system interpreter (no venv); non-root;
-                          #   CMD runs `alembic upgrade head` then uvicorn
+                          #   CMD runs `alembic upgrade head` then uvicorn — both compose files
+                          #   override it (prod only serves; deploy.sh migrates as its own step)
   .env.dev.example        # local non-Docker env — copy to `.env` (Compose uses deploy/.env instead)
   .env.prod.example       # same shape, secrets as {{change-me}}
 ```
@@ -120,7 +121,7 @@ Subsystem pointers (all born module-first; each lives where the roster says):
   `app/models/` must not be reintroduced. Every new module-owned model class
   must be listed in `app/models/__init__.py`'s `import_all_models()` registry
   or Alembic won't see it.
-- **Migrations**: never edit a DB by hand. `alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some things — enum changes, server defaults, renames), then `alembic upgrade head`. Migrations are auto-formatted by ruff via a post-write hook.
+- **Migrations**: never edit a DB by hand. `alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some things — enum changes, server defaults, renames), then `alembic upgrade head`. Migrations are auto-formatted by ruff via a post-write hook. Each one must also work with the **previous** release's code (expand → contract; the rule lives in [`docs/architecture.md`](../docs/architecture.md) → Current stage) — prod migrates before it swaps the containers, and a rollback runs old code on the new schema.
 - **Schemas vs models**: ORM objects never cross the API boundary — convert to a
   module-owned Pydantic schema (`app/modules/<module>/schemas.py`, or a named
   `*_schemas.py` split). Response schemas extend `APIModel`
